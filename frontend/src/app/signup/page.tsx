@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useInterface } from '@/contexts/InterfaceContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,10 +15,9 @@ const SignUp = () => {
     const [contact, setContact] = useState('');
     const [step, setStep] = useState<'contact' | 'otp' | 'role'>('contact');
     const [otp, setOtp] = useState('');
-    const [selectedRole, setSelectedRole] = useState<'admin' | 'contributor' | 'client'>('contributor');
+    const [selectedRole, setSelectedRole] = useState<'superadmin' | 'admin' | 'contributor' | 'client'>('contributor');
     const auth = useAuth();
     const router = useRouter();
-    const interfaceCtx = useInterface();
     // const { t } = useLanguage();
 
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
@@ -51,10 +49,11 @@ const SignUp = () => {
     const handleCreateAccount = () => {
         if (auth?.login) auth.login(selectedRole);
         // toast.success('Account created!');
-        router.push(interfaceCtx?.mode === 'desktop' ? '/dashboard' : '/dashboard');
+        router.push(`/${selectedRole}/dashboard`);
     };
 
-    const roles: { value: 'admin' | 'contributor' | 'client'; label: string; desc: string }[] = [
+    const roles: { value: 'superadmin' | 'admin' | 'contributor' | 'client'; label: string; desc: string }[] = [
+        { value: 'superadmin', label: 'Super Admin', desc: 'System management' },
         { value: 'admin', label: 'Admin', desc: 'Full project control' },
         { value: 'contributor', label: 'Contributor', desc: 'Upload & view assigned' },
         { value: 'client', label: 'Client', desc: 'View shared files only' },

@@ -1,6 +1,13 @@
 import { User, Project, ProjectDocument, ProjectPhoto, Report, Folder, ActivityItem, Comment, SnagItem, ManualSOP } from '@/types';
 
 export const mockUsers: Record<string, User> = {
+    superadmin: {
+        id: 'u0',
+        name: 'Super Admin User',
+        email: 'superadmin@apexis.in',
+        role: 'superadmin',
+        active: true,
+    },
     admin: {
         id: 'u1',
         name: 'Rajesh Kumar',
@@ -25,6 +32,7 @@ export const mockUsers: Record<string, User> = {
 };
 
 export const mockAllUsers: User[] = [
+    { id: 'u0', name: 'Super Admin User', email: 'superadmin@apexis.in', role: 'superadmin', active: true },
     { id: 'u1', name: 'Rajesh Kumar', email: 'rajesh@apexis.in', role: 'admin', active: true },
     { id: 'u2', name: 'Priya Sharma', email: 'priya@apexis.in', role: 'contributor', active: true },
     { id: 'u3', name: 'Vikram Reddy', email: 'vikram@client.com', role: 'client', active: true },

@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useInterface } from '@/contexts/InterfaceContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,9 +12,8 @@ import { Card, CardContent } from '@/components/ui/card';
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [selectedRole, setSelectedRole] = useState<'admin' | 'contributor' | 'client'>('admin');
+    const [selectedRole, setSelectedRole] = useState<'superadmin' | 'admin' | 'contributor' | 'client'>('admin');
     const auth = useAuth();
-    const interfaceCtx = useInterface();
     const router = useRouter();
 
     const handleLogin = (e: React.FormEvent) => {
@@ -23,11 +21,11 @@ const Login = () => {
         if (auth?.login) {
             auth.login(selectedRole);
         }
-        // Fixed to push to /dashboard always for now, or based on mode
-        router.push(interfaceCtx?.mode === 'desktop' ? '/dashboard' : '/dashboard');
+        router.push(`/${selectedRole}/dashboard`);
     };
 
-    const roles: { value: 'admin' | 'contributor' | 'client'; label: string; desc: string }[] = [
+    const roles: { value: 'superadmin' | 'admin' | 'contributor' | 'client'; label: string; desc: string }[] = [
+        { value: 'superadmin', label: 'Super Admin', desc: 'System management' },
         { value: 'admin', label: 'Admin', desc: 'Full project control' },
         { value: 'contributor', label: 'Contributor', desc: 'Upload & view assigned' },
         { value: 'client', label: 'Client', desc: 'View shared files only' },

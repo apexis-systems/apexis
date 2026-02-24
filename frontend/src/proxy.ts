@@ -6,8 +6,8 @@ export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Example redirect: /desktop -> /dashboard
-    if (pathname.startsWith('/desktop')) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+    if (pathname.startsWith('/desktop') || pathname.startsWith('/dashboard')) {
+        return NextResponse.redirect(new URL('/admin/dashboard', request.url));
     }
 
     // Example: redirect root to login

@@ -4,27 +4,29 @@ import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard } from 'luc
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-// import { UserRole } from '@/types';
-type UserRole = 'admin' | 'contributor' | 'client';
+import { UserRole } from '@/types';
 
 const MainSidebar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, switchRole } = useAuth() || {};
 
+  const basePath = `/${user?.role || 'admin'}/dashboard`;
+
   const navItems = [
-    { icon: Home, label: 'Dashboard', path: '/dashboard' },
-    { icon: Upload, label: 'Upload', path: '/dashboard/upload' },
-    { icon: Clock, label: 'Activity', path: '/dashboard/activity' },
-    { icon: AlertTriangle, label: 'Snag List', path: '/dashboard/snags' },
-    { icon: User, label: 'Profile', path: '/dashboard/profile' },
-    ...(user?.role === 'admin' ? [
-      { icon: Users, label: 'User Mgmt', path: '/dashboard/users' },
-      { icon: CreditCard, label: 'Billing', path: '/dashboard/billing' },
+    { icon: Home, label: 'Dashboard', path: `${basePath}` },
+    { icon: Upload, label: 'Upload', path: `${basePath}/upload` },
+    { icon: Clock, label: 'Activity', path: `${basePath}/activity` },
+    { icon: AlertTriangle, label: 'Snag List', path: `${basePath}/snags` },
+    { icon: User, label: 'Profile', path: `${basePath}/profile` },
+    ...((user?.role === 'admin' || user?.role === 'superadmin') ? [
+      { icon: Users, label: 'User Mgmt', path: `${basePath}/users` },
+      { icon: CreditCard, label: 'Billing', path: `${basePath}/billing` },
     ] : []),
   ];
 
   const roles: { value: UserRole; label: string }[] = [
+    { value: 'superadmin', label: 'Super Admin' },
     { value: 'admin', label: 'Admin' },
     { value: 'contributor', label: 'Contributor' },
     { value: 'client', label: 'Client' },
@@ -61,7 +63,10 @@ const MainSidebar = () => {
             {roles.map((role) => (
               <button
                 key={role.value}
-                onClick={() => switchRole(role.value)}
+                onClick={() => {
+                  switchRole(role.value);
+                  router.push(`/${role.value}/dashboard`);
+                }}
                 className={cn(
                   'w-full rounded-lg px-3 py-1.5 text-xs font-medium transition-colors text-left',
                   user.role === role.value

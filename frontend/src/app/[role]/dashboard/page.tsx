@@ -19,7 +19,7 @@ export default function DashboardPage() {
     }
 
     const filteredProjects = mockProjects.filter((project) => {
-        if (user.role === 'admin') return true;
+        if (user.role === 'admin' || user.role === 'superadmin') return true;
         if (user.role === 'contributor') return project.assignedTo.includes(user.id);
         if (user.role === 'client') return project.sharedWith.includes(user.id);
         return false;
@@ -40,7 +40,7 @@ export default function DashboardPage() {
                         Welcome back, {user.name?.split(' ')[0]} 👋
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        {user.role === 'admin' && 'Manage all your company projects'}
+                        {(user.role === 'admin' || user.role === 'superadmin') && 'Manage all your company projects'}
                         {user.role === 'contributor' && 'View and contribute to your assigned projects'}
                         {user.role === 'client' && 'Access your shared project files'}
                     </p>
@@ -72,7 +72,7 @@ export default function DashboardPage() {
                 {filteredProjects.map((project) => (
                     <button
                         key={project.id}
-                        onClick={() => router.push(`/dashboard/project/${project.id}`)}
+                        onClick={() => router.push(`/${user.role}/dashboard/project/${project.id}`)}
                         className="rounded-xl bg-card border border-border p-5 text-left hover:border-accent transition-colors group cursor-pointer"
                     >
                         {/* Color bar */}

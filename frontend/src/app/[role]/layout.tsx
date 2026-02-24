@@ -4,11 +4,11 @@ import { ReactNode } from 'react';
 import MainSidebar from '@/components/Navigation/MainSidebar/MainSidebar';
 import SiteHeader from '@/components/Navigation/SiteHeader/SiteHeader';
 
-interface DesktopLayoutProps {
+interface RoleLayoutProps {
     children: ReactNode;
 }
 
-const DesktopLayout = ({ children }: DesktopLayoutProps) => {
+const RoleLayout = ({ children }: RoleLayoutProps) => {
     return (
         <div className="flex min-h-screen flex-col bg-background">
             <SiteHeader />
@@ -20,4 +20,4 @@ const DesktopLayout = ({ children }: DesktopLayoutProps) => {
     );
 };
 
-export default DesktopLayout;
+export default RoleLayout;

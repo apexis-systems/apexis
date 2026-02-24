@@ -38,7 +38,7 @@ const SiteHeader = () => {
     <>
       <header className="sticky top-0 z-40 border-b border-border bg-card">
         <div className="flex h-14 items-center justify-between px-6">
-          <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2">
+          <button onClick={() => router.push(`/${user?.role || 'admin'}/dashboard`)} className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
               <span className="text-sm font-bold text-accent-foreground">A</span>
             </div>
