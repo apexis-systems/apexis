@@ -1,0 +1,171 @@
+
+> mobile-expo@1.0.0 ios
+> expo start --ios
+
+Starting project at /Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo
+React Compiler enabled
+Starting Metro Bundler
+› Opening exp://192.168.0.3:8081 on iPhone 16e
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+iOS node_modules/expo-router/entry.js ▓░░░░░░░░░░░░░░░  9.0% ( 3/11)
+iOS node_modules/expo-router/entry.js ▓▓░░░░░░░░░░░░░░ 13.2% ( 38/193)
+iOS node_modules/expo-router/entry.js ▓▓▓▓░░░░░░░░░░░░ 27.7% (233/443)
+iOS node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓░░░░░░░░ 51.3% (518/723)
+iOS node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 68.0% (683/831)
+iOS node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.6% ( 889/1096)
+iOS node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 83.6% (1197/1309)
+iOS Bundled 26198ms node_modules/expo-router/entry.js (1585 modules)
+ WARN  SafeAreaView has been deprecated and will be removed in a future release. Please use 'react-native-safe-area-context' instead. See https://github.com/th3rdwave/react-native-safe-area-context
+ WARN  Route "./(auth)/onboarding.tsx" is missing the required default export. Ensure a React component is exported as default.
+Unable to resolve "../../components/ui/button" from "app/(auth)/onboarding.tsx"
+[0m [90m 1 |[39m [36mimport[39m { [33mText[39m[33m,[39m [33mView[39m } [36mfrom[39m [32m'react-native'[39m[33m;[39m
+ [90m 2 |[39m [36mimport[39m { useRouter } [36mfrom[39m [32m'expo-router'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { [33mButton[39m[33m,[39m [33mButtonText[39m } [36mfrom[39m [32m'@/components/ui/button'[39m[33m;[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { [33mSafeAreaView[39m } [36mfrom[39m [32m'react-native-safe-area-context'[39m[33m;[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mOnboardingScreen[39m() {[0m
+
+Import stack:
+
+ app/(auth)/onboarding.tsx
+ | import "../../components/ui/button"
+
+ app (require.context)
+
+Unable to resolve "../../components/ui/button" from "app/(auth)/onboarding.tsx"
+[0m [90m 1 |[39m [36mimport[39m { [33mText[39m[33m,[39m [33mView[39m } [36mfrom[39m [32m'react-native'[39m[33m;[39m
+ [90m 2 |[39m [36mimport[39m { useRouter } [36mfrom[39m [32m'expo-router'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { [33mButton[39m[33m,[39m [33mButtonText[39m } [36mfrom[39m [32m'@/components/ui/button'[39m[33m;[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { [33mSafeAreaView[39m } [36mfrom[39m [32m'react-native-safe-area-context'[39m[33m;[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mOnboardingScreen[39m() {[0m
+
+Import stack:
+
+ app/(auth)/onboarding.tsx
+ | import "../../components/ui/button"
+
+ app (require.context)
+
+ WARN  Route "./index.tsx" is missing the required default export. Ensure a React component is exported as default.
+ ERROR  SyntaxError: /Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/app/(auth)/onboarding.tsx: Unterminated template. (49:3)
+
+  47 |     );
+  48 | }
+> 49 | ```
+     |    ^
+  50 | 
+    at constructor (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:365:19)
+    at TypeScriptParserMixin.raise (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:6599:19)
+    at Object.unterminated (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:5670:20)
+    at readStringContents (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:5365:14)
+    at TypeScriptParserMixin.readTemplateToken (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:6519:9)
+    at TypeScriptParserMixin.getTokenFromCode (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:6227:14)
+    at TypeScriptParserMixin.getTokenFromCode (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:4797:11)
+    at TypeScriptParserMixin.getTokenFromCode (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:9987:11)
+    at TypeScriptParserMixin.nextToken (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:5782:10)
+    at TypeScriptParserMixin.next (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:5692:10)
+    at TypeScriptParserMixin.parseTemplateElement (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11785:10)
+    at TypeScriptParserMixin.parseTemplate (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11792:23)
+    at TypeScriptParserMixin.parseExprAtom (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11351:21)
+    at TypeScriptParserMixin.parseExprAtom (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:4764:20)
+    at TypeScriptParserMixin.parseExprSubscripts (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11081:23)
+    at TypeScriptParserMixin.parseUpdate (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11066:21)
+    at TypeScriptParserMixin.parseMaybeUnary (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11046:23)
+    at TypeScriptParserMixin.parseMaybeUnary (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:9837:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10899:61)
+    at TypeScriptParserMixin.parseExprOps (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10904:23)
+    at TypeScriptParserMixin.parseMaybeConditional (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10881:23)
+    at TypeScriptParserMixin.parseMaybeAssign (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10831:21)
+    at TypeScriptParserMixin.parseMaybeAssign (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:9786:20)
+    at TypeScriptParserMixin.parseExpressionBase (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10784:23)
+    at /Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10780:39
+    at TypeScriptParserMixin.allowInAnd (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12421:16)
+    at TypeScriptParserMixin.parseExpression (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10780:17)
+    at TypeScriptParserMixin.parseStatementContent (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12895:23)
+    at TypeScriptParserMixin.parseStatementContent (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:9508:18)
+    at TypeScriptParserMixin.parseStatementLike (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12767:17)
+    at TypeScriptParserMixin.parseModuleItem (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12744:17)
+    at TypeScriptParserMixin.parseBlockOrModuleBlockBody (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:13316:36)
+    at TypeScriptParserMixin.parseBlockBody (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:13309:10)
+    at TypeScriptParserMixin.parseProgram (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12622:10)
+    at TypeScriptParserMixin.parseTopLevel (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12612:25)
+    at TypeScriptParserMixin.parse (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:14488:25)
+    at TypeScriptParserMixin.parse (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10126:18)
+    at parse (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:14501:26)
+    at parser (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/parser/index.js:41:34)
+    at parser.next (<anonymous>)
+    at normalizeFile (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/transformation/normalize-file.js:64:37)
+    at normalizeFile.next (<anonymous>)
+    at run (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/transformation/index.js:22:50)
+    at run.next (<anonymous>)
+    at transform (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/transform.js:22:33)
+    at transform.next (<anonymous>)
+    at evaluateSync (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/gensync/index.js:251:28)
+    at sync (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/gensync/index.js:89:14)
+    at stopHiding - secret - don't use this - v1 (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/errors/rewrite-stack-trace.js:47:12)
+    at Object.transformSync (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/transform.js:40:76)
+ ERROR  SyntaxError: /Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/app/(auth)/onboarding.tsx: Unterminated template. (49:3)
+
+  47 |     );
+  48 | }
+> 49 | ```
+     |    ^
+  50 | 
+    at constructor (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:365:19)
+    at TypeScriptParserMixin.raise (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:6599:19)
+    at Object.unterminated (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:5670:20)
+    at readStringContents (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:5365:14)
+    at TypeScriptParserMixin.readTemplateToken (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:6519:9)
+    at TypeScriptParserMixin.getTokenFromCode (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:6227:14)
+    at TypeScriptParserMixin.getTokenFromCode (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:4797:11)
+    at TypeScriptParserMixin.getTokenFromCode (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:9987:11)
+    at TypeScriptParserMixin.nextToken (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:5782:10)
+    at TypeScriptParserMixin.next (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:5692:10)
+    at TypeScriptParserMixin.parseTemplateElement (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11785:10)
+    at TypeScriptParserMixin.parseTemplate (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11792:23)
+    at TypeScriptParserMixin.parseExprAtom (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11351:21)
+    at TypeScriptParserMixin.parseExprAtom (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:4764:20)
+    at TypeScriptParserMixin.parseExprSubscripts (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11081:23)
+    at TypeScriptParserMixin.parseUpdate (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11066:21)
+    at TypeScriptParserMixin.parseMaybeUnary (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:11046:23)
+    at TypeScriptParserMixin.parseMaybeUnary (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:9837:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10899:61)
+    at TypeScriptParserMixin.parseExprOps (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10904:23)
+    at TypeScriptParserMixin.parseMaybeConditional (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10881:23)
+    at TypeScriptParserMixin.parseMaybeAssign (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10831:21)
+    at TypeScriptParserMixin.parseMaybeAssign (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:9786:20)
+    at TypeScriptParserMixin.parseExpressionBase (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10784:23)
+    at /Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10780:39
+    at TypeScriptParserMixin.allowInAnd (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12421:16)
+    at TypeScriptParserMixin.parseExpression (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10780:17)
+    at TypeScriptParserMixin.parseStatementContent (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12895:23)
+    at TypeScriptParserMixin.parseStatementContent (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:9508:18)
+    at TypeScriptParserMixin.parseStatementLike (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12767:17)
+    at TypeScriptParserMixin.parseModuleItem (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12744:17)
+    at TypeScriptParserMixin.parseBlockOrModuleBlockBody (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:13316:36)
+    at TypeScriptParserMixin.parseBlockBody (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:13309:10)
+    at TypeScriptParserMixin.parseProgram (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12622:10)
+    at TypeScriptParserMixin.parseTopLevel (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:12612:25)
+    at TypeScriptParserMixin.parse (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:14488:25)
+    at TypeScriptParserMixin.parse (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:10126:18)
+    at parse (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/parser/lib/index.js:14501:26)
+    at parser (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/parser/index.js:41:34)
+    at parser.next (<anonymous>)
+    at normalizeFile (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/transformation/normalize-file.js:64:37)
+    at normalizeFile.next (<anonymous>)
+    at run (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/transformation/index.js:22:50)
+    at run.next (<anonymous>)
+    at transform (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/transform.js:22:33)
+    at transform.next (<anonymous>)
+    at evaluateSync (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/gensync/index.js:251:28)
+    at sync (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/gensync/index.js:89:14)
+    at stopHiding - secret - don't use this - v1 (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/errors/rewrite-stack-trace.js:47:12)
+    at Object.transformSync (/Users/apple/Desktop/Personal/Rhinon Tech/Admin Template/mobile-expo/node_modules/@babel/core/lib/transform.js:40:76)
+ WARN  Route "./(tabs)/profile.tsx" is missing the required default export. Ensure a React component is exported as default.
+ WARN  Route "./(tabs)/settings.tsx" is missing the required default export. Ensure a React component is exported as default.
+ WARN  Route "./(tabs)/settings.tsx" is missing the required default export. Ensure a React component is exported as default.
+ WARN  [Layout children]: No route named "explore" exists in nested children: ["index", "profile", "settings"]
