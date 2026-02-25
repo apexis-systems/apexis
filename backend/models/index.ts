@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { Sequelize, DataTypes } from "sequelize";
 import type { Options } from "sequelize";
-import configParams from "../config/config.ts";
+import configParams from "../config/config.js";
 
 // Because we are using ES Modules ("type": "module"), 
 // we use import.meta.url and import.meta.dirname instead of __dirname.
