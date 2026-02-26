@@ -42,12 +42,50 @@ for (const file of files) {
   db[model.name] = model;
 }
 
-// 3. Run associations if they exist
-Object.keys(db).forEach((modelName) => {
-  if (db[modelName].associate) {
-    db[modelName].associate(db);
-  }
-});
+
+// Plan <-> Organization
+db.Organization.belongsTo(db.Plan, { foreignKey: 'plan_id' });
+db.Plan.hasMany(db.Organization, { foreignKey: 'plan_id' });
+
+// Organization <-> User
+db.User.belongsTo(db.Organization, { foreignKey: 'organization_id' });
+db.Organization.hasMany(db.User, { foreignKey: 'organization_id' });
+
+// Organization <-> Project
+db.Project.belongsTo(db.Organization, { foreignKey: 'organization_id' });
+db.Organization.hasMany(db.Project, { foreignKey: 'organization_id' });
+
+// User <-> Project (Creator)
+db.Project.belongsTo(db.User, { foreignKey: 'created_by' });
+db.User.hasMany(db.Project, { foreignKey: 'created_by' });
+
+// Project <-> ProjectMember
+db.ProjectMember.belongsTo(db.Project, { foreignKey: 'project_id' });
+db.Project.hasMany(db.ProjectMember, { foreignKey: 'project_id' });
+
+// User <-> ProjectMember
+db.ProjectMember.belongsTo(db.User, { foreignKey: 'user_id' });
+db.User.hasMany(db.ProjectMember, { foreignKey: 'user_id' });
+
+// Project <-> Folder
+db.Folder.belongsTo(db.Project, { foreignKey: 'project_id' });
+db.Project.hasMany(db.Folder, { foreignKey: 'project_id' });
+
+// User <-> Folder (Creator)
+db.Folder.belongsTo(db.User, { foreignKey: 'created_by' });
+db.User.hasMany(db.Folder, { foreignKey: 'created_by' });
+
+// Folder <-> Folder (Self-referential parent/child)
+db.Folder.belongsTo(db.Folder, { as: 'parent', foreignKey: 'parent_id' });
+db.Folder.hasMany(db.Folder, { as: 'children', foreignKey: 'parent_id' });
+
+// Folder <-> File
+db.File.belongsTo(db.Folder, { foreignKey: 'folder_id' });
+db.Folder.hasMany(db.File, { foreignKey: 'folder_id' });
+
+// User <-> File (Creator)
+db.File.belongsTo(db.User, { foreignKey: 'created_by' });
+db.User.hasMany(db.File, { foreignKey: 'created_by' });
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
