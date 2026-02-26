@@ -1,0 +1,101 @@
+import fs from "fs";
+import path from "path";
+import { Sequelize, DataTypes } from "sequelize";
+import type { Options } from "sequelize";
+import configParams from "../config/config.js";
+
+// Because we are using ES Modules ("type": "module"), 
+// we use import.meta.url and import.meta.dirname instead of __dirname.
+const basename = path.basename(import.meta.url);
+const currentDir = import.meta.dirname;
+const env = process.env.NODE_ENV || "development";
+const config = (configParams as Record<string, any>)[env];
+const db: any = {};
+let sequelize: Sequelize;
+
+if (config.use_env_variable) {
+  sequelize = new Sequelize(process.env[config.use_env_variable] as string, config as Options);
+} else {
+  sequelize = new Sequelize(
+    config.database,
+    config.username,
+    config.password,
+    config as Options
+  );
+}
+
+// 1. Read all files in the current models directory
+const filesInDir = fs.readdirSync(currentDir).filter((file) => {
+  return (
+    file.indexOf(".") !== 0 &&
+    file !== basename &&
+    file.slice(-3) === ".ts" &&
+    file.indexOf(".test.ts") === -1
+  );
+});
+
+// 2. Dynamically import each model file and initialize it
+for (const file of filesInDir) {
+  const modelModule = await import(`./${file}`);
+  const model = modelModule.default(sequelize, DataTypes);
+  db[model.name] = model;
+}
+
+// Plan <-> Organization
+db.organizations.belongsTo(db.plans, { foreignKey: 'plan_id' });
+db.plans.hasMany(db.organizations, { foreignKey: 'plan_id' });
+
+// Organization <-> User
+db.users.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.users, { foreignKey: 'organization_id' });
+
+// Organization <-> Project
+db.projects.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.projects, { foreignKey: 'organization_id' });
+
+// User <-> Project (Creator)
+db.projects.belongsTo(db.users, { foreignKey: 'created_by' });
+db.users.hasMany(db.projects, { foreignKey: 'created_by' });
+
+// Project <-> ProjectMember
+db.project_members.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.project_members, { foreignKey: 'project_id' });
+
+// User <-> ProjectMember
+db.project_members.belongsTo(db.users, { foreignKey: 'user_id' });
+db.users.hasMany(db.project_members, { foreignKey: 'user_id' });
+
+// Project <-> Folder
+db.folders.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.folders, { foreignKey: 'project_id' });
+
+// User <-> Folder (Creator)
+db.folders.belongsTo(db.users, { foreignKey: 'created_by' });
+db.users.hasMany(db.folders, { foreignKey: 'created_by' });
+
+// Folder <-> Folder (Self-referential parent/child)
+db.folders.belongsTo(db.folders, { as: 'parent', foreignKey: 'parent_id' });
+db.folders.hasMany(db.folders, { as: 'children', foreignKey: 'parent_id' });
+
+// Folder <-> File
+db.files.belongsTo(db.folders, { foreignKey: 'folder_id' });
+db.folders.hasMany(db.files, { foreignKey: 'folder_id' });
+
+// User <-> File (Creator)
+db.files.belongsTo(db.users, { foreignKey: 'created_by' });
+db.users.hasMany(db.files, { foreignKey: 'created_by' });
+
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+
+// Export individual models for destructuring imports (e.g. import { users } from "../models";)
+export const plans = db.plans;
+export const organizations = db.organizations;
+export const users = db.users;
+export const projects = db.projects;
+export const project_members = db.project_members;
+export const folders = db.folders;
+export const files = db.files;
+
+export { sequelize, Sequelize };
+export default db;
