@@ -4,24 +4,26 @@ import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard } from 'luc
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { UserRole } from '@/types';
 
 const MainSidebar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, switchRole } = useAuth() || {};
+  const { t } = useLanguage();
 
-  const basePath = `/${user?.role || 'admin'}/dashboard`;
+  const basePath = `/${user?.role || 'admin'}`;
 
   const navItems = [
-    { icon: Home, label: 'Dashboard', path: `${basePath}` },
-    { icon: Upload, label: 'Upload', path: `${basePath}/upload` },
-    { icon: Clock, label: 'Activity', path: `${basePath}/activity` },
-    { icon: AlertTriangle, label: 'Snag List', path: `${basePath}/snags` },
-    { icon: User, label: 'Profile', path: `${basePath}/profile` },
+    { icon: Home, label: t('dashboard'), path: `${basePath}/dashboard` },
+    { icon: Upload, label: t('upload'), path: `${basePath}/upload` },
+    { icon: Clock, label: t('activity'), path: `${basePath}/activity` },
+    { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },
+    { icon: User, label: t('profile'), path: `${basePath}/profile` },
     ...((user?.role === 'admin' || user?.role === 'superadmin') ? [
-      { icon: Users, label: 'User Mgmt', path: `${basePath}/users` },
-      { icon: CreditCard, label: 'Billing', path: `${basePath}/billing` },
+      { icon: Users, label: t('user_mgmt'), path: `${basePath}/users` },
+      { icon: CreditCard, label: t('billing'), path: `${basePath}/billing` },
     ] : []),
   ];
 
