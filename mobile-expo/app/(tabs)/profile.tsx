@@ -1,89 +1,144 @@
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { mockUser } from '@/utils/mock';
-import { StorageChart } from '@/components/home/StorageChart';
-import { Button, ButtonText } from '@/components/ui/button';
+import { Feather } from '@expo/vector-icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserRole } from '@/types';
+
+const roles: { value: UserRole; label: string }[] = [
+    { value: 'admin', label: 'Admin' },
+    { value: 'contributor', label: 'Contributor' },
+    { value: 'client', label: 'Client' },
+];
+
+const roleBadgeColor: Record<UserRole, { bg: string; text: string }> = {
+    admin: { bg: '#f97316', text: '#fff' },
+    contributor: { bg: '#3b3b3b', text: '#fff' },
+    client: { bg: '#1e1e1e', text: '#888' },
+};
 
 export default function ProfileScreen() {
+    const { user, switchRole, logout } = useAuth();
+    const router = useRouter();
+
+    if (!user) return null;
+
+    const badge = roleBadgeColor[user.role];
+    const roleLabel = user.role.charAt(0).toUpperCase() + user.role.slice(1);
+
+    const handleLogout = () => {
+        Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Sign Out',
+                style: 'destructive',
+                onPress: () => {
+                    logout();
+                    router.replace('/(auth)/login');
+                },
+            },
+        ]);
+    };
+
     return (
-        <SafeAreaView className="flex-1 bg-slate-950" edges={['top']}>
-            {/* Header */}
-            <View className="flex-row justify-between items-center px-6 pt-4 pb-4 border-b border-slate-900">
-                <Text className="text-white text-2xl font-bold">Profile</Text>
-                <TouchableOpacity className="w-10 h-10 bg-slate-900 rounded-full items-center justify-center border border-slate-800">
-                    <MaterialCommunityIcons name="cog-outline" size={20} color="#CBD5E1" />
-                </TouchableOpacity>
-            </View>
-
-            <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-                {/* User Card */}
-                <View className="items-center mt-8 mb-6">
-                    <View className="relative mb-4">
-                        <Image
-                            source={{ uri: mockUser.avatar }}
-                            className="w-28 h-28 rounded-full border-4 border-slate-800"
-                        />
-                        <TouchableOpacity className="absolute bottom-0 right-0 w-8 h-8 bg-indigo-500 rounded-full items-center justify-center border-2 border-slate-950">
-                            <MaterialCommunityIcons name="pencil" size={16} color="white" />
-                        </TouchableOpacity>
-                    </View>
-
-                    <Text className="text-white text-2xl font-bold mb-1">{mockUser.name}</Text>
-                    <Text className="text-slate-400 text-base">{mockUser.email}</Text>
-
-                    <View className="bg-indigo-500/20 px-4 py-1.5 rounded-full mt-3 border border-indigo-500/30">
-                        <Text className="text-indigo-400 font-bold uppercase tracking-widest text-xs">
-                            {mockUser.tier}
-                        </Text>
-                    </View>
-                </View>
-
-                {/* Storage Quick View */}
-                <View className="px-6 mb-8 mt-2">
-                    <Text className="text-white text-lg font-bold mb-4">Storage Plan</Text>
-                    <StorageChart used={mockUser.storage.used} total={mockUser.storage.total} />
-                    <Button
-                        size="md"
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl mt-4 h-12"
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#0d0d0d' }}>
+            <ScrollView contentContainerStyle={{ padding: 20 }}>
+                {/* Avatar + Info */}
+                <View style={{ alignItems: 'center', marginBottom: 32 }}>
+                    <View
+                        style={{
+                            width: 80,
+                            height: 80,
+                            borderRadius: 40,
+                            backgroundColor: '#2a2a2a',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: 12,
+                        }}
                     >
-                        <ButtonText className="font-semibold text-white">Upgrade Plan</ButtonText>
-                    </Button>
-                </View>
-
-                {/* Quick Links Menu */}
-                <View className="px-6 mb-12">
-                    <Text className="text-slate-400 font-semibold uppercase text-xs tracking-wider mb-4 px-2">
-                        Account Settings
-                    </Text>
-
-                    <View className="bg-slate-900 rounded-3xl overflow-hidden border border-slate-800">
-                        <MenuOption icon="shield-check-outline" title="Security & Privacy" />
-                        <MenuOption icon="credit-card-outline" title="Billing Details" />
-                        <MenuOption icon="devices" title="Connected Devices" />
-                        <MenuOption icon="history" title="Activity Log" isLast />
+                        <Feather name="user" size={38} color="#fff" />
                     </View>
-
-                    <TouchableOpacity className="items-center mt-8 py-4">
-                        <Text className="text-rose-500 font-bold">Log Out</Text>
-                    </TouchableOpacity>
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: '#fff' }}>{user.name}</Text>
+                    <Text style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{user.email}</Text>
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            marginTop: 10,
+                            borderRadius: 20,
+                            backgroundColor: badge.bg,
+                            paddingHorizontal: 12,
+                            paddingVertical: 5,
+                        }}
+                    >
+                        <Feather name="shield" size={11} color={badge.text} />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: badge.text }}>{roleLabel}</Text>
+                    </View>
                 </View>
 
+                {/* Role Switcher */}
+                <View
+                    style={{
+                        borderRadius: 14,
+                        backgroundColor: '#111111',
+                        borderWidth: 1,
+                        borderColor: '#2a2a2a',
+                        padding: 16,
+                        marginBottom: 16,
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <Feather name="edit-2" size={14} color="#888" />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Switch Demo Role</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {roles.map((role) => (
+                            <TouchableOpacity
+                                key={role.value}
+                                onPress={() => switchRole(role.value)}
+                                style={{
+                                    flex: 1,
+                                    borderRadius: 12,
+                                    borderWidth: 2,
+                                    borderColor: user.role === role.value ? '#f97316' : '#2a2a2a',
+                                    backgroundColor: user.role === role.value ? 'rgba(249,115,22,0.1)' : '#1a1a1a',
+                                    padding: 12,
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        fontSize: 12,
+                                        fontWeight: '600',
+                                        color: user.role === role.value ? '#f97316' : '#888',
+                                    }}
+                                >
+                                    {role.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Sign Out */}
+                <TouchableOpacity
+                    onPress={handleLogout}
+                    style={{
+                        height: 44,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: 'rgba(239,68,68,0.4)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 8,
+                    }}
+                >
+                    <Feather name="log-out" size={16} color="#ef4444" />
+                    <Text style={{ fontSize: 14, color: '#ef4444', fontWeight: '500' }}>Sign Out</Text>
+                </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
-    );
-}
-
-function MenuOption({ icon, title, isLast = false }: { icon: any, title: string, isLast?: boolean }) {
-    return (
-        <TouchableOpacity className={`flex-row items-center justify-between p-4 px-5 ${!isLast ? 'border-b border-slate-800' : ''}`}>
-            <View className="flex-row items-center gap-4">
-                <View className="w-10 h-10 bg-slate-800 rounded-full items-center justify-center">
-                    <MaterialCommunityIcons name={icon} size={20} color="#94A3B8" />
-                </View>
-                <Text className="text-white text-base font-medium">{title}</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#475569" />
-        </TouchableOpacity>
     );
 }

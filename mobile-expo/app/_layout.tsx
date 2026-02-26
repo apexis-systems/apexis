@@ -1,32 +1,46 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useEffect } from 'react';
 
 import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
 import '@/global.css';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+function RootLayoutNav() {
+  const { isLoggedIn } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    // Defer navigation by one tick so the Root Layout is fully mounted first
+    const timer = setTimeout(() => {
+      const inAuthGroup = segments[0] === '(auth)';
+      if (!isLoggedIn && !inAuthGroup) {
+        router.replace('/(auth)/login');
+      } else if (isLoggedIn && inAuthGroup) {
+        router.replace('/(tabs)');
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isLoggedIn, segments]);
 
   return (
+    <Stack>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="project/[id]" options={{ headerShown: false }} />
+    </Stack>
+  );
+}
 
+export default function RootLayout() {
+  return (
     <GluestackUIProvider mode="dark">
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+        <StatusBar style="light" />
+      </AuthProvider>
     </GluestackUIProvider>
-
   );
 }

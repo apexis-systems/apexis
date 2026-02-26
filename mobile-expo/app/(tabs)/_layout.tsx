@@ -1,51 +1,89 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
 import { Platform } from 'react-native';
-
+import { Feather } from '@expo/vector-icons';
 import { HapticTab } from '@/components/haptic-tab';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const ACCENT = '#f97316';
+const INACTIVE = '#666666';
+const TAB_BG = '#111111';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#6366F1', // Indigo 500
-        tabBarInactiveTintColor: '#64748B', // Slate 500
+        tabBarActiveTintColor: ACCENT,
+        tabBarInactiveTintColor: INACTIVE,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          backgroundColor: '#020617', // Slate 950
+          backgroundColor: TAB_BG,
           borderTopWidth: 1,
-          borderTopColor: '#0F172A', // Slate 900
-          paddingBottom: Platform.OS === 'ios' ? 20 : 0,
-          paddingTop: 10,
-          height: Platform.OS === 'ios' ? 80 : 60,
+          borderTopColor: '#2a2a2a',
+          // Use safe area insets to sit above the Android system nav bar
+          paddingBottom: Platform.OS === 'android' ? insets.bottom + 4 : 20,
+          paddingTop: 8,
+          height: Platform.OS === 'android' ? 60 + insets.bottom : 82,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 9,
           fontWeight: '500',
-          marginTop: 4,
-        }
-      }}>
+          marginTop: 2,
+        },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons size={28} name="home-outline" color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="scan"
+        options={{
+          title: 'Scan',
+          tabBarIcon: ({ color }) => <Feather name="maximize" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="upload"
+        options={{
+          title: 'Upload',
+          tabBarIcon: () => <Feather name="plus" size={24} color="#fff" />,
+          tabBarItemStyle: {
+            marginTop: -12,
+          },
+          tabBarIconStyle: {
+            backgroundColor: ACCENT,
+            borderRadius: 28,
+            width: 44,
+            height: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          tabBarLabelStyle: {
+            fontSize: 9,
+            fontWeight: '500',
+            color: ACCENT,
+            marginTop: 14,
+          },
+        }}
+      />
+      <Tabs.Screen
+        name="activity"
+        options={{
+          title: 'Activity',
+          tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons size={26} name="account-outline" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons size={26} name="cog-outline" color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
     </Tabs>
