@@ -11,7 +11,6 @@ const currentDir = import.meta.dirname;
 const env = process.env.NODE_ENV || "development";
 const config = (configParams as Record<string, any>)[env];
 const db: any = {};
-
 let sequelize: Sequelize;
 
 if (config.use_env_variable) {
@@ -26,7 +25,7 @@ if (config.use_env_variable) {
 }
 
 // 1. Read all files in the current models directory
-const files = fs.readdirSync(currentDir).filter((file) => {
+const filesInDir = fs.readdirSync(currentDir).filter((file) => {
   return (
     file.indexOf(".") !== 0 &&
     file !== basename &&
@@ -36,59 +35,67 @@ const files = fs.readdirSync(currentDir).filter((file) => {
 });
 
 // 2. Dynamically import each model file and initialize it
-for (const file of files) {
+for (const file of filesInDir) {
   const modelModule = await import(`./${file}`);
   const model = modelModule.default(sequelize, DataTypes);
   db[model.name] = model;
 }
 
-
 // Plan <-> Organization
-db.Organization.belongsTo(db.Plan, { foreignKey: 'plan_id' });
-db.Plan.hasMany(db.Organization, { foreignKey: 'plan_id' });
+db.organizations.belongsTo(db.plans, { foreignKey: 'plan_id' });
+db.plans.hasMany(db.organizations, { foreignKey: 'plan_id' });
 
 // Organization <-> User
-db.User.belongsTo(db.Organization, { foreignKey: 'organization_id' });
-db.Organization.hasMany(db.User, { foreignKey: 'organization_id' });
+db.users.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.users, { foreignKey: 'organization_id' });
 
 // Organization <-> Project
-db.Project.belongsTo(db.Organization, { foreignKey: 'organization_id' });
-db.Organization.hasMany(db.Project, { foreignKey: 'organization_id' });
+db.projects.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.projects, { foreignKey: 'organization_id' });
 
 // User <-> Project (Creator)
-db.Project.belongsTo(db.User, { foreignKey: 'created_by' });
-db.User.hasMany(db.Project, { foreignKey: 'created_by' });
+db.projects.belongsTo(db.users, { foreignKey: 'created_by' });
+db.users.hasMany(db.projects, { foreignKey: 'created_by' });
 
 // Project <-> ProjectMember
-db.ProjectMember.belongsTo(db.Project, { foreignKey: 'project_id' });
-db.Project.hasMany(db.ProjectMember, { foreignKey: 'project_id' });
+db.project_members.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.project_members, { foreignKey: 'project_id' });
 
 // User <-> ProjectMember
-db.ProjectMember.belongsTo(db.User, { foreignKey: 'user_id' });
-db.User.hasMany(db.ProjectMember, { foreignKey: 'user_id' });
+db.project_members.belongsTo(db.users, { foreignKey: 'user_id' });
+db.users.hasMany(db.project_members, { foreignKey: 'user_id' });
 
 // Project <-> Folder
-db.Folder.belongsTo(db.Project, { foreignKey: 'project_id' });
-db.Project.hasMany(db.Folder, { foreignKey: 'project_id' });
+db.folders.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.folders, { foreignKey: 'project_id' });
 
 // User <-> Folder (Creator)
-db.Folder.belongsTo(db.User, { foreignKey: 'created_by' });
-db.User.hasMany(db.Folder, { foreignKey: 'created_by' });
+db.folders.belongsTo(db.users, { foreignKey: 'created_by' });
+db.users.hasMany(db.folders, { foreignKey: 'created_by' });
 
 // Folder <-> Folder (Self-referential parent/child)
-db.Folder.belongsTo(db.Folder, { as: 'parent', foreignKey: 'parent_id' });
-db.Folder.hasMany(db.Folder, { as: 'children', foreignKey: 'parent_id' });
+db.folders.belongsTo(db.folders, { as: 'parent', foreignKey: 'parent_id' });
+db.folders.hasMany(db.folders, { as: 'children', foreignKey: 'parent_id' });
 
 // Folder <-> File
-db.File.belongsTo(db.Folder, { foreignKey: 'folder_id' });
-db.Folder.hasMany(db.File, { foreignKey: 'folder_id' });
+db.files.belongsTo(db.folders, { foreignKey: 'folder_id' });
+db.folders.hasMany(db.files, { foreignKey: 'folder_id' });
 
 // User <-> File (Creator)
-db.File.belongsTo(db.User, { foreignKey: 'created_by' });
-db.User.hasMany(db.File, { foreignKey: 'created_by' });
+db.files.belongsTo(db.users, { foreignKey: 'created_by' });
+db.users.hasMany(db.files, { foreignKey: 'created_by' });
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
+
+// Export individual models for destructuring imports (e.g. import { users } from "../models";)
+export const plans = db.plans;
+export const organizations = db.organizations;
+export const users = db.users;
+export const projects = db.projects;
+export const project_members = db.project_members;
+export const folders = db.folders;
+export const files = db.files;
 
 export { sequelize, Sequelize };
 export default db;

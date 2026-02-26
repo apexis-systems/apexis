@@ -19,7 +19,7 @@ export default {
       },
       organization_id: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: "organizations",
           key: "id",

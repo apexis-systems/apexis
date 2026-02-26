@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: apexis-postgres
+    restart: always
+    # We pull these directly from your .env file
+    # so we don't have to hardcode credentials!
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-apexis-database}
+    ports:
+      # Maps your local port from .env (e.g., 5436) to the internal 5432
+      - "${DB_PORT:-5436}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:alpine
+    container_name: apexis-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:

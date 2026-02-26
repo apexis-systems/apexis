@@ -12,7 +12,7 @@ export default {
     await queryInterface.createTable("plans", {
       id: {
         type: Sequelize.INTEGER,
-        primary: true,
+        primaryKey: true,
         allowNull: false,
         autoIncrement: true,
       },

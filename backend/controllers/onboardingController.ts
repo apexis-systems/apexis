@@ -1,0 +1,221 @@
+import type { Request, Response } from "express";
+import crypto from "crypto";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import redis from "../config/redis.ts";
+import { users, organizations, plans } from "../models/index.ts";
+import { sendEmail } from "../utils/email.ts";
+
+const OTP_TTL = 300; // 5 minutes
+
+// ==========================
+// SUPERADMIN ONBOARDING
+// ==========================
+
+export const superadminRequestOtp = async (req: Request, res: Response) => {
+    try {
+        const { name, email, password } = req.body;
+
+        const existingUser = await users.findOne({ where: { email } });
+        if (existingUser) {
+            return res.status(400).json({ error: "Email already registered" });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const otp = crypto.randomBytes(3).toString("hex").toUpperCase();
+        console.log("OTP", otp);
+        const otpHash = await bcrypt.hash(otp, 10);
+
+        const redisKey = `otp:signup:superadmin:${email}`;
+        await redis.set(
+            redisKey,
+            JSON.stringify({ otp_hash: otpHash, name, password_hash: passwordHash }),
+            "EX",
+            OTP_TTL
+        );
+
+        await sendEmail(
+            email,
+            "Your SuperAdmin Verification Code",
+            `Hello ${name},\n\nYour OTP for registration is: ${otp}\n\nIt is valid for 5 minutes.`
+        );
+
+        res.status(200).json({ message: "OTP sent to email" });
+    } catch (error) {
+        console.error("SuperAdmin Request OTP Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const superadminVerifyOtp = async (req: Request, res: Response) => {
+    try {
+        const { email, otp } = req.body;
+        const redisKey = `otp:signup:superadmin:${email}`;
+
+        const redisDataStr = await redis.get(redisKey);
+        if (!redisDataStr) {
+            return res.status(400).json({ error: "OTP expired or invalid" });
+        }
+
+        const { otp_hash, name, password_hash } = JSON.parse(redisDataStr);
+
+        const isOtpValid = await bcrypt.compare(otp, otp_hash);
+        if (!isOtpValid) {
+            return res.status(400).json({ error: "Invalid OTP" });
+        }
+
+        const superAdminCount = await users.count({ where: { role: "superadmin" } });
+        const isPrimary = superAdminCount === 0;
+
+        // Superadmins don't belong to any specific organization
+        const newUser = await users.create({
+            organization_id: null,
+            name,
+            email,
+            password: password_hash,
+            role: "superadmin",
+            is_primary: isPrimary,
+            email_verified: true,
+        });
+
+        await redis.del(redisKey);
+
+        const token = jwt.sign(
+            {
+                user_id: newUser.id,
+                role: newUser.role,
+                organization_id: newUser.organization_id // 1
+            },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "1d" }
+        );
+
+        res.status(201).json({ message: "Signup successful", token });
+    } catch (error) {
+        console.error("SuperAdmin Verify OTP Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// ==========================
+// ADMIN ONBOARDING
+// ==========================
+
+export const adminRequestOtp = async (req: Request, res: Response) => {
+    try {
+        const { name, email, password, organization_name } = req.body;
+
+        const existingUser = await users.findOne({ where: { email } });
+        if (existingUser) {
+            return res.status(400).json({ error: "Email already registered" });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const otp = crypto.randomBytes(3).toString("hex").toUpperCase();
+        console.log("OTP", otp);
+        const otpHash = await bcrypt.hash(otp, 10);
+
+        const redisKey = `otp:signup:admin:${email}`;
+        await redis.set(
+            redisKey,
+            JSON.stringify({
+                otp_hash: otpHash,
+                name,
+                password_hash: passwordHash,
+                organization_name
+            }),
+            "EX",
+            OTP_TTL
+        );
+
+        await sendEmail(
+            email,
+            "Your Admin Verification Code",
+            `Hello ${name},\n\nWelcome to ${organization_name}! Your OTP for registration is: ${otp}\n\nIt is valid for 5 minutes.`
+        );
+
+        res.status(200).json({ message: "OTP sent to email" });
+    } catch (error) {
+        console.error("Admin Request OTP Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const adminVerifyOtp = async (req: Request, res: Response) => {
+    try {
+        const { email, otp } = req.body;
+        const redisKey = `otp:signup:admin:${email}`;
+
+        const redisDataStr = await redis.get(redisKey);
+        if (!redisDataStr) {
+            return res.status(400).json({ error: "OTP expired or invalid" });
+        }
+
+        const { otp_hash, name, password_hash, organization_name } = JSON.parse(redisDataStr);
+
+        const isOtpValid = await bcrypt.compare(otp, otp_hash);
+        if (!isOtpValid) {
+            return res.status(400).json({ error: "Invalid OTP" });
+        }
+
+        const now = new Date();
+        const endDate = new Date();
+        endDate.setDate(now.getDate() + 14);
+
+        const [plan] = await plans.findOrCreate({
+            where: { id: 1 },
+            defaults: {
+                name: "Free Plan",
+                price: 0,
+                storage_limit_mb: 100,
+                duration_days: 14
+            }
+        });
+
+        const [organization] = await organizations.findOrCreate({
+            where: { name: organization_name },
+            defaults: {
+                plan_id: plan.id, // Default Free Plan ID
+                plan_start_date: now,
+                plan_end_date: endDate
+            }
+        });
+
+        const adminCount = await users.count({
+            where: {
+                organization_id: organization.id,
+                role: "admin"
+            }
+        });
+        const isPrimary = adminCount === 0;
+
+        const newUser = await users.create({
+            organization_id: organization.id,
+            name,
+            email,
+            password: password_hash,
+            role: "admin",
+            is_primary: isPrimary,
+            email_verified: true,
+        });
+
+        await redis.del(redisKey);
+
+        const token = jwt.sign(
+            {
+                user_id: newUser.id,
+                role: newUser.role,
+                organization_id: newUser.organization_id
+            },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "1d" }
+        );
+
+        res.status(201).json({ message: "Signup successful", token });
+    } catch (error) {
+        console.error("Admin Verify OTP Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

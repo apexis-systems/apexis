@@ -13,7 +13,7 @@ export default (sequelize: Sequelize) => {
             },
             organization_id: {
                 type: DataTypes.INTEGER,
-                allowNull: false,
+                allowNull: true,
             },
             name: {
                 type: DataTypes.STRING,
@@ -33,6 +33,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
             },
             is_primary: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            email_verified: {
                 type: DataTypes.BOOLEAN,
                 allowNull: false,
                 defaultValue: false,
