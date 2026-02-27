@@ -45,3 +45,11 @@ export const isContributorOrClient = (req: AuthRequest, res: Response, next: Nex
         res.status(403).json({ error: "Requires Project specific role" });
     }
 };
+
+export const isNotClient = (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (req.user && req.user.role !== "client") {
+        next();
+    } else {
+        res.status(403).json({ error: "Clients are not authorized to perform this action" });
+    }
+};
