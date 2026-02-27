@@ -14,6 +14,9 @@ interface ProjectManualsProps {
 
 const ProjectManuals = ({ project }: ProjectManualsProps) => {
   const { user } = useAuth();
+
+  if (!project) return null;
+
   const [manuals, setManuals] = useState<ManualSOP[]>(
     mockManuals.filter((m) => m.projectId === project.id)
   );

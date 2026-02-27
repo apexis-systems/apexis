@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard } from 'lucide-react';
+import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard, LogOut } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,7 +10,7 @@ import { UserRole } from '@/types';
 const MainSidebar = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, switchRole } = useAuth() || {};
+  const { user, switchRole, logout } = useAuth() || {};
   const { t } = useLanguage();
 
   const basePath = `/${user?.role || 'admin'}`;
@@ -80,6 +80,22 @@ const MainSidebar = () => {
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Logout Button */}
+      {logout && (
+        <div className="border-t border-border p-3">
+          <button
+            onClick={() => {
+              logout();
+              router.push('/'); // the middleware handles redirecting to login
+            }}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-red-500 hover:bg-red-500/10 hover:text-red-600"
+          >
+            <LogOut className="h-4 w-4" />
+            {t('logout') || 'Logout'}
+          </button>
         </div>
       )}
     </aside>

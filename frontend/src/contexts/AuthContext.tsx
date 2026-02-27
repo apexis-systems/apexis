@@ -1,13 +1,15 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, UserRole } from '@/types';
-import { mockUsers } from '@/data/mock';
 import Cookies from 'js-cookie';
+import { getMe } from '@/services/authService';
+
 interface AuthContextType {
     user: User | null;
     isLoggedIn: boolean;
-    login: (role: UserRole) => void;
+    isLoading: boolean;
+    login: (token: string) => Promise<User | undefined>;
     logout: () => void;
     switchRole: (role: UserRole) => void;
 }
@@ -15,7 +17,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
     user: null,
     isLoggedIn: false,
-    login: () => { },
+    isLoading: true,
+    login: async () => undefined,
     logout: () => { },
     switchRole: () => { },
 });
@@ -24,38 +27,63 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
-
-    // Load user from cookie on mount
-    React.useEffect(() => {
-        const savedUser = Cookies.get('user');
-        if (savedUser) {
-            try {
-                setUser(JSON.parse(savedUser));
-            } catch (e) {
-                console.error("Failed to parse user cookie", e);
-            }
-        }
-    }, []);
-
-    const login = useCallback((role: UserRole) => {
-        const u = mockUsers[role];
-        setUser(u);
-        Cookies.set('user', JSON.stringify(u), { expires: 7 });
-    }, []);
+    const [isLoading, setIsLoading] = useState(true);
 
     const logout = useCallback(() => {
         setUser(null);
-        Cookies.remove('user');
+        Cookies.remove('token');
     }, []);
 
     const switchRole = useCallback((role: UserRole) => {
-        const u = mockUsers[role];
-        setUser(u);
-        Cookies.set('user', JSON.stringify(u), { expires: 7 });
-    }, []);
+        if (user) {
+            setUser({
+                ...user,
+                role
+            })
+        }
+    }, [user])
+
+    const fetchUser = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const token = Cookies.get('token');
+            if (!token) {
+                setIsLoading(false);
+                return;
+            }
+            const res = await getMe();
+            if (res?.user) {
+                setUser(res.user);
+            }
+        } catch (e) {
+            console.error("Failed to fetch user context", e);
+            logout();
+        } finally {
+            setIsLoading(false);
+        }
+    }, [logout]);
+
+    useEffect(() => {
+        fetchUser();
+    }, [fetchUser]);
+
+    const login = useCallback(async (token: string) => {
+        Cookies.set('token', token, { expires: 1 });
+        try {
+            const res = await getMe();
+            if (res?.user) {
+                setUser(res.user);
+                return res.user as User;
+            }
+        } catch (e) {
+            console.error("Failed to login", e);
+            logout();
+            throw e;
+        }
+    }, [logout]);
 
     return (
-        <AuthContext.Provider value={{ user, isLoggedIn: !!user, login, logout, switchRole }}>
+        <AuthContext.Provider value={{ user, isLoggedIn: !!user, isLoading, login, logout, switchRole }}>
             {children}
         </AuthContext.Provider>
     );

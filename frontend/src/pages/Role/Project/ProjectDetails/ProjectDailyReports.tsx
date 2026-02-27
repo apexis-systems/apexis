@@ -11,6 +11,8 @@ interface ProjectDailyReportsProps {
 }
 
 const ProjectDailyReports = ({ project, userRole }: ProjectDailyReportsProps) => {
+  if (!project) return null;
+
   const dailyReports = mockReports.filter(
     (r) => r.projectId === project.id && r.type === 'daily'
   );

@@ -177,3 +177,29 @@ export const projectLogin = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+// ==========================
+// GET CURRENT USER /me
+// ==========================
+
+export const me = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        const user = await users.findByPk(authUser.user_id, {
+            attributes: { exclude: ['password'] }
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        res.status(200).json({ user });
+    } catch (error) {
+        console.error("Me Route Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

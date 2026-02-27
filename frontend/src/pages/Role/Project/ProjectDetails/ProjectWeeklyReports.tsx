@@ -11,6 +11,8 @@ interface ProjectWeeklyReportsProps {
 }
 
 const ProjectWeeklyReports = ({ project, userRole }: ProjectWeeklyReportsProps) => {
+  if (!project) return null;
+
   const weeklyReports = mockReports.filter(
     (r) => r.projectId === project.id && r.type === 'weekly'
   );

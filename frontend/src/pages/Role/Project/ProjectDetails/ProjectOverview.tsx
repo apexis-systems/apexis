@@ -11,6 +11,8 @@ interface ProjectOverviewProps {
 }
 
 const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
+  if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">Loading project overview...</div>;
+
   const reports = mockReports.filter((r) => r.projectId === project.id);
   const dailyReports = reports.filter((r) => r.type === 'daily');
   const weeklyReports = reports.filter((r) => r.type === 'weekly');

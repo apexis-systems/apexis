@@ -18,6 +18,9 @@ interface ProjectDocumentsProps {
 
 const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const router = useRouter();
+
+  if (!project) return null;
+
   const [docs, setDocs] = useState<ProjectDocument[]>(
     mockDocuments.filter((d) => d.projectId === project.id)
   );

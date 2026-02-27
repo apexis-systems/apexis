@@ -18,6 +18,9 @@ interface ProjectPhotosProps {
 
 const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const router = useRouter();
+
+  if (!project) return null;
+
   const [photos, setPhotos] = useState<ProjectPhoto[]>(
     mockPhotos.filter((p) => p.projectId === project.id)
   );

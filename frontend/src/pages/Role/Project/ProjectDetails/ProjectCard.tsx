@@ -9,6 +9,8 @@ interface ProjectCardProps {
 }
 
 const ProjectCard = ({ project, onClick }: ProjectCardProps) => {
+  if (!project) return null;
+
   return (
     <button
       onClick={onClick}

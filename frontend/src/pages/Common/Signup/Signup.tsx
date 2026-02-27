@@ -2,45 +2,89 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { requestSuperAdminOtp, requestAdminOtp, verifySuperAdminOtp, verifyAdminOtp } from '@/services/authService';
+import Cookies from 'js-cookie';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Signup = () => {
-    const [contact, setContact] = useState('');
-    const [step, setStep] = useState<'contact' | 'otp' | 'role'>('contact');
+    const [step, setStep] = useState<'details' | 'otp'>('details');
+    const [selectedRole, setSelectedRole] = useState<'superadmin' | 'admin'>('admin');
+
+    // Form fields
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [orgName, setOrgName] = useState('');
     const [otp, setOtp] = useState('');
-    const [selectedRole, setSelectedRole] = useState<'superadmin' | 'admin' | 'contributor' | 'client'>('contributor');
-    const auth = useAuth();
+
+    // UI states
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
     const router = useRouter();
+    const auth = useAuth();
 
-    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
-    const isMobile = /^\d{10}$/.test(contact);
-    const isValidContact = isEmail || isMobile;
+    const handleSendOtp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError('');
 
-    const handleSendOtp = () => {
-        if (!isValidContact) { alert('Please enter a valid email or 10-digit mobile number'); return; }
-        setStep('otp');
+        try {
+            if (selectedRole === 'superadmin') {
+                await requestSuperAdminOtp({ name, email, password });
+            } else {
+                if (!orgName.trim()) {
+                    throw new Error("Organization Name is required for Admins");
+                }
+                await requestAdminOtp({ name, email, password, organization_name: orgName });
+            }
+            setStep('otp');
+        } catch (err: any) {
+            setError(err.response?.data?.error || "Failed to send OTP. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleVerifyOtp = () => {
-        if (otp.length !== 6) { alert('Please enter a 6-digit OTP'); return; }
-        setStep('role');
+    const handleVerifyOtp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (otp.length !== 6) { setError('Please enter a 6-digit OTP'); return; }
+
+        setIsLoading(true);
+        setError('');
+
+        try {
+            let res;
+            if (selectedRole === 'superadmin') {
+                res = await verifySuperAdminOtp({ email, otp });
+            } else {
+                res = await verifyAdminOtp({ email, otp });
+            }
+
+            if (res?.token) {
+                if (auth?.login) {
+                    const user = await auth.login(res.token);
+                    if (user?.role) {
+                        router.push(`/${user.role}/dashboard`);
+                        return;
+                    }
+                }
+                router.push(`/`);
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.error || "Invalid OTP. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleCreateAccount = () => {
-        if (auth?.login) auth.login(selectedRole);
-        router.push(`/${selectedRole}/dashboard`);
-    };
-
-    const roles: { value: 'superadmin' | 'admin' | 'contributor' | 'client'; label: string; desc: string }[] = [
+    const roles: { value: 'superadmin' | 'admin'; label: string; desc: string }[] = [
         { value: 'superadmin', label: 'Super Admin', desc: 'System management' },
         { value: 'admin', label: 'Admin', desc: 'Full project control' },
-        { value: 'contributor', label: 'Contributor', desc: 'Upload & view assigned' },
-        { value: 'client', label: 'Client', desc: 'View shared files only' },
     ];
 
     return (
@@ -55,37 +99,104 @@ const Signup = () => {
 
             <Card className="w-full max-w-sm border-0 shadow-none">
                 <CardContent className="p-0">
-                    {step === 'contact' && (
-                        <div className="space-y-5">
+                    {step === 'details' && (
+                        <form onSubmit={handleSendOtp} className="space-y-5">
                             <div className="space-y-2">
-                                <Label htmlFor="contact" className="text-sm font-medium">Email or Mobile Number</Label>
-                                <Input
-                                    id="contact"
-                                    type="text"
-                                    placeholder="you@company.com or 9876543210"
-                                    value={contact}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setContact(e.target.value)}
-                                    className="h-12 rounded-xl bg-secondary border-0 text-base"
-                                />
-                                {contact && !isValidContact && (
-                                    <p className="text-xs text-destructive">Enter a valid email or 10-digit mobile number</p>
-                                )}
+                                <Label className="text-sm font-medium">Select Your Role</Label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {roles.map((role) => (
+                                        <button
+                                            key={role.value}
+                                            type="button"
+                                            onClick={() => { setSelectedRole(role.value); setError(''); }}
+                                            className={`rounded-xl border-2 p-3 text-center transition-all ${selectedRole === role.value
+                                                ? 'border-accent bg-accent/10'
+                                                : 'border-border bg-secondary'
+                                                }`}
+                                        >
+                                            <div className="text-xs font-bold">{role.label}</div>
+                                            <div className="mt-0.5 text-[10px] text-muted-foreground">{role.desc}</div>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="name" className="text-sm font-medium">Full Name</Label>
+                                <Input
+                                    id="name"
+                                    type="text"
+                                    placeholder="John Doe"
+                                    value={name}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
+                                    className="h-12 rounded-xl bg-secondary border-0 text-base"
+                                    required
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="email" className="text-sm font-medium">Work Email</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    placeholder="you@company.com"
+                                    value={email}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                                    className="h-12 rounded-xl bg-secondary border-0 text-base"
+                                    required
+                                />
+                            </div>
+
+                            {selectedRole === 'admin' && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="orgName" className="text-sm font-medium">Organization Name</Label>
+                                    <Input
+                                        id="orgName"
+                                        type="text"
+                                        placeholder="Acme Corp"
+                                        value={orgName}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOrgName(e.target.value)}
+                                        className="h-12 rounded-xl bg-secondary border-0 text-base"
+                                        required
+                                    />
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                                <Input
+                                    id="password"
+                                    type="password"
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                                    className="h-12 rounded-xl bg-secondary border-0 text-base"
+                                    required
+                                    minLength={6}
+                                />
+                            </div>
+
+                            {error && (
+                                <div className="text-red-500 text-sm font-medium text-center">
+                                    {error}
+                                </div>
+                            )}
+
                             <Button
-                                onClick={handleSendOtp}
-                                disabled={!isValidContact}
+                                type="submit"
+                                disabled={isLoading}
                                 className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-accent-foreground hover:bg-accent/90"
                             >
-                                Send OTP
+                                {isLoading ? 'Sending...' : 'Send OTP'}
                             </Button>
-                        </div>
+                        </form>
                     )}
 
                     {step === 'otp' && (
-                        <div className="space-y-5">
+                        <form onSubmit={handleVerifyOtp} className="space-y-5">
                             <div className="space-y-3">
                                 <Label className="text-sm font-medium">Enter 6-digit OTP</Label>
-                                <p className="text-xs text-muted-foreground">Sent to {contact}</p>
+                                <p className="text-xs text-muted-foreground">Sent to {email}</p>
                                 <div className="flex justify-center">
                                     <InputOTP maxLength={6} value={otp} onChange={setOtp}>
                                         <InputOTPGroup>
@@ -99,51 +210,29 @@ const Signup = () => {
                                     </InputOTP>
                                 </div>
                             </div>
+
+                            {error && (
+                                <div className="text-red-500 text-sm font-medium text-center">
+                                    {error}
+                                </div>
+                            )}
+
                             <Button
-                                onClick={handleVerifyOtp}
-                                disabled={otp.length !== 6}
+                                type="submit"
+                                disabled={otp.length !== 6 || isLoading}
                                 className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-accent-foreground hover:bg-accent/90"
                             >
-                                Verify OTP
+                                {isLoading ? 'Verifying...' : 'Verify OTP & Create Account'}
                             </Button>
+
                             <button
                                 type="button"
-                                onClick={() => { setStep('contact'); setOtp(''); }}
+                                onClick={() => { setStep('details'); setOtp(''); setError(''); }}
                                 className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
                             >
-                                ← Change {isEmail ? 'email' : 'number'}
+                                ← Change details
                             </button>
-                        </div>
-                    )}
-
-                    {step === 'role' && (
-                        <div className="space-y-5">
-                            <div className="space-y-2">
-                                <Label className="text-sm font-medium">Select Your Role</Label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {roles.map((role) => (
-                                        <button
-                                            key={role.value}
-                                            type="button"
-                                            onClick={() => setSelectedRole(role.value)}
-                                            className={`rounded-xl border-2 p-3 text-center transition-all ${selectedRole === role.value
-                                                ? 'border-accent bg-accent/10'
-                                                : 'border-border bg-secondary'
-                                                }`}
-                                        >
-                                            <div className="text-xs font-bold">{role.label}</div>
-                                            <div className="mt-0.5 text-[10px] text-muted-foreground">{role.desc}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <Button
-                                onClick={handleCreateAccount}
-                                className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-accent-foreground hover:bg-accent/90"
-                            >
-                                Create Account
-                            </Button>
-                        </div>
+                        </form>
                     )}
 
                     <div className="mt-6 text-center">

@@ -26,6 +26,9 @@ const statusConfig: Record<SnagStatus, { icon: React.ElementType; bg: string; te
 
 const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => {
   const { user } = useAuth();
+
+  if (!project) return null;
+
   const [snags, setSnags] = useState<SnagItem[]>(
     mockSnags.filter((s) => s.projectId === project.id)
   );
