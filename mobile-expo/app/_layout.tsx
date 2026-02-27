@@ -8,11 +8,14 @@ import '@/global.css';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 function RootLayoutNav() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
+    // Wait until initial API token profile fetch resolves
+    if (isLoading) return;
+
     // Defer navigation by one tick so the Root Layout is fully mounted first
     const timer = setTimeout(() => {
       const inAuthGroup = segments[0] === '(auth)';
@@ -23,7 +26,11 @@ function RootLayoutNav() {
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [isLoggedIn, segments]);
+  }, [isLoggedIn, isLoading, segments]);
+
+  if (isLoading) {
+    return null;
+  }
 
   return (
     <Stack>

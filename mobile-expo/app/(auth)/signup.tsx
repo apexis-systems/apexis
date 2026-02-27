@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -7,55 +7,72 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
-    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/types';
+import { requestAdminOtp, verifyAdminOtp } from '@/services/authService';
 
-type Step = 'contact' | 'otp' | 'role';
-
-const roles: { value: UserRole; label: string; desc: string }[] = [
-    { value: 'admin', label: 'Admin', desc: 'Full project control' },
-    { value: 'contributor', label: 'Contributor', desc: 'Upload & view assigned' },
-    { value: 'client', label: 'Client', desc: 'View shared files only' },
-];
+type Step = 'details' | 'otp';
 
 export default function SignUpScreen() {
-    const [step, setStep] = useState<Step>('contact');
-    const [contact, setContact] = useState('');
+    const [step, setStep] = useState<Step>('details');
+
+    // Details
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [orgName, setOrgName] = useState('');
+    const [password, setPassword] = useState('');
+
+    // OTP
     const [otp, setOtp] = useState('');
-    const [selectedRole, setSelectedRole] = useState<UserRole>('contributor');
+
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
     const { login } = useAuth();
     const router = useRouter();
 
-    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
-    const isMobile = /^\d{10}$/.test(contact);
-    const isValidContact = isEmail || isMobile;
-    const contactType = isEmail ? 'email' : 'number';
-
-    const handleSendOtp = () => {
-        if (!isValidContact) {
-            Alert.alert('Invalid', 'Please enter a valid email or 10-digit mobile number');
+    const handleSendOtp = async () => {
+        if (!name || !email || !orgName || password.length < 6) {
+            setError('Please fill all fields and ensure password is >= 6 chars');
             return;
         }
-        Alert.alert('OTP Sent', `OTP sent to ${contact}`);
-        setStep('otp');
+
+        setIsLoading(true);
+        setError('');
+
+        try {
+            await requestAdminOtp({ name, email, password, organization_name: orgName });
+            setStep('otp');
+        } catch (err: any) {
+            setError(err.response?.data?.error || "Failed to send OTP. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleVerifyOtp = () => {
+    const handleVerifyOtp = async () => {
         if (otp.length !== 6) {
-            Alert.alert('Invalid', 'Please enter the 6-digit OTP');
+            setError('Please enter the 6-digit OTP');
             return;
         }
-        // Mock: accept any 6-digit code
-        setStep('role');
-    };
 
-    const handleCreateAccount = () => {
-        login(selectedRole);
-        router.replace('/(tabs)');
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const res = await verifyAdminOtp({ email, otp });
+            if (res?.token) {
+                await login(res.token);
+                router.replace('/(tabs)');
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.error || "Invalid OTP. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -87,13 +104,13 @@ export default function SignUpScreen() {
                             apexis
                         </Text>
                         <Text style={{ fontSize: 11, color: '#888', marginTop: 4, letterSpacing: 4 }}>
-                            CREATE YOUR ACCOUNT
+                            CREATE ADMIN ACCOUNT
                         </Text>
                     </View>
 
                     {/* Step indicators */}
                     <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 32 }}>
-                        {(['contact', 'otp', 'role'] as Step[]).map((s, i) => (
+                        {(['details', 'otp'] as Step[]).map((s, i) => (
                             <View
                                 key={s}
                                 style={{
@@ -101,23 +118,44 @@ export default function SignUpScreen() {
                                     height: 8,
                                     borderRadius: 4,
                                     backgroundColor: step === s ? '#f97316' :
-                                        (['contact', 'otp', 'role'].indexOf(step) > i) ? '#f9731666' : '#2a2a2a',
+                                        (['details', 'otp'].indexOf(step) > i) ? '#f9731666' : '#2a2a2a',
                                 }}
                             />
                         ))}
                     </View>
 
-                    {/* Step 1: Contact */}
-                    {step === 'contact' && (
+                    {/* Step 1: Details */}
+                    {step === 'details' && (
                         <View style={{ gap: 16 }}>
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
-                                    Email or Mobile Number
+                                    Full Name
                                 </Text>
                                 <TextInput
-                                    value={contact}
-                                    onChangeText={setContact}
-                                    placeholder="you@company.com or 9876543210"
+                                    value={name}
+                                    onChangeText={(val) => { setName(val); setError(''); }}
+                                    placeholder="John Doe"
+                                    placeholderTextColor="#555"
+                                    autoCapitalize="words"
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: '#1e1e1e',
+                                        color: '#fff',
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                            </View>
+
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                    Work Email
+                                </Text>
+                                <TextInput
+                                    value={email}
+                                    onChangeText={(val) => { setEmail(val); setError(''); }}
+                                    placeholder="you@company.com"
                                     placeholderTextColor="#555"
                                     keyboardType="email-address"
                                     autoCapitalize="none"
@@ -130,27 +168,76 @@ export default function SignUpScreen() {
                                         fontSize: 15,
                                     }}
                                 />
-                                {contact.length > 0 && !isValidContact && (
-                                    <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 5 }}>
-                                        Enter a valid email or 10-digit mobile number
-                                    </Text>
-                                )}
                             </View>
+
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                    Organization Name
+                                </Text>
+                                <TextInput
+                                    value={orgName}
+                                    onChangeText={(val) => { setOrgName(val); setError(''); }}
+                                    placeholder="Acme Corp"
+                                    placeholderTextColor="#555"
+                                    autoCapitalize="words"
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: '#1e1e1e',
+                                        color: '#fff',
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                            </View>
+
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                    Password
+                                </Text>
+                                <TextInput
+                                    value={password}
+                                    onChangeText={(val) => { setPassword(val); setError(''); }}
+                                    placeholder="••••••••"
+                                    placeholderTextColor="#555"
+                                    secureTextEntry
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: '#1e1e1e',
+                                        color: '#fff',
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                            </View>
+
+                            {error ? (
+                                <Text style={{ color: '#ef4444', textAlign: 'center', marginBottom: 4, fontSize: 13 }}>
+                                    {error}
+                                </Text>
+                            ) : null}
 
                             <TouchableOpacity
                                 onPress={handleSendOtp}
-                                disabled={!isValidContact}
+                                disabled={isLoading}
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
-                                    backgroundColor: isValidContact ? '#f97316' : '#2a2a2a',
+                                    backgroundColor: '#f97316',
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    marginTop: 8,
+                                    opacity: isLoading ? 0.7 : 1,
                                 }}
                             >
-                                <Text style={{ fontSize: 15, fontWeight: '600', color: isValidContact ? '#fff' : '#555' }}>
-                                    Send OTP
-                                </Text>
+                                {isLoading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>
+                                        Send OTP
+                                    </Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     )}
@@ -163,7 +250,7 @@ export default function SignUpScreen() {
                                     Enter 6-digit OTP
                                 </Text>
                                 <Text style={{ fontSize: 11, color: '#888', marginBottom: 16 }}>
-                                    Sent to {contact}
+                                    Sent to {email}
                                 </Text>
 
                                 {/* OTP boxes */}
@@ -192,7 +279,7 @@ export default function SignUpScreen() {
                                 {/* Hidden OTP input */}
                                 <TextInput
                                     value={otp}
-                                    onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, '').slice(0, 6))}
+                                    onChangeText={(val) => { setOtp(val.replace(/[^0-9]/g, '').slice(0, 6)); setError(''); }}
                                     keyboardType="number-pad"
                                     maxLength={6}
                                     style={{
@@ -205,9 +292,15 @@ export default function SignUpScreen() {
                                 />
                             </View>
 
+                            {error ? (
+                                <Text style={{ color: '#ef4444', textAlign: 'center', marginBottom: 4, fontSize: 13 }}>
+                                    {error}
+                                </Text>
+                            ) : null}
+
                             <TouchableOpacity
                                 onPress={handleVerifyOtp}
-                                disabled={otp.length !== 6}
+                                disabled={otp.length !== 6 || isLoading}
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
@@ -215,75 +308,24 @@ export default function SignUpScreen() {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     marginTop: 8,
+                                    opacity: isLoading ? 0.7 : 1,
                                 }}
                             >
-                                <Text style={{ fontSize: 15, fontWeight: '600', color: otp.length === 6 ? '#fff' : '#555' }}>
-                                    Verify OTP
-                                </Text>
+                                {isLoading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={{ fontSize: 15, fontWeight: '600', color: otp.length === 6 ? '#fff' : '#555' }}>
+                                        Verify OTP & Create Account
+                                    </Text>
+                                )}
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                onPress={() => { setStep('contact'); setOtp(''); }}
+                                onPress={() => { setStep('details'); setOtp(''); setError(''); }}
                                 style={{ alignItems: 'center', paddingVertical: 4 }}
                             >
                                 <Text style={{ fontSize: 13, color: '#888' }}>
-                                    ← Change {contactType}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {/* Step 3: Role */}
-                    {step === 'role' && (
-                        <View style={{ gap: 16 }}>
-                            <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 10 }}>
-                                    Select Your Role
-                                </Text>
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                    {roles.map((role) => (
-                                        <TouchableOpacity
-                                            key={role.value}
-                                            onPress={() => setSelectedRole(role.value)}
-                                            style={{
-                                                flex: 1,
-                                                borderRadius: 12,
-                                                borderWidth: 2,
-                                                borderColor: selectedRole === role.value ? '#f97316' : '#2a2a2a',
-                                                backgroundColor: selectedRole === role.value ? 'rgba(249,115,22,0.1)' : '#1e1e1e',
-                                                padding: 12,
-                                                alignItems: 'center',
-                                            }}
-                                        >
-                                            <Text
-                                                style={{
-                                                    fontSize: 11,
-                                                    fontWeight: '700',
-                                                    color: selectedRole === role.value ? '#f97316' : '#fff',
-                                                }}
-                                            >
-                                                {role.label}
-                                            </Text>
-                                            <Text style={{ fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' }}>
-                                                {role.desc}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-
-                            <TouchableOpacity
-                                onPress={handleCreateAccount}
-                                style={{
-                                    height: 48,
-                                    borderRadius: 12,
-                                    backgroundColor: '#f97316',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>
-                                    Create Account
+                                    ← Change Details
                                 </Text>
                             </TouchableOpacity>
                         </View>

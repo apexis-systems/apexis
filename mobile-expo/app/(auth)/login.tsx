@@ -7,11 +7,13 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
+    ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { loginAdmin, loginProject } from '@/services/authService';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
     { value: 'admin', label: 'Admin', desc: 'Full project control' },
@@ -22,13 +24,41 @@ const roles: { value: UserRole; label: string; desc: string }[] = [
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
+    const [projectCode, setProjectCode] = useState('');
+    const [clientName, setClientName] = useState('');
+
+    const [selectedRole, setSelectedRole] = useState<Exclude<UserRole, 'superadmin'>>('admin');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
     const { login } = useAuth();
     const router = useRouter();
 
-    const handleLogin = () => {
-        login(selectedRole);
-        router.replace('/(tabs)');
+    const handleLogin = async () => {
+        setIsLoading(true);
+        setError('');
+
+        try {
+            let res;
+            if (selectedRole === 'admin') {
+                console.log(email, password)
+                res = await loginAdmin({ email, password });
+                console.log(res)
+            } else if (selectedRole === 'contributor') {
+                res = await loginProject({ email, code: projectCode });
+            } else if (selectedRole === 'client') {
+                res = await loginProject({ name: clientName, code: projectCode });
+            }
+
+            if (res?.token) {
+                const user = await login(res.token);
+                router.replace('/(tabs)');
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.error || "Login failed. Please check your credentials.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -64,69 +94,119 @@ export default function LoginScreen() {
                         </Text>
                     </View>
 
-                    {/* Email */}
-                    <View style={{ marginBottom: 16 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
-                            Work Email
-                        </Text>
-                        <TextInput
-                            value={email}
-                            onChangeText={setEmail}
-                            placeholder="you@company.com"
-                            placeholderTextColor="#555"
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            style={{
-                                height: 48,
-                                borderRadius: 12,
-                                backgroundColor: '#1e1e1e',
-                                color: '#fff',
-                                paddingHorizontal: 14,
-                                fontSize: 15,
-                            }}
-                        />
-                    </View>
+                    {/* Dynamic Inputs Based on Role */}
+                    {selectedRole === 'client' ? (
+                        <View style={{ marginBottom: 16 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                Your Name
+                            </Text>
+                            <TextInput
+                                value={clientName}
+                                onChangeText={setClientName}
+                                placeholder="John Doe"
+                                placeholderTextColor="#555"
+                                style={{
+                                    height: 48,
+                                    borderRadius: 12,
+                                    backgroundColor: '#1e1e1e',
+                                    color: '#fff',
+                                    paddingHorizontal: 14,
+                                    fontSize: 15,
+                                }}
+                            />
+                        </View>
+                    ) : (
+                        <View style={{ marginBottom: 16 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                Work Email
+                            </Text>
+                            <TextInput
+                                value={email}
+                                onChangeText={setEmail}
+                                placeholder="you@company.com"
+                                placeholderTextColor="#555"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                style={{
+                                    height: 48,
+                                    borderRadius: 12,
+                                    backgroundColor: '#1e1e1e',
+                                    color: '#fff',
+                                    paddingHorizontal: 14,
+                                    fontSize: 15,
+                                }}
+                            />
+                        </View>
+                    )}
 
-                    {/* Password */}
-                    <View style={{ marginBottom: 20 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
-                            Password
-                        </Text>
-                        <TextInput
-                            value={password}
-                            onChangeText={setPassword}
-                            placeholder="••••••••"
-                            placeholderTextColor="#555"
-                            secureTextEntry
-                            style={{
-                                height: 48,
-                                borderRadius: 12,
-                                backgroundColor: '#1e1e1e',
-                                color: '#fff',
-                                paddingHorizontal: 14,
-                                fontSize: 15,
-                            }}
-                        />
-                    </View>
+                    {selectedRole === 'admin' && (
+                        <View style={{ marginBottom: 16 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                Password
+                            </Text>
+                            <TextInput
+                                value={password}
+                                onChangeText={setPassword}
+                                placeholder="••••••••"
+                                placeholderTextColor="#555"
+                                secureTextEntry
+                                style={{
+                                    height: 48,
+                                    borderRadius: 12,
+                                    backgroundColor: '#1e1e1e',
+                                    color: '#fff',
+                                    paddingHorizontal: 14,
+                                    fontSize: 15,
+                                }}
+                            />
+                        </View>
+                    )}
 
-                    {/* Demo Role Selector */}
+                    {(selectedRole === 'contributor' || selectedRole === 'client') && (
+                        <View style={{ marginBottom: 16 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                Project Code
+                            </Text>
+                            <TextInput
+                                value={projectCode}
+                                onChangeText={setProjectCode}
+                                placeholder="e.g. ABC123XYZ"
+                                placeholderTextColor="#555"
+                                autoCapitalize="characters"
+                                style={{
+                                    height: 48,
+                                    borderRadius: 12,
+                                    backgroundColor: '#1e1e1e',
+                                    color: '#fff',
+                                    paddingHorizontal: 14,
+                                    fontSize: 15,
+                                }}
+                            />
+                        </View>
+                    )}
+
+                    {/* Role Selector */}
                     <View style={{ marginBottom: 24 }}>
                         <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 8 }}>
-                            Demo Role
+                            Select Role
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             {roles.map((role) => (
                                 <TouchableOpacity
                                     key={role.value}
-                                    onPress={() => setSelectedRole(role.value)}
+                                    onPress={() => {
+                                        setSelectedRole(role.value as Exclude<UserRole, 'superadmin'>);
+                                        setError('');
+                                    }}
                                     style={{
                                         flex: 1,
                                         borderRadius: 12,
                                         borderWidth: 2,
                                         borderColor: selectedRole === role.value ? '#f97316' : '#2a2a2a',
                                         backgroundColor: selectedRole === role.value ? 'rgba(249,115,22,0.1)' : '#1e1e1e',
-                                        padding: 10,
+                                        padding: 8,
                                         alignItems: 'center',
+                                        justifyContent: 'center',
                                     }}
                                 >
                                     <Text
@@ -138,7 +218,7 @@ export default function LoginScreen() {
                                     >
                                         {role.label}
                                     </Text>
-                                    <Text style={{ fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' }}>
+                                    <Text style={{ fontSize: 9, color: '#888', marginTop: 2, textAlign: 'center' }}>
                                         {role.desc}
                                     </Text>
                                 </TouchableOpacity>
@@ -146,9 +226,16 @@ export default function LoginScreen() {
                         </View>
                     </View>
 
+                    {error ? (
+                        <Text style={{ color: '#ef4444', textAlign: 'center', marginBottom: 12, fontSize: 13 }}>
+                            {error}
+                        </Text>
+                    ) : null}
+
                     {/* Sign In Button */}
                     <TouchableOpacity
                         onPress={handleLogin}
+                        disabled={isLoading}
                         style={{
                             height: 48,
                             borderRadius: 12,
@@ -156,14 +243,14 @@ export default function LoginScreen() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginBottom: 14,
+                            opacity: isLoading ? 0.7 : 1,
                         }}
                     >
-                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Sign In</Text>
-                    </TouchableOpacity>
-
-                    {/* SSO */}
-                    <TouchableOpacity style={{ alignItems: 'center', marginBottom: 16 }}>
-                        <Text style={{ fontSize: 13, color: '#888' }}>Sign in with SSO →</Text>
+                        {isLoading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Sign In</Text>
+                        )}
                     </TouchableOpacity>
 
                     {/* Sign Up */}

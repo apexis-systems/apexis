@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, UserRole } from '@/types';
-import { mockUsers } from '@/data/mock';
+import * as SecureStore from 'expo-secure-store';
+import { getMe } from '@/services/authService';
 
 interface AuthContextType {
     user: User | null;
     isLoggedIn: boolean;
-    login: (role: UserRole) => void;
+    isLoading: boolean;
+    login: (token: string) => Promise<User | undefined>;
     logout: () => void;
     switchRole: (role: UserRole) => void;
 }
@@ -13,7 +15,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
     user: null,
     isLoggedIn: false,
-    login: () => { },
+    isLoading: true,
+    login: async () => undefined,
     logout: () => { },
     switchRole: () => { },
 });
@@ -22,21 +25,60 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const login = useCallback((role: UserRole) => {
-        setUser(mockUsers[role]);
-    }, []);
-
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
         setUser(null);
+        await SecureStore.deleteItemAsync('token');
     }, []);
+
+    const fetchUser = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const token = await SecureStore.getItemAsync('token');
+            if (!token) {
+                setIsLoading(false);
+                return;
+            }
+            const res = await getMe();
+            if (res?.user) {
+                setUser(res.user);
+            }
+        } catch (e) {
+            console.error("Failed to fetch user context", e);
+            logout();
+        } finally {
+            setIsLoading(false);
+        }
+    }, [logout]);
+
+    useEffect(() => {
+        fetchUser();
+    }, [fetchUser]);
+
+    const login = useCallback(async (token: string) => {
+        await SecureStore.setItemAsync('token', token);
+        try {
+            const res = await getMe();
+            if (res?.user) {
+                setUser(res.user);
+                return res.user as User;
+            }
+        } catch (e) {
+            console.error("Failed to login", e);
+            logout();
+            throw e;
+        }
+    }, [logout]);
 
     const switchRole = useCallback((role: UserRole) => {
-        setUser(mockUsers[role]);
-    }, []);
+        if (user) {
+            setUser({ ...user, role });
+        }
+    }, [user]);
 
     return (
-        <AuthContext.Provider value={{ user, isLoggedIn: !!user, login, logout, switchRole }}>
+        <AuthContext.Provider value={{ user, isLoggedIn: !!user, isLoading, login, logout, switchRole }}>
             {children}
         </AuthContext.Provider>
     );

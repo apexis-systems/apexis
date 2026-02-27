@@ -23,7 +23,7 @@ export const superadminRequestOtp = async (req: Request, res: Response) => {
 
         const passwordHash = await bcrypt.hash(password, 10);
 
-        const otp = crypto.randomBytes(3).toString("hex").toUpperCase();
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
         console.log("OTP", otp);
         const otpHash = await bcrypt.hash(otp, 10);
 
@@ -113,7 +113,7 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
 
         const passwordHash = await bcrypt.hash(password, 10);
 
-        const otp = crypto.randomBytes(3).toString("hex").toUpperCase();
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
         console.log("OTP", otp);
         const otpHash = await bcrypt.hash(otp, 10);
 
