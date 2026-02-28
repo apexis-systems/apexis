@@ -40,3 +40,23 @@ export const inviteUser = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const getOrgUsers = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: Only admins can view organization users" });
+        }
+
+        const orgUsers = await users.findAll({
+            where: { organization_id: authUser.organization_id },
+            attributes: ['id', 'name', 'email', 'role', 'is_primary', 'createdAt']
+        });
+
+        res.status(200).json({ users: orgUsers });
+    } catch (error) {
+        console.error("Get Org Users Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

@@ -45,6 +45,14 @@ export default {
         allowNull: false,
         unique: true,
       },
+      start_date: {
+        type: Sequelize.DATE,
+        allowNull: false,
+      },
+      end_date: {
+        type: Sequelize.DATE,
+        allowNull: false,
+      },
       created_by: {
         type: Sequelize.INTEGER,
         allowNull: false,
