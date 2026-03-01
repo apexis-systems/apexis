@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, ProjectPhoto, Folder } from '@/types';
 import { mockPhotos, mockFolders } from '@/data/mock';
 import { useRouter } from 'expo-router';
+import { PrivateAxios } from '@/helpers/PrivateAxios';
 
 interface Props {
     project: Project;
@@ -16,12 +17,25 @@ export default function ProjectPhotos({ project, user }: Props) {
         mockPhotos.filter((p) => p.projectId === project.id)
     );
     const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-    const [folders, setFolders] = useState<Folder[]>(
-        mockFolders.filter((f) => f.projectId === project.id && f.type === 'photos')
-    );
+    const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [expandedPhoto, setExpandedPhoto] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (project?.id) {
+            fetchFolders();
+        }
+    }, [project?.id]);
+
+    const fetchFolders = async () => {
+        try {
+            const res = await PrivateAxios.get(`/folders?projectId=${project.id}`);
+            setFolders(res.data);
+        } catch (e) {
+            console.error("Failed to fetch folders", e);
+        }
+    };
 
     const currentFolderPhotos = selectedFolder ? photos.filter((p) => p.folderId === selectedFolder) : [];
     const visiblePhotos = user.role === 'client' ? currentFolderPhotos.filter((p) => p.clientVisible) : currentFolderPhotos;
@@ -31,23 +45,24 @@ export default function ProjectPhotos({ project, user }: Props) {
         setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, clientVisible: !p.clientVisible } : p)));
     };
 
-    const handleCreateFolder = (name: string) => {
-        const newFolder: Folder = {
-            id: `folder-photo-${Date.now()}`,
-            projectId: project.id,
-            name,
-            type: 'photos',
-        };
-        setFolders((prev) => [...prev, newFolder]);
-        setShowCreateFolder(false);
-        setNewFolderName('');
+    const handleCreateFolder = async (name: string) => {
+        if (!name.trim()) return;
+        try {
+            await PrivateAxios.post('/folders/create', { project_id: project.id, name: name.trim() });
+            setShowCreateFolder(false);
+            setNewFolderName('');
+            fetchFolders();
+        } catch (e) {
+            console.error("Failed to create folder", e);
+            Alert.alert("Error", "Failed to create folder");
+        }
     };
 
     // Folder view
     if (!selectedFolder) {
         return (
             <View>
-                {user.role !== 'client' && (
+                {(user.role === 'admin' || user.role === 'contributor') && (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity
                             onPress={() => Alert.alert('Info', 'Select a folder first')}
@@ -125,7 +140,7 @@ export default function ProjectPhotos({ project, user }: Props) {
                 <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>{currentFolder?.name}</Text>
             </View>
 
-            {user.role !== 'client' && (
+            {(user.role === 'admin' || user.role === 'contributor') && (
                 <TouchableOpacity
                     onPress={() => router.push(`/(tabs)/upload?projectId=${project.id}&type=photos&folderId=${selectedFolder}`)}
                     style={{ height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}

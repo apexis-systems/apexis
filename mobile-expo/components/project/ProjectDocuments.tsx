@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, ProjectDocument, Folder } from '@/types';
 import { mockDocuments, mockFolders } from '@/data/mock';
 import { useRouter } from 'expo-router';
+import { PrivateAxios } from '@/helpers/PrivateAxios';
 
 interface Props {
     project: Project;
@@ -16,11 +17,24 @@ export default function ProjectDocuments({ project, user }: Props) {
         mockDocuments.filter((d) => d.projectId === project.id)
     );
     const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-    const [folders, setFolders] = useState<Folder[]>(
-        mockFolders.filter((f) => f.projectId === project.id && f.type === 'documents')
-    );
+    const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
+
+    useEffect(() => {
+        if (project?.id) {
+            fetchFolders();
+        }
+    }, [project?.id]);
+
+    const fetchFolders = async () => {
+        try {
+            const res = await PrivateAxios.get(`/folders?projectId=${project.id}`);
+            setFolders(res.data);
+        } catch (e) {
+            console.error("Failed to fetch folders", e);
+        }
+    };
 
     const currentFolderDocs = selectedFolder ? docs.filter((d) => d.folderId === selectedFolder) : [];
     const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.clientVisible) : currentFolderDocs;
@@ -38,24 +52,24 @@ export default function ProjectDocuments({ project, user }: Props) {
         ]);
     };
 
-    const handleCreateFolder = () => {
+    const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
-        const newFolder: Folder = {
-            id: `folder-doc-${Date.now()}`,
-            projectId: project.id,
-            name: newFolderName.trim(),
-            type: 'documents',
-        };
-        setFolders((prev) => [...prev, newFolder]);
-        setNewFolderName('');
-        setShowCreateFolder(false);
+        try {
+            await PrivateAxios.post('/folders/create', { project_id: project.id, name: newFolderName.trim() });
+            setNewFolderName('');
+            setShowCreateFolder(false);
+            fetchFolders();
+        } catch (e) {
+            console.error("Failed to create folder", e);
+            Alert.alert("Error", "Failed to create folder");
+        }
     };
 
     // Folder View
     if (!selectedFolder) {
         return (
             <View>
-                {user.role !== 'client' && (
+                {(user.role === 'admin' || user.role === 'contributor') && (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity
                             onPress={() => Alert.alert('Info', 'Select a folder first')}
@@ -166,7 +180,7 @@ export default function ProjectDocuments({ project, user }: Props) {
                 <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>{currentFolder?.name}</Text>
             </View>
 
-            {user.role !== 'client' && (
+            {(user.role === 'admin' || user.role === 'contributor') && (
                 <TouchableOpacity
                     onPress={() => router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${selectedFolder}`)}
                     style={{

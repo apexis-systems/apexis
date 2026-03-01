@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { HapticTab } from '@/components/haptic-tab';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ACCENT = '#f97316';
 const INACTIVE = '#666666';
@@ -10,6 +11,7 @@ const TAB_BG = '#111111';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
   return (
     <Tabs
@@ -44,6 +46,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="scan"
         options={{
+          href: user?.role === 'client' ? null : '/(tabs)/scan',
           title: 'Scan',
           tabBarIcon: ({ color }) => <Feather name="maximize" size={22} color={color} />,
         }}
@@ -51,6 +54,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="upload"
         options={{
+          href: user?.role === 'client' ? null : '/(tabs)/upload',
           title: 'Upload',
           tabBarIcon: () => <Feather name="plus" size={24} color="#fff" />,
           tabBarItemStyle: {

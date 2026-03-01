@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard, LogOut } from 'lucide-react';
+import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard, LogOut, Shield } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,12 +17,17 @@ const MainSidebar = () => {
 
   const navItems = [
     { icon: Home, label: t('dashboard'), path: `${basePath}/dashboard` },
-    { icon: Upload, label: t('upload'), path: `${basePath}/upload` },
+    ...(user?.role !== 'client' ? [{ icon: Upload, label: t('upload'), path: `${basePath}/upload` }] : []),
     { icon: Clock, label: t('activity'), path: `${basePath}/activity` },
     { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },
     { icon: User, label: t('profile'), path: `${basePath}/profile` },
+    ...(user?.role === 'superadmin' ? [
+      { icon: Shield, label: t('teams') || 'Teams', path: `${basePath}/teams` },
+    ] : []),
+    ...(user?.role === 'admin' ? [
+      { icon: Users, label: t('user_mgmt') || 'Users', path: `${basePath}/users` },
+    ] : []),
     ...((user?.role === 'admin' || user?.role === 'superadmin') ? [
-      { icon: Users, label: t('user_mgmt'), path: `${basePath}/users` },
       { icon: CreditCard, label: t('billing'), path: `${basePath}/billing` },
     ] : []),
   ];

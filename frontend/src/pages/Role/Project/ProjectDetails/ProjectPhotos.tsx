@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Project, User, ProjectPhoto, Folder } from '@/types';
 import { mockPhotos, mockFolders } from '@/data/mock';
 import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
+import { getFolders, createFolder } from '@/services/folderService';
 
 interface ProjectPhotosProps {
   project: Project;
@@ -25,12 +26,25 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     mockPhotos.filter((p) => p.projectId === project.id)
   );
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [folders, setFolders] = useState<Folder[]>(
-    mockFolders.filter((f) => f.projectId === project.id && f.type === 'photos')
-  );
+  const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [shareItem, setShareItem] = useState<string | null>(null);
   const [expandedPhoto, setExpandedPhoto] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (project?.id) {
+      importFolders();
+    }
+  }, [project?.id]);
+
+  const importFolders = async () => {
+    try {
+      const data = await getFolders(project.id);
+      setFolders(data);
+    } catch (e) {
+      console.error("Failed to fetch folders", e);
+    }
+  };
 
   const currentFolderPhotos = selectedFolder
     ? photos.filter((p) => p.folderId === selectedFolder)
@@ -51,15 +65,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     router.push(`/upload?projectId=${project.id}&type=photos&folderId=${selectedFolder}`);
   };
 
-  const handleCreateFolder = (name: string) => {
-    const newFolder: Folder = {
-      id: `folder-photo-${Date.now()}`,
-      projectId: project.id,
-      name,
-      type: 'photos',
-    };
-    setFolders((prev) => [...prev, newFolder]);
-    toast.success(`Folder "${name}" created`);
+  const handleCreateFolder = async (name: string) => {
+    try {
+      await createFolder({ project_id: project.id, name });
+      toast.success(`Folder "${name}" created`);
+      importFolders(); // Refetch
+    } catch (e) {
+      toast.error("Failed to create folder");
+    }
   };
 
   // Folder View

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockProjects } from '@/data/mock';
+import { getProjectById } from '@/services/projectService';
 import ProjectOverview from '@/pages/Role/Project/ProjectDetails/ProjectOverview';
 import ProjectDocuments from '@/pages/Role/Project/ProjectDetails/ProjectDocuments';
 import ProjectPhotos from '@/pages/Role/Project/ProjectDetails/ProjectPhotos';
@@ -26,12 +26,27 @@ export default function Project({ id }: ProjectProps) {
     const router = useRouter();
     const { t } = useLanguage();
 
-    const project = mockProjects.find((p) => p.id === id);
-    const isClient = user?.role === 'client';
+    const [project, setProject] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
+    const isClient = user?.role === 'client';
     const [activeTab, setActiveTab] = useState<TabKey>(isClient ? 'documents' : 'overview');
 
-    if (!user) return null;
+    useEffect(() => {
+        const fetchProject = async () => {
+            try {
+                const data = await getProjectById(id);
+                setProject(data);
+            } catch (error) {
+                console.error("Failed to fetch project:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProject();
+    }, [id]);
+
+    if (!user || loading) return null;
 
     if (!project) {
         return (

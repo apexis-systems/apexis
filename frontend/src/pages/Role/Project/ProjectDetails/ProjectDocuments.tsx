@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Project, User, ProjectDocument, Folder } from '@/types';
 import { mockDocuments, mockFolders } from '@/data/mock';
 import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
+import { getFolders, createFolder } from '@/services/folderService';
 
 interface ProjectDocumentsProps {
   project: Project;
@@ -25,12 +26,26 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     mockDocuments.filter((d) => d.projectId === project.id)
   );
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [folders, setFolders] = useState<Folder[]>(
-    mockFolders.filter((f) => f.projectId === project.id && f.type === 'documents')
-  );
+  const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [shareItem, setShareItem] = useState<string | null>(null);
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (project?.id) {
+      importFolders();
+    }
+  }, [project?.id]);
+
+  const importFolders = async () => {
+    try {
+      const data = await getFolders(project.id);
+      // Backend doesn't differentiate 'type', assuming all for now or filter if needed
+      setFolders(data);
+    } catch (e) {
+      console.error("Failed to fetch folders", e);
+    }
+  };
 
   const currentFolderDocs = selectedFolder
     ? docs.filter((d) => d.folderId === selectedFolder)
@@ -56,15 +71,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     router.push(`/upload?projectId=${project.id}&type=documents&folderId=${selectedFolder}`);
   };
 
-  const handleCreateFolder = (name: string) => {
-    const newFolder: Folder = {
-      id: `folder-doc-${Date.now()}`,
-      projectId: project.id,
-      name,
-      type: 'documents',
-    };
-    setFolders((prev) => [...prev, newFolder]);
-    toast.success(`Folder "${name}" created`);
+  const handleCreateFolder = async (name: string) => {
+    try {
+      await createFolder({ project_id: project.id, name });
+      toast.success(`Folder "${name}" created`);
+      importFolders(); // Refetch
+    } catch (e) {
+      toast.error("Failed to create folder");
+    }
   };
 
   // Folder View

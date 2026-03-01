@@ -13,7 +13,7 @@ export default (sequelize: Sequelize) => {
             },
             folder_id: {
                 type: DataTypes.INTEGER,
-                allowNull: false,
+                allowNull: true,
             },
             file_url: {
                 type: DataTypes.STRING,
