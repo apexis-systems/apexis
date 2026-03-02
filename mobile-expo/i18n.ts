@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 import en from './locales/en.json';
 import hi from './locales/hi.json';
@@ -17,7 +18,16 @@ const resources = {
 
 // Initialize i18next
 const initI18n = async () => {
-    let savedLanguage = await AsyncStorage.getItem(ASYNC_STORAGE_LANG_KEY);
+    let savedLanguage: string | null = null;
+
+    // Guard against SSR / Node environments where window is not defined
+    if (Platform.OS !== 'web' || typeof window !== 'undefined') {
+        try {
+            savedLanguage = await AsyncStorage.getItem(ASYNC_STORAGE_LANG_KEY);
+        } catch (e) {
+            console.warn("Failed to get language from AsyncStorage", e);
+        }
+    }
 
     if (!savedLanguage) {
         // Fall back to device language if available and supported, otherwise English.
