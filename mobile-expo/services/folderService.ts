@@ -1,18 +1,18 @@
-import { PrivateAxios } from "@/helpers/PrivateAxios";
+import { PrivateAxios } from '../helpers/PrivateAxios';
 
-export const getFolders = async (projectId: string) => {
+export const getFolders = async (projectId: string, folderType: string) => {
     try {
-        const response = await PrivateAxios.get(`/folders?projectId=${projectId}`);
+        const response = await PrivateAxios.get(`/folders?project_id=${projectId}&type=${folderType}`);
         return response.data;
     } catch (error) {
-        console.error("getFolders Error", error);
+        console.error("fetchFolders Error", error);
         throw error;
     }
 };
 
-export const createFolder = async (data: { project_id: string, name: string, parent_id?: string | null }) => {
+export const createFolder = async (folderData: { project_id: string, name: string, type: string }) => {
     try {
-        const response = await PrivateAxios.post('/folders/create', data);
+        const response = await PrivateAxios.post('/folders/create', folderData);
         return response.data;
     } catch (error) {
         console.error("createFolder Error", error);

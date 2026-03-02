@@ -25,7 +25,15 @@ export const uploadFile = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { file_name, file_type, file_size_mb, folder_id, project_id } = req.body;
+        const { folder_id, project_id } = req.body;
+
+        if (!req.file) {
+            return res.status(400).json({ error: "No file uploaded" });
+        }
+
+        const file_name = req.file.originalname;
+        const file_type = req.file.mimetype;
+        const file_size_mb = Math.max(1, Math.round(req.file.size / (1024 * 1024)));
 
         // Ensure contributors have access to this project
         if (authUser.role === "contributor") {
@@ -35,19 +43,36 @@ export const uploadFile = async (req: Request, res: Response) => {
             }
         }
 
-        const s3Key = `projects/${project_id}/folders/${folder_id}/${Date.now()}_${file_name}`;
+        const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
+        let finalFolderId = validFolderId;
+
+        if (!finalFolderId) {
+            const [defaultFolder] = await folders.findOrCreate({
+                where: { project_id: project_id, name: 'General' },
+                defaults: { project_id: project_id, name: 'General', created_by: authUser.user_id }
+            });
+            finalFolderId = defaultFolder.id;
+        }
+
+        const folderPath = finalFolderId ? finalFolderId.toString() : 'unassigned';
+
+        // Extract extension and generate sanitized S3 key
+        const extMatch = req.file.originalname.match(/\.[0-9a-z]+$/i);
+        const extension = extMatch ? extMatch[0] : '';
+        const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}${extension}`;
 
         const command = new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: s3Key,
             ContentType: file_type,
+            Body: req.file.buffer
         });
 
-        const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        await s3Client.send(command);
 
         const newFile = await files.create({
-            folder_id,
-            file_url: s3Key, // Storing the KEY instead of the full URL for easier fetching later
+            folder_id: finalFolderId,
+            file_url: s3Key,
             file_name,
             file_type,
             file_size_mb,
@@ -55,8 +80,7 @@ export const uploadFile = async (req: Request, res: Response) => {
         });
 
         res.status(200).json({
-            message: "Presigned URL generated",
-            uploadUrl: presignedUrl,
+            message: "File uploaded successfully",
             file: newFile
         });
     } catch (error) {
@@ -88,9 +112,22 @@ export const listFiles = async (req: Request, res: Response) => {
             ]
         });
 
+        let filteredFolderData = folderData.map((f: any) => f.toJSON());
+
+        if (authUser.role === "client") {
+            // Remove entirely hidden folders
+            filteredFolderData = filteredFolderData.filter((folder: any) => folder.client_visible !== false);
+            // Remove hidden files from the remaining visible folders
+            filteredFolderData = filteredFolderData.map((folder: any) => {
+                if (folder.files) {
+                    folder.files = folder.files.filter((file: any) => file.client_visible !== false);
+                }
+                return folder;
+            });
+        }
+
         // Loop through folders and files to assign presigned GET URLs
-        const result = await Promise.all(folderData.map(async (folderObj: any) => {
-            const folder = folderObj.toJSON();
+        const result = await Promise.all(filteredFolderData.map(async (folder: any) => {
             if (folder.files && folder.files.length > 0) {
                 folder.files = await Promise.all(folder.files.map(async (file: any) => {
                     const command = new GetObjectCommand({
@@ -137,6 +174,33 @@ export const deleteFile = async (req: Request, res: Response) => {
         res.status(200).json({ message: "File deleted successfully" });
     } catch (error) {
         console.error("Delete File Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const toggleFileVisibility = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
+            return res.status(403).json({ error: "Forbidden: Only Admins can toggle file visibility" });
+        }
+
+        const { fileId } = req.params;
+        const { client_visible } = req.body;
+
+        const file = await files.findByPk(fileId);
+        if (!file) {
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        file.client_visible = client_visible;
+        await file.save();
+
+        res.status(200).json({ message: "File visibility updated", file });
+    } catch (error) {
+        console.error("Toggle File Visibility Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

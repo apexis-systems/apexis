@@ -1,69 +1,111 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Project, User, ProjectDocument, Folder } from '@/types';
-import { mockDocuments, mockFolders } from '@/data/mock';
-import { useRouter } from 'expo-router';
+import { Project, User, Folder } from '@/types';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import * as WebBrowser from 'expo-web-browser';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
+import { getProjectFiles, deleteFile, toggleFileVisibility } from '@/services/fileService';
 
-interface Props {
-    project: Project;
-    user: User;
-}
-
-export default function ProjectDocuments({ project, user }: Props) {
+export default function ProjectDocuments({ project, user }: { project: any, user: any }) {
     const { colors } = useTheme();
     const router = useRouter();
-    const [docs, setDocs] = useState<ProjectDocument[]>(
-        mockDocuments.filter((d) => d.projectId === project.id)
-    );
+    const [docs, setDocs] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
     const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        if (project?.id) {
-            fetchFolders();
-        }
+        const fetchFolders = async () => {
+            if (!project?.id) return;
+            setLoading(true);
+            try {
+                const data = await getProjectFiles(project.id);
+                if (data.folderData) {
+                    setFolders(data.folderData);
+                    let fetchedDocs: any[] = [];
+                    data.folderData.forEach((f: any) => {
+                        if (f.files) {
+                            fetchedDocs = [...fetchedDocs, ...f.files.filter((file: any) => file.file_type.includes('pdf') || file.file_type.includes('document'))];
+                        }
+                    });
+                    setDocs(fetchedDocs);
+                }
+            } catch (error) {
+                console.error("Error fetching folders:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchFolders();
     }, [project?.id]);
 
-    const fetchFolders = async () => {
+    const currentFolderDocs = selectedFolder ? docs.filter((d) => d.folder_id === selectedFolder) : [];
+    const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible !== false) : currentFolderDocs;
+    const currentFolder = folders.find((f) => f.id === selectedFolder);
+
+    const toggleDocVisibility = async (doc: any) => {
         try {
-            const res = await PrivateAxios.get(`/folders?projectId=${project.id}`);
-            setFolders(res.data);
+            await toggleFileVisibility(doc.id, !doc.client_visible);
+            setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, client_visible: !doc.client_visible } : d)));
+            Alert.alert('Updated', `Document marked ${!doc.client_visible ? 'Visible' : 'Hidden'} for clients`);
         } catch (e) {
-            console.error("Failed to fetch folders", e);
+            Alert.alert('Error', 'Failed to toggle visibility');
         }
     };
 
-    const currentFolderDocs = selectedFolder ? docs.filter((d) => d.folderId === selectedFolder) : [];
-    const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.clientVisible) : currentFolderDocs;
-    const currentFolder = folders.find((f) => f.id === selectedFolder);
-
-    const toggleVisibility = (docId: string) => {
-        setDocs((prev) => prev.map((d) => (d.id === docId ? { ...d, clientVisible: !d.clientVisible } : d)));
-        Alert.alert('Updated', 'Visibility updated');
+    const toggleFolderVis = async (folder: any) => {
+        try {
+            await toggleFolderVisibility(folder.id, !folder.client_visible);
+            setFolders((prev) => prev.map((f) => (f.id === folder.id ? { ...f, client_visible: !folder.client_visible } : f)));
+            Alert.alert('Updated', `Folder marked ${!folder.client_visible ? 'Visible' : 'Hidden'} for clients`);
+        } catch (err) {
+            Alert.alert('Error', 'Failed to toggle visibility');
+        }
     };
 
-    const deleteDoc = (docId: string) => {
+    const deleteDoc = async (docId: number) => {
         Alert.alert('Delete', 'Delete this document?', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: () => setDocs((prev) => prev.filter((d) => d.id !== docId)) },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await deleteFile(docId);
+                        setDocs((prev) => prev.filter((d) => d.id !== docId));
+                    } catch (err) {
+                        Alert.alert("Error", "Failed to delete");
+                    }
+                }
+            },
         ]);
     };
 
     const handleCreateFolder = async () => {
-        if (!newFolderName.trim()) return;
+        if (!newFolderName.trim() || !project?.id) return;
+        setSubmitting(true);
         try {
-            await PrivateAxios.post('/folders/create', { project_id: project.id, name: newFolderName.trim() });
-            setNewFolderName('');
-            setShowCreateFolder(false);
-            fetchFolders();
-        } catch (e) {
-            console.error("Failed to create folder", e);
+            const data = await createFolder({
+                project_id: project.id,
+                name: newFolderName.trim(),
+                type: 'documents'
+            });
+            if (data.folder) {
+                setFolders([...folders, data.folder]);
+                setShowCreateFolder(false); // Changed from setModalVisible to setShowCreateFolder
+                setNewFolderName('');
+            }
+        } catch (error) {
+            console.error("Failed to create folder:", error);
             Alert.alert("Error", "Failed to create folder");
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -111,7 +153,7 @@ export default function ProjectDocuments({ project, user }: Props) {
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                     {folders.map((folder) => {
-                        const count = docs.filter((d) => d.folderId === folder.id).length;
+                        const count = docs.filter((d) => d.folder_id === folder.id).length;
                         return (
                             <TouchableOpacity
                                 key={folder.id}
@@ -131,7 +173,20 @@ export default function ProjectDocuments({ project, user }: Props) {
                                 <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: colors.text, textAlign: 'center' }}>
                                     {folder.name}
                                 </Text>
-                                <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} files</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} files</Text>
+                                    {(user.role === 'admin' || user.role === 'superadmin') && (
+                                        <TouchableOpacity
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                toggleFolderVis(folder);
+                                            }}
+                                            style={{ padding: 2 }}
+                                        >
+                                            <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </TouchableOpacity>
                         );
                     })}
@@ -203,8 +258,9 @@ export default function ProjectDocuments({ project, user }: Props) {
 
             <View style={{ gap: 6 }}>
                 {visibleDocs.map((doc) => (
-                    <View
+                    <TouchableOpacity
                         key={doc.id}
+                        onPress={() => WebBrowser.openBrowserAsync(doc.downloadUrl)}
                         style={{
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -221,24 +277,24 @@ export default function ProjectDocuments({ project, user }: Props) {
                                 width: 34,
                                 height: 34,
                                 borderRadius: 8,
-                                backgroundColor: doc.type === 'pdf' ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                                backgroundColor: doc.file_type.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                             }}
                         >
-                            <Feather name="file-text" size={16} color={doc.type === 'pdf' ? '#ef4444' : '#3b82f6'} />
+                            <Feather name="file-text" size={16} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} />
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text }}>{doc.name}</Text>
-                            <Text style={{ fontSize: 9, color: colors.textMuted }}>v{doc.version} · {doc.size}</Text>
+                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text }}>{doc.file_name}</Text>
+                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{doc.file_size_mb} MB</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
-                            <TouchableOpacity onPress={() => Alert.alert('Share', `Share ${doc.name}`)} style={{ padding: 4 }}>
+                            <TouchableOpacity onPress={() => Alert.alert('Share', `Share ${doc.file_name}`)} style={{ padding: 4 }}>
                                 <Feather name="share-2" size={14} color="#666" />
                             </TouchableOpacity>
                             {user.role === 'admin' && (
-                                <TouchableOpacity onPress={() => toggleVisibility(doc.id)} style={{ padding: 4 }}>
-                                    <Feather name={doc.clientVisible ? 'eye' : 'eye-off'} size={14} color={doc.clientVisible ? '#f97316' : colors.textMuted} />
+                                <TouchableOpacity onPress={() => toggleDocVisibility(doc)} style={{ padding: 4 }}>
+                                    <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
                                 </TouchableOpacity>
                             )}
                             {(user.role === 'admin' || user.role === 'contributor') && doc.uploaderId === user.id && (
@@ -247,7 +303,7 @@ export default function ProjectDocuments({ project, user }: Props) {
                                 </TouchableOpacity>
                             )}
                         </View>
-                    </View>
+                    </TouchableOpacity>
                 ))}
             </View>
 

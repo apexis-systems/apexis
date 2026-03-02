@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createFolder, getFolders } from "../controllers/folderController.ts";
+import { createFolder, getFolders, toggleFolderVisibility } from "../controllers/folderController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -9,5 +9,6 @@ router.use(verifyToken);
 
 router.post("/create", createFolder);
 router.get("/", getFolders);
+router.put("/:folderId/visibility", toggleFolderVisibility);
 
 export default router;

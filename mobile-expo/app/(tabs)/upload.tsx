@@ -11,8 +11,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockProjects, mockFolders } from '@/data/mock';
 import { useTheme } from '@/contexts/ThemeContext';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { uploadFile } from '@/services/fileService';
 
 type Step = 'project' | 'type' | 'folder' | 'upload' | 'done';
 
@@ -32,6 +34,12 @@ export default function UploadScreen() {
     const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
     const [photoLocation, setPhotoLocation] = useState('');
     const [photoTags, setPhotoTags] = useState('');
+    const [projects, setProjects] = useState<any[]>([]);
+    const [folders, setFolders] = useState<any[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(false);
+    const [loadingFolders, setLoadingFolders] = useState(false);
+    const [selectedAsset, setSelectedAsset] = useState<any>(null);
+    const [isUploading, setIsUploading] = useState(false);
 
     useEffect(() => {
         if (params.projectId && params.type && params.folderId) {
@@ -49,6 +57,45 @@ export default function UploadScreen() {
         }
     }, []);
 
+    useEffect(() => {
+        const fetchProjects = async () => {
+            if (!user) return;
+            setLoadingProjects(true);
+            try {
+                const data = await getProjects();
+                if (data.projects) {
+                    setProjects(data.projects);
+                }
+            } catch (error) {
+                console.error("Failed to fetch projects:", error);
+            } finally {
+                setLoadingProjects(false);
+            }
+        };
+        fetchProjects();
+    }, [user]);
+
+    useEffect(() => {
+        const fetchFolders = async () => {
+            if (!selectedProject || !uploadType) {
+                setFolders([]);
+                return;
+            }
+            setLoadingFolders(true);
+            try {
+                const data = await getFolders(selectedProject, uploadType);
+                if (data.folders) {
+                    setFolders(data.folders);
+                }
+            } catch (error) {
+                console.error("Failed to fetch folders:", error);
+            } finally {
+                setLoadingFolders(false);
+            }
+        };
+        fetchFolders();
+    }, [selectedProject, uploadType]);
+
     if (!user || user.role === 'client') {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -57,22 +104,94 @@ export default function UploadScreen() {
         );
     }
 
-    const projects = mockProjects.filter((p) => {
-        if (user.role === 'admin') return true;
-        return p.assignedTo.includes(user.id);
+    const filteredProjects = projects.filter((p) => {
+        if (user.role === 'admin' || user.role === 'superadmin') return true;
+        // Depending on backend population for assigned users, filtering might happen there
+        return true;
     });
 
-    const folders =
-        selectedProject && uploadType
-            ? mockFolders.filter((f) => f.projectId === selectedProject && f.type === uploadType)
-            : [];
+    const selectedProjectData = projects.find((p) => p.id === selectedProject);
+    const selectedFolderData = folders.find((f) => f.id === selectedFolder);
 
-    const selectedProjectData = mockProjects.find((p) => p.id === selectedProject);
-    const selectedFolderData = mockFolders.find((f) => f.id === selectedFolder);
+    const pickDocument = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'image/*'],
+                copyToCacheDirectory: true,
+            });
+            if (result.canceled === false && result.assets && result.assets.length > 0) {
+                setSelectedAsset(result.assets[0]);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
-    const handleUpload = () => {
-        setStep('done');
-        Alert.alert('Success', 'Files uploaded successfully!');
+    const pickImage = async (useCamera: boolean) => {
+        try {
+            let result;
+            if (useCamera) {
+                const permission = await ImagePicker.requestCameraPermissionsAsync();
+                if (!permission.granted) {
+                    Alert.alert('Permission needed', 'Camera access is required.');
+                    return;
+                }
+                result = await ImagePicker.launchCameraAsync({
+                    mediaTypes: ['images'],
+                    quality: 0.8,
+                });
+            } else {
+                result = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ['images'],
+                    quality: 0.8,
+                });
+            }
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setSelectedAsset(result.assets[0]);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleUpload = async () => {
+        if (!selectedAsset) {
+            Alert.alert('Error', 'Please select a file first');
+            return;
+        }
+        if (!selectedProject || !selectedFolder) {
+            Alert.alert('Error', 'Project and folder must be selected');
+            return;
+        }
+
+        setIsUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', {
+                uri: selectedAsset.uri,
+                name: selectedAsset.name || selectedAsset.fileName || 'upload.jpg',
+                type: selectedAsset.mimeType || 'image/jpeg'
+            } as any);
+
+            formData.append('project_id', selectedProject);
+            formData.append('folder_id', selectedFolder);
+
+            if (uploadType === 'photos') {
+                formData.append('location', photoLocation);
+                formData.append('tags', photoTags);
+            }
+
+            await uploadFile(formData);
+
+            setStep('done');
+            setSelectedAsset(null);
+        } catch (error) {
+            console.error('Upload Error:', error);
+            Alert.alert('Upload Failed', 'There was an error uploading your file.');
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     const goBack = () => {
@@ -127,7 +246,7 @@ export default function UploadScreen() {
                     <View>
                         <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 12 }}>Select a project</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                            {projects.map((project) => (
+                            {filteredProjects.map((project) => (
                                 <TouchableOpacity
                                     key={project.id}
                                     onPress={() => { setSelectedProject(project.id); setStep('type'); }}
@@ -138,7 +257,7 @@ export default function UploadScreen() {
                                             width: 56,
                                             height: 56,
                                             borderRadius: 14,
-                                            backgroundColor: project.color,
+                                            backgroundColor: project.color || colors.primary,
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             borderWidth: 1,
@@ -249,25 +368,77 @@ export default function UploadScreen() {
                 {/* Step: Upload */}
                 {step === 'upload' && (
                     <View style={{ gap: 12 }}>
-                        <TouchableOpacity
-                            style={{
-                                borderRadius: 10,
-                                borderWidth: 2,
-                                borderColor: colors.border,
-                                borderStyle: 'dashed',
-                                backgroundColor: colors.surface,
-                                padding: 30,
-                                alignItems: 'center',
-                            }}
-                        >
-                            <Feather name="upload-cloud" size={32} color={colors.textMuted} />
-                            <Text style={{ fontSize: 12, fontWeight: '500', color: colors.text, marginTop: 8 }}>
-                                Tap to select {uploadType === 'documents' ? 'documents' : 'photos'}
-                            </Text>
-                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>
-                                {uploadType === 'documents' ? 'PDF, DWG files supported' : 'JPG, PNG files supported'}
-                            </Text>
-                        </TouchableOpacity>
+                        {uploadType === 'documents' ? (
+                            <TouchableOpacity
+                                onPress={pickDocument}
+                                style={{
+                                    borderRadius: 10,
+                                    borderWidth: 2,
+                                    borderColor: selectedAsset ? colors.primary : colors.border,
+                                    borderStyle: 'dashed',
+                                    backgroundColor: colors.surface,
+                                    padding: 30,
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Feather name="upload-cloud" size={32} color={selectedAsset ? colors.primary : colors.textMuted} />
+                                <Text style={{ fontSize: 12, fontWeight: '500', color: colors.text, marginTop: 8 }}>
+                                    {selectedAsset ? selectedAsset.name : 'Tap to select document'}
+                                </Text>
+                                {!selectedAsset && (
+                                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>
+                                        PDF, DWG, Image files supported
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <TouchableOpacity
+                                    onPress={() => pickImage(true)}
+                                    style={{
+                                        flex: 1,
+                                        borderRadius: 10,
+                                        borderWidth: 2,
+                                        borderColor: colors.border,
+                                        borderStyle: 'dashed',
+                                        backgroundColor: colors.surface,
+                                        padding: 20,
+                                        alignItems: 'center',
+                                    }}
+                                >
+                                    <Feather name="camera" size={28} color={colors.textMuted} />
+                                    <Text style={{ fontSize: 12, fontWeight: '500', color: colors.text, marginTop: 8, textAlign: 'center' }}>
+                                        Take Photo
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => pickImage(false)}
+                                    style={{
+                                        flex: 1,
+                                        borderRadius: 10,
+                                        borderWidth: 2,
+                                        borderColor: colors.border,
+                                        borderStyle: 'dashed',
+                                        backgroundColor: colors.surface,
+                                        padding: 20,
+                                        alignItems: 'center',
+                                    }}
+                                >
+                                    <Feather name="image" size={28} color={colors.textMuted} />
+                                    <Text style={{ fontSize: 12, fontWeight: '500', color: colors.text, marginTop: 8, textAlign: 'center' }}>
+                                        Gallery
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {uploadType === 'photos' && selectedAsset && (
+                            <View style={{ marginTop: 8, padding: 12, backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.primary }}>
+                                <Text style={{ fontSize: 12, color: colors.text }} numberOfLines={1}>
+                                    Selected: {selectedAsset.fileName || 'Photo'}
+                                </Text>
+                            </View>
+                        )}
 
                         {uploadType === 'photos' && (
                             <>
@@ -318,15 +489,19 @@ export default function UploadScreen() {
 
                         <TouchableOpacity
                             onPress={handleUpload}
+                            disabled={!selectedAsset || isUploading}
                             style={{
                                 height: 42,
                                 borderRadius: 10,
-                                backgroundColor: '#f97316',
+                                backgroundColor: (!selectedAsset || isUploading) ? colors.border : '#f97316',
                                 alignItems: 'center',
                                 justifyContent: 'center',
+                                marginTop: 12
                             }}
                         >
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Upload Files</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>
+                                {isUploading ? 'Uploading...' : 'Upload Files'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 )}
