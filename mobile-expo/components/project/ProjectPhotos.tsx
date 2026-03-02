@@ -5,6 +5,7 @@ import { Project, User, ProjectPhoto, Folder } from '@/types';
 import { mockPhotos, mockFolders } from '@/data/mock';
 import { useRouter } from 'expo-router';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Props {
     project: Project;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function ProjectPhotos({ project, user }: Props) {
+    const { colors } = useTheme();
     const router = useRouter();
     const [photos, setPhotos] = useState<ProjectPhoto[]>(
         mockPhotos.filter((p) => p.projectId === project.id)
@@ -69,14 +71,14 @@ export default function ProjectPhotos({ project, user }: Props) {
                             style={{ flex: 1, height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                         >
                             <Feather name="upload" size={13} color="#fff" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Upload</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => setShowCreateFolder(true)}
-                            style={{ height: 38, borderRadius: 10, borderWidth: 1, borderColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 }}
+                            style={{ height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 }}
                         >
-                            <Feather name="folder-plus" size={13} color="#fff" />
-                            <Text style={{ fontSize: 12, color: '#fff' }}>New Folder</Text>
+                            <Feather name="folder-plus" size={13} color={colors.text} />
+                            <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -88,11 +90,11 @@ export default function ProjectPhotos({ project, user }: Props) {
                             <TouchableOpacity
                                 key={folder.id}
                                 onPress={() => setSelectedFolder(folder.id)}
-                                style={{ width: '30%', alignItems: 'center', gap: 4, borderRadius: 10, backgroundColor: '#111111', borderWidth: 1, borderColor: '#2a2a2a', padding: 12 }}
+                                style={{ width: '30%', alignItems: 'center', gap: 4, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, padding: 12 }}
                             >
                                 <Feather name="folder" size={32} color="#f97316" />
-                                <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: '#fff', textAlign: 'center' }}>{folder.name}</Text>
-                                <Text style={{ fontSize: 9, color: '#666' }}>{count} photos</Text>
+                                <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
+                                <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} photos</Text>
                             </TouchableOpacity>
                         );
                     })}
@@ -100,26 +102,26 @@ export default function ProjectPhotos({ project, user }: Props) {
 
                 {folders.length === 0 && (
                     <View style={{ marginTop: 30, alignItems: 'center' }}>
-                        <Feather name="folder" size={32} color="#2a2a2a" />
-                        <Text style={{ fontSize: 12, color: '#888', marginTop: 8 }}>No folders yet</Text>
+                        <Feather name="folder" size={32} color={colors.border} />
+                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders yet</Text>
                     </View>
                 )}
 
                 <Modal visible={showCreateFolder} transparent animationType="fade">
                     <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
-                        <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff', marginBottom: 14 }}>New Folder</Text>
-                            <View style={{ height: 40, borderRadius: 10, backgroundColor: '#2a2a2a', paddingHorizontal: 12, justifyContent: 'center', marginBottom: 16 }}>
-                                <Text style={{ fontSize: 13, color: '#555' }} onPress={() => { }}>
+                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>New Folder</Text>
+                            <View style={{ height: 40, borderRadius: 10, backgroundColor: colors.border, paddingHorizontal: 12, justifyContent: 'center', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }} onPress={() => { }}>
                                     {newFolderName || 'Folder name'}
                                 </Text>
                             </View>
                             <View style={{ flexDirection: 'row', gap: 8 }}>
                                 <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#444', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 13, color: '#888' }}>Cancel</Text>
+                                    <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={() => handleCreateFolder(newFolderName || 'New Folder')} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Create</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '600', color: 'white' }}>Create</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -137,7 +139,7 @@ export default function ProjectPhotos({ project, user }: Props) {
                     <Feather name="arrow-left" size={16} color="#fff" />
                 </TouchableOpacity>
                 <Feather name="folder" size={16} color="#f97316" />
-                <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>{currentFolder?.name}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{currentFolder?.name}</Text>
             </View>
 
             {(user.role === 'admin' || user.role === 'contributor') && (
@@ -146,7 +148,7 @@ export default function ProjectPhotos({ project, user }: Props) {
                     style={{ height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
                 >
                     <Feather name="upload" size={13} color="#fff" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Upload Photos</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Photos</Text>
                 </TouchableOpacity>
             )}
 
@@ -159,7 +161,7 @@ export default function ProjectPhotos({ project, user }: Props) {
                         style={{
                             width: '18.5%',
                             aspectRatio: 1,
-                            backgroundColor: '#1e1e1e',
+                            backgroundColor: colors.surface,
                             alignItems: 'center',
                             justifyContent: 'center',
                             borderRadius: 4,
@@ -190,11 +192,11 @@ export default function ProjectPhotos({ project, user }: Props) {
 
             {/* Expanded photo detail */}
             {expandedPhoto && (
-                <View style={{ marginTop: 10, borderRadius: 10, borderWidth: 1, borderColor: '#2a2a2a', backgroundColor: '#111111', padding: 12 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '500', color: '#fff', marginBottom: 4 }}>
+                <View style={{ marginTop: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, padding: 12 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '500', color: colors.text, marginBottom: 4 }}>
                         {visiblePhotos.find((p) => p.id === expandedPhoto)?.location}
                     </Text>
-                    <Text style={{ fontSize: 10, color: '#888' }}>
+                    <Text style={{ fontSize: 10, color: colors.textMuted }}>
                         {visiblePhotos.find((p) => p.id === expandedPhoto)?.tags.join(', ')}
                     </Text>
                 </View>
@@ -202,8 +204,8 @@ export default function ProjectPhotos({ project, user }: Props) {
 
             {visiblePhotos.length === 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
-                    <Feather name="camera" size={32} color="#2a2a2a" />
-                    <Text style={{ fontSize: 12, color: '#888', marginTop: 8 }}>No photos yet</Text>
+                    <Feather name="camera" size={32} color={colors.border} />
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No photos yet</Text>
                 </View>
             )}
         </View>

@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Project, UserRole } from '@/types';
 import { mockReports } from '@/data/mock';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Props {
     project: Project;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function ProjectOverview({ project, userRole }: Props) {
+    const { colors } = useTheme();
     const reports = mockReports.filter((r) => r.projectId === project.id);
     const dailyReports = reports.filter((r) => r.type === 'daily');
     const weeklyReports = reports.filter((r) => r.type === 'weekly');
@@ -28,17 +30,17 @@ export default function ProjectOverview({ project, userRole }: Props) {
                         style={{
                             width: '47%',
                             borderRadius: 14,
-                            backgroundColor: '#111111',
+                            backgroundColor: colors.background,
                             borderWidth: 1,
-                            borderColor: '#2a2a2a',
+                            borderColor: colors.border,
                             padding: 14,
                         }}
                     >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <Feather name={item.icon as any} size={14} color="#888" />
-                            <Text style={{ fontSize: 11, color: '#888' }}>{item.label}</Text>
+                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{item.label}</Text>
                         </View>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>{item.value}</Text>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{item.value}</Text>
                     </View>
                 ))}
             </View>
@@ -46,7 +48,7 @@ export default function ProjectOverview({ project, userRole }: Props) {
             {/* Reports */}
             <View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Reports</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Reports</Text>
                     {userRole === 'admin' && (
                         <TouchableOpacity
                             onPress={() => Alert.alert('Info', 'Upload report functionality')}
@@ -61,14 +63,14 @@ export default function ProjectOverview({ project, userRole }: Props) {
                             }}
                         >
                             <Feather name="upload" size={12} color="#fff" />
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#fff' }}>Upload Report</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>Upload Report</Text>
                         </TouchableOpacity>
                     )}
                 </View>
 
                 {dailyReports.length > 0 && (
                     <View style={{ marginBottom: 12 }}>
-                        <Text style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>Daily Site Reports</Text>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8 }}>Daily Site Reports</Text>
                         <View style={{ gap: 6 }}>
                             {dailyReports.map((report) => (
                                 <View
@@ -78,20 +80,20 @@ export default function ProjectOverview({ project, userRole }: Props) {
                                         alignItems: 'center',
                                         gap: 10,
                                         borderRadius: 12,
-                                        backgroundColor: '#111111',
+                                        backgroundColor: colors.background,
                                         borderWidth: 1,
-                                        borderColor: '#2a2a2a',
+                                        borderColor: colors.border,
                                         padding: 10,
                                     }}
                                 >
-                                    <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#1e1e1e', alignItems: 'center', justifyContent: 'center' }}>
+                                    <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}>
                                         <Feather name="file-text" size={16} color="#888" />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: '#fff' }}>{report.title}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>{report.title}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                                             <Feather name="clock" size={9} color="#555" />
-                                            <Text style={{ fontSize: 9, color: '#555' }}>{report.date} · {report.uploader}</Text>
+                                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{report.date} · {report.uploader}</Text>
                                         </View>
                                     </View>
                                 </View>
@@ -102,7 +104,7 @@ export default function ProjectOverview({ project, userRole }: Props) {
 
                 {weeklyReports.length > 0 && (
                     <View>
-                        <Text style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>Weekly Progress Reports</Text>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8 }}>Weekly Progress Reports</Text>
                         <View style={{ gap: 6 }}>
                             {weeklyReports.map((report) => (
                                 <View
@@ -112,9 +114,9 @@ export default function ProjectOverview({ project, userRole }: Props) {
                                         alignItems: 'center',
                                         gap: 10,
                                         borderRadius: 12,
-                                        backgroundColor: '#111111',
+                                        backgroundColor: colors.background,
                                         borderWidth: 1,
-                                        borderColor: '#2a2a2a',
+                                        borderColor: colors.border,
                                         padding: 10,
                                     }}
                                 >
@@ -122,10 +124,10 @@ export default function ProjectOverview({ project, userRole }: Props) {
                                         <Feather name="file-text" size={16} color="#f97316" />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: '#fff' }}>{report.title}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>{report.title}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                                             <Feather name="clock" size={9} color="#555" />
-                                            <Text style={{ fontSize: 9, color: '#555' }}>{report.date} · {report.uploader}</Text>
+                                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{report.date} · {report.uploader}</Text>
                                         </View>
                                     </View>
                                 </View>
@@ -141,7 +143,7 @@ export default function ProjectOverview({ project, userRole }: Props) {
                         height: 44,
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: '#2a2a2a',
+                        borderColor: colors.border,
                         borderStyle: 'dashed',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -150,7 +152,7 @@ export default function ProjectOverview({ project, userRole }: Props) {
                     }}
                 >
                     <Feather name="download" size={15} color="#888" />
-                    <Text style={{ fontSize: 13, color: '#888' }}>Export Final Handover Package</Text>
+                    <Text style={{ fontSize: 13, color: colors.textMuted }}>Export Final Handover Package</Text>
                 </TouchableOpacity>
             )}
         </View>

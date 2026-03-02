@@ -1,0 +1,26 @@
+{
+    "translation": {
+        "dashboard": {
+            "greeting": "Hi, {{name}} 👋",
+            "roles": {
+                "admin": "Manage all your projects",
+                "contributor": "Your assigned projects",
+                "client": "Your shared projects"
+            },
+            "stats": {
+                "projects": "Projects",
+                "documents": "Documents",
+                "photos": "Photos"
+            },
+            "yourProjects": "Your Projects",
+            "noProjects": "No projects available"
+        },
+        "tabs": {
+            "home": "Home",
+            "scan": "Scan",
+            "upload": "Upload",
+            "activity": "Activity",
+            "profile": "Profile"
+        }
+    }
+}

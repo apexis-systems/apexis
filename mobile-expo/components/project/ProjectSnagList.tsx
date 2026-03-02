@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { Project, SnagItem, SnagStatus } from '@/types';
 import { mockSnags, mockAllUsers } from '@/data/mock';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Props {
     project: Project;
@@ -11,13 +12,8 @@ interface Props {
 
 type StatusConfig = { icon: keyof typeof Feather.glyphMap; bg: string; iconColor: string; label: string };
 
-const statusConfig: Record<SnagStatus, StatusConfig> = {
-    red: { icon: 'x', bg: '#ef4444', iconColor: '#fff', label: 'No action needed' },
-    amber: { icon: 'minus', bg: '#f59e0b', iconColor: '#fff', label: 'Waiting clearance' },
-    green: { icon: 'check', bg: '#22c55e', iconColor: '#fff', label: 'Completed' },
-};
-
 export default function ProjectSnagList({ project }: Props) {
+    const { colors } = useTheme();
     const { user } = useAuth();
     const [snags, setSnags] = useState<SnagItem[]>(
         mockSnags.filter((s) => s.projectId === project.id)
@@ -26,6 +22,12 @@ export default function ProjectSnagList({ project }: Props) {
     const [newTitle, setNewTitle] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [newAssignee, setNewAssignee] = useState('');
+
+    const statusConfig: Record<SnagStatus, StatusConfig> = {
+        red: { icon: 'x', bg: '#ef4444', iconColor: colors.text, label: 'No action needed' },
+        amber: { icon: 'minus', bg: '#f59e0b', iconColor: colors.text, label: 'Waiting clearance' },
+        green: { icon: 'check', bg: '#22c55e', iconColor: colors.text, label: 'Completed' },
+    };
 
     const cycleStatus = (id: string) => {
         const order: SnagStatus[] = ['amber', 'green', 'red'];
@@ -81,7 +83,7 @@ export default function ProjectSnagList({ project }: Props) {
                     }}
                 >
                     <Feather name="plus" size={15} color="#fff" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Add Snag</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Add Snag</Text>
                 </TouchableOpacity>
             )}
 
@@ -97,8 +99,8 @@ export default function ProjectSnagList({ project }: Props) {
                                 gap: 10,
                                 borderRadius: 10,
                                 borderWidth: 1,
-                                borderColor: '#2a2a2a',
-                                backgroundColor: '#111111',
+                                borderColor: colors.border,
+                                backgroundColor: colors.background,
                                 padding: 12,
                             }}
                         >
@@ -117,17 +119,17 @@ export default function ProjectSnagList({ project }: Props) {
                                 <Feather name={cfg.icon} size={13} color={cfg.iconColor} />
                             </TouchableOpacity>
                             <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>{snag.title}</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{snag.title}</Text>
                                 {snag.description && (
-                                    <Text numberOfLines={2} style={{ fontSize: 10, color: '#888', marginTop: 2 }}>{snag.description}</Text>
+                                    <Text numberOfLines={2} style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{snag.description}</Text>
                                 )}
-                                <Text style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+                                <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>
                                     Assigned: {snag.assignedToName} · {cfg.label}
                                 </Text>
                                 {snag.comments.length > 0 && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                         <Feather name="message-square" size={10} color="#555" />
-                                        <Text numberOfLines={1} style={{ fontSize: 9, color: '#555' }}>{snag.comments[snag.comments.length - 1]}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted }}>{snag.comments[snag.comments.length - 1]}</Text>
                                     </View>
                                 )}
                             </View>
@@ -138,21 +140,21 @@ export default function ProjectSnagList({ project }: Props) {
 
             {snags.length === 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, color: '#888' }}>No snags yet</Text>
+                    <Text style={{ fontSize: 12, color: colors.textMuted }}>No snags yet</Text>
                 </View>
             )}
 
             {/* Add Snag Modal */}
             <Modal visible={showAdd} transparent animationType="slide">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 14 }}>Add Snag</Text>
+                    <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Add Snag</Text>
                         <TextInput
                             value={newTitle}
                             onChangeText={setNewTitle}
                             placeholder="Snag title"
                             placeholderTextColor="#555"
-                            style={{ height: 40, borderRadius: 10, backgroundColor: '#2a2a2a', color: '#fff', paddingHorizontal: 12, fontSize: 13, marginBottom: 10 }}
+                            style={{ height: 40, borderRadius: 10, backgroundColor: colors.border, color: colors.text, paddingHorizontal: 12, fontSize: 13, marginBottom: 10 }}
                         />
                         <TextInput
                             value={newDescription}
@@ -160,9 +162,9 @@ export default function ProjectSnagList({ project }: Props) {
                             placeholder="Description (optional)"
                             placeholderTextColor="#555"
                             multiline
-                            style={{ height: 70, borderRadius: 10, backgroundColor: '#2a2a2a', color: '#fff', paddingHorizontal: 12, paddingTop: 10, fontSize: 13, marginBottom: 10 }}
+                            style={{ height: 70, borderRadius: 10, backgroundColor: colors.border, color: colors.text, paddingHorizontal: 12, paddingTop: 10, fontSize: 13, marginBottom: 10 }}
                         />
-                        <Text style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>Assign to:</Text>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 6 }}>Assign to:</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                             <View style={{ flexDirection: 'row', gap: 6 }}>
                                 {assignableUsers.map((u) => (
@@ -174,21 +176,21 @@ export default function ProjectSnagList({ project }: Props) {
                                             paddingVertical: 8,
                                             borderRadius: 10,
                                             borderWidth: 2,
-                                            borderColor: newAssignee === u.id ? '#f97316' : '#2a2a2a',
-                                            backgroundColor: newAssignee === u.id ? 'rgba(249,115,22,0.1)' : '#2a2a2a',
+                                            borderColor: newAssignee === u.id ? '#f97316' : colors.border,
+                                            backgroundColor: newAssignee === u.id ? 'rgba(249,115,22,0.1)' : colors.border,
                                         }}
                                     >
-                                        <Text style={{ fontSize: 12, color: newAssignee === u.id ? '#f97316' : '#888' }}>{u.name}</Text>
+                                        <Text style={{ fontSize: 12, color: newAssignee === u.id ? '#f97316' : colors.textMuted }}>{u.name}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
                         </ScrollView>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowAdd(false)} style={{ flex: 1, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#444', alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: '#888' }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={addSnag} style={{ flex: 1, height: 42, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Add</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: 'white' }}>Add</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

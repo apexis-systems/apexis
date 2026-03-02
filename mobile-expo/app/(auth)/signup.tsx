@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { requestAdminOtp, verifyAdminOtp } from '@/services/authService';
+import { useTheme } from '@/contexts/ThemeContext';
 
 type Step = 'details' | 'otp';
 
@@ -33,6 +34,7 @@ export default function SignUpScreen() {
 
     const { login } = useAuth();
     const router = useRouter();
+    const { colors } = useTheme();
 
     const handleSendOtp = async () => {
         if (!name || !email || !orgName || password.length < 6) {
@@ -76,7 +78,7 @@ export default function SignUpScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#111111' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
@@ -100,10 +102,10 @@ export default function SignUpScreen() {
                         >
                             <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>A</Text>
                         </View>
-                        <Text style={{ fontSize: 30, fontWeight: '800', color: '#fff', letterSpacing: -0.5 }}>
+                        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.text, letterSpacing: -0.5 }}>
                             apexis
                         </Text>
-                        <Text style={{ fontSize: 11, color: '#888', marginTop: 4, letterSpacing: 4 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>
                             CREATE ADMIN ACCOUNT
                         </Text>
                     </View>
@@ -117,8 +119,8 @@ export default function SignUpScreen() {
                                     width: step === s ? 24 : 8,
                                     height: 8,
                                     borderRadius: 4,
-                                    backgroundColor: step === s ? '#f97316' :
-                                        (['details', 'otp'].indexOf(step) > i) ? '#f9731666' : '#2a2a2a',
+                                    backgroundColor: step === s ? colors.primary :
+                                        (['details', 'otp'].indexOf(step) > i) ? `${colors.primary}66` : colors.border,
                                 }}
                             />
                         ))}
@@ -128,20 +130,22 @@ export default function SignUpScreen() {
                     {step === 'details' && (
                         <View style={{ gap: 16 }}>
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                     Full Name
                                 </Text>
                                 <TextInput
                                     value={name}
                                     onChangeText={(val) => { setName(val); setError(''); }}
                                     placeholder="John Doe"
-                                    placeholderTextColor="#555"
+                                    placeholderTextColor={colors.textMuted}
                                     autoCapitalize="words"
                                     style={{
                                         height: 48,
                                         borderRadius: 12,
-                                        backgroundColor: '#1e1e1e',
-                                        color: '#fff',
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        color: colors.text,
                                         paddingHorizontal: 14,
                                         fontSize: 15,
                                     }}
@@ -149,21 +153,23 @@ export default function SignUpScreen() {
                             </View>
 
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                     Work Email
                                 </Text>
                                 <TextInput
                                     value={email}
                                     onChangeText={(val) => { setEmail(val); setError(''); }}
                                     placeholder="you@company.com"
-                                    placeholderTextColor="#555"
+                                    placeholderTextColor={colors.textMuted}
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                     style={{
                                         height: 48,
                                         borderRadius: 12,
-                                        backgroundColor: '#1e1e1e',
-                                        color: '#fff',
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        color: colors.text,
                                         paddingHorizontal: 14,
                                         fontSize: 15,
                                     }}
@@ -171,20 +177,22 @@ export default function SignUpScreen() {
                             </View>
 
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                     Organization Name
                                 </Text>
                                 <TextInput
                                     value={orgName}
                                     onChangeText={(val) => { setOrgName(val); setError(''); }}
                                     placeholder="Acme Corp"
-                                    placeholderTextColor="#555"
+                                    placeholderTextColor={colors.textMuted}
                                     autoCapitalize="words"
                                     style={{
                                         height: 48,
                                         borderRadius: 12,
-                                        backgroundColor: '#1e1e1e',
-                                        color: '#fff',
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        color: colors.text,
                                         paddingHorizontal: 14,
                                         fontSize: 15,
                                     }}
@@ -192,20 +200,22 @@ export default function SignUpScreen() {
                             </View>
 
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                     Password
                                 </Text>
                                 <TextInput
                                     value={password}
                                     onChangeText={(val) => { setPassword(val); setError(''); }}
                                     placeholder="••••••••"
-                                    placeholderTextColor="#555"
+                                    placeholderTextColor={colors.textMuted}
                                     secureTextEntry
                                     style={{
                                         height: 48,
                                         borderRadius: 12,
-                                        backgroundColor: '#1e1e1e',
-                                        color: '#fff',
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        color: colors.text,
                                         paddingHorizontal: 14,
                                         fontSize: 15,
                                     }}
@@ -246,10 +256,10 @@ export default function SignUpScreen() {
                     {step === 'otp' && (
                         <View style={{ gap: 16 }}>
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 4 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 4 }}>
                                     Enter 6-digit OTP
                                 </Text>
-                                <Text style={{ fontSize: 11, color: '#888', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 16 }}>
                                     Sent to {email}
                                 </Text>
 
@@ -262,14 +272,14 @@ export default function SignUpScreen() {
                                                 width: 44,
                                                 height: 52,
                                                 borderRadius: 10,
-                                                backgroundColor: '#1e1e1e',
+                                                backgroundColor: colors.surface,
                                                 borderWidth: 2,
-                                                borderColor: otp[i] ? '#f97316' : '#2a2a2a',
+                                                borderColor: otp[i] ? colors.primary : colors.border,
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                             }}
                                         >
-                                            <Text style={{ fontSize: 20, fontWeight: '700', color: '#fff' }}>
+                                            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>
                                                 {otp[i] || ''}
                                             </Text>
                                         </View>
@@ -304,7 +314,7 @@ export default function SignUpScreen() {
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
-                                    backgroundColor: otp.length === 6 ? '#f97316' : '#2a2a2a',
+                                    backgroundColor: otp.length === 6 ? colors.primary : colors.border,
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     marginTop: 8,
@@ -314,7 +324,7 @@ export default function SignUpScreen() {
                                 {isLoading ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
-                                    <Text style={{ fontSize: 15, fontWeight: '600', color: otp.length === 6 ? '#fff' : '#555' }}>
+                                    <Text style={{ fontSize: 15, fontWeight: '600', color: otp.length === 6 ? '#fff' : colors.textMuted }}>
                                         Verify OTP & Create Account
                                     </Text>
                                 )}
@@ -324,7 +334,7 @@ export default function SignUpScreen() {
                                 onPress={() => { setStep('details'); setOtp(''); setError(''); }}
                                 style={{ alignItems: 'center', paddingVertical: 4 }}
                             >
-                                <Text style={{ fontSize: 13, color: '#888' }}>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>
                                     ← Change Details
                                 </Text>
                             </TouchableOpacity>
@@ -336,9 +346,9 @@ export default function SignUpScreen() {
                         onPress={() => router.replace('/(auth)/login')}
                         style={{ alignItems: 'center', marginTop: 28 }}
                     >
-                        <Text style={{ fontSize: 13, color: '#888' }}>
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>
                             Already have an account?{' '}
-                            <Text style={{ fontWeight: '600', color: '#f97316' }}>Sign In</Text>
+                            <Text style={{ fontWeight: '600', color: colors.primary }}>Sign In</Text>
                         </Text>
                     </TouchableOpacity>
                 </ScrollView>

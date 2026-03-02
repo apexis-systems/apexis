@@ -4,12 +4,14 @@ import { Feather } from '@expo/vector-icons';
 import { Project, ManualSOP } from '@/types';
 import { mockManuals } from '@/data/mock';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Props {
     project: Project;
 }
 
 export default function ProjectManuals({ project }: Props) {
+    const { colors } = useTheme();
     const { user } = useAuth();
     const [manuals, setManuals] = useState<ManualSOP[]>(
         mockManuals.filter((m) => m.projectId === project.id)
@@ -39,7 +41,7 @@ export default function ProjectManuals({ project }: Props) {
                     }}
                 >
                     <Feather name="upload" size={13} color="#fff" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Upload Manual / SOP</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Manual / SOP</Text>
                 </TouchableOpacity>
             )}
 
@@ -52,9 +54,9 @@ export default function ProjectManuals({ project }: Props) {
                             alignItems: 'center',
                             gap: 10,
                             borderRadius: 10,
-                            backgroundColor: '#111111',
+                            backgroundColor: colors.background,
                             borderWidth: 1,
-                            borderColor: '#2a2a2a',
+                            borderColor: colors.border,
                             padding: 10,
                         }}
                     >
@@ -62,8 +64,8 @@ export default function ProjectManuals({ project }: Props) {
                             <Feather name="book-open" size={16} color="#f97316" />
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: '#fff' }}>{m.name}</Text>
-                            <Text style={{ fontSize: 9, color: '#666' }}>{m.size} · {m.uploadDate}</Text>
+                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text }}>{m.name}</Text>
+                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{m.size} · {m.uploadDate}</Text>
                         </View>
                         {user?.role === 'admin' && (
                             <TouchableOpacity onPress={() => deleteManual(m.id)} style={{ padding: 4 }}>
@@ -76,8 +78,8 @@ export default function ProjectManuals({ project }: Props) {
 
             {manuals.length === 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
-                    <Feather name="book-open" size={32} color="#2a2a2a" />
-                    <Text style={{ fontSize: 12, color: '#888', marginTop: 8 }}>No manuals or SOPs yet</Text>
+                    <Feather name="book-open" size={32} color={colors.border} />
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No manuals or SOPs yet</Text>
                 </View>
             )}
         </View>

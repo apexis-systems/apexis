@@ -2,9 +2,11 @@ import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export default function ScanScreen() {
     const { user } = useAuth();
+    const { colors } = useTheme();
 
     if (!user) return null;
 
@@ -13,12 +15,12 @@ export default function ScanScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#0d0d0d' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
             <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 14 }}>
                 {/* Header */}
                 <View style={{ marginBottom: 24 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '700', color: '#fff' }}>Scan QR Code</Text>
-                    <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>Quick access to project files</Text>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>Scan QR Code</Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Quick access to project files</Text>
                 </View>
 
                 {/* Scanner Area */}
@@ -29,18 +31,18 @@ export default function ScanScreen() {
                             height: 260,
                             borderRadius: 20,
                             borderWidth: 2,
-                            borderColor: '#2a2a2a',
+                            borderColor: colors.border,
                             borderStyle: 'dashed',
-                            backgroundColor: '#111111',
+                            backgroundColor: colors.surface,
                             alignItems: 'center',
                             justifyContent: 'center',
                         }}
                     >
-                        <Feather name="maximize" size={64} color="#2a2a2a" />
+                        <Feather name="maximize" size={64} color={colors.border} />
                         <Text
                             style={{
                                 fontSize: 12,
-                                color: '#888',
+                                color: colors.textMuted,
                                 textAlign: 'center',
                                 paddingHorizontal: 32,
                                 marginTop: 12,
@@ -71,7 +73,7 @@ export default function ScanScreen() {
                         style={{
                             marginTop: 20,
                             fontSize: 10,
-                            color: '#666',
+                            color: colors.textMuted,
                             textAlign: 'center',
                             maxWidth: 220,
                         }}

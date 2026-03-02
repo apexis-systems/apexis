@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loginAdmin, loginProject } from '@/services/authService';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
     { value: 'admin', label: 'Admin', desc: 'Full project control' },
@@ -33,6 +34,7 @@ export default function LoginScreen() {
 
     const { login } = useAuth();
     const router = useRouter();
+    const { colors } = useTheme();
 
     const handleLogin = async () => {
         setIsLoading(true);
@@ -62,7 +64,7 @@ export default function LoginScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#111111' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
@@ -86,10 +88,10 @@ export default function LoginScreen() {
                         >
                             <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>A</Text>
                         </View>
-                        <Text style={{ fontSize: 30, fontWeight: '800', color: '#fff', letterSpacing: -0.5 }}>
+                        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.text, letterSpacing: -0.5 }}>
                             apexis
                         </Text>
-                        <Text style={{ fontSize: 11, color: '#888', marginTop: 4, letterSpacing: 4 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>
                             RECORD · REPORT · RELEASE
                         </Text>
                     </View>
@@ -97,19 +99,21 @@ export default function LoginScreen() {
                     {/* Dynamic Inputs Based on Role */}
                     {selectedRole === 'client' ? (
                         <View style={{ marginBottom: 16 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                 Your Name
                             </Text>
                             <TextInput
                                 value={clientName}
                                 onChangeText={setClientName}
                                 placeholder="John Doe"
-                                placeholderTextColor="#555"
+                                placeholderTextColor={colors.textMuted}
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
-                                    backgroundColor: '#1e1e1e',
-                                    color: '#fff',
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    color: colors.text,
                                     paddingHorizontal: 14,
                                     fontSize: 15,
                                 }}
@@ -117,21 +121,23 @@ export default function LoginScreen() {
                         </View>
                     ) : (
                         <View style={{ marginBottom: 16 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                 Work Email
                             </Text>
                             <TextInput
                                 value={email}
                                 onChangeText={setEmail}
                                 placeholder="you@company.com"
-                                placeholderTextColor="#555"
+                                placeholderTextColor={colors.textMuted}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
-                                    backgroundColor: '#1e1e1e',
-                                    color: '#fff',
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    color: colors.text,
                                     paddingHorizontal: 14,
                                     fontSize: 15,
                                 }}
@@ -141,20 +147,22 @@ export default function LoginScreen() {
 
                     {selectedRole === 'admin' && (
                         <View style={{ marginBottom: 16 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                 Password
                             </Text>
                             <TextInput
                                 value={password}
                                 onChangeText={setPassword}
                                 placeholder="••••••••"
-                                placeholderTextColor="#555"
+                                placeholderTextColor={colors.textMuted}
                                 secureTextEntry
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
-                                    backgroundColor: '#1e1e1e',
-                                    color: '#fff',
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    color: colors.text,
                                     paddingHorizontal: 14,
                                     fontSize: 15,
                                 }}
@@ -164,20 +172,22 @@ export default function LoginScreen() {
 
                     {(selectedRole === 'contributor' || selectedRole === 'client') && (
                         <View style={{ marginBottom: 16 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                 Project Code
                             </Text>
                             <TextInput
                                 value={projectCode}
                                 onChangeText={setProjectCode}
                                 placeholder="e.g. ABC123XYZ"
-                                placeholderTextColor="#555"
+                                placeholderTextColor={colors.textMuted}
                                 autoCapitalize="characters"
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
-                                    backgroundColor: '#1e1e1e',
-                                    color: '#fff',
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    color: colors.text,
                                     paddingHorizontal: 14,
                                     fontSize: 15,
                                 }}
@@ -187,7 +197,7 @@ export default function LoginScreen() {
 
                     {/* Role Selector */}
                     <View style={{ marginBottom: 24 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '500', color: '#fff', marginBottom: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 8 }}>
                             Select Role
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -202,8 +212,8 @@ export default function LoginScreen() {
                                         flex: 1,
                                         borderRadius: 12,
                                         borderWidth: 2,
-                                        borderColor: selectedRole === role.value ? '#f97316' : '#2a2a2a',
-                                        backgroundColor: selectedRole === role.value ? 'rgba(249,115,22,0.1)' : '#1e1e1e',
+                                        borderColor: selectedRole === role.value ? colors.primary : colors.border,
+                                        backgroundColor: selectedRole === role.value ? 'rgba(249,115,22,0.1)' : colors.surface,
                                         padding: 8,
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -213,12 +223,12 @@ export default function LoginScreen() {
                                         style={{
                                             fontSize: 11,
                                             fontWeight: '700',
-                                            color: selectedRole === role.value ? '#f97316' : '#fff',
+                                            color: selectedRole === role.value ? colors.primary : colors.text,
                                         }}
                                     >
                                         {role.label}
                                     </Text>
-                                    <Text style={{ fontSize: 9, color: '#888', marginTop: 2, textAlign: 'center' }}>
+                                    <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2, textAlign: 'center' }}>
                                         {role.desc}
                                     </Text>
                                 </TouchableOpacity>
@@ -255,9 +265,9 @@ export default function LoginScreen() {
 
                     {/* Sign Up */}
                     <TouchableOpacity onPress={() => router.push('/(auth)/signup')} style={{ alignItems: 'center' }}>
-                        <Text style={{ fontSize: 13, color: '#888' }}>
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>
                             Don't have an account?{' '}
-                            <Text style={{ fontWeight: '600', color: '#f97316' }}>Sign Up</Text>
+                            <Text style={{ fontWeight: '600', color: colors.primary }}>Sign Up</Text>
                         </Text>
                     </TouchableOpacity>
                 </ScrollView>

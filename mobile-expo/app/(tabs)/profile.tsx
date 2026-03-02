@@ -4,26 +4,35 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const roles: { value: UserRole; label: string }[] = [
     { value: 'admin', label: 'Admin' },
     { value: 'contributor', label: 'Contributor' },
     { value: 'client', label: 'Client' },
+    { value: 'superadmin', label: 'Super Admin' },
 ];
 
 const roleBadgeColor: Record<UserRole, { bg: string; text: string }> = {
     admin: { bg: '#f97316', text: '#fff' },
     contributor: { bg: '#3b3b3b', text: '#fff' },
     client: { bg: '#1e1e1e', text: '#888' },
+    superadmin: { bg: '#ef4444', text: '#fff' },
 };
 
 export default function ProfileScreen() {
     const { user, switchRole, logout } = useAuth();
     const router = useRouter();
+    const { colors } = useTheme();
 
     if (!user) return null;
 
-    const badge = roleBadgeColor[user.role];
+    const badge = { ...roleBadgeColor[user.role] };
+    if (user.role === 'client') {
+        badge.bg = colors.surface;
+        badge.text = colors.textMuted;
+    }
+
     const roleLabel = user.role.charAt(0).toUpperCase() + user.role.slice(1);
 
     const handleLogout = () => {
@@ -41,7 +50,7 @@ export default function ProfileScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#0d0d0d' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 {/* Avatar + Info */}
                 <View style={{ alignItems: 'center', marginBottom: 32 }}>
@@ -50,16 +59,17 @@ export default function ProfileScreen() {
                             width: 80,
                             height: 80,
                             borderRadius: 40,
-                            backgroundColor: '#2a2a2a',
+                            backgroundColor: colors.border,
                             alignItems: 'center',
                             justifyContent: 'center',
+                            marginTop: 12,
                             marginBottom: 12,
                         }}
                     >
-                        <Feather name="user" size={38} color="#fff" />
+                        <Feather name="user" size={38} color={colors.text} />
                     </View>
-                    <Text style={{ fontSize: 20, fontWeight: '700', color: '#fff' }}>{user.name}</Text>
-                    <Text style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{user.email}</Text>
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>{user.name}</Text>
+                    <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{user.email}</Text>
                     <View
                         style={{
                             flexDirection: 'row',
@@ -81,16 +91,16 @@ export default function ProfileScreen() {
                 <View
                     style={{
                         borderRadius: 14,
-                        backgroundColor: '#111111',
+                        backgroundColor: colors.surface,
                         borderWidth: 1,
-                        borderColor: '#2a2a2a',
+                        borderColor: colors.border,
                         padding: 16,
                         marginBottom: 16,
                     }}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <Feather name="edit-2" size={14} color="#888" />
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Switch Demo Role</Text>
+                        <Feather name="edit-2" size={14} color={colors.textMuted} />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Switch Demo Role</Text>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                         {roles.map((role) => (
@@ -101,8 +111,8 @@ export default function ProfileScreen() {
                                     flex: 1,
                                     borderRadius: 12,
                                     borderWidth: 2,
-                                    borderColor: user.role === role.value ? '#f97316' : '#2a2a2a',
-                                    backgroundColor: user.role === role.value ? 'rgba(249,115,22,0.1)' : '#1a1a1a',
+                                    borderColor: user.role === role.value ? colors.primary : colors.border,
+                                    backgroundColor: user.role === role.value ? 'rgba(249,115,22,0.1)' : colors.background,
                                     padding: 12,
                                     alignItems: 'center',
                                 }}
@@ -111,7 +121,7 @@ export default function ProfileScreen() {
                                     style={{
                                         fontSize: 12,
                                         fontWeight: '600',
-                                        color: user.role === role.value ? '#f97316' : '#888',
+                                        color: user.role === role.value ? colors.primary : colors.textMuted,
                                     }}
                                 >
                                     {role.label}

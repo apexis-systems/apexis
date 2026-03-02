@@ -5,6 +5,7 @@ import { Project, User, ProjectDocument, Folder } from '@/types';
 import { mockDocuments, mockFolders } from '@/data/mock';
 import { useRouter } from 'expo-router';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Props {
     project: Project;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function ProjectDocuments({ project, user }: Props) {
+    const { colors } = useTheme();
     const router = useRouter();
     const [docs, setDocs] = useState<ProjectDocument[]>(
         mockDocuments.filter((d) => d.projectId === project.id)
@@ -85,7 +87,7 @@ export default function ProjectDocuments({ project, user }: Props) {
                             }}
                         >
                             <Feather name="upload" size={13} color="#fff" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Upload</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => setShowCreateFolder(true)}
@@ -93,7 +95,7 @@ export default function ProjectDocuments({ project, user }: Props) {
                                 height: 38,
                                 borderRadius: 10,
                                 borderWidth: 1,
-                                borderColor: '#2a2a2a',
+                                borderColor: colors.border,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 flexDirection: 'row',
@@ -101,8 +103,8 @@ export default function ProjectDocuments({ project, user }: Props) {
                                 paddingHorizontal: 12,
                             }}
                         >
-                            <Feather name="folder-plus" size={13} color="#fff" />
-                            <Text style={{ fontSize: 12, color: '#fff' }}>New Folder</Text>
+                            <Feather name="folder-plus" size={13} color={colors.text} />
+                            <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -119,17 +121,17 @@ export default function ProjectDocuments({ project, user }: Props) {
                                     alignItems: 'center',
                                     gap: 4,
                                     borderRadius: 10,
-                                    backgroundColor: '#111111',
+                                    backgroundColor: colors.background,
                                     borderWidth: 1,
-                                    borderColor: '#2a2a2a',
+                                    borderColor: colors.border,
                                     padding: 12,
                                 }}
                             >
                                 <Feather name="folder" size={32} color="#f97316" />
-                                <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: '#fff', textAlign: 'center' }}>
+                                <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: colors.text, textAlign: 'center' }}>
                                     {folder.name}
                                 </Text>
-                                <Text style={{ fontSize: 9, color: '#666' }}>{count} files</Text>
+                                <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} files</Text>
                             </TouchableOpacity>
                         );
                     })}
@@ -137,29 +139,29 @@ export default function ProjectDocuments({ project, user }: Props) {
 
                 {folders.length === 0 && (
                     <View style={{ marginTop: 30, alignItems: 'center' }}>
-                        <Feather name="folder" size={32} color="#2a2a2a" />
-                        <Text style={{ fontSize: 12, color: '#888', marginTop: 8 }}>No folders yet</Text>
+                        <Feather name="folder" size={32} color={colors.border} />
+                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders yet</Text>
                     </View>
                 )}
 
                 {/* Create Folder Modal */}
                 <Modal visible={showCreateFolder} transparent animationType="fade">
                     <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
-                        <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff', marginBottom: 14 }}>New Folder</Text>
+                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>New Folder</Text>
                             <TextInput
                                 value={newFolderName}
                                 onChangeText={setNewFolderName}
                                 placeholder="Folder name"
                                 placeholderTextColor="#555"
-                                style={{ height: 40, borderRadius: 10, backgroundColor: '#2a2a2a', color: '#fff', paddingHorizontal: 12, fontSize: 13, marginBottom: 16 }}
+                                style={{ height: 40, borderRadius: 10, backgroundColor: colors.border, color: colors.text, paddingHorizontal: 12, fontSize: 13, marginBottom: 16 }}
                             />
                             <View style={{ flexDirection: 'row', gap: 8 }}>
                                 <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#444', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 13, color: '#888' }}>Cancel</Text>
+                                    <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={handleCreateFolder} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Create</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '600', color: 'white' }}>Create</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -177,7 +179,7 @@ export default function ProjectDocuments({ project, user }: Props) {
                     <Feather name="arrow-left" size={16} color="#fff" />
                 </TouchableOpacity>
                 <Feather name="folder" size={16} color="#f97316" />
-                <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>{currentFolder?.name}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{currentFolder?.name}</Text>
             </View>
 
             {(user.role === 'admin' || user.role === 'contributor') && (
@@ -195,7 +197,7 @@ export default function ProjectDocuments({ project, user }: Props) {
                     }}
                 >
                     <Feather name="upload" size={13} color="#fff" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Upload Document</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Document</Text>
                 </TouchableOpacity>
             )}
 
@@ -208,9 +210,9 @@ export default function ProjectDocuments({ project, user }: Props) {
                             alignItems: 'center',
                             gap: 8,
                             borderRadius: 10,
-                            backgroundColor: '#111111',
+                            backgroundColor: colors.background,
                             borderWidth: 1,
-                            borderColor: '#2a2a2a',
+                            borderColor: colors.border,
                             padding: 10,
                         }}
                     >
@@ -227,8 +229,8 @@ export default function ProjectDocuments({ project, user }: Props) {
                             <Feather name="file-text" size={16} color={doc.type === 'pdf' ? '#ef4444' : '#3b82f6'} />
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: '#fff' }}>{doc.name}</Text>
-                            <Text style={{ fontSize: 9, color: '#666' }}>v{doc.version} · {doc.size}</Text>
+                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text }}>{doc.name}</Text>
+                            <Text style={{ fontSize: 9, color: colors.textMuted }}>v{doc.version} · {doc.size}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
                             <TouchableOpacity onPress={() => Alert.alert('Share', `Share ${doc.name}`)} style={{ padding: 4 }}>
@@ -236,7 +238,7 @@ export default function ProjectDocuments({ project, user }: Props) {
                             </TouchableOpacity>
                             {user.role === 'admin' && (
                                 <TouchableOpacity onPress={() => toggleVisibility(doc.id)} style={{ padding: 4 }}>
-                                    <Feather name={doc.clientVisible ? 'eye' : 'eye-off'} size={14} color={doc.clientVisible ? '#f97316' : '#666'} />
+                                    <Feather name={doc.clientVisible ? 'eye' : 'eye-off'} size={14} color={doc.clientVisible ? '#f97316' : colors.textMuted} />
                                 </TouchableOpacity>
                             )}
                             {(user.role === 'admin' || user.role === 'contributor') && doc.uploaderId === user.id && (
@@ -251,8 +253,8 @@ export default function ProjectDocuments({ project, user }: Props) {
 
             {visibleDocs.length === 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
-                    <Feather name="file-text" size={32} color="#2a2a2a" />
-                    <Text style={{ fontSize: 12, color: '#888', marginTop: 8 }}>No documents yet</Text>
+                    <Feather name="file-text" size={32} color={colors.border} />
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No documents yet</Text>
                 </View>
             )}
         </View>

@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import ProjectOverview from '@/components/project/ProjectOverview';
 import ProjectDocuments from '@/components/project/ProjectDocuments';
@@ -18,6 +19,7 @@ type Tab = 'overview' | 'documents' | 'photos' | 'daily' | 'weekly' | 'snags' | 
 export default function ProjectWorkspaceScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { user } = useAuth();
+    const { colors, isDark } = useTheme();
     const router = useRouter();
 
     const [project, setProject] = useState<any>(null);
@@ -41,14 +43,14 @@ export default function ProjectWorkspaceScreen() {
     }, [id]);
 
     if (!user || loading) return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#0d0d0d', justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#f97316" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.primary} />
         </SafeAreaView>
     );
 
     if (!project) return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#0d0d0d', justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: '#fff' }}>Project not found</Text>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ color: colors.text }}>Project not found</Text>
         </SafeAreaView>
     );
 
@@ -66,61 +68,71 @@ export default function ProjectWorkspaceScreen() {
     const visibleTabs = tabs.filter((t) => !(t.hideForClient && user.role === 'client'));
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#0d0d0d' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
             {/* Header */}
             <View
                 style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 8,
+                    gap: 12,
                     paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    borderBottomWidth: 1,
-                    borderBottomColor: '#2a2a2a',
-                    backgroundColor: '#111111',
+                    paddingVertical: 14,
+                    backgroundColor: colors.surface,
                 }}
             >
-                <TouchableOpacity onPress={() => router.back()} style={{ padding: 6, borderRadius: 20 }}>
-                    <Feather name="arrow-left" size={18} color="#fff" />
+                <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+                    <Feather name="arrow-left" size={20} color={colors.text} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>
+                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
                         {project.name}
                     </Text>
-                    <Text style={{ fontSize: 10, color: '#888' }}>{project.location}</Text>
+                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{project.location || 'Location not set'}</Text>
                 </View>
             </View>
 
             {/* Tab Bar */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ backgroundColor: '#111111', borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}
-                contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 6, gap: 4 }}
-            >
-                {visibleTabs.map((tab) => (
-                    <TouchableOpacity
-                        key={tab.key}
-                        onPress={() => setActiveTab(tab.key)}
-                        style={{
-                            borderRadius: 8,
-                            paddingHorizontal: 14,
-                            paddingVertical: 6,
-                            backgroundColor: activeTab === tab.key ? '#1e1e1e' : 'transparent',
-                        }}
-                    >
-                        <Text
-                            style={{
-                                fontSize: 11,
-                                fontWeight: '600',
-                                color: activeTab === tab.key ? '#fff' : '#666',
-                            }}
-                        >
-                            {tab.label}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
+            <View style={{ backgroundColor: colors.surface }}>
+                <View style={{
+                    paddingHorizontal: 8,
+                    paddingBottom: 14,
+                    paddingTop: 4,
+                }}>
+                    <View style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        justifyContent: 'center',
+                        backgroundColor: isDark ? colors.surface : colors.border,
+                        borderRadius: 12,
+                        paddingHorizontal: 0,
+                        paddingVertical: 6,
+                        gap: 4
+                    }}>
+                        {visibleTabs.map((tab) => (
+                            <TouchableOpacity
+                                key={tab.key}
+                                onPress={() => setActiveTab(tab.key)}
+                                style={{
+                                    borderRadius: 12,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 6,
+                                    backgroundColor: activeTab === tab.key ? (isDark ? colors.border : colors.surface) : 'transparent',
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        fontSize: 10,
+                                        fontWeight: '600',
+                                        color: activeTab === tab.key ? colors.text : colors.textMuted,
+                                    }}
+                                >
+                                    {tab.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+            </View>
 
             {/* Tab Content */}
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>

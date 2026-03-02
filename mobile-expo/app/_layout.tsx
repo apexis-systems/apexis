@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 
 import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
 import '@/global.css';
+import '@/i18n';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 function RootLayoutNav() {
@@ -41,13 +42,24 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+
+function ThemedLayout() {
+  const { isDark } = useTheme();
   return (
-    <GluestackUIProvider mode="dark">
+    <GluestackUIProvider mode={isDark ? "dark" : "light"}>
       <AuthProvider>
         <RootLayoutNav />
-        <StatusBar style="light" />
+        <StatusBar style={isDark ? "light" : "dark"} />
       </AuthProvider>
     </GluestackUIProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <ThemedLayout />
+    </ThemeProvider>
   );
 }
