@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Project, User, ProjectDocument, Folder } from '@/types';
-import { mockDocuments, mockFolders } from '@/data/mock';
+import { Project, User, Folder } from '@/types';
 import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -10,7 +9,8 @@ import { useRouter } from 'next/navigation';
 import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
-import { getFolders, createFolder } from '@/services/folderService';
+import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
+import { getFiles, deleteFile, toggleFileVisibility } from '@/services/fileService';
 
 interface ProjectDocumentsProps {
   project: Project;
@@ -22,9 +22,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
   if (!project) return null;
 
-  const [docs, setDocs] = useState<ProjectDocument[]>(
-    mockDocuments.filter((d) => d.projectId === project.id)
-  );
+  const [docs, setDocs] = useState<any[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -39,36 +37,66 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
   const importFolders = async () => {
     try {
-      const data = await getFolders(project.id);
-      // Backend doesn't differentiate 'type', assuming all for now or filter if needed
-      setFolders(data);
+      // getFiles on the backend includes the folder hierarchy with attached files natively.
+      const json = await getFiles(project.id);
+      if (json.folderData) {
+        setFolders(json.folderData);
+
+        // Flatten files specifically for document type for root view, or just map them live.
+        let fetchedDocs: any[] = [];
+        json.folderData.forEach((f: any) => {
+          if (f.files) {
+            fetchedDocs = [...fetchedDocs, ...f.files.filter((file: any) => file.file_type.includes('pdf') || file.file_type.includes('document'))];
+          }
+        });
+        setDocs(fetchedDocs);
+      }
     } catch (e) {
       console.error("Failed to fetch folders", e);
     }
   };
 
   const currentFolderDocs = selectedFolder
-    ? docs.filter((d) => d.folderId === selectedFolder)
+    ? docs.filter((d) => d.folder_id === selectedFolder)
     : [];
 
-  const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.clientVisible) : currentFolderDocs;
+  const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible) : currentFolderDocs;
 
   const currentFolder = folders.find((f) => f.id === selectedFolder);
 
-  const toggleVisibility = (docId: string) => {
-    setDocs((prev) =>
-      prev.map((d) => (d.id === docId ? { ...d, clientVisible: !d.clientVisible } : d))
-    );
-    toast.success('Visibility updated');
+  const toggleDocVisibility = async (doc: any) => {
+    try {
+      await toggleFileVisibility(doc.id, !doc.client_visible);
+      setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, client_visible: !doc.client_visible } : d));
+      toast.success(`Document marked ${!doc.client_visible ? 'Visible' : 'Hidden'} for clients`);
+    } catch (e) {
+      toast.error('Failed to toggle visibility');
+    }
   };
 
-  const deleteDoc = (docId: string) => {
-    setDocs((prev) => prev.filter((d) => d.id !== docId));
-    toast.success('Document deleted');
+  const toggleFolderVis = async (folder: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await toggleFolderVisibility(folder.id, !folder.client_visible);
+      setFolders((prev) => prev.map((f) => f.id === folder.id ? { ...f, client_visible: !folder.client_visible } : f));
+      toast.success(`Folder marked ${!folder.client_visible ? 'Visible' : 'Hidden'} for clients`);
+    } catch (err) {
+      toast.error('Failed to toggle visibility');
+    }
+  };
+
+  const deleteDoc = async (docId: number) => {
+    try {
+      await deleteFile(docId);
+      setDocs((prev) => prev.filter((d) => d.id !== docId));
+      toast.success('Document deleted');
+    } catch (error) {
+      toast.error('Failed to delete');
+    }
   };
 
   const handleUpload = () => {
-    router.push(`/upload?projectId=${project.id}&type=documents&folderId=${selectedFolder}`);
+    router.push(`/${user.role}/upload?projectId=${project.id}&type=documents&folderId=${selectedFolder}`);
   };
 
   const handleCreateFolder = async (name: string) => {
@@ -105,7 +133,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
         <div className="grid grid-cols-3 gap-2">
           {folders.map((folder) => {
-            const folderDocs = docs.filter((d) => d.folderId === folder.id);
+            const folderDocs = docs.filter((d) => d.folder_id === folder.id);
             return (
               <button
                 key={folder.id}
@@ -113,12 +141,23 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 className="flex flex-col items-center gap-1 p-3 rounded-lg bg-card border border-border hover:border-accent transition-colors"
               >
                 <FolderIcon className="h-8 w-8 text-accent" />
-                <span className="text-[10px] font-medium text-foreground text-center leading-tight line-clamp-2">
+                <span className="text-[10px] font-medium text-foreground text-center leading-tight line-clamp-2 mt-1">
                   {folder.name}
                 </span>
-                <span className="text-[9px] text-muted-foreground">
-                  {folderDocs.length} files
-                </span>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[9px] text-muted-foreground mr-1">
+                    {folderDocs.length} files
+                  </span>
+                  {(user.role === 'admin' || user.role === 'superadmin') && (
+                    <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded p-1 hover:bg-secondary transition-colors" title={`Toggle client visibility (Currently: ${folder.client_visible !== false ? 'Visible' : 'Hidden'})`}>
+                      {folder.client_visible !== false ? (
+                        <Eye className="h-3 w-3 text-accent" />
+                      ) : (
+                        <EyeOff className="h-3 w-3 text-muted-foreground" />
+                      )}
+                    </button>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -167,13 +206,13 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         {visibleDocs.map((doc) => (
           <div key={doc.id}>
             <div className="flex items-center gap-2 rounded-lg bg-card border border-border p-2">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${doc.type === 'pdf' ? 'bg-red-50 dark:bg-red-950' : 'bg-blue-50 dark:bg-blue-950'}`}>
-                <FileText className={`h-4 w-4 ${doc.type === 'pdf' ? 'text-red-500' : 'text-blue-500'}`} />
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950' : 'bg-blue-50 dark:bg-blue-950'}`}>
+                <FileText className={`h-4 w-4 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
               </div>
-              <button onClick={() => setExpandedDoc(expandedDoc === doc.id ? null : doc.id)} className="flex-1 min-w-0 text-left">
-                <p className="text-[10px] font-semibold truncate">{doc.name}</p>
+              <button onClick={() => window.open(doc.downloadUrl, '_blank')} className="flex-1 min-w-0 text-left cursor-pointer hover:underline">
+                <p className="text-[10px] font-semibold truncate">{doc.file_name}</p>
                 <p className="text-[9px] text-muted-foreground">
-                  v{doc.version} · {doc.size}
+                  {doc.file_size_mb} MB
                 </p>
               </button>
               <div className="flex items-center gap-1">
@@ -181,15 +220,15 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
                 {user.role === 'admin' && (
-                  <button onClick={() => toggleVisibility(doc.id)} className="rounded-md p-1 hover:bg-secondary">
-                    {doc.clientVisible ? (
+                  <button onClick={() => toggleDocVisibility(doc)} className="rounded-md p-1 hover:bg-secondary" title={`Toggle client visibility (Currently: ${doc.client_visible !== false ? 'Visible' : 'Hidden'})`}>
+                    {doc.client_visible !== false ? (
                       <Eye className="h-3.5 w-3.5 text-accent" />
                     ) : (
                       <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
                     )}
                   </button>
                 )}
-                {(user.role === 'admin' || user.role === 'contributor') && doc.uploaderId === user.id && (
+                {(user.role === 'admin' || user.role === 'superadmin') && (
                   <button onClick={() => deleteDoc(doc.id)} className="rounded-md p-1 hover:bg-destructive/10">
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </button>

@@ -1,0 +1,45 @@
+import { PrivateAxios } from '../helpers/PrivateAxios';
+
+export const uploadFile = async (data: FormData) => {
+    try {
+        const response = await PrivateAxios.post('/files/upload', data, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error("uploadFile Error", error);
+        throw error;
+    }
+};
+
+export const getProjectFiles = async (projectId: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/files/${projectId}`);
+        return response.data;
+    } catch (error) {
+        console.error("getProjectFiles Error", error);
+        throw error;
+    }
+};
+
+export const deleteFile = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.delete(`/files/${fileId}`);
+        return response.data;
+    } catch (error) {
+        console.error("deleteFile Error", error);
+        throw error;
+    }
+};
+
+export const toggleFileVisibility = async (fileId: string | number, client_visible: boolean) => {
+    try {
+        const response = await PrivateAxios.put(`/files/${fileId}/visibility`, { client_visible });
+        return response.data;
+    } catch (error) {
+        console.error("toggleFileVisibility Error", error);
+        throw error;
+    }
+};

@@ -1,62 +1,95 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Project, User, ProjectPhoto, Folder } from '@/types';
-import { mockPhotos, mockFolders } from '@/data/mock';
-import { useRouter } from 'expo-router';
+import { Project, User, Folder } from '@/types';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { Image } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
+import { getProjectFiles, toggleFileVisibility } from '@/services/fileService';
+import { useEffect, useState } from 'react';
 
-interface Props {
-    project: Project;
-    user: User;
-}
-
-export default function ProjectPhotos({ project, user }: Props) {
+export default function ProjectPhotos({ project, user }: { project: any, user: any }) {
     const { colors } = useTheme();
     const router = useRouter();
-    const [photos, setPhotos] = useState<ProjectPhoto[]>(
-        mockPhotos.filter((p) => p.projectId === project.id)
-    );
+    const [photos, setPhotos] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
     const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [expandedPhoto, setExpandedPhoto] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        if (project?.id) {
-            fetchFolders();
-        }
+        const fetchFolders = async () => {
+            if (!project?.id) return;
+            setLoading(true);
+            try {
+                const data = await getProjectFiles(project.id);
+                if (data.folderData) {
+                    setFolders(data.folderData);
+                    let fetchedPhotos: any[] = [];
+                    data.folderData.forEach((f: any) => {
+                        if (f.files) {
+                            fetchedPhotos = [...fetchedPhotos, ...f.files.filter((file: any) => file.file_type.includes('image'))];
+                        }
+                    });
+                    setPhotos(fetchedPhotos);
+                }
+            } catch (error) {
+                console.error("Error fetching folders:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchFolders();
     }, [project?.id]);
 
-    const fetchFolders = async () => {
+    const currentFolderPhotos = selectedFolder ? photos.filter((p) => p.folder_id === selectedFolder) : [];
+    const visiblePhotos = user.role === 'client' ? currentFolderPhotos.filter((p) => p.client_visible !== false) : currentFolderPhotos;
+    const currentFolder = folders.find((f) => f.id === selectedFolder);
+
+    const togglePhotoVisibility = async (photo: any) => {
         try {
-            const res = await PrivateAxios.get(`/folders?projectId=${project.id}`);
-            setFolders(res.data);
+            await toggleFileVisibility(photo.id, !photo.client_visible);
+            setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, client_visible: !photo.client_visible } : p)));
+            Alert.alert('Updated', `Photo marked ${!photo.client_visible ? 'Visible' : 'Hidden'} for clients`);
         } catch (e) {
-            console.error("Failed to fetch folders", e);
+            Alert.alert('Error', 'Failed to toggle visibility');
         }
     };
 
-    const currentFolderPhotos = selectedFolder ? photos.filter((p) => p.folderId === selectedFolder) : [];
-    const visiblePhotos = user.role === 'client' ? currentFolderPhotos.filter((p) => p.clientVisible) : currentFolderPhotos;
-    const currentFolder = folders.find((f) => f.id === selectedFolder);
-
-    const toggleVisibility = (photoId: string) => {
-        setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, clientVisible: !p.clientVisible } : p)));
+    const toggleFolderVis = async (folder: any) => {
+        try {
+            await toggleFolderVisibility(folder.id, !folder.client_visible);
+            setFolders((prev) => prev.map((f) => (f.id === folder.id ? { ...f, client_visible: !folder.client_visible } : f)));
+            Alert.alert('Updated', `Folder marked ${!folder.client_visible ? 'Visible' : 'Hidden'} for clients`);
+        } catch (err) {
+            Alert.alert('Error', 'Failed to toggle visibility');
+        }
     };
 
-    const handleCreateFolder = async (name: string) => {
-        if (!name.trim()) return;
+    const handleCreateFolder = async (newFolderName: string) => {
+        if (!newFolderName.trim() || !project?.id) return;
+        setSubmitting(true);
         try {
-            await PrivateAxios.post('/folders/create', { project_id: project.id, name: name.trim() });
-            setShowCreateFolder(false);
-            setNewFolderName('');
-            fetchFolders();
-        } catch (e) {
-            console.error("Failed to create folder", e);
-            Alert.alert("Error", "Failed to create folder");
+            const data = await createFolder({
+                project_id: project.id,
+                name: newFolderName.trim(),
+                type: 'photos'
+            });
+            if (data.folder) {
+                setFolders([...folders, data.folder]);
+                setShowCreateFolder(false); // Changed from setModalVisible to setShowCreateFolder
+                setNewFolderName('');
+            }
+        } catch (error) {
+            console.error("Failed to create folder:", error);
+            Alert.alert("Error", "Failed to create folder"); // Re-added Alert for user feedback
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -85,7 +118,7 @@ export default function ProjectPhotos({ project, user }: Props) {
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                     {folders.map((folder) => {
-                        const count = photos.filter((p) => p.folderId === folder.id).length;
+                        const count = photos.filter((p) => p.folder_id === folder.id).length;
                         return (
                             <TouchableOpacity
                                 key={folder.id}
@@ -94,7 +127,20 @@ export default function ProjectPhotos({ project, user }: Props) {
                             >
                                 <Feather name="folder" size={32} color="#f97316" />
                                 <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
-                                <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} photos</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} photos</Text>
+                                    {(user.role === 'admin' || user.role === 'superadmin') && (
+                                        <TouchableOpacity
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                toggleFolderVis(folder);
+                                            }}
+                                            style={{ padding: 2 }}
+                                        >
+                                            <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </TouchableOpacity>
                         );
                     })}
@@ -157,7 +203,7 @@ export default function ProjectPhotos({ project, user }: Props) {
                 {visiblePhotos.map((photo) => (
                     <TouchableOpacity
                         key={photo.id}
-                        onPress={() => setExpandedPhoto(expandedPhoto === photo.id ? null : photo.id)}
+                        onPress={() => WebBrowser.openBrowserAsync(photo.downloadUrl)}
                         style={{
                             width: '18.5%',
                             aspectRatio: 1,
@@ -166,9 +212,10 @@ export default function ProjectPhotos({ project, user }: Props) {
                             justifyContent: 'center',
                             borderRadius: 4,
                             position: 'relative',
+                            overflow: 'hidden'
                         }}
                     >
-                        <Feather name="camera" size={14} color="#333" />
+                        <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
                         {/* Overlay buttons */}
                         <View style={{ position: 'absolute', top: 2, right: 2, flexDirection: 'row', gap: 2 }}>
                             <TouchableOpacity
@@ -179,10 +226,10 @@ export default function ProjectPhotos({ project, user }: Props) {
                             </TouchableOpacity>
                             {user.role === 'admin' && (
                                 <TouchableOpacity
-                                    onPress={() => toggleVisibility(photo.id)}
+                                    onPress={() => togglePhotoVisibility(photo)}
                                     style={{ backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 8, padding: 2 }}
                                 >
-                                    <Feather name={photo.clientVisible ? 'eye' : 'eye-off'} size={9} color={photo.clientVisible ? '#f97316' : '#aaa'} />
+                                    <Feather name={photo.client_visible !== false ? 'eye' : 'eye-off'} size={9} color={photo.client_visible !== false ? '#f97316' : '#aaa'} />
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -194,10 +241,7 @@ export default function ProjectPhotos({ project, user }: Props) {
             {expandedPhoto && (
                 <View style={{ marginTop: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, padding: 12 }}>
                     <Text style={{ fontSize: 11, fontWeight: '500', color: colors.text, marginBottom: 4 }}>
-                        {visiblePhotos.find((p) => p.id === expandedPhoto)?.location}
-                    </Text>
-                    <Text style={{ fontSize: 10, color: colors.textMuted }}>
-                        {visiblePhotos.find((p) => p.id === expandedPhoto)?.tags.join(', ')}
+                        {visiblePhotos.find((p) => p.id === expandedPhoto)?.file_name}
                     </Text>
                 </View>
             )}
