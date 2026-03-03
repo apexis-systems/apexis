@@ -13,10 +13,11 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { loginAdmin, loginProject } from '@/services/authService';
+import { loginAdmin, loginProject, loginSuperAdmin } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
+    { value: 'superadmin', label: 'Super Admin', desc: 'Full system control' },
     { value: 'admin', label: 'Admin', desc: 'Full project control' },
     { value: 'contributor', label: 'Contributor', desc: 'Upload & view assigned' },
     { value: 'client', label: 'Client', desc: 'View shared files only' },
@@ -28,7 +29,7 @@ export default function LoginScreen() {
     const [projectCode, setProjectCode] = useState('');
     const [clientName, setClientName] = useState('');
 
-    const [selectedRole, setSelectedRole] = useState<Exclude<UserRole, 'superadmin'>>('admin');
+    const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -43,9 +44,9 @@ export default function LoginScreen() {
         try {
             let res;
             if (selectedRole === 'admin') {
-                console.log(email, password)
                 res = await loginAdmin({ email, password });
-                console.log(res)
+            } else if (selectedRole === 'superadmin') {
+                res = await loginSuperAdmin({ email, password });
             } else if (selectedRole === 'contributor') {
                 res = await loginProject({ email, code: projectCode });
             } else if (selectedRole === 'client') {
@@ -145,7 +146,7 @@ export default function LoginScreen() {
                         </View>
                     )}
 
-                    {selectedRole === 'admin' && (
+                    {(selectedRole === 'admin' || selectedRole === 'superadmin') && (
                         <View style={{ marginBottom: 16 }}>
                             <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                 Password
@@ -205,7 +206,7 @@ export default function LoginScreen() {
                                 <TouchableOpacity
                                     key={role.value}
                                     onPress={() => {
-                                        setSelectedRole(role.value as Exclude<UserRole, 'superadmin'>);
+                                        setSelectedRole(role.value);
                                         setError('');
                                     }}
                                     style={{

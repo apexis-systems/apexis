@@ -231,7 +231,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
 
     return (
         <View>
-            {(user.role === 'admin' || user.role === 'contributor') && (
+            {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && (
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                     <TouchableOpacity
                         onPress={() => router.push(`/(tabs)/upload?projectId=${project.id}&type=photos&folderId=${selectedFolder || ''}`)}
@@ -515,7 +515,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                             >
                                 <Feather name="share-2" size={9} color="#fff" />
                             </TouchableOpacity>
-                            {user.role === 'admin' && (
+                            {(user.role === 'admin' || user.role === 'superadmin') && (
                                 <TouchableOpacity
                                     onPress={() => togglePhotoVisibility(photo)}
                                     style={{ backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 8, padding: 2 }}

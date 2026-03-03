@@ -102,13 +102,13 @@ export default function ProfileScreen() {
                         <Feather name="edit-2" size={14} color={colors.textMuted} />
                         <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Switch Demo Role</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                         {roles.map((role) => (
                             <TouchableOpacity
                                 key={role.value}
                                 onPress={() => switchRole(role.value)}
                                 style={{
-                                    flex: 1,
+                                    width: '48%',
                                     borderRadius: 12,
                                     borderWidth: 2,
                                     borderColor: user.role === role.value ? colors.primary : colors.border,

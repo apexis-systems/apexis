@@ -143,7 +143,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     // Unified View
     return (
         <View>
-            {(user.role === 'admin' || user.role === 'contributor') && (
+            {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && (
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                     <TouchableOpacity
                         onPress={() => router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${selectedFolder || ''}`)}
@@ -298,12 +298,12 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                             <TouchableOpacity onPress={() => handleShare(doc)} style={{ padding: 4 }}>
                                 <Feather name="share-2" size={14} color="#666" />
                             </TouchableOpacity>
-                            {user.role === 'admin' && (
+                            {(user.role === 'admin' || user.role === 'superadmin') && (
                                 <TouchableOpacity onPress={() => toggleDocVisibility(doc)} style={{ padding: 4 }}>
                                     <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
                                 </TouchableOpacity>
                             )}
-                            {(user.role === 'admin' || user.role === 'contributor') && doc.uploaderId === user.id && (
+                            {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && doc.uploaderId === user.id && (
                                 <TouchableOpacity onPress={() => deleteDoc(doc.id)} style={{ padding: 4 }}>
                                     <Feather name="trash-2" size={14} color="#ef4444" />
                                 </TouchableOpacity>
