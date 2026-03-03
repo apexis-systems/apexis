@@ -1,55 +1,60 @@
 "use client";
 
+import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { mockReports } from '@/data/mock';
-import { FileText, Upload, Calendar } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { FileText, Calendar, Loader2, Camera, Image } from 'lucide-react';
+import { getReports, Report } from '@/services/reportService';
 
-interface ProjectDailyReportsProps {
-  project: Project;
-  userRole: UserRole;
-}
+interface Props { project: Project; userRole: UserRole; }
 
-const ProjectDailyReports = ({ project, userRole }: ProjectDailyReportsProps) => {
+const ProjectDailyReports = ({ project, userRole }: Props) => {
   if (!project) return null;
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const dailyReports = mockReports.filter(
-    (r) => r.projectId === project.id && r.type === 'daily'
-  );
+  useEffect(() => {
+    if (!project?.id) return;
+    getReports(project.id as any, 'daily')
+      .then(setReports)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [project?.id]);
+
+  const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-accent" /></div>;
 
   return (
     <div className="mt-3">
-      {/* Upload Button */}
-      {userRole !== 'client' && (
-        <Button className="mb-3 w-full h-9 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 text-xs font-semibold">
-          <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload Daily Report
-        </Button>
-      )}
-
-      {/* Report List */}
       <div className="space-y-2">
-        {dailyReports.map((report) => (
-          <div
-            key={report.id}
-            className="flex items-center gap-2.5 rounded-lg bg-card border border-border p-2.5"
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10">
+        {reports.map(r => (
+          <div key={r.id} className="flex items-start gap-2.5 rounded-lg bg-card border border-border p-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 shrink-0">
               <FileText className="h-4 w-4 text-accent" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold truncate">{report.title}</p>
-              <div className="flex items-center gap-1 text-[9px] text-muted-foreground mt-0.5">
-                <Calendar className="h-2.5 w-2.5" />
-                <span>{report.date}</span>
-                <span>·</span>
-                <span>{report.uploader}</span>
+              <p className="text-[11px] font-semibold">
+                Daily Report — {fmt(r.period_start)}
+                {r.period_start !== r.period_end ? ` to ${fmt(r.period_end)}` : ''}
+              </p>
+              <div className="flex items-center gap-3 mt-1 text-[9px] text-muted-foreground flex-wrap">
+                <span className="flex items-center gap-1"><Calendar className="h-2.5 w-2.5" />{fmt(r.period_start)}</span>
+                <span className="flex items-center gap-1"><Image className="h-2.5 w-2.5" />{r.photos_count} photos</span>
+                <span className="flex items-center gap-1"><FileText className="h-2.5 w-2.5" />{r.docs_count} docs</span>
+                {r.releases_count > 0 && <span>{r.releases_count} releases</span>}
+                {r.comments_count > 0 && <span>{r.comments_count} comments</span>}
               </div>
+              {r.summary && typeof r.summary === 'object' && (r.summary as any).by_user?.length > 0 && (
+                <p className="text-[9px] text-muted-foreground mt-1 line-clamp-2">
+                  By: {(r.summary as any).by_user.map((u: any) => `${u.name} (${u.uploads})`).join(', ')}
+                </p>
+              )}
+
             </div>
           </div>
         ))}
       </div>
-
-      {dailyReports.length === 0 && (
+      {reports.length === 0 && (
         <div className="mt-6 text-center">
           <FileText className="mx-auto h-8 w-8 text-muted-foreground/30" />
           <p className="mt-1.5 text-xs text-muted-foreground">No daily reports yet</p>
