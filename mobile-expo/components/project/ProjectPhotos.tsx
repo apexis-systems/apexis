@@ -1,5 +1,5 @@
 import {
-    View, Text, TouchableOpacity, Alert, Modal,
+    View, Text, TouchableOpacity, Alert, Modal, Share,
     TextInput, Image, FlatList, Dimensions, StatusBar,
     ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
@@ -133,6 +133,20 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
         const prev = Math.max(viewerIndex - 1, 0);
         setViewerIndex(prev);
         flatListRef.current?.scrollToIndex({ index: prev, animated: true });
+    };
+
+    const handleSharePhoto = async () => {
+        const photo = visiblePhotos[viewerIndex];
+        if (!photo?.downloadUrl) return;
+        try {
+            await Share.share({
+                title: photo.file_name || 'Site Photo',
+                message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
+                url: photo.downloadUrl, // iOS only
+            });
+        } catch (e) {
+            console.error('Share error:', e);
+        }
     };
 
     const downloadToGallery = async () => {
@@ -303,12 +317,17 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
                             {viewerIndex + 1} / {visiblePhotos.length}
                         </Text>
-                        <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
-                            {downloading
-                                ? <ActivityIndicator size="small" color="#f97316" />
-                                : <Feather name="download" size={22} color="#f97316" />
-                            }
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
+                                <Feather name="share-2" size={20} color="#fff" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
+                                {downloading
+                                    ? <ActivityIndicator size="small" color="#f97316" />
+                                    : <Feather name="download" size={20} color="#f97316" />
+                                }
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
                     {/* Photo pager */}
@@ -463,6 +482,20 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
                     >
                         <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                         <View style={{ position: 'absolute', top: 2, right: 2, flexDirection: 'row', gap: 2 }}>
+                            <TouchableOpacity
+                                onPress={async () => {
+                                    try {
+                                        await Share.share({
+                                            title: photo.file_name || 'Site Photo',
+                                            message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
+                                            url: photo.downloadUrl,
+                                        });
+                                    } catch { }
+                                }}
+                                style={{ backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 8, padding: 2 }}
+                            >
+                                <Feather name="share-2" size={9} color="#fff" />
+                            </TouchableOpacity>
                             {user.role === 'admin' && (
                                 <TouchableOpacity
                                     onPress={() => togglePhotoVisibility(photo)}

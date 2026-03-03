@@ -109,6 +109,11 @@ db.projects.hasMany(db.snags, { foreignKey: 'project_id' });
 db.snags.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
 db.snags.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
 
+// Project <-> Manual
+db.manuals.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.manuals, { foreignKey: 'project_id' });
+db.manuals.belongsTo(db.users, { foreignKey: 'uploaded_by', as: 'uploader' });
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
@@ -123,6 +128,7 @@ export const files = db.files;
 export const comments = db.comments;
 export const reports = db.reports;
 export const snags = db.snags;
+export const manuals = db.manuals;
 
 export { sequelize, Sequelize };
 export default db;

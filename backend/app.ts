@@ -13,6 +13,7 @@ import superadminRoutes from "./routes/superadminRoutes.ts";
 import commentRoutes from "./routes/commentRoutes.ts";
 import reportRoutes from "./routes/reportRoutes.ts";
 import snagRoutes from "./routes/snagRoutes.ts";
+import manualRoutes from "./routes/manualRoutes.ts";
 import { startCronJobs } from "./cron.ts";
 
 const app = express();
@@ -45,6 +46,7 @@ app.use("/api/superadmin", superadminRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/snags", snagRoutes);
+app.use("/api/manuals", manualRoutes);
 
 // Test DB Connection and Start Server
 const startServer = async () => {

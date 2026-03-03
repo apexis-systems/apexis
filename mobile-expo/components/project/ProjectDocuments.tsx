@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Share } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
@@ -31,7 +31,7 @@ export default function ProjectDocuments({ project, user }: { project: any, user
                     let fetchedDocs: any[] = [];
                     data.folderData.forEach((f: any) => {
                         if (f.files) {
-                            fetchedDocs = [...fetchedDocs, ...f.files.filter((file: any) => file.file_type.includes('pdf') || file.file_type.includes('document'))];
+                            fetchedDocs = [...fetchedDocs, ...f.files.filter((file: any) => !file.file_type?.startsWith('image/'))];
                         }
                     });
                     setDocs(fetchedDocs);
@@ -85,6 +85,18 @@ export default function ProjectDocuments({ project, user }: { project: any, user
                 }
             },
         ]);
+    };
+
+    const handleShare = async (doc: any) => {
+        try {
+            await Share.share({
+                title: doc.file_name,
+                message: `${doc.file_name}\n${doc.downloadUrl}`,
+                url: doc.downloadUrl,   // iOS only
+            });
+        } catch (e) {
+            console.error('Share error:', e);
+        }
     };
 
     const handleCreateFolder = async () => {
@@ -289,7 +301,7 @@ export default function ProjectDocuments({ project, user }: { project: any, user
                             <Text style={{ fontSize: 9, color: colors.textMuted }}>{doc.file_size_mb} MB</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
-                            <TouchableOpacity onPress={() => Alert.alert('Share', `Share ${doc.file_name}`)} style={{ padding: 4 }}>
+                            <TouchableOpacity onPress={() => handleShare(doc)} style={{ padding: 4 }}>
                                 <Feather name="share-2" size={14} color="#666" />
                             </TouchableOpacity>
                             {user.role === 'admin' && (

@@ -48,45 +48,54 @@ export const createProject = async (req: Request, res: Response) => {
 export const getProjects = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        if (!authUser) {
-            return res.status(401).json({ error: "Unauthorized" });
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { sequelize } = await import('../models/index.ts');
+
+        // Build WHERE clause based on role
+        let whereClause = '';
+        const replacements: any = {};
+
+        if (authUser.role === 'superadmin') {
+            whereClause = '';
+        } else if (authUser.role === 'admin') {
+            whereClause = 'WHERE p.organization_id = :org_id';
+            replacements.org_id = authUser.organization_id;
+        } else if (authUser.role === 'contributor' || authUser.role === 'client') {
+            if (!authUser.project_id) return res.status(400).json({ error: "No project linked to session" });
+            whereClause = 'WHERE p.id = :project_id';
+            replacements.project_id = authUser.project_id;
         }
-        let projectsList;
-        if (authUser.role === "superadmin") {
-            // SuperAdmin sees all projects
-            projectsList = await projects.findAll();
-        } else if (authUser.role === "admin") {
-            // Admin sees organization projects
-            projectsList = await projects.findAll({
-                where: { organization_id: authUser.organization_id }
-            });
-        } else if (authUser.role === "contributor" || authUser.role === "client") {
-            // Contributor/Client see only linked projects
-            // The JWT for these users should have `project_id` attached
-            if (!authUser.project_id) {
-                return res.status(400).json({ error: "No project linked to session" });
+
+        const [rows] = await sequelize.query(`
+            SELECT
+                p.*,
+                COUNT(CASE WHEN f.file_type LIKE 'image/%' THEN 1 END)::int        AS "totalPhotos",
+                COUNT(CASE WHEN f.file_type NOT LIKE 'image/%' THEN 1 END)::int    AS "totalDocs"
+            FROM public.projects p
+            LEFT JOIN public.folders fo ON fo.project_id = p.id
+            LEFT JOIN public.files    f  ON f.folder_id  = fo.id
+            ${whereClause}
+            GROUP BY p.id
+            ORDER BY p."createdAt" DESC
+        `, { replacements });
+
+        // Strip sensitive codes for non-admins
+        const safeRows = (rows as any[]).map((p: any) => {
+            if (authUser.role !== 'admin') {
+                delete p.contributor_code;
+                delete p.client_code;
             }
-            projectsList = await projects.findAll({
-                where: { id: authUser.project_id }
-            });
-        }
+            return p;
+        });
 
-        if (authUser.role !== "admin") {
-            // Strip out sensitive codes for non-admins
-            projectsList = projectsList.map((p: any) => {
-                const projectOutput = p.toJSON ? p.toJSON() : p;
-                delete projectOutput.contributor_code;
-                delete projectOutput.client_code;
-                return projectOutput;
-            });
-        }
-
-        res.status(200).json({ projects: projectsList });
+        res.status(200).json({ projects: safeRows });
     } catch (error) {
         console.error("Get Projects Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
 
 export const getProjectById = async (req: Request, res: Response) => {
     try {
