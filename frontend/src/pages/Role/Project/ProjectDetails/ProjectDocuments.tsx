@@ -51,10 +51,15 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const importFolders = async () => {
     try {
       const json = await getFiles(project.id);
-      if (json.folderData) setFolders(json.folderData);
-      if (json.fileData) {
-        // Filter out images (photos go to ProjectPhotos)
-        setDocs(json.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+      if (json.folderData) {
+        setFolders(json.folderData);
+        let fetchedDocs: any[] = [];
+        json.folderData.forEach((f: any) => {
+          if (f.files) {
+            fetchedDocs = [...fetchedDocs, ...f.files.filter((file: any) => !file.file_type?.startsWith('image/'))];
+          }
+        });
+        setDocs(fetchedDocs);
       }
     } catch (e) {
       console.error("Failed to fetch folders/files", e);
