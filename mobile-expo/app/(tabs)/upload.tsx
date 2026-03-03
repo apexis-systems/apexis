@@ -51,10 +51,10 @@ export default function UploadScreen() {
     const [fileQueue, setFileQueue] = useState<FileProgress[]>([]);
 
     useEffect(() => {
-        if (params.projectId && params.type && params.folderId) {
+        if (params.projectId && params.type && params.folderId !== undefined) {
             setSelectedProject(params.projectId);
             setUploadType(params.type);
-            setSelectedFolder(params.folderId);
+            setSelectedFolder(params.folderId || null);
             setStep('upload');
         } else if (params.projectId && params.type) {
             setSelectedProject(params.projectId);
@@ -64,7 +64,7 @@ export default function UploadScreen() {
             setSelectedProject(params.projectId);
             setStep('type');
         }
-    }, []);
+    }, [params]);
 
     useEffect(() => {
         if (!user) return;
@@ -100,11 +100,11 @@ export default function UploadScreen() {
     const pickFromGallery = () => {
         launchImageLibrary(
             { mediaType: 'photo', selectionLimit: 0, quality: 0.8 },
-            (response) => {
+            (response: any) => {
                 if (response.didCancel || response.errorCode) return;
                 const assets = response.assets || [];
                 if (assets.length === 0) return;
-                const queue: FileProgress[] = assets.map((a) => ({
+                const queue: FileProgress[] = assets.map((a: any) => ({
                     asset: a,
                     progress: 0,
                     status: 'pending',
@@ -118,11 +118,11 @@ export default function UploadScreen() {
     const pickFromCamera = () => {
         launchCamera(
             { mediaType: 'photo', quality: 0.8 },
-            (response) => {
+            (response: any) => {
                 if (response.didCancel || response.errorCode) return;
                 const assets = response.assets || [];
                 if (assets.length === 0) return;
-                const queue: FileProgress[] = assets.map((a) => ({
+                const queue: FileProgress[] = assets.map((a: any) => ({
                     asset: a,
                     progress: 0,
                     status: 'pending',
@@ -167,7 +167,7 @@ export default function UploadScreen() {
             Alert.alert('No files', 'Please select at least one file.');
             return;
         }
-        if (!selectedProject || !selectedFolder) {
+        if (!selectedProject || selectedFolder === undefined) {
             Alert.alert('Error', 'Project and folder must be selected.');
             return;
         }
@@ -189,7 +189,7 @@ export default function UploadScreen() {
                     type: item.asset.type || 'image/jpeg',
                 } as any);
                 formData.append('project_id', selectedProject);
-                formData.append('folder_id', selectedFolder);
+                if (selectedFolder) formData.append('folder_id', selectedFolder);
                 if (uploadType === 'photos') {
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
@@ -345,6 +345,21 @@ export default function UploadScreen() {
                             </View>
                         ) : (
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                <TouchableOpacity
+                                    onPress={() => { setSelectedFolder(null); setStep('upload'); }}
+                                    style={{
+                                        width: '30%', alignItems: 'center', gap: 4,
+                                        borderRadius: 10, backgroundColor: colors.surface,
+                                        borderWidth: 1, borderColor: colors.border, padding: 12,
+                                    }}
+                                >
+                                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(249,115,22,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name="folder" size={16} color={colors.primary} />
+                                    </View>
+                                    <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '700', color: colors.text, textAlign: 'center' }}>
+                                        Root Level
+                                    </Text>
+                                </TouchableOpacity>
                                 {folders.map((folder) => (
                                     <TouchableOpacity
                                         key={folder.id}

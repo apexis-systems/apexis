@@ -44,26 +44,27 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
         setLoading(true);
         getProjectFiles(project.id)
             .then((data) => {
-                if (data.folderData) {
-                    setFolders(data.folderData);
-                    let allPhotos: any[] = [];
-                    data.folderData.forEach((f: any) => {
-                        if (f.files) {
-                            allPhotos = [...allPhotos, ...f.files.filter((file: any) => file.file_type?.includes('image'))];
-                        }
-                    });
-                    setPhotos(allPhotos);
+                if (data.folderData) setFolders(data.folderData);
+                if (data.fileData) {
+                    setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
                 }
             })
             .catch((e) => console.error('fetchFiles', e))
             .finally(() => setLoading(false));
     }, [project?.id]);
 
-    const currentFolderPhotos = selectedFolder ? photos.filter((p) => p.folder_id === selectedFolder) : [];
+    const currentFolders = folders.filter((f) => f.parent_id === selectedFolder);
+    const currentFolderPhotos = photos.filter((p) => p.folder_id === selectedFolder);
     const visiblePhotos = user.role === 'client'
         ? currentFolderPhotos.filter((p) => p.client_visible !== false)
         : currentFolderPhotos;
     const currentFolder = folders.find((f) => f.id === selectedFolder);
+
+    const goBack = () => {
+        if (!selectedFolder) return;
+        const parentId = currentFolder?.parent_id || null;
+        setSelectedFolder(parentId);
+    };
 
     // ── Viewer helpers ────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
         if (!newFolderName.trim() || !project?.id) return;
         setSubmitting(true);
         try {
-            const data = await createFolder({ project_id: project.id, name: newFolderName.trim(), type: 'photos' });
+            const data = await createFolder({ project_id: project.id, name: newFolderName.trim(), parent_id: selectedFolder, type: 'photos' });
             if (data.folder) {
                 setFolders([...folders, data.folder]);
                 setShowCreateFolder(false);
@@ -209,36 +210,73 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
         }
     };
 
+    const getBreadcrumbs = () => {
+        if (!currentFolder) return [];
+        const path: any[] = [];
+        let curr: any = currentFolder;
+        while (curr) {
+            path.unshift(curr);
+            curr = folders.find((f) => f.id === curr.parent_id);
+        }
+        return path;
+    };
 
-    // ── Folder list ───────────────────────────────────────────────────────────
+    // ── Unified Layout ───────────────────────────────────────────────────────────
 
-    if (!selectedFolder) {
-        return (
-            <View>
-                {(user.role === 'admin' || user.role === 'contributor') && (
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                        <TouchableOpacity
-                            onPress={() => Alert.alert('Info', 'Select a folder first')}
-                            style={{ flex: 1, height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                        >
-                            <Feather name="upload" size={13} color="#fff" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => setShowCreateFolder(true)}
-                            style={{ height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 }}
-                        >
-                            <Feather name="folder-plus" size={13} color={colors.text} />
-                            <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
-                        </TouchableOpacity>
+    return (
+        <View>
+            {(user.role === 'admin' || user.role === 'contributor') && (
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                    <TouchableOpacity
+                        onPress={() => router.push(`/(tabs)/upload?projectId=${project.id}&type=photos&folderId=${selectedFolder || ''}`)}
+                        style={{ flex: 1, height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                    >
+                        <Feather name="upload" size={13} color="#fff" />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Photo</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setShowCreateFolder(true)}
+                        style={{ height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 }}
+                    >
+                        <Feather name="folder-plus" size={13} color={colors.text} />
+                        <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {loading ? (
+                <ActivityIndicator color="#f97316" style={{ marginTop: 30 }} />
+            ) : (
+                <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        {currentFolder && (
+                            <TouchableOpacity onPress={goBack} style={{ padding: 6, borderRadius: 20 }}>
+                                <Feather name="arrow-left" size={16} color={colors.text} />
+                            </TouchableOpacity>
+                        )}
+                        <Feather name="folder" size={16} color="#f97316" />
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TouchableOpacity onPress={() => setSelectedFolder(null)}>
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: !selectedFolder ? '#f97316' : colors.textMuted }}>
+                                        {project?.name}
+                                    </Text>
+                                </TouchableOpacity>
+                                {getBreadcrumbs().map((b) => (
+                                    <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 12, color: colors.textMuted, marginHorizontal: 4 }}>/</Text>
+                                        <TouchableOpacity onPress={() => setSelectedFolder(b.id)}>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: selectedFolder === b.id ? '#f97316' : colors.textMuted }}>
+                                                {b.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        </ScrollView>
                     </View>
-                )}
-
-                {loading ? (
-                    <ActivityIndicator color="#f97316" style={{ marginTop: 30 }} />
-                ) : (
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                        {folders.map((folder) => {
+                        {currentFolders.map((folder) => {
                             const count = photos.filter((p) => p.folder_id === folder.id).length;
                             return (
                                 <TouchableOpacity
@@ -260,46 +298,40 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
                             );
                         })}
                     </View>
-                )}
+                </View>
+            )}
 
-                {!loading && folders.length === 0 && (
-                    <View style={{ marginTop: 30, alignItems: 'center' }}>
-                        <Feather name="folder" size={32} color={colors.border} />
-                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders yet</Text>
-                    </View>
-                )}
+            {!loading && currentFolders.length === 0 && photos.filter((p) => p.folder_id === selectedFolder).length === 0 && (
+                <View style={{ marginTop: 30, alignItems: 'center' }}>
+                    <Feather name="camera" size={32} color={colors.border} />
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or photos yet</Text>
+                </View>
+            )}
 
-                {/* New Folder Modal */}
-                <Modal visible={showCreateFolder} transparent animationType="fade">
-                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
-                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>New Folder</Text>
-                            <TextInput
-                                value={newFolderName}
-                                onChangeText={setNewFolderName}
-                                placeholder="Folder name"
-                                placeholderTextColor={colors.textMuted}
-                                style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
-                            />
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={handleCreateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Creating…' : 'Create'}</Text>
-                                </TouchableOpacity>
-                            </View>
+            {/* New Folder Modal */}
+            <Modal visible={showCreateFolder} transparent animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
+                    <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>New Folder</Text>
+                        <TextInput
+                            value={newFolderName}
+                            onChangeText={setNewFolderName}
+                            placeholder="Folder name"
+                            placeholderTextColor={colors.textMuted}
+                            style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleCreateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Creating…' : 'Create'}</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
-                </Modal>
-            </View>
-        );
-    }
+                </View>
+            </Modal>
 
-    // ── Photo grid ────────────────────────────────────────────────────────────
-
-    return (
-        <View>
             {/* ── Full-screen viewer modal (inlined — NOT a nested component) ── */}
             <Modal visible={viewerOpen} transparent={false} animationType="fade" statusBarTranslucent onRequestClose={closeViewer}>
                 <StatusBar hidden />
@@ -452,26 +484,6 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <TouchableOpacity onPress={() => setSelectedFolder(null)} style={{ padding: 6, borderRadius: 20 }}>
-                    <Feather name="arrow-left" size={16} color={colors.text} />
-                </TouchableOpacity>
-                <Feather name="folder" size={16} color="#f97316" />
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{currentFolder?.name}</Text>
-                <Text style={{ fontSize: 10, color: colors.textMuted, marginLeft: 4 }}>({visiblePhotos.length})</Text>
-            </View>
-
-            {(user.role === 'admin' || user.role === 'contributor') && (
-                <TouchableOpacity
-                    onPress={() => router.push(`/(tabs)/upload?projectId=${project.id}&type=photos&folderId=${selectedFolder}`)}
-                    style={{ height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
-                >
-                    <Feather name="upload" size={13} color="#fff" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Upload Photos</Text>
-                </TouchableOpacity>
-            )}
-
             {/* 5-col photo grid */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
                 {visiblePhotos.map((photo, index) => (

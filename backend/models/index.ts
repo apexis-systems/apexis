@@ -81,6 +81,10 @@ db.folders.hasMany(db.folders, { as: 'children', foreignKey: 'parent_id' });
 db.files.belongsTo(db.folders, { foreignKey: 'folder_id' });
 db.folders.hasMany(db.files, { foreignKey: 'folder_id' });
 
+// Project <-> File
+db.files.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.files, { foreignKey: 'project_id' });
+
 // User <-> File (Creator)
 db.files.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
 db.users.hasMany(db.files, { foreignKey: 'created_by' });

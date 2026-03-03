@@ -15,6 +15,10 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: true,
             },
+            project_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+            },
             file_url: {
                 type: DataTypes.STRING,
                 allowNull: false,

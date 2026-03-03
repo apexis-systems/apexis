@@ -10,7 +10,7 @@ export const getFolders = async (projectId: string, folderType: string) => {
     }
 };
 
-export const createFolder = async (folderData: { project_id: string, name: string, type: string }) => {
+export const createFolder = async (folderData: { project_id: string, name: string, type: string, parent_id?: string | null }) => {
     try {
         const response = await PrivateAxios.post('/folders/create', folderData);
         return response.data;
