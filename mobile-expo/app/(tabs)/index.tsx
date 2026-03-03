@@ -18,7 +18,6 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const router = useRouter();
 
-  if (!user) return null;
 
   const [projects, setProjects] = useState<any[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -41,6 +40,8 @@ export default function DashboardScreen() {
       fetchProjects();
     }
   }, [user]);
+
+  if (!user) return null;
 
   const fetchProjects = async () => {
     try {
@@ -74,11 +75,13 @@ export default function DashboardScreen() {
   };
 
   const roleSubtitle =
-    user.role === 'admin'
-      ? t('dashboard.roles.admin')
-      : user.role === 'contributor'
-        ? t('dashboard.roles.contributor')
-        : t('dashboard.roles.client');
+    user.role === 'superadmin'
+      ? 'Super Admin'
+      : user.role === 'admin'
+        ? t('dashboard.roles.admin')
+        : user.role === 'contributor'
+          ? t('dashboard.roles.contributor')
+          : t('dashboard.roles.client');
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -142,7 +145,7 @@ export default function DashboardScreen() {
                 <View style={{ position: 'absolute', right: 6, top: 6, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
               </TouchableOpacity>
 
-              {user.role === 'admin' && (
+              {(user.role === 'admin' || user.role === 'superadmin') && (
                 <TouchableOpacity onPress={() => setIsCreating(true)} style={{ padding: 6, borderRadius: 20, marginLeft: 2 }}>
                   <Feather name="plus-circle" size={18} color={colors.primary} />
                 </TouchableOpacity>

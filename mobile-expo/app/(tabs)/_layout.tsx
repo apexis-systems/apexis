@@ -16,9 +16,7 @@ export default function TabLayout() {
   const { colors } = useTheme();
   const { t } = useTranslation();
 
-  if (!user) {
-    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
-  }
+  // The RootLayoutNav handles redirection. We allow Tabs to render with empty or default placeholders momentarily.
 
   return (
     <Tabs

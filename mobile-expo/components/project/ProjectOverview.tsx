@@ -61,12 +61,12 @@ export default function ProjectOverview({ project, userRole }: Props) {
         getProjectFiles(projectId)
             .then((data) => {
                 let photos = 0, docs = 0;
-                data.folderData?.forEach((f: any) => {
-                    f.files?.forEach((file: any) => {
+                if (data.fileData) {
+                    data.fileData.forEach((file: any) => {
                         if (file.file_type?.startsWith('image/')) photos++;
                         else docs++;
                     });
-                });
+                }
                 setPhotosCount(photos);
                 setDocsCount(docs);
             })

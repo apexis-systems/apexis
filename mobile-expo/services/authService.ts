@@ -39,6 +39,16 @@ export const loginAdmin = async (data: any) => {
     }
 };
 
+export const loginSuperAdmin = async (data: any) => {
+    try {
+        const response = await PublicAxios.post('/auth/superadmin/login', data);
+        return response.data;
+    } catch (error: any) {
+        console.error("loginSuperAdmin Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
 export const loginProject = async (data: any) => {
     try {
         const response = await PublicAxios.post('/auth/project/login', data);

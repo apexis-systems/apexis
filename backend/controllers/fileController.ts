@@ -46,15 +46,7 @@ export const uploadFile = async (req: Request, res: Response) => {
         const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
         let finalFolderId = validFolderId;
 
-        if (!finalFolderId) {
-            const [defaultFolder] = await folders.findOrCreate({
-                where: { project_id: project_id, name: 'General' },
-                defaults: { project_id: project_id, name: 'General', created_by: authUser.user_id }
-            });
-            finalFolderId = defaultFolder.id;
-        }
-
-        const folderPath = finalFolderId ? finalFolderId.toString() : 'unassigned';
+        const folderPath = finalFolderId ? finalFolderId.toString() : 'root';
 
         // Extract extension and generate sanitized S3 key
         const extMatch = req.file.originalname.match(/\.[0-9a-z]+$/i);
@@ -72,6 +64,7 @@ export const uploadFile = async (req: Request, res: Response) => {
 
         const newFile = await files.create({
             folder_id: finalFolderId,
+            project_id: parseInt(project_id, 10),
             file_url: s3Key,
             file_name,
             file_type,
@@ -102,46 +95,37 @@ export const listFiles = async (req: Request, res: Response) => {
             }
         }
 
+        // Get all folders for this project
         const folderData = await folders.findAll({
             where: { project_id: projectId },
-            include: [
-                {
-                    model: files,
-                    as: "files"
-                }
-            ]
         });
 
-        let filteredFolderData = folderData.map((f: any) => f.toJSON());
+        // Get all files for this project
+        const fileData = await files.findAll({
+            where: { project_id: projectId },
+        });
+
+        let filteredFolders = folderData.map((f: any) => f.toJSON());
+        let filteredFiles = fileData.map((f: any) => f.toJSON());
 
         if (authUser.role === "client") {
-            // Remove entirely hidden folders
-            filteredFolderData = filteredFolderData.filter((folder: any) => folder.client_visible !== false);
-            // Remove hidden files from the remaining visible folders
-            filteredFolderData = filteredFolderData.map((folder: any) => {
-                if (folder.files) {
-                    folder.files = folder.files.filter((file: any) => file.client_visible !== false);
-                }
-                return folder;
-            });
+            // Remove hidden folders
+            filteredFolders = filteredFolders.filter((folder: any) => folder.client_visible !== false);
+            // Remove hidden files
+            filteredFiles = filteredFiles.filter((file: any) => file.client_visible !== false);
         }
 
-        // Loop through folders and files to assign presigned GET URLs
-        const result = await Promise.all(filteredFolderData.map(async (folder: any) => {
-            if (folder.files && folder.files.length > 0) {
-                folder.files = await Promise.all(folder.files.map(async (file: any) => {
-                    const command = new GetObjectCommand({
-                        Bucket: BUCKET_NAME,
-                        Key: file.file_url // The S3 Key
-                    });
-                    file.downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-                    return file;
-                }));
-            }
-            return folder;
+        // Generate presigned GET URLs for all files
+        const finalizedFiles = await Promise.all(filteredFiles.map(async (file: any) => {
+            const command = new GetObjectCommand({
+                Bucket: BUCKET_NAME,
+                Key: file.file_url
+            });
+            file.downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+            return file;
         }));
 
-        res.status(200).json({ folderData: result });
+        res.status(200).json({ folderData: filteredFolders, fileData: finalizedFiles });
     } catch (error) {
         console.error("List Files Error:", error);
         res.status(500).json({ error: "Internal server error" });
