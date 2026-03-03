@@ -101,6 +101,14 @@ db.comments.hasMany(db.comments, { as: 'replies', foreignKey: 'parent_id' });
 db.reports.belongsTo(db.projects, { foreignKey: 'project_id' });
 db.projects.hasMany(db.reports, { foreignKey: 'project_id' });
 
+// Project <-> Snag
+db.snags.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.snags, { foreignKey: 'project_id' });
+
+// Snag <-> User (assignee + creator)
+db.snags.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
+db.snags.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
@@ -114,6 +122,7 @@ export const folders = db.folders;
 export const files = db.files;
 export const comments = db.comments;
 export const reports = db.reports;
+export const snags = db.snags;
 
 export { sequelize, Sequelize };
 export default db;

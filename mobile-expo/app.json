@@ -10,10 +10,24 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.apexis.app"
+      "bundleIdentifier": "com.apexis.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Apexis needs access to your photo library to attach photos to snags and upload site images.",
+        "NSPhotoLibraryAddUsageDescription": "Apexis needs permission to save downloaded photos to your library.",
+        "NSCameraUsageDescription": "Apexis needs camera access to capture site photos.",
+        "NSMicrophoneUsageDescription": "Apexis needs microphone access for video capture."
+      }
     },
     "android": {
       "package": "com.apexis.app",
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -42,7 +56,22 @@
         }
       ],
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Apexis needs access to your photos to attach images to snags and upload site photos.",
+          "cameraPermission": "Apexis needs camera access to capture site photos."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Apexis needs access to your photo library.",
+          "savePhotosPermission": "Apexis needs permission to save photos to your library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
