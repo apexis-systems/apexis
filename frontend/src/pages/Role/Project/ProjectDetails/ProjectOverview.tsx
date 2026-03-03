@@ -1,9 +1,10 @@
 "use client";
 
+import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { mockReports } from '@/data/mock';
-import { CalendarDays, FileText, Camera, Upload, Download, Clock } from 'lucide-react';
+import { CalendarDays, FileText, Camera, Download, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getReports, Report } from '@/services/reportService';
 
 interface ProjectOverviewProps {
   project: Project;
@@ -13,9 +14,20 @@ interface ProjectOverviewProps {
 const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
   if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">Loading project overview...</div>;
 
-  const reports = mockReports.filter((r) => r.projectId === project.id);
-  const dailyReports = reports.filter((r) => r.type === 'daily');
-  const weeklyReports = reports.filter((r) => r.type === 'weekly');
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!project?.id) return;
+    getReports(project.id as any)
+      .then(setReports)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [project?.id]);
+
+  const dailyReports = reports.filter(r => r.type === 'daily');
+  const weeklyReports = reports.filter(r => r.type === 'weekly');
+  const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
     <div className="mt-4 space-y-4">
@@ -26,14 +38,14 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
             <CalendarDays className="h-4 w-4" />
             <span className="text-xs">Start Date</span>
           </div>
-          <div className="mt-1 text-sm font-semibold">{project.startDate}</div>
+          <div className="mt-1 text-sm font-semibold">{project.start_date ? new Date(project.start_date).toLocaleDateString() : '—'}</div>
         </div>
         <div className="rounded-xl bg-card border border-border p-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <CalendarDays className="h-4 w-4" />
             <span className="text-xs">End Date</span>
           </div>
-          <div className="mt-1 text-sm font-semibold">{project.endDate}</div>
+          <div className="mt-1 text-sm font-semibold">{project.end_date ? new Date(project.end_date).toLocaleDateString() : '—'}</div>
         </div>
         <div className="rounded-xl bg-card border border-border p-4">
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -55,15 +67,12 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-foreground">Reports</h2>
-          {userRole === 'admin' && (
-            <Button size="sm" className="h-8 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 text-xs">
-              <Upload className="h-3.5 w-3.5 mr-1" /> Upload Report
-            </Button>
-          )}
         </div>
 
+        {loading && <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-accent" /></div>}
+
         {/* Daily Reports */}
-        {dailyReports.length > 0 && (
+        {!loading && dailyReports.length > 0 && (
           <div className="mb-3">
             <p className="text-xs font-medium text-muted-foreground mb-2">Daily Site Reports</p>
             <div className="space-y-2">
@@ -73,11 +82,11 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
                     <FileText className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold truncate">{report.title}</p>
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+                    <p className="text-xs font-semibold truncate">Daily Report — {fmt(report.period_start)}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
                       <Clock className="h-3 w-3" />
-                      <span>{report.date}</span>
-                      <span>· {report.uploader}</span>
+                      <span>{fmt(report.period_start)}</span>
+                      <span>· {report.photos_count} photos · {report.docs_count} docs</span>
                     </div>
                   </div>
                 </div>
@@ -87,7 +96,7 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
         )}
 
         {/* Weekly Reports */}
-        {weeklyReports.length > 0 && (
+        {!loading && weeklyReports.length > 0 && (
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Weekly Progress Reports</p>
             <div className="space-y-2">
@@ -97,11 +106,11 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
                     <FileText className="h-4 w-4 text-accent" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold truncate">{report.title}</p>
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+                    <p className="text-xs font-semibold truncate">Weekly Report — {fmt(report.period_start)} to {fmt(report.period_end)}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
                       <Clock className="h-3 w-3" />
-                      <span>{report.date}</span>
-                      <span>· {report.uploader}</span>
+                      <span>{fmt(report.period_start)} — {fmt(report.period_end)}</span>
+                      <span>· {report.photos_count} photos</span>
                     </div>
                   </div>
                 </div>

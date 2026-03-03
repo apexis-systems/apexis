@@ -46,7 +46,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         let fetchedDocs: any[] = [];
         json.folderData.forEach((f: any) => {
           if (f.files) {
-            fetchedDocs = [...fetchedDocs, ...f.files.filter((file: any) => file.file_type.includes('pdf') || file.file_type.includes('document'))];
+            fetchedDocs = [...fetchedDocs, ...f.files.filter((file: any) => !file.file_type?.startsWith('image/'))];
+
           }
         });
         setDocs(fetchedDocs);
