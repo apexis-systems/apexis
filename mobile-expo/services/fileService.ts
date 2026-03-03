@@ -14,6 +14,29 @@ export const uploadFile = async (data: FormData) => {
     }
 };
 
+export const uploadFileWithProgress = async (
+    data: FormData,
+    onProgress: (percentage: number) => void
+) => {
+    try {
+        const response = await PrivateAxios.post('/files/upload', data, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+            onUploadProgress: (progressEvent) => {
+                if (progressEvent.total) {
+                    const pct = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    onProgress(pct);
+                }
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error("uploadFileWithProgress Error", error);
+        throw error;
+    }
+};
+
 export const getProjectFiles = async (projectId: string | number) => {
     try {
         const response = await PrivateAxios.get(`/files/${projectId}`);
