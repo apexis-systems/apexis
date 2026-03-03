@@ -82,8 +82,24 @@ db.files.belongsTo(db.folders, { foreignKey: 'folder_id' });
 db.folders.hasMany(db.files, { foreignKey: 'folder_id' });
 
 // User <-> File (Creator)
-db.files.belongsTo(db.users, { foreignKey: 'created_by' });
+db.files.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
 db.users.hasMany(db.files, { foreignKey: 'created_by' });
+
+// File <-> Comment
+db.comments.belongsTo(db.files, { foreignKey: 'file_id' });
+db.files.hasMany(db.comments, { foreignKey: 'file_id' });
+
+// User <-> Comment
+db.comments.belongsTo(db.users, { foreignKey: 'user_id', as: 'user' });
+db.users.hasMany(db.comments, { foreignKey: 'user_id' });
+
+// Comment <-> Comment (threaded replies)
+db.comments.belongsTo(db.comments, { as: 'parent', foreignKey: 'parent_id' });
+db.comments.hasMany(db.comments, { as: 'replies', foreignKey: 'parent_id' });
+
+// Project <-> Report
+db.reports.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.reports, { foreignKey: 'project_id' });
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
@@ -96,6 +112,8 @@ export const projects = db.projects;
 export const project_members = db.project_members;
 export const folders = db.folders;
 export const files = db.files;
+export const comments = db.comments;
+export const reports = db.reports;
 
 export { sequelize, Sequelize };
 export default db;

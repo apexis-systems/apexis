@@ -10,6 +10,9 @@ import userRoutes from "./routes/userRoutes.ts";
 import fileRoutes from "./routes/fileRoutes.ts";
 import folderRoutes from "./routes/folderRoutes.ts";
 import superadminRoutes from "./routes/superadminRoutes.ts";
+import commentRoutes from "./routes/commentRoutes.ts";
+import reportRoutes from "./routes/reportRoutes.ts";
+import { startCronJobs } from "./cron.ts";
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -17,9 +20,9 @@ const PORT = process.env.PORT || 5001;
 // Middleware
 // Allow all origins
 const corsOptions = {
-  origin: true, // true means reflect request origin, allows all
-  credentials: true, // allow cookies/auth headers
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    origin: true, // true means reflect request origin, allows all
+    credentials: true, // allow cookies/auth headers
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 };
 
 // Apply CORS middleware
@@ -38,6 +41,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/folders", folderRoutes);
 app.use("/api/superadmin", superadminRoutes);
+app.use("/api/comments", commentRoutes);
+app.use("/api/reports", reportRoutes);
 
 // Test DB Connection and Start Server
 const startServer = async () => {
@@ -50,6 +55,7 @@ const startServer = async () => {
 
         app.listen(PORT, () => {
             console.log(`Server is running on http://localhost:${PORT}`);
+            startCronJobs();
         });
     } catch (error) {
         console.error('Unable to connect to the database:', error);

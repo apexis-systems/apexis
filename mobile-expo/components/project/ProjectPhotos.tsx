@@ -1,13 +1,14 @@
 import {
     View, Text, TouchableOpacity, Alert, Modal,
     TextInput, Image, FlatList, Dimensions, StatusBar,
-    ActivityIndicator,
+    ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
 import { getProjectFiles, toggleFileVisibility } from '@/services/fileService';
+import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef } from 'react';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
@@ -30,6 +31,13 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
     const [viewerIndex, setViewerIndex] = useState(0);
     const [downloading, setDownloading] = useState(false);
     const flatListRef = useRef<FlatList>(null);
+
+    // Comment state
+    const [photoComments, setPhotoComments] = useState<CommentThread[]>([]);
+    const [commentText, setCommentText] = useState('');
+    const [replyTo, setReplyTo] = useState<number | null>(null);
+    const [commentLoading, setCommentLoading] = useState(false);
+    const [addingComment, setAddingComment] = useState(false);
 
     useEffect(() => {
         if (!project?.id) return;
@@ -59,10 +67,58 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
 
     // ── Viewer helpers ────────────────────────────────────────────────────────
 
+    // ── Scroll viewer to correct index when opened ──────────────────────────
+    useEffect(() => {
+        if (viewerOpen) {
+            // Small delay to ensure FlatList is mounted
+            const t = setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index: viewerIndex, animated: false });
+            }, 50);
+            return () => clearTimeout(t);
+        }
+    }, [viewerOpen]);
+
+    // ── Reload comments when swiping to a new photo ───────────────────────────
+    useEffect(() => {
+        if (viewerOpen && visiblePhotos[viewerIndex]?.id) {
+            loadComments(visiblePhotos[viewerIndex].id);
+        }
+    }, [viewerIndex, viewerOpen]);
+
+    const loadComments = async (fileId: number) => {
+        setCommentLoading(true);
+        try {
+            const data = await getComments(fileId);
+            setPhotoComments(data);
+        } catch (e) {
+            console.error('loadComments error:', e);
+        } finally {
+            setCommentLoading(false);
+        }
+    };
+
+    const handleAddComment = async () => {
+        const photo = visiblePhotos[viewerIndex];
+        if (!photo?.id || !commentText.trim()) return;
+        setAddingComment(true);
+        try {
+            await addCommentApi(photo.id, commentText.trim(), replyTo ?? undefined);
+            setCommentText('');
+            setReplyTo(null);
+            await loadComments(photo.id);
+        } catch (e) {
+            console.error('addComment error:', e);
+        } finally {
+            setAddingComment(false);
+        }
+    };
+
     const openViewer = (index: number) => {
         setViewerIndex(index);
+        setPhotoComments([]);
+        setReplyTo(null);
+        setCommentText('');
         setViewerOpen(true);
-        setTimeout(() => flatListRef.current?.scrollToIndex({ index, animated: false }), 50);
     };
 
     const closeViewer = () => setViewerOpen(false);
@@ -139,99 +195,6 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
         }
     };
 
-    // ── Full-screen viewer modal ───────────────────────────────────────────────
-
-    const PhotoViewer = () => (
-        <Modal visible={viewerOpen} transparent={false} animationType="fade" statusBarTranslucent onRequestClose={closeViewer}>
-            <StatusBar hidden />
-            <View style={{ flex: 1, backgroundColor: '#000' }}>
-                {/* Top bar */}
-                <View style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                    paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                }}>
-                    <TouchableOpacity onPress={closeViewer} style={{ padding: 8 }}>
-                        <Feather name="x" size={22} color="#fff" />
-                    </TouchableOpacity>
-                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                        {viewerIndex + 1} / {visiblePhotos.length}
-                    </Text>
-                    <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
-                        {downloading
-                            ? <ActivityIndicator size="small" color="#f97316" />
-                            : <Feather name="download" size={22} color="#f97316" />
-                        }
-                    </TouchableOpacity>
-                </View>
-
-                {/* Photo pager */}
-                <FlatList
-                    ref={flatListRef}
-                    data={visiblePhotos}
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    keyExtractor={(item) => item.id.toString()}
-                    getItemLayout={(_, index) => ({ length: SCREEN_W, offset: SCREEN_W * index, index })}
-                    initialScrollIndex={viewerIndex}
-                    onMomentumScrollEnd={(e) => {
-                        const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-                        setViewerIndex(idx);
-                    }}
-                    renderItem={({ item }) => (
-                        <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center' }}>
-                            <Image
-                                source={{ uri: item.downloadUrl }}
-                                style={{ width: SCREEN_W, height: SCREEN_H }}
-                                resizeMode="contain"
-                            />
-                        </View>
-                    )}
-                />
-
-                {/* Prev / Next arrows */}
-                {viewerIndex > 0 && (
-                    <TouchableOpacity
-                        onPress={goPrev}
-                        style={{
-                            position: 'absolute', left: 12, top: '50%',
-                            backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10,
-                        }}
-                    >
-                        <Feather name="chevron-left" size={26} color="#fff" />
-                    </TouchableOpacity>
-                )}
-                {viewerIndex < visiblePhotos.length - 1 && (
-                    <TouchableOpacity
-                        onPress={goNext}
-                        style={{
-                            position: 'absolute', right: 12, top: '50%',
-                            backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10,
-                        }}
-                    >
-                        <Feather name="chevron-right" size={26} color="#fff" />
-                    </TouchableOpacity>
-                )}
-
-                {/* Bottom info bar */}
-                <View style={{
-                    position: 'absolute', bottom: 0, left: 0, right: 0,
-                    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 32,
-                }}>
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
-                        {visiblePhotos[viewerIndex]?.file_name || 'Photo'}
-                    </Text>
-                    {visiblePhotos[viewerIndex]?.location ? (
-                        <Text style={{ color: '#aaa', fontSize: 10, marginTop: 2 }}>
-                            📍 {visiblePhotos[viewerIndex].location}
-                        </Text>
-                    ) : null}
-                </View>
-            </View>
-        </Modal>
-    );
 
     // ── Folder list ───────────────────────────────────────────────────────────
 
@@ -323,7 +286,153 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
 
     return (
         <View>
-            <PhotoViewer />
+            {/* ── Full-screen viewer modal (inlined — NOT a nested component) ── */}
+            <Modal visible={viewerOpen} transparent={false} animationType="fade" statusBarTranslucent onRequestClose={closeViewer}>
+                <StatusBar hidden />
+                <View style={{ flex: 1, backgroundColor: '#000' }}>
+                    {/* Top bar */}
+                    <View style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                    }}>
+                        <TouchableOpacity onPress={closeViewer} style={{ padding: 8 }}>
+                            <Feather name="x" size={22} color="#fff" />
+                        </TouchableOpacity>
+                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                            {viewerIndex + 1} / {visiblePhotos.length}
+                        </Text>
+                        <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
+                            {downloading
+                                ? <ActivityIndicator size="small" color="#f97316" />
+                                : <Feather name="download" size={22} color="#f97316" />
+                            }
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Photo pager */}
+                    <FlatList
+                        ref={flatListRef}
+                        data={visiblePhotos}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        keyExtractor={(item) => item.id.toString()}
+                        getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
+                        onMomentumScrollEnd={(e) => {
+                            const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                            if (idx !== viewerIndex) setViewerIndex(idx);
+                        }}
+                        renderItem={({ item }) => (
+                            <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center' }}>
+                                <Image
+                                    source={{ uri: item.downloadUrl }}
+                                    style={{ width: SCREEN_W, height: SCREEN_H }}
+                                    resizeMode="contain"
+                                />
+                            </View>
+                        )}
+                    />
+
+                    {/* Prev / Next arrows */}
+                    {viewerIndex > 0 && (
+                        <TouchableOpacity
+                            onPress={goPrev}
+                            style={{ position: 'absolute', left: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
+                        >
+                            <Feather name="chevron-left" size={26} color="#fff" />
+                        </TouchableOpacity>
+                    )}
+                    {viewerIndex < visiblePhotos.length - 1 && (
+                        <TouchableOpacity
+                            onPress={goNext}
+                            style={{ position: 'absolute', right: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
+                        >
+                            <Feather name="chevron-right" size={26} color="#fff" />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Bottom panel: info + comments */}
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+                    >
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
+                            <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                                    {visiblePhotos[viewerIndex]?.file_name || 'Photo'}
+                                </Text>
+                                {visiblePhotos[viewerIndex]?.location
+                                    ? <Text style={{ color: '#aaa', fontSize: 10, marginTop: 2 }}>📍 {visiblePhotos[viewerIndex].location}</Text>
+                                    : null
+                                }
+                            </View>
+
+                            <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
+                                <Text style={{ color: '#aaa', fontSize: 10, fontWeight: '700', marginBottom: 6 }}>
+                                    💬 COMMENTS ({photoComments.length})
+                                </Text>
+                                {commentLoading ? (
+                                    <ActivityIndicator size="small" color="#f97316" style={{ marginBottom: 8 }} />
+                                ) : (
+                                    <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
+                                        {photoComments.length === 0 && (
+                                            <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>No comments yet. Be the first!</Text>
+                                        )}
+                                        {photoComments.map((c) => (
+                                            <View key={c.id} style={{ marginBottom: 8 }}>
+                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                                                        <Text style={{ color: '#f97316', fontSize: 10, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
+                                                        <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                                                            <Text style={{ color: '#888', fontSize: 9 }}>↩ Reply</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                    <Text style={{ color: '#ddd', fontSize: 11 }}>{c.text}</Text>
+                                                </View>
+                                                {c.replies?.map((r) => (
+                                                    <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
+                                                        <Text style={{ color: '#f97316', fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || 'User'}</Text>
+                                                        <Text style={{ color: '#ccc', fontSize: 10 }}>{r.text}</Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        ))}
+                                    </ScrollView>
+                                )}
+                                {replyTo && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                        <Text style={{ color: '#f97316', fontSize: 9 }}>Replying to comment</Text>
+                                        <TouchableOpacity onPress={() => setReplyTo(null)}>
+                                            <Text style={{ color: '#888', fontSize: 9 }}>✕ Cancel</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: Platform.OS === 'android' ? 16 : 32, marginTop: 6 }}>
+                                    <TextInput
+                                        value={commentText}
+                                        onChangeText={setCommentText}
+                                        placeholder="Add a comment…"
+                                        placeholderTextColor="#555"
+                                        style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
+                                    />
+                                    <TouchableOpacity
+                                        onPress={handleAddComment}
+                                        disabled={addingComment || !commentText.trim()}
+                                        style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        {addingComment
+                                            ? <ActivityIndicator size="small" color="#fff" />
+                                            : <Feather name="send" size={14} color="#fff" />
+                                        }
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <TouchableOpacity onPress={() => setSelectedFolder(null)} style={{ padding: 6, borderRadius: 20 }}>
