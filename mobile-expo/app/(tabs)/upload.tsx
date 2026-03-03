@@ -13,7 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { launchImageLibrary, launchCamera, type Asset } from 'react-native-image-picker';
+import * as ImagePicker from 'expo-image-picker';
+type Asset = any; // Will cast expo assets directly into the queue
 import * as DocumentPicker from 'expo-document-picker';
 import { uploadFileWithProgress } from '@/services/fileService';
 import { getProjects } from '@/services/projectService';
@@ -49,6 +50,8 @@ export default function UploadScreen() {
     const [loadingProjects, setLoadingProjects] = useState(false);
     const [loadingFolders, setLoadingFolders] = useState(false);
     const [fileQueue, setFileQueue] = useState<FileProgress[]>([]);
+    const [cameFromProject, setCameFromProject] = useState(false); // track origin
+    const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null); // nested folder navigation
 
     useEffect(() => {
         if (params.projectId && params.type && params.folderId !== undefined) {
@@ -56,15 +59,24 @@ export default function UploadScreen() {
             setUploadType(params.type);
             setSelectedFolder(params.folderId || null);
             setStep('upload');
+            setCameFromProject(true);
         } else if (params.projectId && params.type) {
             setSelectedProject(params.projectId);
             setUploadType(params.type);
             setStep('folder');
+            setCameFromProject(true);
         } else if (params.projectId) {
             setSelectedProject(params.projectId);
             setStep('type');
+            setCameFromProject(true);
+        } else {
+            // Opened directly from dashboard
+            // Only reset if we actually have state to reset, avoiding unnecessary re-renders
+            if (step !== 'project' || selectedProject !== null || cameFromProject) {
+                reset();
+            }
         }
-    }, [params]);
+    }, [params.projectId, params.type, params.folderId]); // Dep on values, not object identity
 
     useEffect(() => {
         if (!user) return;
@@ -79,7 +91,11 @@ export default function UploadScreen() {
         if (!selectedProject || !uploadType) { setFolders([]); return; }
         setLoadingFolders(true);
         getFolders(selectedProject, uploadType)
-            .then((data) => { if (data.folders) setFolders(data.folders); })
+            .then((data) => {
+                // Handle both raw array and {folders:[]} response shapes
+                const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
+                setFolders(rawFolders.filter((f: any) => !f.type || f.type === uploadType));
+            })
             .catch((e) => console.error('fetchFolders', e))
             .finally(() => setLoadingFolders(false));
     }, [selectedProject, uploadType]);
@@ -92,45 +108,86 @@ export default function UploadScreen() {
         );
     }
 
-    const selectedProjectData = projects.find((p) => p.id === selectedProject);
-    const selectedFolderData = folders.find((f) => f.id === selectedFolder);
+    const selectedProjectData = projects.find((p) => String(p.id) === String(selectedProject));
+    const selectedFolderData = folders.find((f) => String(f.id) === String(selectedFolder));
+
+    // ── Nested folder helpers ─────────────────────────────────────────────────
+    const getFolderChildren = (parentId: string | null) =>
+        folders.filter((f) => String(f.parent_id ?? 'null') === String(parentId ?? 'null'));
+
+    const getBreadcrumbFolders = (folderId: string | null): any[] => {
+        if (!folderId) return [];
+        const current = folders.find((f) => String(f.id) === String(folderId));
+        if (!current) return [];
+        return [...getBreadcrumbFolders(current.parent_id != null ? String(current.parent_id) : null), current];
+    };
+
+    const currentBrowseFolders = getFolderChildren(folderBrowseId);
+    const browseBreadcrumbs = getBreadcrumbFolders(folderBrowseId);
 
     // ── Pickers ───────────────────────────────────────────────────────────────
 
-    const pickFromGallery = () => {
-        launchImageLibrary(
-            { mediaType: 'photo', selectionLimit: 0, quality: 0.8 },
-            (response: any) => {
-                if (response.didCancel || response.errorCode) return;
-                const assets = response.assets || [];
-                if (assets.length === 0) return;
-                const queue: FileProgress[] = assets.map((a: any) => ({
-                    asset: a,
-                    progress: 0,
-                    status: 'pending',
-                    anim: new Animated.Value(0),
-                }));
-                setFileQueue(queue);
-            }
-        );
+    const pickFromGallery = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsMultipleSelection: true,
+                quality: 0.8,
+            });
+
+            if (result.canceled || !result.assets?.length) return;
+
+            const queue: FileProgress[] = result.assets.map((a: any) => ({
+                asset: {
+                    uri: a.uri,
+                    fileName: a.fileName || a.uri.split('/').pop(),
+                    type: a.mimeType || 'image/jpeg',
+                    size: a.fileSize || 0
+                },
+                progress: 0,
+                status: 'pending',
+                anim: new Animated.Value(0),
+            }));
+            setFileQueue((prev) => [...prev, ...queue]);
+        } catch (error) {
+            console.error('Gallery Error:', error);
+            Alert.alert('Error', 'Failed to pick image from gallery.');
+        }
     };
 
-    const pickFromCamera = () => {
-        launchCamera(
-            { mediaType: 'photo', quality: 0.8 },
-            (response: any) => {
-                if (response.didCancel || response.errorCode) return;
-                const assets = response.assets || [];
-                if (assets.length === 0) return;
-                const queue: FileProgress[] = assets.map((a: any) => ({
-                    asset: a,
-                    progress: 0,
-                    status: 'pending',
-                    anim: new Animated.Value(0),
-                }));
-                setFileQueue(queue);
+    const pickFromCamera = async () => {
+        try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission Required', 'We need access to your camera to take photos.');
+                return;
             }
-        );
+
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images'],
+                allowsEditing: false,
+                quality: 0.8,
+            });
+
+            if (result.canceled || !result.assets?.length) return;
+
+            const a = result.assets[0];
+            const queue: FileProgress[] = [{
+                asset: {
+                    uri: a.uri,
+                    fileName: a.fileName || a.uri.split('/').pop(),
+                    type: a.mimeType || 'image/jpeg',
+                    size: a.fileSize || 0
+                },
+                progress: 0,
+                status: 'pending',
+                anim: new Animated.Value(0),
+            }];
+            setFileQueue((prev) => [...prev, ...queue]);
+        } catch (error) {
+            console.error('Camera Error:', error);
+            Alert.alert('Error', 'Failed to take photo with camera.');
+        }
     };
 
     const pickDocument = async () => {
@@ -218,10 +275,24 @@ export default function UploadScreen() {
     };
 
     const goBack = () => {
+        if (cameFromProject) {
+            const proj = selectedProject;
+            const tab = uploadType;
+            const folder = selectedFolder || '';
+            reset();
+            router.push({
+                pathname: '/project/[id]',
+                params: { id: proj, tab: tab, folderId: folder }
+            } as any);
+            return;
+        }
         if (step === 'project') router.push('/(tabs)');
         else if (step === 'type') setStep('project');
         else if (step === 'folder') setStep('type');
-        else if (step === 'upload') setStep('folder');
+        else if (step === 'upload') {
+            setFileQueue([]);
+            setStep('folder');
+        }
         else if (step === 'uploading') return; // block nav during upload
         else router.push('/(tabs)');
     };
@@ -231,9 +302,11 @@ export default function UploadScreen() {
         setSelectedProject(null);
         setUploadType(null);
         setSelectedFolder(null);
+        setFolderBrowseId(null);
         setPhotoLocation('');
         setPhotoTags('');
         setFileQueue([]);
+        setCameFromProject(false);
     };
 
     const doneCount = fileQueue.filter((f) => f.status === 'done').length;
@@ -335,48 +408,111 @@ export default function UploadScreen() {
                 {/* ── Step: Folder ── */}
                 {step === 'folder' && (
                     <View>
-                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 12 }}>Select a folder</Text>
-                        {loadingFolders ? (
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>Loading folders…</Text>
-                        ) : folders.length === 0 ? (
-                            <View style={{ marginTop: 30, alignItems: 'center' }}>
-                                <Feather name="folder" size={32} color={colors.border} />
-                                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders available</Text>
-                            </View>
-                        ) : (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                                <TouchableOpacity
-                                    onPress={() => { setSelectedFolder(null); setStep('upload'); }}
-                                    style={{
-                                        width: '30%', alignItems: 'center', gap: 4,
-                                        borderRadius: 10, backgroundColor: colors.surface,
-                                        borderWidth: 1, borderColor: colors.border, padding: 12,
-                                    }}
-                                >
-                                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(249,115,22,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="folder" size={16} color={colors.primary} />
-                                    </View>
-                                    <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '700', color: colors.text, textAlign: 'center' }}>
-                                        Root Level
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8 }}>Select destination folder</Text>
+
+                        {/* Breadcrumb */}
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TouchableOpacity onPress={() => setFolderBrowseId(null)}>
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: !folderBrowseId ? '#f97316' : colors.textMuted }}>
+                                        {selectedProjectData?.name || 'Project'}
                                     </Text>
                                 </TouchableOpacity>
-                                {folders.map((folder) => (
-                                    <TouchableOpacity
-                                        key={folder.id}
-                                        onPress={() => { setSelectedFolder(folder.id); setStep('upload'); }}
-                                        style={{
-                                            width: '30%', alignItems: 'center', gap: 4,
-                                            borderRadius: 10, backgroundColor: colors.surface,
-                                            borderWidth: 1, borderColor: colors.border, padding: 12,
-                                        }}
-                                    >
-                                        <Feather name="folder" size={32} color={colors.primary} />
-                                        <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: colors.text, textAlign: 'center' }}>
-                                            {folder.name}
-                                        </Text>
-                                    </TouchableOpacity>
+                                {browseBreadcrumbs.map((b) => (
+                                    <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginHorizontal: 4 }}>/</Text>
+                                        <TouchableOpacity onPress={() => setFolderBrowseId(b.id)}>
+                                            <Text style={{ fontSize: 11, fontWeight: '700', color: folderBrowseId === b.id ? '#f97316' : colors.textMuted }}>
+                                                {b.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 ))}
                             </View>
+                        </ScrollView>
+
+                        {loadingFolders ? (
+                            <Text style={{ fontSize: 11, color: colors.textMuted }}>Loading folders…</Text>
+                        ) : (
+                            <View style={{ gap: 6 }}>
+                                {/* Root Level option - shown only at root browse */}
+                                {!folderBrowseId && (
+                                    <TouchableOpacity
+                                        onPress={() => { setSelectedFolder(null); setStep('upload'); }}
+                                        style={{
+                                            flexDirection: 'row', alignItems: 'center', gap: 10,
+                                            borderRadius: 10, backgroundColor: colors.surface,
+                                            borderWidth: 1.5, borderColor: !selectedFolder ? '#f97316' : colors.border, padding: 12,
+                                        }}
+                                    >
+                                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(249,115,22,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="folder" size={16} color="#f97316" />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Root Level</Text>
+                                            <Text style={{ fontSize: 10, color: colors.textMuted }}>Upload directly to project</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Children folders */}
+                                {currentBrowseFolders.map((folder) => {
+                                    const hasChildren = folders.some((f) => f.parent_id === folder.id);
+                                    return (
+                                        <View key={folder.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <TouchableOpacity
+                                                onPress={() => { setSelectedFolder(folder.id); setStep('upload'); }}
+                                                style={{
+                                                    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
+                                                    borderRadius: 10, backgroundColor: colors.surface,
+                                                    borderWidth: 1.5, borderColor: selectedFolder === folder.id ? '#f97316' : colors.border, padding: 12,
+                                                }}
+                                            >
+                                                <Feather name="folder" size={20} color="#f97316" />
+                                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, flex: 1 }} numberOfLines={1}>{folder.name}</Text>
+                                            </TouchableOpacity>
+                                            {hasChildren && (
+                                                <TouchableOpacity
+                                                    onPress={() => setFolderBrowseId(folder.id)}
+                                                    style={{ padding: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}
+                                                >
+                                                    <Feather name="chevron-right" size={16} color={colors.textMuted} />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    );
+                                })}
+
+                                {/* Empty state */}
+                                {currentBrowseFolders.length === 0 && folderBrowseId && (
+                                    <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted }}>No subfolders here.</Text>
+                                        <TouchableOpacity
+                                            onPress={() => { setSelectedFolder(folderBrowseId); setStep('upload'); }}
+                                            style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: '#f97316' }}
+                                        >
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Upload here</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+
+                                {folders.length === 0 && (
+                                    <View style={{ marginTop: 20, alignItems: 'center' }}>
+                                        <Feather name="folder" size={28} color={colors.border} />
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>No folders yet. Upload to Root Level.</Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+
+                        {/* Upload to current browsed folder */}
+                        {folderBrowseId && (
+                            <TouchableOpacity
+                                onPress={() => { setSelectedFolder(folderBrowseId); setStep('upload'); }}
+                                style={{ marginTop: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 10, alignItems: 'center' }}
+                            >
+                                <Text style={{ fontSize: 12, color: colors.textMuted }}>Upload to "{browseBreadcrumbs[browseBreadcrumbs.length - 1]?.name}"</Text>
+                            </TouchableOpacity>
                         )}
                     </View>
                 )}
@@ -576,24 +712,46 @@ export default function UploadScreen() {
                                 {errorCount} file{errorCount !== 1 ? 's' : ''} failed
                             </Text>
                         )}
-                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                        <View style={{ flexDirection: 'column', gap: 10, marginTop: 16, width: '100%' }}>
                             <TouchableOpacity
-                                onPress={reset}
-                                style={{
-                                    borderRadius: 10, borderWidth: 1, borderColor: colors.border,
-                                    paddingHorizontal: 20, paddingVertical: 10,
+                                onPress={() => {
+                                    // Upload Again: keep project/type/folder, just reset file queue
+                                    setFileQueue([]);
+                                    setStep('upload');
                                 }}
-                            >
-                                <Text style={{ fontSize: 12, color: colors.text, fontWeight: '600' }}>Upload More</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => { reset(); router.push('/(tabs)'); }}
                                 style={{
                                     borderRadius: 10, backgroundColor: '#f97316',
-                                    paddingHorizontal: 20, paddingVertical: 10,
+                                    paddingHorizontal: 20, paddingVertical: 12,
+                                    alignItems: 'center',
                                 }}
                             >
-                                <Text style={{ fontSize: 12, color: '#fff', fontWeight: '600' }}>Back to Dashboard</Text>
+                                <Text style={{ fontSize: 12, color: '#fff', fontWeight: '600' }}>Upload Again</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (cameFromProject) {
+                                        const proj = selectedProject;
+                                        const tab = uploadType;
+                                        const folder = selectedFolder || '';
+                                        reset();
+                                        router.push({
+                                            pathname: '/project/[id]',
+                                            params: { id: proj, tab: tab, folderId: folder }
+                                        } as any);
+                                    } else {
+                                        reset();
+                                        router.push('/(tabs)');
+                                    }
+                                }}
+                                style={{
+                                    borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+                                    paddingHorizontal: 20, paddingVertical: 12,
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Text style={{ fontSize: 12, color: colors.text, fontWeight: '600' }}>
+                                    {cameFromProject ? 'Go Back to Folder' : 'Back to Dashboard'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                     </View>

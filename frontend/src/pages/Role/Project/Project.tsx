@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getProjectById } from '@/services/projectService';
@@ -30,7 +30,22 @@ export default function Project({ id }: ProjectProps) {
     const [loading, setLoading] = useState(true);
 
     const isClient = user?.role === 'client';
-    const [activeTab, setActiveTab] = useState<TabKey>(isClient ? 'documents' : 'overview');
+    const searchParams = useSearchParams();
+    const urlTab = searchParams?.get('tab') as TabKey | null;
+    const [activeTab, setActiveTab] = useState<TabKey>(urlTab || (isClient ? 'documents' : 'overview'));
+
+    // When tab changes, update the URL so back navigation restores it
+    const setTab = (tab: TabKey) => {
+        setActiveTab(tab);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', tab);
+        window.history.replaceState(null, '', url.toString());
+    };
+
+    // Sync from URL if it changes (e.g. on back navigation)
+    useEffect(() => {
+        if (urlTab && urlTab !== activeTab) setActiveTab(urlTab);
+    }, [urlTab]);
 
     useEffect(() => {
         const fetchProject = async () => {
@@ -87,7 +102,7 @@ export default function Project({ id }: ProjectProps) {
                         const Icon = item.icon;
                         const isActive = activeTab === item.key;
                         return (
-                            <button key={item.key} onClick={() => setActiveTab(item.key)}
+                            <button key={item.key} onClick={() => setTab(item.key)}
                                 className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                                     isActive ? 'bg-accent/10 text-accent' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                                 )}>

@@ -5,7 +5,7 @@ import { Project, User, Folder } from '@/types';
 import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
@@ -19,15 +19,28 @@ interface ProjectPhotosProps {
 
 const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   if (!project) return null;
 
   const [photos, setPhotos] = useState<any[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  // Initialize from URL ?folder= param for back-navigation restoration
+  const [selectedFolder, setRawSelectedFolder] = useState<string | null>(
+    searchParams?.get('folder') || null
+  );
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [shareItem, setShareItem] = useState<string | null>(null);
   const [expandedPhoto, setExpandedPhoto] = useState<string | null>(null);
+
+  // Sync selectedFolder to URL so returnUrl always encodes correct folder
+  const setSelectedFolder = (folderId: string | null) => {
+    setRawSelectedFolder(folderId);
+    const url = new URL(window.location.href);
+    if (folderId) { url.searchParams.set('folder', folderId); }
+    else { url.searchParams.delete('folder'); }
+    window.history.replaceState(null, '', url.toString());
+  };
 
   useEffect(() => {
     if (project?.id) {
@@ -47,16 +60,16 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     }
   };
 
-  const currentFolders = folders.filter((f) => f.parent_id === selectedFolder);
-  const currentFolderPhotos = photos.filter((p) => p.folder_id === selectedFolder);
+  const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
+  const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
 
   const visiblePhotos = user.role === 'client' ? currentFolderPhotos.filter((p) => p.client_visible) : currentFolderPhotos;
 
-  const currentFolder = folders.find((f) => f.id === selectedFolder);
+  const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
   const goBack = () => {
     if (!selectedFolder) return;
-    const parentId = currentFolder?.parent_id || null;
+    const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
     setSelectedFolder(parentId);
   };
 
@@ -93,7 +106,12 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   };
 
   const handleUpload = () => {
-    router.push(`/${user.role}/upload?projectId=${project.id}&type=photos&folderId=${selectedFolder || ''}`);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', 'photos');
+    if (selectedFolder) url.searchParams.set('folder', selectedFolder);
+    else url.searchParams.delete('folder');
+    const returnUrl = encodeURIComponent(url.pathname + url.search);
+    router.push(`/${user.role}/upload?projectId=${project.id}&type=photos&folderId=${selectedFolder || ''}&returnUrl=${returnUrl}`);
   };
 
   const handleCreateFolder = async (name: string) => {
@@ -160,6 +178,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       <div className="grid grid-cols-3 gap-2">
         {currentFolders.map((folder) => {
           const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
+          const subFolders = folders.filter((f) => f.parent_id === folder.id);
           return (
             <button
               key={folder.id}
@@ -172,7 +191,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               </span>
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="text-[9px] text-muted-foreground mr-1">
-                  {folderPhotos.length} photos
+                  {folderPhotos.length} photos{subFolders.length > 0 ? `, ${subFolders.length} folder${subFolders.length === 1 ? '' : 's'}` : ''}
                 </span>
                 {(user.role === 'admin' || user.role === 'superadmin') && (
                   <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded p-1 hover:bg-secondary transition-colors" title={`Toggle client visibility (Currently: ${folder.client_visible !== false ? 'Visible' : 'Hidden'})`}>

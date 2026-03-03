@@ -2,7 +2,7 @@ import { PrivateAxios } from '../helpers/PrivateAxios';
 
 export const getFolders = async (projectId: string, folderType: string) => {
     try {
-        const response = await PrivateAxios.get(`/folders?project_id=${projectId}&type=${folderType}`);
+        const response = await PrivateAxios.get(`/folders?projectId=${projectId}&type=${folderType}`);
         return response.data;
     } catch (error) {
         console.error("fetchFolders Error", error);

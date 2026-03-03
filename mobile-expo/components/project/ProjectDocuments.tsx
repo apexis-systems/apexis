@@ -9,11 +9,11 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility } from '@/services/fileService';
 
-export default function ProjectDocuments({ project, user }: { project: any, user: any }) {
+export default function ProjectDocuments({ project, user, initialFolderId }: { project: any, user: any, initialFolderId?: string }) {
     const { colors } = useTheme();
     const router = useRouter();
     const [docs, setDocs] = useState<any[]>([]);
-    const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+    const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
     const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -39,14 +39,20 @@ export default function ProjectDocuments({ project, user }: { project: any, user
         fetchFolders();
     }, [project?.id]);
 
-    const currentFolders = folders.filter((f) => f.parent_id === selectedFolder);
-    const currentFolderDocs = docs.filter((d) => d.folder_id === selectedFolder);
+    useEffect(() => {
+        if (initialFolderId !== undefined) {
+            setSelectedFolder(initialFolderId || null);
+        }
+    }, [initialFolderId]);
+
+    const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
+    const currentFolderDocs = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
     const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible !== false) : currentFolderDocs;
-    const currentFolder = folders.find((f) => f.id === selectedFolder);
+    const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
     const goBack = () => {
         if (!selectedFolder) return;
-        const parentId = currentFolder?.parent_id || null;
+        const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
     };
 
@@ -210,6 +216,7 @@ export default function ProjectDocuments({ project, user }: { project: any, user
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {currentFolders.map((folder) => {
                     const count = docs.filter((d) => d.folder_id === folder.id).length;
+                    const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                     return (
                         <TouchableOpacity
                             key={folder.id}
@@ -229,8 +236,8 @@ export default function ProjectDocuments({ project, user }: { project: any, user
                             <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: colors.text, textAlign: 'center' }}>
                                 {folder.name}
                             </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} files</Text>
+                            <View style={{ flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} files{subcount > 0 ? `\n${subcount} folder${subcount === 1 ? '' : 's'}` : ''}</Text>
                                 {(user.role === 'admin' || user.role === 'superadmin') && (
                                     <TouchableOpacity
                                         onPress={(e) => {
@@ -312,6 +319,30 @@ export default function ProjectDocuments({ project, user }: { project: any, user
                     <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No documents yet</Text>
                 </View>
             )}
+
+            {/* New Folder Modal */}
+            <Modal visible={showCreateFolder} transparent animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
+                    <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>New Folder</Text>
+                        <TextInput
+                            value={newFolderName}
+                            onChangeText={setNewFolderName}
+                            placeholder="Folder name"
+                            placeholderTextColor={colors.textMuted}
+                            style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleCreateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Creating…' : 'Create'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }

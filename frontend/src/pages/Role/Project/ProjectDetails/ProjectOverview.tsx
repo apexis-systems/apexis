@@ -5,6 +5,7 @@ import { Project, UserRole } from '@/types';
 import { CalendarDays, FileText, Camera, Download, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getReports, Report } from '@/services/reportService';
+import { getFiles } from '@/services/fileService';
 
 interface ProjectOverviewProps {
   project: Project;
@@ -17,12 +18,32 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [photosCount, setPhotosCount] = useState<number>(0);
+  const [docsCount, setDocsCount] = useState<number>(0);
+  const [counting, setCounting] = useState(true);
+
   useEffect(() => {
     if (!project?.id) return;
     getReports(project.id as any)
       .then(setReports)
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    setCounting(true);
+    getFiles(project.id)
+      .then((data) => {
+        let photos = 0, docs = 0;
+        if (data.fileData) {
+          data.fileData.forEach((file: any) => {
+            if (file.file_type?.startsWith('image/')) photos++;
+            else docs++;
+          });
+        }
+        setPhotosCount(photos);
+        setDocsCount(docs);
+      })
+      .catch(() => { })
+      .finally(() => setCounting(false));
   }, [project?.id]);
 
   const dailyReports = reports.filter(r => r.type === 'daily');
@@ -52,14 +73,14 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
             <FileText className="h-4 w-4" />
             <span className="text-xs">Documents</span>
           </div>
-          <div className="mt-1 text-xl font-bold">{project.totalDocs}</div>
+          <div className="mt-1 text-xl font-bold">{counting ? '...' : docsCount}</div>
         </div>
         <div className="rounded-xl bg-card border border-border p-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Camera className="h-4 w-4" />
             <span className="text-xs">Photos</span>
           </div>
-          <div className="mt-1 text-xl font-bold">{project.totalPhotos}</div>
+          <div className="mt-1 text-xl font-bold">{counting ? '...' : photosCount}</div>
         </div>
       </div>
 

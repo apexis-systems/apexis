@@ -15,11 +15,11 @@ import * as FileSystem from 'expo-file-system';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectPhotos({ project, user }: { project: any; user: any }) {
+export default function ProjectPhotos({ project, user, initialFolderId }: { project: any; user: any; initialFolderId?: string }) {
     const { colors } = useTheme();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
-    const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+    const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
     const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -53,16 +53,22 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
             .finally(() => setLoading(false));
     }, [project?.id]);
 
-    const currentFolders = folders.filter((f) => f.parent_id === selectedFolder);
-    const currentFolderPhotos = photos.filter((p) => p.folder_id === selectedFolder);
+    useEffect(() => {
+        if (initialFolderId !== undefined) {
+            setSelectedFolder(initialFolderId || null);
+        }
+    }, [initialFolderId]);
+
+    const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
+    const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
     const visiblePhotos = user.role === 'client'
         ? currentFolderPhotos.filter((p) => p.client_visible !== false)
         : currentFolderPhotos;
-    const currentFolder = folders.find((f) => f.id === selectedFolder);
+    const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
     const goBack = () => {
         if (!selectedFolder) return;
-        const parentId = currentFolder?.parent_id || null;
+        const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
     };
 
@@ -278,6 +284,7 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                         {currentFolders.map((folder) => {
                             const count = photos.filter((p) => p.folder_id === folder.id).length;
+                            const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                             return (
                                 <TouchableOpacity
                                     key={folder.id}
@@ -286,8 +293,8 @@ export default function ProjectPhotos({ project, user }: { project: any; user: a
                                 >
                                     <Feather name="folder" size={32} color="#f97316" />
                                     <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                        <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} photos</Text>
+                                    <View style={{ flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                        <Text style={{ fontSize: 9, color: colors.textMuted }}>{count} photos{subcount > 0 ? `\n${subcount} folder${subcount === 1 ? '' : 's'}` : ''}</Text>
                                         {(user.role === 'admin' || user.role === 'superadmin') && (
                                             <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleFolderVis(folder); }} style={{ padding: 2 }}>
                                                 <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? '#f97316' : colors.textMuted} />

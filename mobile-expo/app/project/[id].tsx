@@ -17,7 +17,7 @@ import ProjectManuals from '@/components/project/ProjectManuals';
 type Tab = 'overview' | 'documents' | 'photos' | 'daily' | 'weekly' | 'snags' | 'manuals';
 
 export default function ProjectWorkspaceScreen() {
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, tab, folderId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string }>();
     const { user } = useAuth();
     const { colors, isDark } = useTheme();
     const router = useRouter();
@@ -25,8 +25,14 @@ export default function ProjectWorkspaceScreen() {
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    const defaultTab: Tab = user?.role === 'client' ? 'documents' : 'overview';
+    const defaultTab: Tab = (tab as Tab) || (user?.role === 'client' ? 'documents' : 'overview');
     const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
+
+    useEffect(() => {
+        if (tab && ['overview', 'documents', 'photos', 'daily', 'weekly', 'snags', 'manuals'].includes(tab)) {
+            setActiveTab(tab as Tab);
+        }
+    }, [tab]);
 
     useEffect(() => {
         const fetchProject = async () => {
@@ -87,7 +93,7 @@ export default function ProjectWorkspaceScreen() {
                     <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
                         {project.name}
                     </Text>
-                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{project.location || 'Location not set'}</Text>
+                    {/* <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{project.location || 'Location not set'}</Text> */}
                 </View>
             </View>
 
@@ -139,8 +145,8 @@ export default function ProjectWorkspaceScreen() {
                 {activeTab === 'overview' && user.role !== 'client' && (
                     <ProjectOverview project={project} userRole={user.role} />
                 )}
-                {activeTab === 'documents' && <ProjectDocuments project={project} user={user} />}
-                {activeTab === 'photos' && <ProjectPhotos project={project} user={user} />}
+                {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} />}
+                {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} />}
                 {activeTab === 'daily' && user.role !== 'client' && (
                     <ProjectDailyReports project={project} userRole={user.role} />
                 )}
