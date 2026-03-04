@@ -33,14 +33,10 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
     getFiles(project.id)
       .then((data) => {
         let photos = 0, docs = 0;
-        if (data.folderData) {
-          data.folderData.forEach((f: any) => {
-            if (f.files) {
-              f.files.forEach((file: any) => {
-                if (file.file_type?.startsWith('image/')) photos++;
-                else docs++;
-              });
-            }
+        if (data.fileData) {
+          data.fileData.forEach((file: any) => {
+            if (file.file_type?.startsWith('image/')) photos++;
+            else docs++;
           });
         }
         setPhotosCount(photos);

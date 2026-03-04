@@ -66,7 +66,7 @@ export interface Report {
 
 export interface ActivityItem {
     id: string;
-    type: 'upload' | 'edit' | 'delete' | 'share';
+    type: 'upload' | 'edit' | 'delete' | 'share' | 'upload_photo';
     description: string;
     projectName: string;
     timestamp: string;

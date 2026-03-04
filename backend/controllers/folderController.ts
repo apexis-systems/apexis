@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { folders, project_members } from "../models/index.ts";
+import { folders, project_members, activities } from "../models/index.ts";
 
 export const createFolder = async (req: Request, res: Response) => {
     try {
@@ -28,6 +28,13 @@ export const createFolder = async (req: Request, res: Response) => {
             name,
             parent_id: parent_id || null,
             created_by: authUser.user_id,
+        });
+
+        await activities.create({
+            project_id,
+            user_id: authUser.user_id,
+            type: 'edit',
+            description: `Created folder "${name}"`
         });
 
         res.status(201).json({

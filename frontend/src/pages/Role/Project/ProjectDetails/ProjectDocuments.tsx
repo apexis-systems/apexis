@@ -53,13 +53,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       const json = await getFiles(project.id);
       if (json.folderData) {
         setFolders(json.folderData);
-        let fetchedDocs: any[] = [];
-        json.folderData.forEach((f: any) => {
-          if (f.files) {
-            fetchedDocs = [...fetchedDocs, ...f.files.filter((file: any) => !file.file_type?.startsWith('image/'))];
-          }
-        });
-        setDocs(fetchedDocs);
+      }
+      if (json.fileData) {
+        setDocs(json.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
       }
     } catch (e) {
       console.error("Failed to fetch folders/files", e);

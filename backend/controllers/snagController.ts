@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { snags, users, project_members } from '../models/index.ts';
+import { snags, users, project_members, activities } from '../models/index.ts';
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION || 'ap-south-2',
@@ -77,6 +77,13 @@ export const createSnag = async (req: Request, res: Response) => {
             created_by: authUser.user_id,
         });
 
+        await activities.create({
+            project_id: Number(project_id),
+            user_id: authUser.user_id,
+            type: 'edit',
+            description: `Added snag "${title.trim()}"`
+        });
+
         const full = await snags.findByPk((snag as any).id, {
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name'] },
@@ -93,6 +100,7 @@ export const createSnag = async (req: Request, res: Response) => {
 // PATCH /snags/:id/status  — cycle status
 export const updateSnagStatus = async (req: Request, res: Response) => {
     try {
+        const authUser = (req as any).user;
         const { id } = req.params;
         const { status } = req.body;
         const valid = ['amber', 'green', 'red'];
@@ -103,6 +111,15 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
 
         (snag as any).status = status;
         await snag.save();
+
+        if (authUser) {
+            await activities.create({
+                project_id: (snag as any).project_id,
+                user_id: authUser.user_id,
+                type: 'edit',
+                description: `Updated status for snag "${(snag as any).title}"`
+            });
+        }
         res.json({ snag });
     } catch (err) {
         console.error('updateSnagStatus error:', err);
