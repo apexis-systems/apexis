@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
-import { files, folders, project_members, activities } from "../models/index.ts";
+import db from "../models/index.ts";
+const { files, folders, project_members, activities } = db;
+import { Op } from "sequelize";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -27,13 +29,13 @@ export const uploadFile = async (req: Request, res: Response) => {
 
         const { folder_id, project_id } = req.body;
 
-        if (!req.file) {
+        if (!(req as any).file) {
             return res.status(400).json({ error: "No file uploaded" });
         }
 
-        const file_name = req.file.originalname;
-        const file_type = req.file.mimetype;
-        const file_size_mb = Math.max(1, Math.round(req.file.size / (1024 * 1024)));
+        const file_name = (req as any).file.originalname;
+        const file_type = (req as any).file.mimetype;
+        const file_size_mb = Math.max(1, Math.round((req as any).file.size / (1024 * 1024)));
 
         // Ensure contributors have access to this project
         if (authUser.role === "contributor") {
@@ -49,7 +51,7 @@ export const uploadFile = async (req: Request, res: Response) => {
         const folderPath = finalFolderId ? finalFolderId.toString() : 'root';
 
         // Extract extension and generate sanitized S3 key
-        const extMatch = req.file.originalname.match(/\.[0-9a-z]+$/i);
+        const extMatch = (req as any).file.originalname.match(/\.[0-9a-z]+$/i);
         const extension = extMatch ? extMatch[0] : '';
         const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}${extension}`;
 
@@ -57,7 +59,7 @@ export const uploadFile = async (req: Request, res: Response) => {
             Bucket: BUCKET_NAME,
             Key: s3Key,
             ContentType: file_type,
-            Body: req.file.buffer
+            Body: (req as any).file.buffer
         });
 
         await s3Client.send(command);
@@ -107,9 +109,16 @@ export const listFiles = async (req: Request, res: Response) => {
             where: { project_id: projectId },
         });
 
-        // Get all files for this project
+        const folderIds = folderData.map((f: any) => f.id);
+
+        // Get all files for this project (either by explicit project_id or via folder_id)
         const fileData = await files.findAll({
-            where: { project_id: projectId },
+            where: {
+                [Op.or]: [
+                    { project_id: projectId },
+                    { folder_id: { [Op.in]: folderIds } }
+                ]
+            }
         });
 
         let filteredFolders = folderData.map((f: any) => f.toJSON());
