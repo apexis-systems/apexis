@@ -14,7 +14,7 @@ export interface Snag {
     created_by?: number;
     assignee?: { id: number; name: string; email: string };
     creator?: { id: number; name: string };
-    downloadUrl?: string;
+    photoDownloadUrl?: string;
     createdAt: string;
 }
 

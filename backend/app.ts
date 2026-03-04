@@ -14,6 +14,7 @@ import commentRoutes from "./routes/commentRoutes.ts";
 import reportRoutes from "./routes/reportRoutes.ts";
 import snagRoutes from "./routes/snagRoutes.ts";
 import manualRoutes from "./routes/manualRoutes.ts";
+import activityRoutes from "./routes/activityRoutes.ts";
 import { startCronJobs } from "./cron.ts";
 
 const app = express();
@@ -47,6 +48,7 @@ app.use("/api/comments", commentRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/snags", snagRoutes);
 app.use("/api/manuals", manualRoutes);
+app.use("/api/activities", activityRoutes);
 
 // Test DB Connection and Start Server
 const startServer = async () => {

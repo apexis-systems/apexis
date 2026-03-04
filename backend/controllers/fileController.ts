@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { files, folders, project_members } from "../models/index.ts";
+import { files, folders, project_members, activities } from "../models/index.ts";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -70,6 +70,13 @@ export const uploadFile = async (req: Request, res: Response) => {
             file_type,
             file_size_mb,
             created_by: authUser.user_id,
+        });
+
+        await activities.create({
+            project_id: parseInt(project_id, 10),
+            user_id: authUser.user_id,
+            type: file_type.startsWith('image/') ? 'upload_photo' : 'upload',
+            description: `Uploaded ${file_name}`
         });
 
         res.status(200).json({
@@ -153,6 +160,14 @@ export const deleteFile = async (req: Request, res: Response) => {
         });
 
         await s3Client.send(command);
+
+        await activities.create({
+            project_id: file.project_id,
+            user_id: authUser.user_id,
+            type: 'delete',
+            description: `Deleted ${file.file_name}`
+        });
+
         await file.destroy();
 
         res.status(200).json({ message: "File deleted successfully" });

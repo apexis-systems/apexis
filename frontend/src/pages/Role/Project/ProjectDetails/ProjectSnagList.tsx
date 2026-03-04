@@ -141,7 +141,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
         {snags.map((snag) => {
           const cfg = STATUS_CONFIG[snag.status];
           const Icon = cfg.icon;
-          const photoUrl = snag.downloadUrl || snag.photo_url;
+          const photoUrl = snag.photoDownloadUrl || snag.photo_url;
           return (
             <div key={snag.id} className="flex items-start gap-3 rounded-lg border border-border bg-card p-3">
               {/* Status circle */}

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "mobile-expo",
-    "slug": "mobile-expo",
+    "name": "Apexis",
+    "slug": "apexis",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobileexpo",
+    "scheme": "apexis",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

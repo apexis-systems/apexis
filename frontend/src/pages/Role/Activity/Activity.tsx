@@ -4,16 +4,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, FileText, Camera, Clock, Loader2 } from 'lucide-react';
-import { getProjects } from '@/services/projectService';
-import { getFiles } from '@/services/fileService';
+import { getActivities } from '@/services/activityService';
+import { ActivityItem as GlobalActivityItem } from '@/types';
 
-interface ActivityItem {
-    id: string;
-    type: 'upload_doc' | 'upload_photo';
-    description: string;
-    projectName: string;
-    timestamp: string;
-    rawDate: Date;
+interface ActivityItem extends GlobalActivityItem {
+    userName?: string;
 }
 
 const Activity = () => {
@@ -26,42 +21,17 @@ const Activity = () => {
         const load = async () => {
             if (!user) return;
             try {
-                // 1. Get user's projects
-                const pRes = await getProjects();
-                const projects = pRes.projects || [];
+                const feed = await getActivities();
 
-                // 2. Fetch files for all these projects in parallel
-                const feed: ActivityItem[] = [];
-
-                await Promise.all(projects.map(async (p: any) => {
-                    try {
-                        const fRes = await getFiles(p.id);
-                        const folders = fRes.folderData || [];
-
-                        folders.forEach((folder: any) => {
-                            if (!folder.files) return;
-                            folder.files.forEach((file: any) => {
-                                const isPhoto = file.file_type?.startsWith('image/');
-                                feed.push({
-                                    id: `f-${file.id}`,
-                                    type: isPhoto ? 'upload_photo' : 'upload_doc',
-                                    description: `Uploaded ${file.file_name}`,
-                                    projectName: p.name,
-                                    timestamp: new Date(file.createdAt).toLocaleString('en-IN', {
-                                        dateStyle: 'medium', timeStyle: 'short'
-                                    }),
-                                    rawDate: new Date(file.createdAt)
-                                });
-                            });
-                        });
-                    } catch (e) {
-                        console.error(`Failed files for project ${p.id}`, e);
-                    }
+                // Format timestamps locally
+                const formatted = feed.map((act: any) => ({
+                    ...act,
+                    timestamp: new Date(act.timestamp).toLocaleString('en-IN', {
+                        dateStyle: 'medium', timeStyle: 'short'
+                    })
                 }));
 
-                // 3. Sort newest first
-                feed.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
-                setActivities(feed);
+                setActivities(formatted);
             } catch (error) {
                 console.error("Activity load error", error);
             } finally {
