@@ -5,7 +5,8 @@ export const uploadFile = async (data: FormData) => {
         const response = await PrivateAxios.post('/files/upload', data, {
             headers: {
                 'Content-Type': 'multipart/form-data',
-            }
+            },
+            timeout: 120000
         });
         return response.data;
     } catch (error) {
@@ -23,9 +24,10 @@ export const uploadFileWithProgress = async (
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
+            timeout: 120000,
             onUploadProgress: (progressEvent) => {
                 if (progressEvent.total) {
-                    const pct = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    const pct = Math.min(100, Math.round((progressEvent.loaded * 100) / progressEvent.total));
                     onProgress(pct);
                 }
             },

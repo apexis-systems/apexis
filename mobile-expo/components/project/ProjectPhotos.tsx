@@ -4,12 +4,12 @@ import {
     ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
 import { getProjectFiles, toggleFileVisibility } from '@/services/fileService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 
@@ -41,19 +41,24 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     const [commentLoading, setCommentLoading] = useState(false);
     const [addingComment, setAddingComment] = useState(false);
 
-    useEffect(() => {
-        if (!project?.id) return;
-        setLoading(true);
-        getProjectFiles(project.id)
-            .then((data) => {
-                if (data.folderData) setFolders(data.folderData);
-                if (data.fileData) {
-                    setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
-                }
-            })
-            .catch((e) => console.error('fetchFiles', e))
-            .finally(() => setLoading(false));
-    }, [project?.id]);
+    useFocusEffect(
+        useCallback(() => {
+            if (!project?.id) return;
+            if (folders.length === 0 && photos.length === 0) setLoading(true);
+            getProjectFiles(project.id)
+                .then((data) => {
+                    if (data.folderData) setFolders(data.folderData);
+                    if (data.fileData) {
+                        setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
+                    }
+                })
+                .catch((e) => console.error('fetchFiles', e))
+                .finally(() => setLoading(false));
+
+            // cleanup function placeholder if needed for focus blur
+            return () => { };
+        }, [project?.id])
+    );
 
     useEffect(() => {
         if (initialFolderId !== undefined) {

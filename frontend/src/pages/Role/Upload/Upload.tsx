@@ -8,9 +8,10 @@ import { uploadFile } from '@/services/fileService';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, FileText, Camera, Upload as UploadIcon, Check, Folder } from 'lucide-react';
+import { ArrowLeft, FileText, Camera, Upload as UploadIcon, Check, Folder, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { createActivity } from '@/services/activityService';
 
 type Step = 'project' | 'type' | 'folder' | 'upload' | 'done';
 
@@ -34,7 +35,7 @@ function UploadInner() {
     const [photoTags, setPhotoTags] = useState('');
     const [projects, setProjects] = useState<any[]>([]);
     const [allFolders, setAllFolders] = useState<any[]>([]);
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -123,31 +124,51 @@ function UploadInner() {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            setFile(e.target.files[0]);
+            const selectedFiles = Array.from(e.target.files);
+            if (files.length + selectedFiles.length > 20) {
+                toast.error('You can only upload up to 20 files at once.');
+                return;
+            }
+            setFiles(prev => [...prev, ...selectedFiles].slice(0, 20));
         }
     };
 
+    const removeFile = (index: number) => {
+        setFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleUpload = async () => {
-        if (!file) { toast.error('Please select a file to upload'); return; }
+        if (files.length === 0) { toast.error('Please select at least one file to upload'); return; }
         if (!selectedProject) { toast.error('Project is required'); return; }
 
         setIsUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('project_id', selectedProject);
-            if (selectedFolder) formData.append('folder_id', selectedFolder);
-            if (uploadType === 'photos') {
-                formData.append('location', photoLocation);
-                formData.append('tags', photoTags);
-            }
-            await uploadFile(formData);
+            await Promise.all(files.map(async (f) => {
+                const formData = new FormData();
+                formData.append('file', f);
+                formData.append('project_id', selectedProject);
+                formData.append('skipActivity', 'true');
+                if (selectedFolder) formData.append('folder_id', selectedFolder);
+                if (uploadType === 'photos') {
+                    formData.append('location', photoLocation);
+                    formData.append('tags', photoTags);
+                }
+                return uploadFile(formData);
+            }));
+
+            // Group Activity log
+            await createActivity({
+                project_id: selectedProject,
+                type: uploadType === 'photos' ? 'upload_photo' : 'upload',
+                description: `${files.length} new ${uploadType === 'documents' ? 'documents' : 'site photos'} added`
+            });
+
             setStep('done');
-            setFile(null);
+            setFiles([]);
             toast.success('Files uploaded successfully!');
         } catch (error) {
             console.error('Upload Error', error);
-            toast.error('Failed to upload file');
+            toast.error('Failed to upload files');
         } finally {
             setIsUploading(false);
         }
@@ -172,7 +193,7 @@ function UploadInner() {
 
     // Upload Again — keep all context (project, type, folder) and go back to upload step
     const uploadAgain = () => {
-        setFile(null);
+        setFiles([]);
         setStep('upload');
     };
 
@@ -327,21 +348,35 @@ function UploadInner() {
                         type="file"
                         ref={fileInputRef}
                         className="hidden"
+                        multiple
                         onChange={handleFileChange}
-                        accept={uploadType === 'documents' ? ".pdf,.dwg,image/*" : "image/*"}
+                        accept={uploadType === 'documents' ? ".pdf,.dwg,.doc,.docx,.xls,.xlsx,.csv,.txt" : "image/*"}
                     />
                     <div
                         className="flex flex-col items-center rounded-xl border-2 border-dashed border-border bg-card p-8 cursor-pointer hover:border-accent/50 transition-colors"
                         onClick={() => fileInputRef.current?.click()}
                     >
-                        <UploadIcon className={`h-10 w-10 mb-3 ${file ? 'text-accent' : 'text-muted-foreground/40'}`} />
+                        <UploadIcon className={`h-10 w-10 mb-3 ${files.length > 0 ? 'text-accent' : 'text-muted-foreground/40'}`} />
                         <p className="text-sm font-medium text-foreground">
-                            {file ? file.name : `Click to select ${uploadType === 'documents' ? 'documents' : 'photos'}`}
+                            {files.length > 0 ? `${files.length} file(s) selected` : `Click to select ${uploadType === 'documents' ? 'documents' : 'photos'} (Max 20)`}
                         </p>
-                        {!file && (
+                        {files.length === 0 && (
                             <p className="text-xs text-muted-foreground mt-1">{uploadType === 'documents' ? 'PDF, DWG files supported' : 'JPG, PNG files supported'}</p>
                         )}
                     </div>
+
+                    {files.length > 0 && (
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                            {files.map((f, i) => (
+                                <div key={i} className="flex items-center justify-between bg-card border border-border rounded-lg p-2 px-3">
+                                    <span className="text-xs truncate w-5/6">{f.name}</span>
+                                    <button onClick={() => removeFile(i)} className="p-1 hover:bg-secondary rounded-full">
+                                        <X className="h-3 w-3 text-muted-foreground" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     {uploadType === 'photos' && (
                         <>
                             <div className="space-y-1.5"><Label className="text-xs font-medium">Location</Label><Input placeholder="e.g., Block A - Ground Floor" value={photoLocation} onChange={(e) => setPhotoLocation(e.target.value)} /></div>
@@ -350,7 +385,7 @@ function UploadInner() {
                     )}
                     <Button
                         onClick={handleUpload}
-                        disabled={!file || isUploading}
+                        disabled={files.length === 0 || isUploading}
                         className="w-full h-11 rounded-xl bg-accent text-accent-foreground hover:bg-accent/90 font-semibold disabled:opacity-50"
                     >
                         {isUploading ? 'Uploading...' : 'Upload Files'}

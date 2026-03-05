@@ -4,6 +4,7 @@ const { files, folders, project_members, activities } = db;
 import { Op } from "sequelize";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import sharp from 'sharp';
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION || "ap-south-2",
@@ -22,12 +23,12 @@ const checkProjectAccess = async (userId: number, projectId: number) => {
     });
 };
 
-export const uploadFile = async (req: Request, res: Response) => {
+export const uploadFile = async (req: Request | any, res: Response) => {
     try {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { folder_id, project_id } = req.body;
+        const { folder_id, project_id, skipActivity } = req.body;
 
         if (!(req as any).file) {
             return res.status(400).json({ error: "No file uploaded" });
@@ -55,11 +56,51 @@ export const uploadFile = async (req: Request, res: Response) => {
         const extension = extMatch ? extMatch[0] : '';
         const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}${extension}`;
 
+        let fileBuffer = req.file.buffer;
+        let finalFileName = file_name;
+
+        // Apply compression and watermarking only to images
+        if (file_type.startsWith('image/')) {
+            const timestamp = new Date().toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                dateStyle: 'medium',
+                timeStyle: 'short'
+            });
+
+            const svgOverlay = `
+                <svg width="600" height="100">
+                    <style>
+                        .title { fill: #e98b06; font-size: 24px; font-family: sans-serif; font-weight: bold; }
+                    </style>
+                    <text x="10" y="40" class="title" fill="#e98b06" stroke="black" stroke-width="0.5">${timestamp}</text>
+                </svg>
+            `;
+
+            try {
+                fileBuffer = await sharp(req.file.buffer)
+                    .resize({ width: 1280, withoutEnlargement: true })
+                    .composite([
+                        {
+                            input: Buffer.from(svgOverlay),
+                            gravity: 'southwest',
+                        }
+                    ])
+                    .jpeg({ quality: 60 })
+                    .toBuffer();
+
+                // Force extension to jpg since we are converting
+                finalFileName = file_name.replace(/\.[^/.]+$/, "") + ".jpg";
+            } catch (sharpErr) {
+                console.error("Sharp processing failed, falling back to original", sharpErr);
+                // Fallback to original buffer if sharp fails
+            }
+        }
+
         const command = new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: s3Key,
             ContentType: file_type,
-            Body: (req as any).file.buffer
+            Body: fileBuffer
         });
 
         await s3Client.send(command);
@@ -68,22 +109,20 @@ export const uploadFile = async (req: Request, res: Response) => {
             folder_id: finalFolderId,
             project_id: parseInt(project_id, 10),
             file_url: s3Key,
-            file_name,
+            file_name: finalFileName,
             file_type,
             file_size_mb,
             created_by: authUser.user_id,
         });
 
-        // Log activity — wrapped separately so upload succeeds even if this fails
-        try {
+        // Grouping API logic - skip if true
+        if (skipActivity !== 'true') {
             await activities.create({
                 project_id: parseInt(project_id, 10),
                 user_id: authUser.user_id,
                 type: file_type.startsWith('image/') ? 'upload_photo' : 'upload',
-                description: `Uploaded ${file_name}`
+                description: `Uploaded ${finalFileName}`
             });
-        } catch (actError) {
-            console.warn("Activity log failed (non-fatal):", actError);
         }
 
         res.status(200).json({

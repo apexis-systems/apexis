@@ -19,6 +19,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { uploadFileWithProgress } from '@/services/fileService';
 import { getProjects } from '@/services/projectService';
 import { getFolders } from '@/services/folderService';
+import { createActivity } from '@/services/activityService';
 
 type Step = 'project' | 'type' | 'folder' | 'upload' | 'uploading' | 'done';
 
@@ -27,6 +28,7 @@ interface FileProgress {
     progress: number; // 0–100
     status: 'pending' | 'uploading' | 'done' | 'error';
     anim: Animated.Value;
+    source?: 'camera' | 'gallery' | 'document';
 }
 
 export default function UploadScreen() {
@@ -129,13 +131,25 @@ export default function UploadScreen() {
 
     const pickFromGallery = async () => {
         try {
+            const maxAllowed = 20 - fileQueue.length;
+            if (maxAllowed <= 0) {
+                Alert.alert('Limit Reached', 'You can only upload up to 20 files at once.');
+                return;
+            }
+
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ['images'],
                 allowsMultipleSelection: true,
+                selectionLimit: maxAllowed,
                 quality: 0.8,
             });
 
             if (result.canceled || !result.assets?.length) return;
+
+            if (fileQueue.length + result.assets.length > 20) {
+                Alert.alert('Limit Reached', 'You can only select up to 20 files in total.');
+                return;
+            }
 
             const queue: FileProgress[] = result.assets.map((a: any) => ({
                 asset: {
@@ -147,6 +161,7 @@ export default function UploadScreen() {
                 progress: 0,
                 status: 'pending',
                 anim: new Animated.Value(0),
+                source: 'gallery' as const,
             }));
             setFileQueue((prev) => [...prev, ...queue]);
         } catch (error) {
@@ -156,6 +171,11 @@ export default function UploadScreen() {
     };
 
     const pickFromCamera = async () => {
+        if (fileQueue.length >= 20) {
+            Alert.alert('Limit Reached', 'You can only upload up to 20 files at once.');
+            return;
+        }
+
         try {
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
             if (status !== 'granted') {
@@ -182,6 +202,7 @@ export default function UploadScreen() {
                 progress: 0,
                 status: 'pending',
                 anim: new Animated.Value(0),
+                source: 'camera' as const,
             }];
             setFileQueue((prev) => [...prev, ...queue]);
         } catch (error) {
@@ -199,17 +220,23 @@ export default function UploadScreen() {
                     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     'application/vnd.ms-powerpoint',
                     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                    'application/acad', 'image/vnd.dwg', 'application/dxf',
-                    'text/plain', '*/*'],
+                    'text/plain'],
                 multiple: true,
                 copyToCacheDirectory: true,
             });
             if (result.canceled || !result.assets?.length) return;
+
+            if (fileQueue.length + result.assets.length > 20) {
+                Alert.alert('Limit Reached', 'You can only select up to 20 files in total.');
+                return;
+            }
+
             const queue: FileProgress[] = result.assets.map((a) => ({
                 asset: { uri: a.uri, fileName: a.name, type: a.mimeType, size: a.size } as Asset,
                 progress: 0,
                 status: 'pending',
                 anim: new Animated.Value(0),
+                source: 'document' as const,
             }));
             setFileQueue(queue);
         } catch (err) {
@@ -246,6 +273,7 @@ export default function UploadScreen() {
                     type: item.asset.type || 'image/jpeg',
                 } as any);
                 formData.append('project_id', selectedProject);
+                formData.append('skipActivity', 'true');
                 if (selectedFolder) formData.append('folder_id', selectedFolder);
                 if (uploadType === 'photos') {
                     if (photoLocation) formData.append('location', photoLocation);
@@ -268,6 +296,19 @@ export default function UploadScreen() {
                 updatedQueue[i] = { ...updatedQueue[i], status: 'error' };
                 setFileQueue([...updatedQueue]);
                 console.error(`Upload error for file ${i}:`, err);
+            }
+        }
+
+        const successCount = updatedQueue.filter((f) => f.status === 'done').length;
+        if (successCount > 0 && selectedProject) {
+            try {
+                await createActivity({
+                    project_id: selectedProject,
+                    type: uploadType === 'photos' ? 'upload_photo' : 'upload',
+                    description: `${successCount} new ${uploadType === 'documents' ? 'documents' : 'site photos'} added`
+                });
+            } catch (err) {
+                console.error('Failed to log grouped activity', err);
             }
         }
 
@@ -311,6 +352,8 @@ export default function UploadScreen() {
 
     const doneCount = fileQueue.filter((f) => f.status === 'done').length;
     const errorCount = fileQueue.filter((f) => f.status === 'error').length;
+    const cameraCount = fileQueue.filter((f) => f.source === 'camera').length;
+    const galleryCount = fileQueue.filter((f) => f.source === 'gallery').length;
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -527,31 +570,42 @@ export default function UploadScreen() {
                                     onPress={pickFromCamera}
                                     style={{
                                         flex: 1, borderRadius: 10, borderWidth: 2,
-                                        borderColor: colors.border, borderStyle: 'dashed',
-                                        backgroundColor: colors.surface, padding: 20, alignItems: 'center',
-                                    }}
-                                >
-                                    <Feather name="camera" size={26} color={colors.textMuted} />
-                                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 6 }}>Camera</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={pickFromGallery}
-                                    style={{
-                                        flex: 1, borderRadius: 10, borderWidth: 2,
-                                        borderColor: fileQueue.length > 0 ? colors.primary : colors.border,
+                                        borderColor: cameraCount > 0 ? colors.primary : colors.border,
                                         borderStyle: 'dashed', backgroundColor: colors.surface,
                                         padding: 20, alignItems: 'center',
                                     }}
                                 >
-                                    <Feather name="image" size={26} color={fileQueue.length > 0 ? colors.primary : colors.textMuted} />
-                                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 6 }}>Gallery</Text>
-                                    {fileQueue.length > 0 && (
+                                    <Feather name="camera" size={26} color={cameraCount > 0 ? colors.primary : colors.textMuted} />
+                                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 6 }}>Camera</Text>
+                                    {cameraCount > 0 && (
                                         <View style={{
                                             marginTop: 4, backgroundColor: colors.primary,
                                             borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2,
                                         }}>
                                             <Text style={{ fontSize: 9, color: '#fff', fontWeight: '700' }}>
-                                                {fileQueue.length} selected
+                                                {cameraCount} selected
+                                            </Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={pickFromGallery}
+                                    style={{
+                                        flex: 1, borderRadius: 10, borderWidth: 2,
+                                        borderColor: galleryCount > 0 ? colors.primary : colors.border,
+                                        borderStyle: 'dashed', backgroundColor: colors.surface,
+                                        padding: 20, alignItems: 'center',
+                                    }}
+                                >
+                                    <Feather name="image" size={26} color={galleryCount > 0 ? colors.primary : colors.textMuted} />
+                                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 6 }}>Gallery</Text>
+                                    {galleryCount > 0 && (
+                                        <View style={{
+                                            marginTop: 4, backgroundColor: colors.primary,
+                                            borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2,
+                                        }}>
+                                            <Text style={{ fontSize: 9, color: '#fff', fontWeight: '700' }}>
+                                                {galleryCount} selected
                                             </Text>
                                         </View>
                                     )}
@@ -573,7 +627,7 @@ export default function UploadScreen() {
                                 </Text>
                                 {fileQueue.length === 0 && (
                                     <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>
-                                        PDF, DWG, Image files supported
+                                        PDF, CAD, Office files supported
                                     </Text>
                                 )}
                             </TouchableOpacity>
@@ -729,19 +783,14 @@ export default function UploadScreen() {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => {
-                                    if (cameFromProject) {
-                                        const proj = selectedProject;
-                                        const tab = uploadType;
-                                        const folder = selectedFolder || '';
-                                        reset();
-                                        router.push({
-                                            pathname: '/project/[id]',
-                                            params: { id: proj, tab: tab, folderId: folder }
-                                        } as any);
-                                    } else {
-                                        reset();
-                                        router.push('/(tabs)');
-                                    }
+                                    const proj = selectedProject;
+                                    const tab = uploadType;
+                                    const folder = selectedFolder || '';
+                                    reset();
+                                    router.push({
+                                        pathname: '/project/[id]',
+                                        params: { id: proj, tab: tab, folderId: folder }
+                                    } as any);
                                 }}
                                 style={{
                                     borderRadius: 10, borderWidth: 1, borderColor: colors.border,
@@ -750,7 +799,8 @@ export default function UploadScreen() {
                                 }}
                             >
                                 <Text style={{ fontSize: 12, color: colors.text, fontWeight: '600' }}>
-                                    {cameFromProject ? 'Go Back to Folder' : 'Back to Dashboard'}
+                                    Go Back to Folder
+
                                 </Text>
                             </TouchableOpacity>
                         </View>

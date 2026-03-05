@@ -15,6 +15,7 @@
     "@aws-sdk/client-s3": "^3.999.0",
     "@aws-sdk/s3-request-presigner": "^3.999.0",
     "@types/node-cron": "^3.0.11",
+    "@types/sharp": "^0.31.1",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
@@ -27,6 +28,7 @@
     "pg": "^8.18.0",
     "sequelize": "^6.37.7",
     "sequelize-cli": "^6.6.5",
+    "sharp": "^0.34.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
