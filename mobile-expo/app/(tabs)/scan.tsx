@@ -1,86 +1,234 @@
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Paths, File as FSFile } from 'expo-file-system';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import SaveScanModal from '@/components/scan/SaveScanModal';
+import DocumentScanProcessor, { DocumentScanProcessorRef } from '@/components/scan/DocumentScanProcessor';
 
 export default function ScanScreen() {
     const { user } = useAuth();
     const { colors } = useTheme();
+    const [permission, requestPermission] = useCameraPermissions();
+    const cameraRef = useRef<CameraView>(null);
+    const processorRef = useRef<DocumentScanProcessorRef>(null);
+    const [capturedImage, setCapturedImage] = useState<string | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [processingStep, setProcessingStep] = useState<'capturing' | 'enhancing' | null>(null);
+
+    const facing = 'back';
 
     if (!user) return null;
 
-    const handleScan = () => {
-        Alert.alert('QR Scanner', 'QR scanner will open camera (demo)');
+    if (!permission) {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#f97316" />
+            </SafeAreaView>
+        );
+    }
+
+    if (!permission.granted) {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+                    <Feather name="camera-off" size={64} color={colors.textMuted} style={{ marginBottom: 20 }} />
+                    <Text style={{ textAlign: 'center', fontSize: 16, color: colors.text, marginBottom: 12 }}>
+                        We need your permission to use the camera for scanning files.
+                    </Text>
+                    <TouchableOpacity
+                        onPress={requestPermission}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                            backgroundColor: '#f97316',
+                            paddingHorizontal: 20,
+                            paddingVertical: 12,
+                            borderRadius: 10,
+                        }}
+                    >
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Grant Permission</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const takePicture = async () => {
+        if (!cameraRef.current || isProcessing) return;
+        setIsProcessing(true);
+        setProcessingStep('capturing');
+        try {
+            const photo = await cameraRef.current.takePictureAsync({
+                quality: 0.9,
+                base64: false,
+                exif: false,
+            });
+
+            if (!photo?.uri) return;
+
+            // --- Apply document scan (B&W) enhancement ---
+            setProcessingStep('enhancing');
+            let finalUri = photo.uri;
+
+            try {
+                const processed = await processorRef.current?.process(photo.uri);
+                if (processed && processed.startsWith('data:image')) {
+                    // Strip data URL prefix and save as real file
+                    const base64Data = processed.replace(/^data:image\/\w+;base64,/, '');
+                    const outputFile = new FSFile(Paths.cache, `scan_${Date.now()}.jpg`);
+                    outputFile.write(atob(base64Data));
+                    finalUri = outputFile.uri;
+                }
+            } catch (enhanceErr) {
+                console.warn('Enhancement failed, using original:', enhanceErr);
+                // Fall through — use the original photo
+            }
+
+            setCapturedImage(finalUri);
+        } catch (error) {
+            console.error('Failed to take picture:', error);
+        } finally {
+            setIsProcessing(false);
+            setProcessingStep(null);
+        }
+    };
+
+    const handleDiscard = () => {
+        setCapturedImage(null);
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-            <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 14 }}>
-                {/* Header */}
-                <View style={{ marginBottom: 24 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>Scan QR Code</Text>
-                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Quick access to project files</Text>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} edges={['top']}>
+            {/* Hidden image processor — used for document enhancement */}
+            <DocumentScanProcessor ref={processorRef} />
+
+            <View style={{ flex: 1 }}>
+
+                {/* Header Overlay */}
+                <View style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+                    paddingHorizontal: 20, paddingVertical: 16,
+                    backgroundColor: 'rgba(0,0,0,0.4)',
+                }}>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#fff' }}>Scan Document</Text>
+                    <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>
+                        Line up your document and tap capture
+                    </Text>
                 </View>
 
-                {/* Scanner Area */}
-                <View style={{ alignItems: 'center' }}>
-                    <View
-                        style={{
-                            width: 260,
-                            height: 260,
-                            borderRadius: 20,
+                {/* Camera View */}
+                <CameraView
+                    style={{ flex: 1 }}
+                    facing={facing}
+                    ref={cameraRef}
+                    autofocus="on"
+                >
+                    {/* Visual Guideline overlay */}
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{
+                            width: '80%',
+                            height: '65%',
                             borderWidth: 2,
-                            borderColor: colors.border,
+                            borderColor: isProcessing ? '#f97316' : 'rgba(255,255,255,0.5)',
+                            borderRadius: 12,
                             borderStyle: 'dashed',
-                            backgroundColor: colors.surface,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                        }}>
+                            {/* Corner markers */}
+                            {[
+                                { top: -2, left: -2 }, { top: -2, right: -2 },
+                                { bottom: -2, left: -2 }, { bottom: -2, right: -2 },
+                            ].map((pos, i) => (
+                                <View key={i} style={[{
+                                    position: 'absolute', width: 20, height: 20,
+                                    borderColor: isProcessing ? '#f97316' : '#fff',
+                                    borderTopWidth: i < 2 ? 3 : 0,
+                                    borderLeftWidth: i % 2 === 0 ? 3 : 0,
+                                    borderRightWidth: i % 2 === 1 ? 3 : 0,
+                                    borderBottomWidth: i >= 2 ? 3 : 0,
+                                }, pos]} />
+                            ))}
+                        </View>
+                    </View>
+                </CameraView>
+
+                {/* Processing Overlay */}
+                {isProcessing && (
+                    <View style={{
+                        position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
+                        justifyContent: 'center', alignItems: 'center', zIndex: 20,
+                    }}>
+                        <ActivityIndicator size="large" color="#f97316" />
+                        <Text style={{ color: '#fff', marginTop: 12, fontSize: 14, fontWeight: '600' }}>
+                            {processingStep === 'capturing' ? 'Capturing...' : '✦ Enhancing document...'}
+                        </Text>
+                    </View>
+                )}
+
+                {/* Bottom Controls */}
+                <View style={{
+                    paddingBottom: 40,
+                    paddingTop: 20,
+                    backgroundColor: '#000',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 40,
+                }}>
+
+                    {/* Flash toggle placeholder */}
+                    <View style={{ width: 44, height: 44 }} />
+
+                    {/* Shutter Button */}
+                    <TouchableOpacity
+                        onPress={takePicture}
+                        disabled={isProcessing}
+                        style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 36,
+                            backgroundColor: 'transparent',
+                            borderWidth: 4,
+                            borderColor: isProcessing ? '#f97316' : '#fff',
                             alignItems: 'center',
                             justifyContent: 'center',
                         }}
                     >
-                        <Feather name="maximize" size={64} color={colors.border} />
-                        <Text
-                            style={{
-                                fontSize: 12,
-                                color: colors.textMuted,
-                                textAlign: 'center',
-                                paddingHorizontal: 32,
-                                marginTop: 12,
-                            }}
-                        >
-                            Point your camera at a project QR code
-                        </Text>
-                    </View>
-
-                    <TouchableOpacity
-                        onPress={handleScan}
-                        style={{
-                            marginTop: 24,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            borderRadius: 10,
-                            backgroundColor: '#f97316',
-                            paddingHorizontal: 20,
-                            paddingVertical: 10,
-                        }}
-                    >
-                        <Feather name="camera" size={14} color="#fff" />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Open Camera</Text>
+                        <View style={{
+                            width: 56,
+                            height: 56,
+                            borderRadius: 28,
+                            backgroundColor: isProcessing ? '#f97316' : '#fff',
+                        }} />
                     </TouchableOpacity>
 
-                    <Text
-                        style={{
-                            marginTop: 20,
-                            fontSize: 10,
-                            color: colors.textMuted,
-                            textAlign: 'center',
-                            maxWidth: 220,
-                        }}
-                    >
-                        Each project has a unique QR code that links directly to its documents and photos.
-                    </Text>
+                    {/* B&W mode badge */}
+                    <View style={{
+                        backgroundColor: 'rgba(255,255,255,0.15)',
+                        borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+                        alignItems: 'center',
+                    }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>B&W</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8 }}>SCAN</Text>
+                    </View>
+
                 </View>
+
+                {/* Save flow modal */}
+                {capturedImage && (
+                    <SaveScanModal
+                        imageUri={capturedImage}
+                        onDiscard={handleDiscard}
+                        onSaveSuccess={() => setCapturedImage(null)}
+                    />
+                )}
             </View>
         </SafeAreaView>
     );

@@ -74,12 +74,17 @@ export const uploadFile = async (req: Request, res: Response) => {
             created_by: authUser.user_id,
         });
 
-        await activities.create({
-            project_id: parseInt(project_id, 10),
-            user_id: authUser.user_id,
-            type: file_type.startsWith('image/') ? 'upload_photo' : 'upload',
-            description: `Uploaded ${file_name}`
-        });
+        // Log activity — wrapped separately so upload succeeds even if this fails
+        try {
+            await activities.create({
+                project_id: parseInt(project_id, 10),
+                user_id: authUser.user_id,
+                type: file_type.startsWith('image/') ? 'upload_photo' : 'upload',
+                description: `Uploaded ${file_name}`
+            });
+        } catch (actError) {
+            console.warn("Activity log failed (non-fatal):", actError);
+        }
 
         res.status(200).json({
             message: "File uploaded successfully",
