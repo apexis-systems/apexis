@@ -19,6 +19,8 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     const [newFolderName, setNewFolderName] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    // View Mode: 'grid' or 'list'
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
     useFocusEffect(
         useCallback(() => {
@@ -213,6 +215,14 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                         ))}
                     </View>
                 </ScrollView>
+
+                {/* View Mode Toggle */}
+                <TouchableOpacity
+                    onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                    style={{ padding: 6, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+                >
+                    <Feather name={viewMode === 'grid' ? 'list' : 'grid'} size={16} color={colors.text} />
+                </TouchableOpacity>
             </View>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -224,14 +234,14 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                             key={folder.id}
                             onPress={() => setSelectedFolder(folder.id)}
                             style={{
-                                width: '30%',
+                                width: '23%',
                                 alignItems: 'center',
                                 gap: 4,
                                 borderRadius: 10,
                                 backgroundColor: colors.background,
                                 borderWidth: 1,
                                 borderColor: colors.border,
-                                padding: 12,
+                                padding: 8,
                             }}
                         >
                             <Feather name="folder" size={32} color="#f97316" />
@@ -264,55 +274,91 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                 </View>
             )}
 
-            <View style={{ gap: 6 }}>
-                {visibleDocs.map((doc) => (
-                    <TouchableOpacity
-                        key={doc.id}
-                        onPress={() => WebBrowser.openBrowserAsync(doc.downloadUrl)}
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 8,
-                            borderRadius: 10,
-                            backgroundColor: colors.background,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            padding: 10,
-                        }}
-                    >
-                        <View
-                            style={{
-                                width: 34,
-                                height: 34,
-                                borderRadius: 8,
-                                backgroundColor: doc.file_type.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
-                        >
-                            <Feather name="file-text" size={16} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text }}>{doc.file_name}</Text>
-                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{doc.file_size_mb} MB</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 4 }}>
-                            <TouchableOpacity onPress={() => handleShare(doc)} style={{ padding: 4 }}>
-                                <Feather name="share-2" size={14} color="#666" />
+            <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 6 : 8, marginTop: currentFolders.length > 0 ? 12 : 0 }}>
+                {visibleDocs.map((doc) => {
+                    if (viewMode === 'grid') {
+                        return (
+                            <TouchableOpacity
+                                key={doc.id}
+                                onPress={() => WebBrowser.openBrowserAsync(doc.downloadUrl)}
+                                style={{
+                                    width: '23%',
+                                    aspectRatio: 1,
+                                    backgroundColor: colors.surface,
+                                    borderRadius: 10,
+                                    overflow: 'hidden',
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: 8
+                                }}
+                            >
+                                <Feather name="file-text" size={32} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
+                                <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: colors.text, textAlign: 'center' }}>{doc.file_name}</Text>
+                                <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); handleShare(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, padding: 4 }}>
+                                        <Feather name="share-2" size={12} color={colors.text} />
+                                    </TouchableOpacity>
+                                    {(user.role === 'admin' || user.role === 'superadmin') && (
+                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, padding: 4 }}>
+                                            <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </TouchableOpacity>
-                            {(user.role === 'admin' || user.role === 'superadmin') && (
-                                <TouchableOpacity onPress={() => toggleDocVisibility(doc)} style={{ padding: 4 }}>
-                                    <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
-                                </TouchableOpacity>
-                            )}
-                            {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && doc.uploaderId === user.id && (
-                                <TouchableOpacity onPress={() => deleteDoc(doc.id)} style={{ padding: 4 }}>
-                                    <Feather name="trash-2" size={14} color="#ef4444" />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </TouchableOpacity>
-                ))}
+                        );
+                    } else {
+                        return (
+                            <TouchableOpacity
+                                key={doc.id}
+                                onPress={() => WebBrowser.openBrowserAsync(doc.downloadUrl)}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    borderRadius: 10,
+                                    backgroundColor: colors.background,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 10,
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        width: 34,
+                                        height: 34,
+                                        borderRadius: 8,
+                                        backgroundColor: doc.file_type.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <Feather name="file-text" size={16} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text }}>{doc.file_name}</Text>
+                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{doc.file_size_mb} MB</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); handleShare(doc); }} style={{ padding: 4 }}>
+                                        <Feather name="share-2" size={14} color="#666" />
+                                    </TouchableOpacity>
+                                    {(user.role === 'admin' || user.role === 'superadmin') && (
+                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ padding: 4 }}>
+                                            <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                        </TouchableOpacity>
+                                    )}
+                                    {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && doc.uploaderId === user.id && (
+                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} style={{ padding: 4 }}>
+                                            <Feather name="trash-2" size={14} color="#ef4444" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    }
+                })}
             </View>
 
             {visibleDocs.length === 0 && (

@@ -26,7 +26,8 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "CAMERA"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -70,6 +71,12 @@
           "photosPermission": "Apexis needs access to your photo library.",
           "savePhotosPermission": "Apexis needs permission to save photos to your library.",
           "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Apexis needs camera access to scan documents."
         }
       ]
     ],
