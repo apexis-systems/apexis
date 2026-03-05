@@ -13,7 +13,7 @@ export function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // If user tries to access login/signup while already logged in
+    // If user tries to access login/signup while already logged in --
     if (isAuthRoute && token) {
         return NextResponse.redirect(new URL('/', request.url));
     }
