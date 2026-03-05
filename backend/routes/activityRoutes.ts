@@ -4,6 +4,7 @@ import { verifyToken } from '../middleware/verifyToken.ts';
 
 const router = Router();
 
+
 router.use(verifyToken);
 // Base path: /api/activities
 router.get('/', getActivities);
