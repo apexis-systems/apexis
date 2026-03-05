@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Share, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import * as WebBrowser from 'expo-web-browser';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility } from '@/services/fileService';
@@ -20,24 +20,26 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        const fetchFolders = async () => {
-            if (!project?.id) return;
-            setLoading(true);
-            try {
-                const data = await getProjectFiles(project.id);
-                if (data.folderData) setFolders(data.folderData);
-                if (data.fileData) {
-                    setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+    useFocusEffect(
+        useCallback(() => {
+            const fetchFolders = async () => {
+                if (!project?.id) return;
+                if (folders.length === 0 && docs.length === 0) setLoading(true);
+                try {
+                    const data = await getProjectFiles(project.id);
+                    if (data.folderData) setFolders(data.folderData);
+                    if (data.fileData) {
+                        setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+                    }
+                } catch (error) {
+                    console.error("Error fetching folders:", error);
+                } finally {
+                    setLoading(false);
                 }
-            } catch (error) {
-                console.error("Error fetching folders:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchFolders();
-    }, [project?.id]);
+            };
+            fetchFolders();
+        }, [project?.id])
+    );
 
     useEffect(() => {
         if (initialFolderId !== undefined) {

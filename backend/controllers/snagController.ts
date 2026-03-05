@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import sharp from 'sharp';
 import { snags, users, project_members, activities } from '../models/index.ts';
 
 const s3Client = new S3Client({
@@ -58,11 +59,30 @@ export const createSnag = async (req: Request, res: Response) => {
 
         let photo_url: string | null = null;
         if (req.file) {
-            const ext = req.file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
+            let fileBuffer = req.file.buffer;
+            let ext = req.file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
+
+            if (req.file.mimetype.startsWith('image/')) {
+                const timestamp = new Date().toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short'
+                });
+                const svgOverlay = `<svg width="600" height="100"><style>.title { fill: #e98b06; font-size: 24px; font-family: sans-serif; font-weight: bold; }</style><text x="10" y="40" class="title" fill="#e98b06" stroke="black" stroke-width="0.5">${timestamp}</text></svg>`;
+                try {
+                    fileBuffer = await sharp(req.file.buffer)
+                        .resize({ width: 1280, withoutEnlargement: true })
+                        .composite([{ input: Buffer.from(svgOverlay), gravity: 'southwest' }])
+                        .jpeg({ quality: 60 })
+                        .toBuffer();
+                    ext = '.jpg';
+                } catch (e) {
+                    console.error('Sharp error in snag', e);
+                }
+            }
+
             const key = `projects/${project_id}/snags/${Date.now()}${ext}`;
             await s3Client.send(new PutObjectCommand({
                 Bucket: BUCKET, Key: key,
-                ContentType: req.file.mimetype, Body: req.file.buffer,
+                ContentType: req.file.mimetype, Body: fileBuffer,
             }));
             photo_url = key;
         }
