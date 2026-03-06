@@ -2,6 +2,9 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+# Install fonts for sharp SVG text rendering on Alpine
+RUN apk add --no-cache ttf-dejavu fontconfig
+
 # Install dependencies first (layer caching)
 COPY package*.json ./
 RUN npm install

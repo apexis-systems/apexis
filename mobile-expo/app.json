@@ -2,7 +2,7 @@
   "expo": {
     "name": "Apexis",
     "slug": "apexis",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "apexis",
@@ -20,6 +20,7 @@
     },
     "android": {
       "package": "com.apexis.app",
+      "versionCode": 2,
       "permissions": [
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",

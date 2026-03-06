@@ -67,24 +67,30 @@ export const uploadFile = async (req: Request | any, res: Response) => {
                 timeStyle: 'short'
             });
 
-            const svgOverlay = `
-                <svg width="600" height="100">
-                    <style>
-                        .title { fill: #e98b06; font-size: 24px; font-family: sans-serif; font-weight: bold; }
-                    </style>
-                    <text x="10" y="40" class="title" fill="#e98b06" stroke="black" stroke-width="0.5">${timestamp}</text>
-                </svg>
-            `;
-
             try {
-                fileBuffer = await sharp(req.file.buffer)
+                const image = sharp((req as any).file.buffer);
+                const metadata = await image.metadata();
+                const originalWidth = metadata.width || 1280;
+                const finalWidth = Math.min(originalWidth, 1280);
+
+                // Dynamically adjust font size to width
+                const fontSize = Math.max(14, Math.min(36, Math.round(finalWidth * 0.035)));
+                const svgWidth = finalWidth;
+                const svgHeight = Math.round(fontSize * 2.5);
+                const yPos = Math.round(fontSize * 1.5);
+
+                const svgOverlay = `
+                    <svg width="${svgWidth}" height="${svgHeight}">
+                        <style>
+                            .title { fill: #e98b06; font-size: ${fontSize}px; font-family: sans-serif; font-weight: bold; }
+                        </style>
+                        <text x="15" y="${yPos}" class="title" stroke="black" stroke-width="${fontSize < 20 ? 0.3 : 0.6}">${timestamp}</text>
+                    </svg>
+                `;
+
+                fileBuffer = await image
                     .resize({ width: 1280, withoutEnlargement: true })
-                    .composite([
-                        {
-                            input: Buffer.from(svgOverlay),
-                            gravity: 'southwest',
-                        }
-                    ])
+                    .composite([{ input: Buffer.from(svgOverlay), gravity: 'southwest' }])
                     .jpeg({ quality: 60 })
                     .toBuffer();
 
