@@ -14,7 +14,7 @@ import ProjectWeeklyReports from '@/components/project/ProjectWeeklyReports';
 import ProjectSnagList from '@/components/project/ProjectSnagList';
 import ProjectManuals from '@/components/project/ProjectManuals';
 
-type Tab = 'overview' | 'documents' | 'photos' | 'daily' | 'weekly' | 'snags' | 'manuals';
+type Tab = 'overview' | 'documents' | 'photos' | 'reports' | 'snags' | 'manuals';
 
 export default function ProjectWorkspaceScreen() {
     const { id, tab, folderId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string }>();
@@ -27,9 +27,10 @@ export default function ProjectWorkspaceScreen() {
 
     const defaultTab: Tab = (tab as Tab) || (user?.role === 'client' ? 'documents' : 'overview');
     const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
+    const [reportType, setReportType] = useState<'daily' | 'weekly'>('daily');
 
     useEffect(() => {
-        if (tab && ['overview', 'documents', 'photos', 'daily', 'weekly', 'snags', 'manuals'].includes(tab)) {
+        if (tab && ['overview', 'documents', 'photos', 'reports', 'snags', 'manuals'].includes(tab)) {
             setActiveTab(tab as Tab);
         }
     }, [tab]);
@@ -65,10 +66,9 @@ export default function ProjectWorkspaceScreen() {
         { key: 'overview', label: 'Overview', hideForClient: true },
         { key: 'documents', label: 'Docs' },
         { key: 'photos', label: 'Photos' },
-        { key: 'daily', label: 'Daily', hideForClient: true },
-        { key: 'weekly', label: 'Weekly', hideForClient: true },
-        { key: 'snags', label: 'Snags' },
-        { key: 'manuals', label: 'SOPs' },
+        { key: 'reports', label: 'Reports', hideForClient: true },
+        { key: 'snags', label: 'Snags', hideForClient: true },
+        { key: 'manuals', label: 'SOPs', hideForClient: true },
     ];
 
     const visibleTabs = tabs.filter((t) => !(t.hideForClient && user.role === 'client'));
@@ -147,11 +147,29 @@ export default function ProjectWorkspaceScreen() {
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} />}
-                {activeTab === 'daily' && user.role !== 'client' && (
-                    <ProjectDailyReports project={project} userRole={user.role} />
-                )}
-                {activeTab === 'weekly' && user.role !== 'client' && (
-                    <ProjectWeeklyReports project={project} userRole={user.role} />
+                {activeTab === 'reports' && user.role !== 'client' && (
+                    <View style={{ flex: 1, marginBottom: 16 }}>
+                        {/* Toggle */}
+                        <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.surface : '#e2e8f0', borderRadius: 8, padding: 4, marginBottom: 16 }}>
+                            <TouchableOpacity
+                                onPress={() => setReportType('daily')}
+                                style={{ flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: reportType === 'daily' ? colors.background : 'transparent', borderRadius: 6 }}
+                            >
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>Daily</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setReportType('weekly')}
+                                style={{ flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: reportType === 'weekly' ? colors.background : 'transparent', borderRadius: 6 }}
+                            >
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {reportType === 'daily' ? (
+                            <ProjectDailyReports project={project} userRole={user.role} />
+                        ) : (
+                            <ProjectWeeklyReports project={project} userRole={user.role} />
+                        )}
+                    </View>
                 )}
                 {activeTab === 'snags' && <ProjectSnagList project={project} />}
                 {activeTab === 'manuals' && <ProjectManuals project={project} />}

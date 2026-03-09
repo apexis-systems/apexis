@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
@@ -11,6 +12,7 @@ import HelpSupportModal from '@/components/shared/HelpSupportModal';
 import FeedbackModal from '@/components/shared/FeedbackModal';
 import LanguageSelectorModal from '@/components/shared/LanguageSelectorModal';
 import { useTranslation } from 'react-i18next';
+import { setActiveProjectContext } from '@/utils/projectSelection';
 
 export default function DashboardScreen() {
   const { user } = useAuth();
@@ -40,6 +42,13 @@ export default function DashboardScreen() {
       fetchProjects();
     }
   }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Clear out the active project scope if they return to Dashboard
+      setActiveProjectContext(null, null);
+    }, [])
+  );
 
   if (!user) return null;
 
@@ -145,11 +154,7 @@ export default function DashboardScreen() {
                 <View style={{ position: 'absolute', right: 6, top: 6, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
               </TouchableOpacity>
 
-              {(user.role === 'admin' || user.role === 'superadmin') && (
-                <TouchableOpacity onPress={() => setIsCreating(true)} style={{ padding: 6, borderRadius: 20, marginLeft: 2 }}>
-                  <Feather name="plus-circle" size={18} color={colors.primary} />
-                </TouchableOpacity>
-              )}
+
             </View>
           </>
         ) : (
@@ -284,6 +289,41 @@ export default function DashboardScreen() {
               </View>
             </TouchableOpacity>
           ))}
+
+          {/* Add Create Project card — admin/superadmin only */}
+          {(user.role === 'admin' || user.role === 'superadmin') && (
+            <TouchableOpacity
+              onPress={() => setIsCreating(true)}
+              style={{ width: '22%', alignItems: 'center', gap: 4 }}
+            >
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 14,
+                  backgroundColor: 'transparent',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderStyle: 'dashed',
+                  borderColor: '#f97316',
+                }}
+              >
+                <Feather name="plus" size={24} color="#f97316" />
+              </View>
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: '500',
+                  color: '#f97316',
+                  textAlign: 'center',
+                  lineHeight: 13,
+                }}
+              >
+                Create Project
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {filteredProjects.length === 0 && (

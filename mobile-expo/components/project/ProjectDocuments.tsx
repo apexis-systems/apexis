@@ -8,6 +8,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility } from '@/services/fileService';
+import { setActiveProjectContext } from '@/utils/projectSelection';
 
 export default function ProjectDocuments({ project, user, initialFolderId }: { project: any, user: any, initialFolderId?: string }) {
     const { colors } = useTheme();
@@ -48,6 +49,12 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
             setSelectedFolder(initialFolderId || null);
         }
     }, [initialFolderId]);
+
+    useEffect(() => {
+        if (project?.id) {
+            setActiveProjectContext(project.id, selectedFolder);
+        }
+    }, [project?.id, selectedFolder]);
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderDocs = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));

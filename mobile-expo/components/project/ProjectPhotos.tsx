@@ -12,6 +12,7 @@ import { getComments, addComment as addCommentApi, type CommentThread } from '@/
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
+import { setActiveProjectContext } from '@/utils/projectSelection';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -65,6 +66,12 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
             setSelectedFolder(initialFolderId || null);
         }
     }, [initialFolderId]);
+
+    useEffect(() => {
+        if (project?.id) {
+            setActiveProjectContext(project.id, selectedFolder);
+        }
+    }, [project?.id, selectedFolder]);
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
