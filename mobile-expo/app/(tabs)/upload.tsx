@@ -433,7 +433,9 @@ export default function UploadScreen() {
                     </View>
 
                     {/* Camera */}
-                    {(cameraPermission?.granted && isFocused) ? (
+                    {cameraPermission === null ? (
+                        <View style={{ flex: 1, backgroundColor: '#000' }} />
+                    ) : (cameraPermission.granted && isFocused) ? (
                         <CameraView style={{ flex: 1 }} facing="back" ref={cameraRef} autofocus="on" />
                     ) : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -804,7 +806,7 @@ export default function UploadScreen() {
                             style={{ height: 50, borderRadius: 25, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
                         >
                             <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
-                                {(params.projectId || getActiveProjectContext().projectId) ? 'Return to Project' : 'Done'}
+                                {(params.projectId || getActiveProjectContext().projectId) ? 'Return to Folder' : 'Done'}
                             </Text>
                         </TouchableOpacity>
                     </View>

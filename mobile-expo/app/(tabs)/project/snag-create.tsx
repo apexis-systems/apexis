@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSnag, getAssignees, Assignee } from '@/services/snagService';
@@ -21,6 +22,7 @@ export default function SnagCreateScreen() {
     const { projectId } = useLocalSearchParams<{ projectId: string }>();
     const router = useRouter();
     const navigation = useNavigation();
+    const isFocused = useIsFocused();
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const cameraRef = useRef<CameraView>(null);
@@ -54,6 +56,38 @@ export default function SnagCreateScreen() {
         if (!cameraPermission?.granted) requestCameraPermission();
         if (!mediaPermission?.granted) requestMediaPermission();
     }, [cameraPermission?.granted, mediaPermission?.granted]);
+
+    const resetState = () => {
+        setCapturedPhoto(null);
+        setTitle('');
+        setDescription('');
+        setAssigneeId(null);
+        setStep('camera');
+    };
+
+    const handleBack = () => {
+        const goBack = () => {
+            resetState();
+            if (projectId) {
+                router.push(`/(tabs)/project/${projectId}?tab=snags`);
+            } else {
+                router.back();
+            }
+        };
+
+        if (capturedPhoto || title.trim()) {
+            Alert.alert(
+                'Discard?',
+                'Are you sure you want to discard this snag?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Discard', style: 'destructive', onPress: goBack }
+                ]
+            );
+        } else {
+            goBack();
+        }
+    };
 
     const capturePhoto = async () => {
         if (!cameraRef.current || isCapturing) return;
@@ -94,7 +128,12 @@ export default function SnagCreateScreen() {
             if (assigneeId) form.append('assigned_to', String(assigneeId));
             form.append('photo', { uri: capturedPhoto.uri, type: capturedPhoto.mime, name: capturedPhoto.name } as any);
             await createSnag(form);
-            router.back();
+            resetState();
+            if (projectId) {
+                router.push(`/(tabs)/project/${projectId}?tab=snags`);
+            } else {
+                router.back();
+            }
         } catch {
             Alert.alert('Error', 'Failed to create snag. Please try again.');
         } finally {
@@ -114,7 +153,7 @@ export default function SnagCreateScreen() {
                     paddingHorizontal: 20, paddingVertical: 16,
                     backgroundColor: 'rgba(0,0,0,0.5)',
                 }}>
-                    <TouchableOpacity onPress={() => router.back()}>
+                    <TouchableOpacity onPress={handleBack}>
                         <Feather name="x" size={24} color="#fff" />
                     </TouchableOpacity>
                     <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff' }}>Take Snag Photo</Text>
@@ -122,7 +161,9 @@ export default function SnagCreateScreen() {
                 </View>
 
                 {/* Camera */}
-                {cameraPermission?.granted ? (
+                {cameraPermission === null ? (
+                    <View style={{ flex: 1, backgroundColor: '#000' }} />
+                ) : (cameraPermission.granted && isFocused) ? (
                     <CameraView style={{ flex: 1 }} facing="back" ref={cameraRef}>
                         {/* Bottom Controls */}
                         <View style={{

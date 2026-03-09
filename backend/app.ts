@@ -15,6 +15,7 @@ import reportRoutes from "./routes/reportRoutes.ts";
 import snagRoutes from "./routes/snagRoutes.ts";
 import manualRoutes from "./routes/manualRoutes.ts";
 import activityRoutes from "./routes/activityRoutes.ts";
+import organizationRoutes from "./routes/organizationRoutes.ts";
 import { startCronJobs } from "./cron.ts";
 
 const app = express();
@@ -49,6 +50,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/snags", snagRoutes);
 app.use("/api/manuals", manualRoutes);
 app.use("/api/activities", activityRoutes);
+app.use("/api/organizations", organizationRoutes);
 
 // Test DB Connection and Start Server
 const startServer = async () => {

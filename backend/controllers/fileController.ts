@@ -262,3 +262,37 @@ export const toggleFileVisibility = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const viewFile = async (req: Request, res: Response) => {
+    try {
+        const { fileKey } = req.body;
+        if (!fileKey) {
+            return res.status(400).json({ error: "No file key provided" });
+        }
+
+        const command = new GetObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: fileKey,
+        });
+
+        const s3Item = await s3Client.send(command);
+
+        if (s3Item.ContentType) {
+            res.setHeader("Content-Type", s3Item.ContentType);
+        }
+
+        // s3Item.Body is a Readable stream in Node.js
+        if (s3Item.Body && typeof (s3Item.Body as any).pipe === "function") {
+            (s3Item.Body as any).pipe(res);
+        } else {
+            console.error("Expected a stream from S3 but got:", typeof s3Item.Body);
+            res.status(500).json({ error: "Failed to read file stream" });
+        }
+    } catch (error: any) {
+        console.error("View File Error:", error.message);
+        if (error.name === "NoSuchKey") {
+            return res.status(404).json({ error: "File not found" });
+        }
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

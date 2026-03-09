@@ -49,11 +49,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="scan"
+        name="activity"
         options={{
-          href: user?.role === 'client' ? null : '/(tabs)/scan',
-          title: t('tabs.scan'),
-          tabBarIcon: ({ color }) => <Feather name="maximize" size={22} color={color} />,
+          title: t('tabs.activity') || 'Activity',
+          tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -82,10 +81,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="activity"
+        name="notifications"
         options={{
-          title: t('tabs.activity'),
-          tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
+          title: 'Notifications',
+          tabBarIcon: ({ color }) => <Feather name="bell" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -104,6 +103,13 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="project/snag-create"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="scan"
         options={{
           href: null,
           headerShown: false,

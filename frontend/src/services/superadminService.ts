@@ -19,3 +19,27 @@ export const getOrgOverview = async () => {
         throw error;
     }
 };
+
+export const uploadOrgLogo = async (formData: FormData) => {
+    try {
+        const response = await PrivateAxios.post('/organizations/logo', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    } catch (error) {
+        console.error("uploadOrgLogo Error", error);
+        throw error;
+    }
+};
+
+export const getSecureFileUrl = async (fileKey: string) => {
+    try {
+        const response = await PrivateAxios.post('/files/view', { fileKey }, {
+            responseType: 'blob'
+        });
+        return URL.createObjectURL(response.data);
+    } catch (error) {
+        console.error("getSecureFileUrl Error", error);
+        return null;
+    }
+};
