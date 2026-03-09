@@ -200,37 +200,59 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       )}
 
       {/* Add Snag Dialog */}
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      <Dialog open={showAdd} onOpenChange={(open) => {
+        if (!open) {
+          // setAddStep('photo'); // Reset on close // Removed addStep
+          setNewPhoto(null); setPhotoPreview(null);
+          setNewTitle(''); setNewDescription(''); setNewAssignee('');
+        }
+        setShowAdd(open);
+      }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-sm">Add Snag</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+
+          <div className="space-y-3 py-1">
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+
+            {/* Photo area — preview at top if selected, otherwise a compact picker button */}
+            {photoPreview ? (
+              <div className="relative w-full h-44 rounded-lg overflow-hidden border border-border">
+                <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => { setNewPhoto(null); setPhotoPreview(null); }}
+                  className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5 hover:bg-black/80 transition-colors"
+                >
+                  <X className="h-3.5 w-3.5 text-white" />
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] rounded-full px-2.5 py-1 hover:bg-black/80 transition-colors"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <div
+                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-secondary/20 p-5 cursor-pointer hover:border-accent/50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImagePlus className="h-8 w-8 mb-2 text-muted-foreground/50" />
+                <p className="text-xs font-medium text-foreground">Click to attach photo</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Required — JPG, PNG, etc.</p>
+              </div>
+            )}
+
             <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Snag title *" maxLength={200} />
             <Textarea
               value={newDescription}
               onChange={e => setNewDescription(e.target.value)}
               placeholder="Description (optional)"
-              className="min-h-[60px] text-xs"
+              className="min-h-[56px] text-xs"
               maxLength={500}
             />
 
-            {/* Photo picker */}
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
-            {photoPreview ? (
-              <div className="relative w-full h-32 rounded-md overflow-hidden border border-border">
-                <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                <button onClick={() => { setNewPhoto(null); setPhotoPreview(null); }} className="absolute top-1 right-1 bg-black/60 rounded-full p-1">
-                  <X className="h-3 w-3 text-white" />
-                </button>
-              </div>
-            ) : (
-              <Button type="button" variant="outline" className="w-full text-xs h-9" onClick={() => fileInputRef.current?.click()}>
-                <ImagePlus className="h-3.5 w-3.5 mr-1.5" /> Attach Photo
-              </Button>
-            )}
-
-            {/* Assignee select */}
             <Select value={newAssignee} onValueChange={setNewAssignee}>
               <SelectTrigger className="text-xs"><SelectValue placeholder="Assign to... (optional)" /></SelectTrigger>
               <SelectContent>
@@ -240,10 +262,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
               </SelectContent>
             </Select>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
-            <Button onClick={addSnag} disabled={submitting} className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
+            <Button onClick={addSnag} disabled={submitting || !newTitle.trim() || !newPhoto} className="bg-accent text-accent-foreground hover:bg-accent/90">
+              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add Snag'}
             </Button>
           </DialogFooter>
         </DialogContent>

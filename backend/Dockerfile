@@ -14,4 +14,4 @@ COPY . .
 
 EXPOSE 5001
 
-CMD ["node", "--experimental-strip-types", "app.ts"]
+CMD ["npm", "run", "dev"]

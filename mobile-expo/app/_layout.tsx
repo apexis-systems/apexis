@@ -2,6 +2,14 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
+import { LogBox } from 'react-native';
+
+// Suppress the non-critical expo-keep-awake warning from expo-camera in Expo Go
+LogBox.ignoreLogs([
+  'Unable to activate keep awake',
+  'keep awake',
+]);
+
 
 import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
 import '@/global.css';
@@ -37,7 +45,6 @@ function RootLayoutNav() {
     <Stack>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="project/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

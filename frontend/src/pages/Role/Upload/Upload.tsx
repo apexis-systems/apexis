@@ -8,12 +8,10 @@ import { uploadFile } from '@/services/fileService';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, FileText, Camera, Upload as UploadIcon, Check, Folder, X } from 'lucide-react';
+import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, ChevronDown, MapPin, Tag } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { createActivity } from '@/services/activityService';
-
-type Step = 'project' | 'type' | 'folder' | 'upload' | 'done';
 
 function UploadInner() {
     const { user } = useAuth();
@@ -23,12 +21,11 @@ function UploadInner() {
     const urlProjectId = searchParams?.get('projectId');
     const urlType = searchParams?.get('type') as 'documents' | 'photos' | null;
     const urlFolderId = searchParams?.get('folderId');
-    // Capture the return URL so back/done can go back to exact project page
+    // returnUrl used to go back to the exact project folder page after upload
     const returnUrl = searchParams?.get('returnUrl') || null;
 
-    const [step, setStep] = useState<Step>('project');
     const [selectedProject, setSelectedProject] = useState<string | null>(null);
-    const [projectName, setProjectName] = useState<string>(''); // stored immediately to show in breadcrumb
+    const [projectName, setProjectName] = useState<string>('');
     const [uploadType, setUploadType] = useState<'documents' | 'photos' | null>(null);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
     const [photoLocation, setPhotoLocation] = useState('');
@@ -38,23 +35,33 @@ function UploadInner() {
     const [files, setFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
+    const [done, setDone] = useState(false);
+    const [doneType, setDoneType] = useState<'documents' | 'photos'>('documents');
+
+    // Section collapsed state
+    const [metaOpen, setMetaOpen] = useState(false);
+    const [projectOpen, setProjectOpen] = useState(!urlProjectId);
+    const [folderOpen, setFolderOpen] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Prefill from URL params (navigated from project folder)
     useEffect(() => {
-        if (urlProjectId && urlType && urlFolderId !== undefined && urlFolderId !== null) {
+        if (urlProjectId) {
             setSelectedProject(urlProjectId);
-            setUploadType(urlType);
-            setSelectedFolder(urlFolderId || null);
-            setStep('upload');
-        } else if (urlProjectId && urlType) {
-            setSelectedProject(urlProjectId);
-            setUploadType(urlType);
-            setStep('folder');
-        } else if (urlProjectId) {
-            setSelectedProject(urlProjectId);
-            setStep('type');
+            setProjectOpen(false);
+            setFolderOpen(false);
+        }
+        if (urlType) setUploadType(urlType);
+        if (urlFolderId) {
+            setSelectedFolder(urlFolderId);
         }
     }, [urlProjectId, urlType, urlFolderId]);
+
+    // Auto-open folder section when a project is manually selected
+    useEffect(() => {
+        if (selectedProject && !urlProjectId) setFolderOpen(true);
+    }, [selectedProject, urlProjectId]);
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -63,34 +70,27 @@ function UploadInner() {
                 const data = await getProjects();
                 if (data.projects) {
                     setProjects(data.projects);
-                    // Once loaded, update projectName if not already set
-                    if (selectedProject && !projectName) {
-                        const found = data.projects.find((p: any) => String(p.id) === String(selectedProject));
+                    if (urlProjectId && !projectName) {
+                        const found = data.projects.find((p: any) => String(p.id) === String(urlProjectId));
                         if (found) setProjectName(found.name);
                     }
                 }
-            } catch (err) {
-                console.error("Failed to load projects", err);
-            }
+            } catch (err) { console.error("Failed to load projects", err); }
         };
         fetchProjects();
     }, [user]);
 
     useEffect(() => {
         const fetchFolders = async () => {
-            if (!selectedProject || !uploadType) { setAllFolders([]); return; }
+            if (!selectedProject) { setAllFolders([]); return; }
             try {
                 const data = await getFolders(selectedProject);
-                // Backend returns a plain array OR {folders: [...]}
                 const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
-                // Filter by type client-side (documents vs photos)
-                setAllFolders(rawFolders.filter((f: any) => !f.type || f.type === uploadType));
-            } catch (err) {
-                console.error("Failed to load folders", err);
-            }
+                setAllFolders(rawFolders);
+            } catch (err) { console.error("Failed to load folders", err); }
         };
-        if (selectedProject && uploadType) fetchFolders();
-    }, [selectedProject, uploadType]);
+        if (selectedProject) fetchFolders();
+    }, [selectedProject]);
 
     if (!user || user.role === 'client') {
         return (
@@ -100,12 +100,11 @@ function UploadInner() {
         );
     }
 
+    // After upload, go to the returnUrl (the folder page we came from) or build one
     const dashboardPath = returnUrl || `/${user.role}/dashboard`;
     const selectedProjectData = projects.find((p) => String(p.id) === String(selectedProject));
-    // Use project name from state (set when project clicked) or from the async-loaded selectedProjectData
     const displayProjectName = projectName || selectedProjectData?.name || '';
 
-    // Build nested folder tree helpers — use String() to handle number vs string IDs
     const getFolderChildren = (parentId: string | null) =>
         allFolders.filter((f) => String(f.parent_id ?? 'null') === String(parentId ?? 'null'));
 
@@ -119,8 +118,9 @@ function UploadInner() {
     const currentBrowseFolders = getFolderChildren(folderBrowseId);
     const browseBreadcrumbs = getBreadcrumbFolders(folderBrowseId);
     const selectedFolderData = allFolders.find((f) => String(f.id) === String(selectedFolder));
-    // Full path breadcrumb for the selected folder (e.g. folder1 › test › hello)
     const selectedFolderPath = getBreadcrumbFolders(selectedFolder);
+
+    const isPhotos = uploadType === 'photos';
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -129,17 +129,35 @@ function UploadInner() {
                 toast.error('You can only upload up to 20 files at once.');
                 return;
             }
-            setFiles(prev => [...prev, ...selectedFiles].slice(0, 20));
+            const newFiles = [...files, ...selectedFiles].slice(0, 20);
+            setFiles(newFiles);
+            // Auto-detect upload type from file MIME types
+            const allImages = newFiles.every(f => f.type.startsWith('image/'));
+            if (!urlType) {
+                const detectedType = allImages ? 'photos' : 'documents';
+                setUploadType(detectedType);
+                if (detectedType === 'photos') setMetaOpen(true);
+                else setMetaOpen(false);
+            }
         }
     };
 
     const removeFile = (index: number) => {
-        setFiles(prev => prev.filter((_, i) => i !== index));
+        const newFiles = files.filter((_, i) => i !== index);
+        setFiles(newFiles);
+        if (newFiles.length > 0 && !urlType) {
+            const allImages = newFiles.every(f => f.type.startsWith('image/'));
+            setUploadType(allImages ? 'photos' : 'documents');
+        } else if (newFiles.length === 0 && !urlType) {
+            setUploadType(null);
+            setMetaOpen(false);
+        }
     };
 
     const handleUpload = async () => {
         if (files.length === 0) { toast.error('Please select at least one file to upload'); return; }
-        if (!selectedProject) { toast.error('Project is required'); return; }
+        if (!selectedProject) { toast.error('Please select a project'); return; }
+        const effectiveType = uploadType || (files.every(f => f.type.startsWith('image/')) ? 'photos' : 'documents');
 
         setIsUploading(true);
         try {
@@ -149,21 +167,30 @@ function UploadInner() {
                 formData.append('project_id', selectedProject);
                 formData.append('skipActivity', 'true');
                 if (selectedFolder) formData.append('folder_id', selectedFolder);
-                if (uploadType === 'photos') {
-                    formData.append('location', photoLocation);
-                    formData.append('tags', photoTags);
+                if (effectiveType === 'photos') {
+                    if (photoLocation) formData.append('location', photoLocation);
+                    if (photoTags) formData.append('tags', photoTags);
                 }
                 return uploadFile(formData);
             }));
 
-            // Group Activity log
             await createActivity({
                 project_id: selectedProject,
-                type: uploadType === 'photos' ? 'upload_photo' : 'upload',
-                description: `${files.length} new ${uploadType === 'documents' ? 'documents' : 'site photos'} added`
+                type: effectiveType === 'photos' ? 'upload_photo' : 'upload',
+                description: `${files.length} new ${effectiveType === 'documents' ? 'documents' : 'site photos'} added`
             });
 
-            setStep('done');
+            let projectUrl: string;
+            if (returnUrl) {
+                projectUrl = returnUrl;
+            } else {
+                const tab = effectiveType === 'photos' ? 'photos' : 'documents';
+                const folderParam = selectedFolder ? `&folder=${selectedFolder}` : '';
+                projectUrl = `/${user.role}/project/${selectedProject}?tab=${tab}${folderParam}`;
+            }
+
+            setDoneType(effectiveType);
+            setDone(true);
             setFiles([]);
             toast.success('Files uploaded successfully!');
         } catch (error) {
@@ -174,247 +201,300 @@ function UploadInner() {
         }
     };
 
-    const goBack = () => {
-        if (step === 'project') router.push(dashboardPath);
-        else if (step === 'type') {
-            if (urlProjectId) router.push(dashboardPath);
-            else setStep('project');
-        }
-        else if (step === 'folder') {
-            if (urlProjectId && urlType) router.push(dashboardPath);
-            else setStep('type');
-        }
-        else if (step === 'upload') {
-            if (urlProjectId && urlType && urlFolderId !== undefined) router.push(dashboardPath);
-            else setStep('folder');
-        }
-        else router.push(dashboardPath);
-    };
+    if (done) {
+        // Build the go-to URL from selected state
+        const tab = doneType === 'photos' ? 'photos' : 'documents';
+        const folderParam = selectedFolder ? `&folder=${selectedFolder}` : '';
+        const goToUrl = returnUrl
+            ? returnUrl
+            : selectedProject
+                ? `/${user.role}/project/${selectedProject}?tab=${tab}${folderParam}`
+                : dashboardPath;
 
-    // Upload Again — keep all context (project, type, folder) and go back to upload step
-    const uploadAgain = () => {
-        setFiles([]);
-        setStep('upload');
-    };
+        return (
+            <div className="max-w-md mx-auto p-8 flex flex-col items-center py-20">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 mb-4">
+                    <Check className="h-8 w-8 text-accent" />
+                </div>
+                <h2 className="text-base font-bold mb-1">Upload Complete</h2>
+                <p className="text-sm text-muted-foreground mb-6">Your files were uploaded successfully.</p>
+                <div className="flex flex-col gap-3 w-full max-w-xs">
+                    <Button onClick={() => { setDone(false); setFiles([]); setUploadType(urlType); setMetaOpen(false); }} className="w-full rounded-xl bg-accent text-accent-foreground hover:bg-accent/90">
+                        Upload Again
+                    </Button>
+                    <Button variant="outline" onClick={() => router.push(goToUrl)} className="w-full rounded-xl">
+                        Return to Folder
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="max-w-2xl p-8 mx-auto">
-            <div className="mb-6 flex items-center gap-2">
-                <button onClick={goBack} className="rounded-full p-1.5 hover:bg-secondary transition-colors">
+        <div className="max-w-2xl p-6 mx-auto space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-2">
+                <button onClick={() => router.push(dashboardPath)} className="rounded-full p-1.5 hover:bg-secondary transition-colors">
                     <ArrowLeft className="h-4 w-4" />
                 </button>
                 <h1 className="text-lg font-bold text-foreground">Upload Files</h1>
             </div>
 
-            {/* Breadcrumb — only show on upload/done steps to avoid duplicate with folder step's own breadcrumb */}
-            {selectedProject && (step === 'upload' || step === 'done') && (
-                <div className="mb-4 text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
-                    <span className="font-medium text-foreground">{displayProjectName}</span>
-                    {uploadType && (<><span>›</span><span className="capitalize">{uploadType}</span></>)}
-                    {selectedFolder && selectedFolderPath.length > 0 && (
-                        selectedFolderPath.map((f, i) => (
-                            <span key={f.id} className="flex items-center gap-1">
-                                <span>›</span>
-                                <span>{f.name}</span>
-                            </span>
-                        ))
-                    )}
+            {/* ── Section 1: File Picker ── */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="px-4 py-3 border-b border-border">
+                    <p className="text-sm font-semibold">1. Select files</p>
                 </div>
-            )}
-
-            {step === 'project' && (
-                <div>
-                    <p className="text-sm text-muted-foreground mb-4">Select a project</p>
-                    <div className="grid grid-cols-4 gap-4">
-                        {projects.map((project) => (
-                            <button key={project.id} onClick={() => { setSelectedProject(project.id); setProjectName(project.name); setStep('type'); }} className="flex flex-col items-center gap-2 group">
-                                <div className="h-14 w-14 rounded-xl flex items-center justify-center shadow-sm border border-border group-hover:border-accent transition-colors" style={{ backgroundColor: project.color || '#f97316' }}>
-                                    <span className="text-white text-lg font-bold">{project.name.charAt(0)}</span>
-                                </div>
-                                <span className="text-xs font-medium text-foreground text-center leading-tight line-clamp-2">{project.name.split(' ').slice(0, 2).join(' ')}</span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {step === 'type' && (
-                <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground mb-3">What are you uploading?</p>
-                    <button onClick={() => { setUploadType('documents'); setFolderBrowseId(null); setStep('folder'); }} className="w-full flex items-center gap-3 rounded-xl bg-card border border-border p-4 text-left hover:border-accent transition-colors">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary"><FileText className="h-5 w-5 text-foreground" /></div>
-                        <div><p className="text-sm font-bold">Documents</p><p className="text-xs text-muted-foreground">PDFs, DWG files, drawings</p></div>
-                    </button>
-                    <button onClick={() => { setUploadType('photos'); setFolderBrowseId(null); setStep('folder'); }} className="w-full flex items-center gap-3 rounded-xl bg-card border border-border p-4 text-left hover:border-accent transition-colors">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary"><Camera className="h-5 w-5 text-foreground" /></div>
-                        <div><p className="text-sm font-bold">Photos</p><p className="text-xs text-muted-foreground">Site photos with metadata</p></div>
-                    </button>
-                </div>
-            )}
-
-            {step === 'folder' && (
-                <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">Select destination folder</p>
-
-                    {/* Folder breadcrumb navigation */}
-                    <div className="flex items-center gap-1 flex-wrap text-xs">
-                        <button
-                            onClick={() => setFolderBrowseId(null)}
-                            className={`font-medium ${!folderBrowseId ? 'text-accent' : 'text-muted-foreground hover:underline'}`}
-                        >
-                            {selectedProjectData?.name || 'Project root'}
-                        </button>
-                        {browseBreadcrumbs.map((b) => (
-                            <span key={b.id} className="flex items-center gap-1">
-                                <span className="text-muted-foreground">/</span>
-                                <button
-                                    onClick={() => setFolderBrowseId(b.id)}
-                                    className={`font-medium ${folderBrowseId === b.id ? 'text-accent' : 'text-muted-foreground hover:underline'}`}
-                                >
-                                    {b.name}
-                                </button>
-                            </span>
-                        ))}
-                    </div>
-
-                    <div className="space-y-1.5">
-                        {/* Root level option (only at root browse) */}
-                        {!folderBrowseId && (
-                            <button
-                                onClick={() => { setSelectedFolder(null); setStep('upload'); }}
-                                className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${!selectedFolder ? 'border-accent bg-accent/5' : 'border-border bg-card hover:border-accent/50'}`}
-                            >
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary flex-shrink-0">
-                                    <Folder className="h-4 w-4 text-accent" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-semibold">Root Level</p>
-                                    <p className="text-xs text-muted-foreground">Upload directly to project</p>
-                                </div>
-                            </button>
-                        )}
-
-                        {/* Children of current browsed folder */}
-                        {currentBrowseFolders.map((folder) => {
-                            const hasChildren = allFolders.some((f) => f.parent_id === folder.id);
-                            return (
-                                <div key={folder.id} className="flex items-center gap-1">
-                                    <button
-                                        onClick={() => { setSelectedFolder(folder.id); setStep('upload'); }}
-                                        className={`flex-1 flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${selectedFolder === folder.id ? 'border-accent bg-accent/5' : 'border-border bg-card hover:border-accent/50'}`}
-                                    >
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary flex-shrink-0">
-                                            <Folder className="h-4 w-4 text-accent" />
-                                        </div>
-                                        <p className="text-sm font-medium flex-1">{folder.name}</p>
-                                    </button>
-                                    {hasChildren && (
-                                        <button
-                                            onClick={() => setFolderBrowseId(folder.id)}
-                                            className="p-2 rounded-lg hover:bg-secondary transition-colors text-xs text-muted-foreground flex-shrink-0"
-                                            title="Browse subfolders"
-                                        >
-                                            <ArrowLeft className="h-4 w-4 rotate-180" />
-                                        </button>
-                                    )}
-                                </div>
-                            );
-                        })}
-
-                        {currentBrowseFolders.length === 0 && folderBrowseId && (
-                            <p className="text-xs text-muted-foreground text-center py-4">No subfolders here. Select this folder or go back.</p>
-                        )}
-                        {allFolders.length === 0 && (
-                            <p className="text-xs text-muted-foreground text-center py-4">No folders found. You can upload to Root Level.</p>
-                        )}
-                    </div>
-
-                    {/* Upload to current browse level */}
-                    {folderBrowseId && (
-                        <Button
-                            variant="outline"
-                            onClick={() => { setSelectedFolder(folderBrowseId); setStep('upload'); }}
-                            className="w-full text-xs"
-                        >
-                            Upload to "{browseBreadcrumbs[browseBreadcrumbs.length - 1]?.name}"
-                        </Button>
-                    )}
-                </div>
-            )}
-
-            {step === 'upload' && (
-                <div className="space-y-4">
+                <div className="p-4 space-y-3">
                     <input
                         type="file"
                         ref={fileInputRef}
                         className="hidden"
                         multiple
                         onChange={handleFileChange}
-                        accept={uploadType === 'documents' ? ".pdf,.dwg,.doc,.docx,.xls,.xlsx,.csv,.txt" : "image/*"}
+                        accept={isPhotos ? "image/*" : uploadType === 'documents' ? ".pdf,.dwg,.doc,.docx,.xls,.xlsx,.csv,.txt" : undefined}
                     />
                     <div
-                        className="flex flex-col items-center rounded-xl border-2 border-dashed border-border bg-card p-8 cursor-pointer hover:border-accent/50 transition-colors"
+                        className="flex flex-col items-center rounded-xl border-2 border-dashed border-border bg-secondary/30 p-6 cursor-pointer hover:border-accent/50 transition-colors"
                         onClick={() => fileInputRef.current?.click()}
                     >
-                        <UploadIcon className={`h-10 w-10 mb-3 ${files.length > 0 ? 'text-accent' : 'text-muted-foreground/40'}`} />
+                        <UploadIcon className={`h-8 w-8 mb-2 ${files.length > 0 ? 'text-accent' : 'text-muted-foreground/40'}`} />
                         <p className="text-sm font-medium text-foreground">
-                            {files.length > 0 ? `${files.length} file(s) selected` : `Click to select ${uploadType === 'documents' ? 'documents' : 'photos'} (Max 20)`}
+                            {files.length > 0 ? `${files.length} file(s) selected — click to add more` : 'Click to select files (Max 20)'}
                         </p>
-                        {files.length === 0 && (
-                            <p className="text-xs text-muted-foreground mt-1">{uploadType === 'documents' ? 'PDF, DWG files supported' : 'JPG, PNG files supported'}</p>
+                        {files.length === 0 && <p className="text-xs text-muted-foreground mt-1">Documents, images, PDFs — type auto-detected</p>}
+                        {files.length > 0 && uploadType && (
+                            <p className="text-xs text-accent mt-1">Detected as: {uploadType === 'photos' ? '📷 Photos' : '📄 Documents'}</p>
                         )}
                     </div>
-
                     {files.length > 0 && (
-                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto">
                             {files.map((f, i) => (
-                                <div key={i} className="flex items-center justify-between bg-card border border-border rounded-lg p-2 px-3">
-                                    <span className="text-xs truncate w-5/6">{f.name}</span>
-                                    <button onClick={() => removeFile(i)} className="p-1 hover:bg-secondary rounded-full">
+                                <div key={f.name + i} className="flex items-center justify-between bg-secondary/50 rounded-lg p-2 px-3">
+                                    <span className="text-xs truncate w-5/6 text-foreground">{f.name}</span>
+                                    <button onClick={() => removeFile(i)} className="p-1 hover:bg-secondary rounded-full flex-shrink-0">
                                         <X className="h-3 w-3 text-muted-foreground" />
                                     </button>
                                 </div>
                             ))}
                         </div>
                     )}
-                    {uploadType === 'photos' && (
-                        <>
-                            <div className="space-y-1.5"><Label className="text-xs font-medium">Location</Label><Input placeholder="e.g., Block A - Ground Floor" value={photoLocation} onChange={(e) => setPhotoLocation(e.target.value)} /></div>
-                            <div className="space-y-1.5"><Label className="text-xs font-medium">Tags</Label><Input placeholder="e.g., foundation, concrete" value={photoTags} onChange={(e) => setPhotoTags(e.target.value)} /></div>
-                        </>
-                    )}
-                    <Button
-                        onClick={handleUpload}
-                        disabled={files.length === 0 || isUploading}
-                        className="w-full h-11 rounded-xl bg-accent text-accent-foreground hover:bg-accent/90 font-semibold disabled:opacity-50"
+                </div>
+            </div>
+
+            {/* ── Section 2: Location & Tags (photos only) ── */}
+            {isPhotos && (
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                    <button
+                        className="w-full flex items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/30 transition-colors"
+                        onClick={() => setMetaOpen(p => !p)}
                     >
-                        {isUploading ? 'Uploading...' : 'Upload Files'}
-                    </Button>
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold">2. Location &amp; Tags</p>
+                            <span className="text-xs text-muted-foreground">(optional)</span>
+                            {(photoLocation || photoTags) && (
+                                <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full">filled</span>
+                            )}
+                        </div>
+                        {metaOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                    </button>
+                    {metaOpen && (
+                        <div className="p-4 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                <Label className="text-xs font-medium">Location</Label>
+                            </div>
+                            <Input placeholder="e.g., Block A - Ground Floor" value={photoLocation} onChange={(e) => setPhotoLocation(e.target.value)} />
+                            <div className="flex items-center gap-2 mt-2">
+                                <Tag className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                <Label className="text-xs font-medium">Tags</Label>
+                            </div>
+                            <Input placeholder="e.g., foundation, concrete" value={photoTags} onChange={(e) => setPhotoTags(e.target.value)} />
+                        </div>
+                    )}
                 </div>
             )}
 
-            {step === 'done' && (
-                <div className="flex flex-col items-center py-12">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 mb-4"><Check className="h-8 w-8 text-accent" /></div>
-                    <h2 className="text-base font-bold mb-1">Upload Complete</h2>
-                    <p className="text-sm text-muted-foreground mb-6">Your files have been uploaded successfully.</p>
-                    <div className="flex flex-col gap-3 w-full max-w-xs">
-                        <Button
-                            onClick={uploadAgain}
-                            className="w-full rounded-xl bg-accent text-accent-foreground hover:bg-accent/90"
-                        >
-                            Upload Again
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => router.push(dashboardPath)}
-                            className="w-full rounded-xl"
-                        >
-                            {returnUrl ? 'Go Back to Folder' : 'Back to Dashboard'}
-                        </Button>
+            {/* ── Section 3: Project & Folder ── */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <button
+                    className="w-full flex items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/30 transition-colors"
+                    onClick={() => setProjectOpen(p => !p)}
+                >
+                    <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold">{isPhotos ? '3.' : '2.'} Project &amp; Folder</p>
+                        {selectedProject && (
+                            <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full">
+                                {displayProjectName}{selectedFolderData ? ` › ${selectedFolderData.name}` : ' › Root'}
+                            </span>
+                        )}
                     </div>
+                    {projectOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                </button>
+                {projectOpen && (
+                    <div className="p-4 space-y-4">
+                        {/* Project grid */}
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-2">Select project</p>
+                            <div className="grid grid-cols-4 gap-3">
+                                {projects.map((project) => (
+                                    <button
+                                        key={project.id}
+                                        onClick={() => {
+                                            setSelectedProject(String(project.id));
+                                            setProjectName(project.name);
+                                            setSelectedFolder(null);
+                                            setFolderBrowseId(null);
+                                            setFolderOpen(true);
+                                        }}
+                                        className="flex flex-col items-center gap-1.5 group"
+                                    >
+                                        <div
+                                            className={`h-12 w-12 rounded-xl flex items-center justify-center shadow-sm border-2 transition-all ${String(selectedProject) === String(project.id) ? 'border-accent scale-105' : 'border-transparent group-hover:border-accent/50'}`}
+                                            style={{ backgroundColor: project.color || '#f97316' }}
+                                        >
+                                            <span className="text-white text-base font-bold">{project.name.charAt(0)}</span>
+                                        </div>
+                                        <span className="text-[11px] font-medium text-foreground text-center line-clamp-1">{project.name.split(' ').slice(0, 2).join(' ')}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Folder selector (shown after a project is selected) */}
+                        {selectedProject && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs text-muted-foreground">Destination folder</p>
+                                    <button
+                                        className="text-[10px] text-muted-foreground hover:underline"
+                                        onClick={() => setFolderOpen(p => !p)}
+                                    >
+                                        {folderOpen ? 'Collapse ▲' : 'Expand ▼'}
+                                    </button>
+                                </div>
+
+                                {/* Folder breadcrumb nav */}
+                                {folderOpen && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-1 flex-wrap text-xs">
+                                            <button
+                                                onClick={() => setFolderBrowseId(null)}
+                                                className={`font-medium ${!folderBrowseId ? 'text-accent' : 'text-muted-foreground hover:underline'}`}
+                                            >
+                                                {displayProjectName || 'Project root'}
+                                            </button>
+                                            {browseBreadcrumbs.map((b) => (
+                                                <span key={b.id} className="flex items-center gap-1">
+                                                    <span className="text-muted-foreground">/</span>
+                                                    <button
+                                                        onClick={() => setFolderBrowseId(b.id)}
+                                                        className={`font-medium ${folderBrowseId === b.id ? 'text-accent' : 'text-muted-foreground hover:underline'}`}
+                                                    >
+                                                        {b.name}
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+
+                                        <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                            {/* Root level */}
+                                            {!folderBrowseId && (
+                                                <button
+                                                    onClick={() => { setSelectedFolder(null); setFolderOpen(false); }}
+                                                    className={`w-full flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors ${!selectedFolder ? 'border-accent bg-accent/5' : 'border-border bg-card hover:border-accent/50'}`}
+                                                >
+                                                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary flex-shrink-0">
+                                                        <Folder className="h-3.5 w-3.5 text-accent" />
+                                                    </div>
+                                                    <p className="text-xs font-medium">Root Level</p>
+                                                </button>
+                                            )}
+                                            {/* Folder list */}
+                                            {currentBrowseFolders.map((folder) => {
+                                                const hasChildren = allFolders.some((f) => String(f.parent_id) === String(folder.id));
+                                                return (
+                                                    <div key={folder.id} className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={() => { setSelectedFolder(folder.id); setFolderOpen(false); }}
+                                                            className={`flex-1 flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors ${String(selectedFolder) === String(folder.id) ? 'border-accent bg-accent/5' : 'border-border bg-card hover:border-accent/50'}`}
+                                                        >
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary flex-shrink-0">
+                                                                <Folder className="h-3.5 w-3.5 text-accent" />
+                                                            </div>
+                                                            <p className="text-xs font-medium flex-1">{folder.name}</p>
+                                                        </button>
+                                                        {hasChildren && (
+                                                            <button
+                                                                onClick={() => setFolderBrowseId(folder.id)}
+                                                                className="p-2 rounded-lg hover:bg-secondary transition-colors flex-shrink-0"
+                                                                title="Browse subfolders"
+                                                            >
+                                                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            {allFolders.length === 0 && (
+                                                <p className="text-xs text-muted-foreground text-center py-3">No folders yet. Files go to root.</p>
+                                            )}
+                                        </div>
+
+                                        {folderBrowseId && (
+                                            <button
+                                                onClick={() => { setSelectedFolder(folderBrowseId); setFolderOpen(false); }}
+                                                className="w-full text-xs text-accent font-medium py-1 hover:underline text-left"
+                                            >
+                                                → Use &quot;{browseBreadcrumbs[browseBreadcrumbs.length - 1]?.name}&quot; as destination
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Current selection pill (when collapsed) */}
+                                {!folderOpen && (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <Folder className="h-3 w-3" />
+                                        {selectedFolderData
+                                            ? <span className="font-medium text-foreground">{selectedFolderPath.map(f => f.name).join(' › ')}</span>
+                                            : <span>Root level</span>
+                                        }
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {selectedProject && (
+                            <button className="text-xs text-accent font-medium" onClick={() => setProjectOpen(false)}>
+                                Done →
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* ── Summary breadcrumb ── */}
+            {selectedProject && (
+                <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                    <span className="font-medium text-foreground">{displayProjectName}</span>
+                    {selectedFolderPath.map((f) => (
+                        <span key={f.id} className="flex items-center gap-1">
+                            <span>›</span>
+                            <span>{f.name}</span>
+                        </span>
+                    ))}
                 </div>
             )}
+
+            {/* ── Upload button ── */}
+            <Button
+                onClick={handleUpload}
+                disabled={files.length === 0 || !selectedProject || isUploading}
+                className="w-full h-11 rounded-xl bg-accent text-accent-foreground hover:bg-accent/90 font-semibold disabled:opacity-50"
+            >
+                {isUploading ? 'Uploading...' : `Upload ${files.length > 0 ? files.length + ' file(s)' : 'Files'}`}
+            </Button>
         </div>
     );
 }

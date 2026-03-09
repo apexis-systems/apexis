@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus } from 'lucide-react';
+import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getProjects, createProject } from '@/services/projectService';
-import { getOrgOverview } from '@/services/superadminService';
+import { getOrgOverview, uploadOrgLogo, getSecureFileUrl } from '@/services/superadminService';
+import { toast } from 'sonner';
+import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 export default function Dashboard() {
-    const { user } = useAuth() || {};
+    const auth = useAuth() || {};
+    const user = auth.user;
     const router = useRouter();
     const { t } = useLanguage();
 
@@ -19,6 +23,18 @@ export default function Dashboard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [orgData, setOrgData] = useState<any>(null);
+    const [localLogo, setLocalLogo] = useState<string | null>(null);
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const logoInputRef = useRef<HTMLInputElement>(null);
+
+    // Cropping states
+    const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+    const [imgSrc, setImgSrc] = useState('');
+    const [crop, setCrop] = useState<Crop>();
+    const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+    const imgRef = useRef<HTMLImageElement>(null);
 
     useEffect(() => {
         if (user) {
@@ -27,13 +43,35 @@ export default function Dashboard() {
             } else {
                 fetchProjects();
             }
+            const typedUser = user as any;
+            if (typedUser.organization?.logo) {
+                setLocalLogo(typedUser.organization.logo);
+            }
         }
     }, [user]);
+
+    useEffect(() => {
+        let currentUrl: string | null = null;
+        const fetchLogo = async () => {
+            if (localLogo) {
+                const url = await getSecureFileUrl(localLogo);
+                if (url) {
+                    setLogoUrl(url);
+                    currentUrl = url;
+                }
+            }
+        };
+        fetchLogo();
+        return () => {
+            if (currentUrl) URL.revokeObjectURL(currentUrl);
+        };
+    }, [localLogo]);
 
     const fetchOrgOverview = async () => {
         try {
             const data = await getOrgOverview();
             setOrgData(data);
+            if (data.organization?.logo) setLocalLogo(data.organization.logo);
         } catch (e) {
             console.error("Failed to fetch org overview", e);
         }
@@ -63,6 +101,80 @@ export default function Dashboard() {
         }
     };
 
+    const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (user?.role !== 'admin' && user?.role !== 'superadmin') return;
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setCrop(undefined); // Reset crop
+        const reader = new FileReader();
+        reader.addEventListener('load', () => {
+            setImgSrc(reader.result?.toString() || '');
+            setIsCropModalOpen(true);
+        });
+        reader.readAsDataURL(file);
+    };
+
+    function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+        const { width, height } = e.currentTarget;
+        const _crop = makeAspectCrop(
+            { unit: '%', width: 90 },
+            1, // 1:1 aspect ratio
+            width,
+            height
+        );
+        setCrop(centerCrop(_crop, width, height));
+    }
+
+    const handleUploadCropped = async () => {
+        if (!completedCrop || !imgRef.current) return;
+
+        setIsUploadingLogo(true);
+        setIsCropModalOpen(false);
+
+        try {
+            // Create canvas to draw the cropped image
+            const canvas = document.createElement('canvas');
+            const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
+            const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
+            canvas.width = completedCrop.width;
+            canvas.height = completedCrop.height;
+            const ctx = canvas.getContext('2d');
+
+            if (!ctx) throw new Error('No 2d context');
+
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(
+                imgRef.current,
+                completedCrop.x * scaleX,
+                completedCrop.y * scaleY,
+                completedCrop.width * scaleX,
+                completedCrop.height * scaleY,
+                0,
+                0,
+                completedCrop.width,
+                completedCrop.height
+            );
+
+            // Convert to blob and upload
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            if (!blob) throw new Error('Canvas is empty');
+
+            const formData = new FormData();
+            formData.append('logo', blob, 'logo.jpg');
+
+            const res = await uploadOrgLogo(formData);
+            setLocalLogo(res.logo);
+            toast.success('Organization logo updated');
+        } catch (error) {
+            console.error("Logo upload failed", error);
+            toast.error('Failed to upload logo');
+        } finally {
+            setIsUploadingLogo(false);
+            if (logoInputRef.current) logoInputRef.current.value = '';
+        }
+    };
+
     if (!user) {
         return (
             <div className="p-8 max-w-6xl mx-auto flex items-center justify-center min-h-[50vh]">
@@ -76,10 +188,27 @@ export default function Dashboard() {
 
     return (
         <div className="p-8 max-w-6xl mx-auto">
+            {/* Hidden Log Input */}
+            <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
+
             {/* Greeting with Logo */}
             <div className="mb-8 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-xl bg-muted border border-border flex items-center justify-center overflow-hidden shrink-0">
-                    <span className="text-[10px] text-muted-foreground">Logo</span>
+                <div
+                    className="h-12 w-12 rounded-xl bg-muted border border-border flex items-center justify-center overflow-hidden shrink-0 relative cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => setIsPreviewOpen(true)}
+                >
+                    {isUploadingLogo ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    ) : logoUrl ? (
+                        <img src={logoUrl} alt="Org Logo" className="h-full w-full object-cover" />
+                    ) : (
+                        <span className="text-[10px] text-muted-foreground font-medium">Logo</span>
+                    )}
+                    {(user.role === 'admin' || user.role === 'superadmin') && !isUploadingLogo && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <Camera className="h-4 w-4 text-white" />
+                        </div>
+                    )}
                 </div>
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">
@@ -232,7 +361,7 @@ export default function Dashboard() {
                             <button
                                 key={project.id}
                                 onClick={() => router.push(`/${user.role}/project/${project.id}`)}
-                                className="rounded-xl bg-card border border-border p-5 text-left hover:border-accent transition-colors group cursor-pointer"
+                                className="rounded-xl bg-card border border-border p-5 text-left hover:border-accent transition-colors group cursor-pointer flex flex-col items-start w-full"
                             >
                                 {/* Color bar */}
                                 <div
@@ -256,7 +385,7 @@ export default function Dashboard() {
 
                                 {/* Admin Display Codes */}
                                 {user.role === 'admin' && (
-                                    <div className="mt-3 bg-secondary/50 rounded-md p-2 flex flex-col gap-1 border border-border text-xs">
+                                    <div className="mt-3 bg-secondary/50 self-stretch rounded-md p-2 flex flex-col gap-1 border border-border text-xs">
                                         <div className="flex justify-between">
                                             <span className="text-muted-foreground font-medium">Contributor:</span>
                                             <span className="font-mono text-foreground font-bold">{project.contributor_code}</span>
@@ -269,7 +398,7 @@ export default function Dashboard() {
                                 )}
 
                                 {/* Stats row */}
-                                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border">
+                                <div className="flex items-center w-full gap-4 mt-4 pt-4 border-t border-border">
                                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                         <FileText className="h-3.5 w-3.5" />
                                         <span className="font-medium text-foreground">{project.totalDocs || 0}</span> {t('documents').toLowerCase()}
@@ -290,6 +419,94 @@ export default function Dashboard() {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* Logo Crop Modal */}
+            {isCropModalOpen && !!imgSrc && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                    <div className="bg-background rounded-xl shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-border flex justify-between items-center">
+                            <h2 className="font-bold text-lg">Crop Logo</h2>
+                            <button onClick={() => { setIsCropModalOpen(false); if (logoInputRef.current) logoInputRef.current.value = ''; }} className="text-muted-foreground hover:text-foreground">
+                                ×
+                            </button>
+                        </div>
+                        <div className="p-6 bg-secondary/30 flex-1 overflow-auto flex items-center justify-center">
+                            <ReactCrop
+                                crop={crop}
+                                onChange={(_, percentCrop) => setCrop(percentCrop)}
+                                onComplete={(c) => setCompletedCrop(c)}
+                                aspect={1}
+                                circularCrop
+                            >
+                                <img
+                                    ref={imgRef}
+                                    alt="Crop me"
+                                    src={imgSrc}
+                                    onLoad={onImageLoad}
+                                    style={{ maxHeight: '50vh', maxWidth: '100%', objectFit: 'contain' }}
+                                />
+                            </ReactCrop>
+                        </div>
+                        <div className="p-4 border-t border-border flex justify-end gap-3 bg-background">
+                            <button
+                                onClick={() => { setIsCropModalOpen(false); if (logoInputRef.current) logoInputRef.current.value = ''; }}
+                                className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUploadCropped}
+                                disabled={!completedCrop?.width || !completedCrop?.height}
+                                className="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                            >
+                                Upload Logo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Logo Preview Modal */}
+            {isPreviewOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+                    <div className="bg-background rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden flex flex-col relative animate-in fade-in zoom-in duration-200">
+                        <button
+                            onClick={() => setIsPreviewOpen(false)}
+                            className="absolute top-4 right-4 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors z-10"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+
+                        <div className="p-8 flex flex-col items-center gap-6">
+                            <div className="w-48 h-48 rounded-2xl bg-muted border-2 border-border overflow-hidden flex items-center justify-center shadow-inner">
+                                {logoUrl ? (
+                                    <img src={logoUrl} alt="Org Logo Preview" className="h-full w-full object-cover" />
+                                ) : (
+                                    <span className="text-muted-foreground font-medium italic">No Logo</span>
+                                )}
+                            </div>
+
+                            <div className="text-center">
+                                <h3 className="text-lg font-bold text-foreground">Organization Logo</h3>
+                                <p className="text-sm text-muted-foreground mt-1">This logo represents {orgData?.organization?.name || 'your organization'}.</p>
+                            </div>
+
+                            {(user.role === 'admin' || user.role === 'superadmin') && (
+                                <button
+                                    onClick={() => {
+                                        setIsPreviewOpen(false);
+                                        logoInputRef.current?.click();
+                                    }}
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-accent hover:bg-accent/90 text-white rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                    <Camera className="h-4 w-4" />
+                                    Change Logo
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

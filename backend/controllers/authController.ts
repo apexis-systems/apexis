@@ -190,7 +190,11 @@ export const me = async (req: Request, res: Response) => {
         }
 
         const user = await users.findByPk(authUser.user_id, {
-            attributes: { exclude: ['password'] }
+            attributes: { exclude: ['password'] },
+            include: [{
+                model: organizations,
+                attributes: ['id', 'name', 'logo']
+            }]
         });
 
         if (!user) {
