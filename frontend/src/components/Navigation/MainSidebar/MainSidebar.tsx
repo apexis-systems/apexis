@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard, LogOut, Shield } from 'lucide-react';
+import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard, LogOut, Shield, MessageSquare } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,7 +19,8 @@ const MainSidebar = () => {
     { icon: Home, label: t('dashboard'), path: `${basePath}/dashboard` },
     ...(user?.role !== 'client' ? [{ icon: Upload, label: t('upload'), path: `${basePath}/upload` }] : []),
     { icon: Clock, label: t('activity'), path: `${basePath}/activity` },
-    ...(user?.role !== 'client' ? [{ icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` }] : []),
+    { icon: MessageSquare, label: 'Chats', path: `${basePath}/chats` },
+    { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },
     { icon: User, label: t('profile'), path: `${basePath}/profile` },
     ...(user?.role === 'superadmin' ? [
       { icon: Shield, label: t('teams') || 'Teams', path: `${basePath}/teams` },
@@ -32,12 +33,12 @@ const MainSidebar = () => {
     ] : []),
   ];
 
-  const roles: { value: UserRole; label: string }[] = [
-    { value: 'superadmin', label: 'Super Admin' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'contributor', label: 'Contributor' },
-    { value: 'client', label: 'Client' },
-  ];
+  // const roles: { value: UserRole; label: string }[] = [
+  //   { value: 'superadmin', label: 'Super Admin' },
+  //   { value: 'admin', label: 'Admin' },
+  //   { value: 'contributor', label: 'Contributor' },
+  //   { value: 'client', label: 'Client' },
+  // ];
 
   return (
     <aside className="w-56 shrink-0 border-r border-border bg-card min-h-[calc(100vh-3.5rem)] flex flex-col">
@@ -63,7 +64,7 @@ const MainSidebar = () => {
         })}
       </nav>
 
-      {user && switchRole && (
+      {/* {user && switchRole && (
         <div className="border-t border-border p-3">
           <p className="text-[10px] font-medium text-muted-foreground mb-2 uppercase tracking-wider">Demo Role</p>
           <div className="space-y-1">
@@ -86,7 +87,7 @@ const MainSidebar = () => {
             ))}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Logout Button */}
       {logout && (

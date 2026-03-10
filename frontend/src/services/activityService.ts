@@ -1,9 +1,10 @@
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import { ActivityItem } from '@/types';
 
-export const getActivities = async (): Promise<ActivityItem[]> => {
+export const getActivities = async (organization_id?: string): Promise<ActivityItem[]> => {
     try {
-        const res = await PrivateAxios.get('/activities');
+        const url = organization_id ? `/activities?organization_id=${organization_id}` : '/activities';
+        const res = await PrivateAxios.get(url);
         return res.data.activities;
     } catch (error) {
         console.error('getActivities API error:', error);

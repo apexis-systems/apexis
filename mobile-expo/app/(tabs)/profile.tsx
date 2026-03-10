@@ -6,12 +6,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
 import { useTheme } from '@/contexts/ThemeContext';
 
-const roles: { value: UserRole; label: string }[] = [
-    { value: 'admin', label: 'Admin' },
-    { value: 'contributor', label: 'Contributor' },
-    { value: 'client', label: 'Client' },
-    { value: 'superadmin', label: 'Super Admin' },
-];
+// const roles: { value: UserRole; label: string }[] = [
+//     { value: 'admin', label: 'Admin' },
+//     { value: 'contributor', label: 'Contributor' },
+//     { value: 'client', label: 'Client' },
+//     { value: 'superadmin', label: 'Super Admin' },
+// ];
 
 const roleBadgeColor: Record<UserRole, { bg: string; text: string }> = {
     admin: { bg: '#f97316', text: '#fff' },
@@ -88,7 +88,7 @@ export default function ProfileScreen() {
                 </View>
 
                 {/* Role Switcher */}
-                <View
+                {/* <View
                     style={{
                         borderRadius: 14,
                         backgroundColor: colors.surface,
@@ -129,7 +129,7 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                         ))}
                     </View>
-                </View>
+                </View> */}
 
                 {/* Linked Devices */}
                 <TouchableOpacity

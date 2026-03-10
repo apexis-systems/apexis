@@ -6,12 +6,12 @@ export default {
     await queryInterface.addColumn('folders', 'client_visible', {
       type: Sequelize.BOOLEAN,
       allowNull: false,
-      defaultValue: true,
+      defaultValue: false,
     });
     await queryInterface.addColumn('files', 'client_visible', {
       type: Sequelize.BOOLEAN,
       allowNull: false,
-      defaultValue: true,
+      defaultValue: false,
     });
   },
 

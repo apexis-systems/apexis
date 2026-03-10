@@ -33,3 +33,12 @@ export const fetchSecureLogo = async (fileKey: string) => {
         return null;
     }
 };
+export const getOrganizations = async () => {
+    try {
+        const response = await PrivateAxios.get('/superadmin/organizations');
+        return response.data.organizations;
+    } catch (error) {
+        console.error("getOrganizations Error", error);
+        throw error;
+    }
+};

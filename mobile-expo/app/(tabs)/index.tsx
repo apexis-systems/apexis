@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Platform, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Platform, Image, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -14,7 +14,7 @@ import LanguageSelectorModal from '@/components/shared/LanguageSelectorModal';
 import { useTranslation } from 'react-i18next';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadOrganizationLogo, fetchSecureLogo } from '@/services/organizationService';
+import { uploadOrganizationLogo, fetchSecureLogo, getOrganizations } from '@/services/organizationService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 
 export default function DashboardScreen() {
@@ -43,18 +43,24 @@ export default function DashboardScreen() {
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
 
 
   useEffect(() => {
     if (user) {
-      fetchProjects();
+      if (user.role === 'superadmin') {
+        fetchOrganizations();
+      }
+      fetchProjects(selectedOrgId);
       // Handle setting initial logo
       const orgs = (user as any).organizations || (user as any).organization;
       if (orgs?.logo) {
         setLocalLogoKey(orgs.logo);
       }
     }
-  }, [user]);
+  }, [user, selectedOrgId]);
 
   useEffect(() => {
     const fetchLogo = async () => {
@@ -77,9 +83,19 @@ export default function DashboardScreen() {
 
   if (!user) return null;
 
-  const fetchProjects = async () => {
+  const fetchOrganizations = async () => {
     try {
-      const res = await PrivateAxios.get('/projects');
+      const orgs = await getOrganizations();
+      setOrganizations(orgs || []);
+    } catch (err) {
+      console.error("Failed to fetch organizations:", err);
+    }
+  };
+
+  const fetchProjects = async (orgId?: string | null) => {
+    try {
+      const url = orgId ? `/projects?organization_id=${orgId}` : '/projects';
+      const res = await PrivateAxios.get(url);
       setProjects(res.data.projects || []);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
@@ -109,7 +125,7 @@ export default function DashboardScreen() {
   };
 
   const handleLogoUpload = async () => {
-    if (user?.role !== 'admin' && user?.role !== 'superadmin') return;
+    if (user?.role !== 'admin') return;
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -299,10 +315,33 @@ export default function DashboardScreen() {
             ))}
           </View>
 
-          {/* Section label */}
-          <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textMuted, marginBottom: 10 }}>
-            {t('dashboard.yourProjects')}
-          </Text>
+          {/* Section label with Org Filter for Superadmin */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textMuted }}>
+              {t('dashboard.yourProjects')}
+            </Text>
+            {user.role === 'superadmin' && organizations.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setIsOrgDropdownOpen(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: colors.surface,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>
+                  {selectedOrgId ? organizations.find(o => o.id === selectedOrgId)?.name : 'All Organizations'}
+                </Text>
+                <Feather name="chevron-down" size={12} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Project Grid */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -356,8 +395,8 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             ))}
 
-            {/* Add Create Project card — admin/superadmin only */}
-            {(user.role === 'admin' || user.role === 'superadmin') && (
+            {/* Add Create Project card — admin only */}
+            {user.role === 'admin' && (
               <TouchableOpacity
                 onPress={() => setIsCreating(true)}
                 style={{ width: '22%', alignItems: 'center', gap: 4 }}
@@ -402,90 +441,105 @@ export default function DashboardScreen() {
         </ScrollView>
         {/* Create Project Modal */}
         <Modal visible={isCreating} animationType="fade" transparent>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 16 }}>Create New Project</Text>
-
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Project Name</Text>
-              <TextInput
-                style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
-                placeholder="E.g. Alpha Tower"
-                placeholderTextColor={colors.textMuted}
-                value={newProject.name}
-                onChangeText={(text) => setNewProject({ ...newProject, name: text })}
-              />
-
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Description</Text>
-              <TextInput
-                style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
-                placeholder="Short description"
-                placeholderTextColor={colors.textMuted}
-                value={newProject.description}
-                onChangeText={(text) => setNewProject({ ...newProject, description: text })}
-              />
-
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Start Date (YYYY-MM-DD)</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}
+              onPress={() => setIsCreating(false)}
+            >
               <TouchableOpacity
-                style={{ backgroundColor: colors.background, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
-                onPress={() => setShowStartPicker(true)}
+                activeOpacity={1}
+                style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: colors.border }}
+                onPress={(e) => e.stopPropagation()}
               >
-                <Text style={{ color: newProject.start_date ? colors.text : colors.textMuted }}>
-                  {newProject.start_date || 'Select Start Date'}
-                </Text>
+                <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 16 }}>Create New Project</Text>
+
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Project Name</Text>
+                  <TextInput
+                    style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
+                    placeholder="E.g. Alpha Tower"
+                    placeholderTextColor={colors.textMuted}
+                    value={newProject.name}
+                    onChangeText={(text) => setNewProject({ ...newProject, name: text })}
+                  />
+
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Description</Text>
+                  <TextInput
+                    style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
+                    placeholder="Short description"
+                    placeholderTextColor={colors.textMuted}
+                    value={newProject.description}
+                    onChangeText={(text) => setNewProject({ ...newProject, description: text })}
+                  />
+
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Start Date (YYYY-MM-DD)</Text>
+                  <TouchableOpacity
+                    style={{ backgroundColor: colors.background, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
+                    onPress={() => setShowStartPicker(true)}
+                  >
+                    <Text style={{ color: newProject.start_date ? colors.text : colors.textMuted }}>
+                      {newProject.start_date || 'Select Start Date'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showStartPicker && (
+                    <DateTimePicker
+                      value={newProject.start_date ? new Date(newProject.start_date) : new Date()}
+                      mode="date"
+                      display="default"
+                      onChange={(event, selectedDate) => {
+                        setShowStartPicker(Platform.OS === 'ios');
+                        if (selectedDate) {
+                          setNewProject({ ...newProject, start_date: selectedDate.toISOString().split('T')[0] });
+                        }
+                      }}
+                    />
+                  )}
+
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>End Date (YYYY-MM-DD)</Text>
+                  <TouchableOpacity
+                    style={{ backgroundColor: colors.background, padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}
+                    onPress={() => setShowEndPicker(true)}
+                  >
+                    <Text style={{ color: newProject.end_date ? colors.text : colors.textMuted }}>
+                      {newProject.end_date || 'Select End Date'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showEndPicker && (
+                    <DateTimePicker
+                      value={newProject.end_date ? new Date(newProject.end_date) : new Date()}
+                      mode="date"
+                      display="default"
+                      onChange={(event, selectedDate) => {
+                        setShowEndPicker(Platform.OS === 'ios');
+                        if (selectedDate) {
+                          setNewProject({ ...newProject, end_date: selectedDate.toISOString().split('T')[0] });
+                        }
+                      }}
+                    />
+                  )}
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+                    <TouchableOpacity onPress={() => setIsCreating(false)} style={{ padding: 12 }}>
+                      <Text style={{ color: colors.textMuted, fontWeight: 'bold' }}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleCreate}
+                      disabled={isSubmitting}
+                      style={{ backgroundColor: colors.primary, padding: 12, borderRadius: 8, paddingHorizontal: 20, justifyContent: 'center' }}
+                    >
+                      {isSubmitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontWeight: 'bold' }}>Create</Text>}
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
               </TouchableOpacity>
-
-              {showStartPicker && (
-                <DateTimePicker
-                  value={newProject.start_date ? new Date(newProject.start_date) : new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, selectedDate) => {
-                    setShowStartPicker(Platform.OS === 'ios');
-                    if (selectedDate) {
-                      setNewProject({ ...newProject, start_date: selectedDate.toISOString().split('T')[0] });
-                    }
-                  }}
-                />
-              )}
-
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>End Date (YYYY-MM-DD)</Text>
-              <TouchableOpacity
-                style={{ backgroundColor: colors.background, padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}
-                onPress={() => setShowEndPicker(true)}
-              >
-                <Text style={{ color: newProject.end_date ? colors.text : colors.textMuted }}>
-                  {newProject.end_date || 'Select End Date'}
-                </Text>
-              </TouchableOpacity>
-
-              {showEndPicker && (
-                <DateTimePicker
-                  value={newProject.end_date ? new Date(newProject.end_date) : new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, selectedDate) => {
-                    setShowEndPicker(Platform.OS === 'ios');
-                    if (selectedDate) {
-                      setNewProject({ ...newProject, end_date: selectedDate.toISOString().split('T')[0] });
-                    }
-                  }}
-                />
-              )}
-
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
-                <TouchableOpacity onPress={() => setIsCreating(false)} style={{ padding: 12 }}>
-                  <Text style={{ color: colors.textMuted, fontWeight: 'bold' }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleCreate}
-                  disabled={isSubmitting}
-                  style={{ backgroundColor: colors.primary, padding: 12, borderRadius: 8, paddingHorizontal: 20, justifyContent: 'center' }}
-                >
-                  {isSubmitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontWeight: 'bold' }}>Create</Text>}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* Action Modals */}
@@ -499,12 +553,44 @@ export default function DashboardScreen() {
         visible={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
         logoUri={logoUri}
-        canChange={user.role === 'admin' || user.role === 'superadmin'}
+        canChange={user.role === 'admin'}
         onChangePress={() => {
           setIsPreviewOpen(false);
           handleLogoUpload();
         }}
       />
+
+      {/* Org Selection Modal for Superadmin */}
+      <Modal visible={isOrgDropdownOpen} animationType="fade" transparent>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setIsOrgDropdownOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+        >
+          <View style={{ backgroundColor: colors.surface, borderRadius: 20, width: '100%', maxWidth: 400, padding: 10, overflow: 'hidden' }}>
+            <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text }}>Select Organization</Text>
+            </View>
+            <ScrollView style={{ maxHeight: 400 }}>
+              <TouchableOpacity
+                onPress={() => { setSelectedOrgId(null); setIsOrgDropdownOpen(false); }}
+                style={{ padding: 15, backgroundColor: selectedOrgId === null ? colors.background : 'transparent' }}
+              >
+                <Text style={{ fontSize: 14, color: colors.text, fontWeight: selectedOrgId === null ? 'bold' : 'normal' }}>All Organizations</Text>
+              </TouchableOpacity>
+              {organizations.map((org) => (
+                <TouchableOpacity
+                  key={org.id}
+                  onPress={() => { setSelectedOrgId(org.id); setIsOrgDropdownOpen(false); }}
+                  style={{ padding: 15, backgroundColor: selectedOrgId === org.id ? colors.background : 'transparent' }}
+                >
+                  <Text style={{ fontSize: 14, color: colors.text, fontWeight: selectedOrgId === org.id ? 'bold' : 'normal' }}>{org.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 }

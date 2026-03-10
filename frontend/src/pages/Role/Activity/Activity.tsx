@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Upload, FileText, Camera, Clock, Loader2 } from 'lucide-react';
+import { Upload, FileText, Camera, Clock, Loader2, ChevronDown } from 'lucide-react';
 import { getActivities } from '@/services/activityService';
+import { getOrganizations } from '@/services/superadminService';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ActivityItem as GlobalActivityItem } from '@/types';
 
 interface ActivityItem extends GlobalActivityItem {
@@ -15,13 +17,23 @@ const Activity = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
     const [activities, setActivities] = useState<ActivityItem[]>([]);
+    const [organizations, setOrganizations] = useState<any[]>([]);
+    const [selectedOrgId, setSelectedOrgId] = useState<string>('');
     const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (user?.role === 'superadmin') {
+            getOrganizations().then(setOrganizations).catch(console.error);
+        }
+    }, [user]);
 
     useEffect(() => {
         const load = async () => {
             if (!user) return;
+            setLoading(true);
             try {
-                const feed = await getActivities();
+                const orgId = (selectedOrgId && selectedOrgId !== 'all') ? selectedOrgId : undefined;
+                const feed = await getActivities(orgId);
 
                 // Format timestamps locally
                 const formatted = feed.map((act: any) => ({
@@ -39,15 +51,30 @@ const Activity = () => {
             }
         };
         load();
-    }, [user]);
+    }, [user, selectedOrgId]);
 
     if (!user) return null;
 
     return (
         <div className="max-w-4xl p-8 mx-auto">
-            <div className="mb-6">
-                <h1 className="text-xl font-bold text-foreground">{t('activity')}</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">Updates from your projects</p>
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h1 className="text-xl font-bold text-foreground">{t('activity')}</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">Updates from your projects</p>
+                </div>
+                {user.role === 'superadmin' && (
+                    <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
+                        <SelectTrigger className="w-48 text-xs">
+                            <SelectValue placeholder="All Organizations" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Organizations</SelectItem>
+                            {organizations.map(org => (
+                                <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
             </div>
 
             {loading ? (

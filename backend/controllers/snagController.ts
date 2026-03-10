@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Op } from 'sequelize';
 import sharp from 'sharp';
 import { snags, users, project_members, activities } from '../models/index.ts';
 
@@ -184,16 +185,25 @@ export const getAssignees = async (req: Request, res: Response) => {
         const { project_id } = req.query;
         if (!project_id) return res.status(400).json({ error: 'project_id is required' });
 
-        const { sequelize } = await import('../models/index.ts');
-        const [rows] = await sequelize.query(
-            `SELECT u.id, u.name, u.email, u.role
-             FROM project_members pm
-             JOIN users u ON u.id = pm.user_id
-             WHERE pm.project_id = :project_id AND u.role != 'client'`,
-            { replacements: { project_id: Number(project_id) } }
-        );
+        const members = await project_members.findAll({
+            where: { project_id: Number(project_id) },
+            include: [
+                {
+                    model: users,
+                    attributes: ['id', 'name', 'email', 'role'],
+                    where: { role: { [Op.ne]: 'client' } },
+                    required: true,
+                },
+            ],
+            attributes: [],
+        });
 
-        res.json({ assignees: rows });
+        const assignees = members.map((m: any) => {
+            const u = m.user ?? m.dataValues?.user;
+            return u?.toJSON ? u.toJSON() : u;
+        });
+
+        res.json({ assignees });
     } catch (err) {
         console.error('getAssignees error:', err);
         res.status(500).json({ error: 'Internal server error' });
