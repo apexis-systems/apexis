@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { User, UserRole } from '@/types';
 import Cookies from 'js-cookie';
 import { getMe } from '@/services/authService';
+import { io, Socket } from 'socket.io-client';
 
 interface AuthContextType {
     user: User | null;
@@ -28,10 +29,14 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const isLoggedIn = !!user;
 
     const logout = useCallback(() => {
         setUser(null);
         Cookies.remove('token');
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('qrSessionId');
+        }
     }, []);
 
     const switchRole = useCallback((role: UserRole) => {
@@ -66,6 +71,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         fetchUser();
     }, [fetchUser]);
+
+    useEffect(() => {
+        let socket: Socket | null = null;
+        if (isLoggedIn && typeof window !== 'undefined') {
+            const qrSessionId = localStorage.getItem('qrSessionId');
+            if (qrSessionId) {
+                const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+                socket = io(backendUrl);
+
+                socket.on('connect', () => {
+                    socket?.emit('join-qr-room', qrSessionId);
+                });
+
+                socket.on('qr-revoked', () => {
+                    logout();
+                    // Let the proxy logic in _middleware or proxy.ts redirect to login, 
+                    // or force window reload so it resets state entirely
+                    window.location.href = '/login';
+                });
+            }
+        }
+
+        return () => {
+            if (socket) socket.disconnect();
+        }
+    }, [isLoggedIn, logout]);
 
     const login = useCallback(async (token: string) => {
         Cookies.set('token', token, { expires: 1 });

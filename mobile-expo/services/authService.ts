@@ -74,3 +74,37 @@ export const getMe = async () => {
         throw error;
     }
 };
+
+// ==========================
+// WEB QR AUTHENTICATION
+// ==========================
+
+export const authorizeWebSession = async (sessionId: string) => {
+    try {
+        const response = await PrivateAxios.post('/qr/authorize', { sessionId });
+        return response.data;
+    } catch (error: any) {
+        console.error("authorizeWebSession Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const getActiveWebSessions = async () => {
+    try {
+        const response = await PrivateAxios.get('/qr/sessions');
+        return response.data; // { sessions: [] }
+    } catch (error: any) {
+        console.error("getActiveWebSessions Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const revokeWebSession = async (sessionId: string) => {
+    try {
+        const response = await PrivateAxios.delete(`/qr/sessions/${sessionId}`);
+        return response.data;
+    } catch (error: any) {
+        console.error("revokeWebSession Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};

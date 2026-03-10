@@ -131,6 +131,33 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
+                {/* Linked Devices */}
+                <TouchableOpacity
+                    onPress={() => router.push('/(tabs)/linked-devices')}
+                    style={{
+                        borderRadius: 14,
+                        backgroundColor: colors.surface,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        padding: 16,
+                        marginBottom: 16,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={{ backgroundColor: 'rgba(249,115,22,0.1)', padding: 8, borderRadius: 8 }}>
+                            <Feather name="monitor" size={18} color="#f97316" />
+                        </View>
+                        <View>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Linked Devices</Text>
+                            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>Scan QR to log in on Web</Text>
+                        </View>
+                    </View>
+                    <Feather name="chevron-right" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+
                 {/* Sign Out */}
                 <TouchableOpacity
                     onPress={handleLogout}
