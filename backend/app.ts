@@ -17,8 +17,14 @@ import manualRoutes from "./routes/manualRoutes.ts";
 import activityRoutes from "./routes/activityRoutes.ts";
 import organizationRoutes from "./routes/organizationRoutes.ts";
 import { startCronJobs } from "./cron.ts";
+import http from 'http';
+import { initIO } from './socket.ts';
+import qrAuthRoutes from "./routes/qrAuthRoutes.ts";
 
 const app = express();
+const httpServer = http.createServer(app);
+const io = initIO(httpServer);
+
 const PORT = process.env.PORT || 5001;
 
 // Middleware
@@ -40,6 +46,7 @@ app.get('/', (req: Request, res: Response) => {
 
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/qr", qrAuthRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/files", fileRoutes);
@@ -61,7 +68,7 @@ const startServer = async () => {
         // Automatically create tables based on models (use migrations for production!)
         // await sequelize.sync(); 
 
-        app.listen(PORT, () => {
+        httpServer.listen(PORT, () => {
             console.log(`Server is running on http://localhost:${PORT}`);
             startCronJobs();
         });

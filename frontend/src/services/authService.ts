@@ -118,3 +118,13 @@ export const getMe = async () => {
         throw error;
     }
 };
+
+export const getQrSession = async () => {
+    try {
+        const response = await PublicAxios.get("/qr/generate");
+        return response.data; // { sessionId: string }
+    } catch (error) {
+        console.error("getQrSession Error", error);
+        throw error;
+    }
+};

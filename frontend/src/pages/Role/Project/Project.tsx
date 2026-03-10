@@ -80,8 +80,8 @@ export default function Project({ id }: ProjectProps) {
         { key: 'photos' as TabKey, label: t('photos'), icon: Camera },
         { key: 'daily' as TabKey, label: t('daily_reports'), icon: ClipboardList, adminOnly: true },
         { key: 'weekly' as TabKey, label: t('weekly_reports'), icon: BarChart3, adminOnly: true },
-        { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle },
-        { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen },
+        { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle, adminOnly: true },
+        { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen, adminOnly: true },
     ];
 
     const visibleNav = navItems.filter((item) => !(item.adminOnly && isClient));
