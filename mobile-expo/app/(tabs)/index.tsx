@@ -14,7 +14,7 @@ import LanguageSelectorModal from '@/components/shared/LanguageSelectorModal';
 import { useTranslation } from 'react-i18next';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadOrganizationLogo, fetchSecureLogo } from '@/services/organizationService';
+import { uploadOrganizationLogo, fetchSecureLogo, getOrganizations } from '@/services/organizationService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 
 export default function DashboardScreen() {
@@ -43,18 +43,24 @@ export default function DashboardScreen() {
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
 
 
   useEffect(() => {
     if (user) {
-      fetchProjects();
+      if (user.role === 'superadmin') {
+        fetchOrganizations();
+      }
+      fetchProjects(selectedOrgId);
       // Handle setting initial logo
       const orgs = (user as any).organizations || (user as any).organization;
       if (orgs?.logo) {
         setLocalLogoKey(orgs.logo);
       }
     }
-  }, [user]);
+  }, [user, selectedOrgId]);
 
   useEffect(() => {
     const fetchLogo = async () => {
@@ -77,9 +83,19 @@ export default function DashboardScreen() {
 
   if (!user) return null;
 
-  const fetchProjects = async () => {
+  const fetchOrganizations = async () => {
     try {
-      const res = await PrivateAxios.get('/projects');
+      const orgs = await getOrganizations();
+      setOrganizations(orgs || []);
+    } catch (err) {
+      console.error("Failed to fetch organizations:", err);
+    }
+  };
+
+  const fetchProjects = async (orgId?: string | null) => {
+    try {
+      const url = orgId ? `/projects?organization_id=${orgId}` : '/projects';
+      const res = await PrivateAxios.get(url);
       setProjects(res.data.projects || []);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
@@ -109,7 +125,7 @@ export default function DashboardScreen() {
   };
 
   const handleLogoUpload = async () => {
-    if (user?.role !== 'admin' && user?.role !== 'superadmin') return;
+    if (user?.role !== 'admin') return;
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -299,10 +315,33 @@ export default function DashboardScreen() {
             ))}
           </View>
 
-          {/* Section label */}
-          <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textMuted, marginBottom: 10 }}>
-            {t('dashboard.yourProjects')}
-          </Text>
+          {/* Section label with Org Filter for Superadmin */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textMuted }}>
+              {t('dashboard.yourProjects')}
+            </Text>
+            {user.role === 'superadmin' && organizations.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setIsOrgDropdownOpen(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: colors.surface,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>
+                  {selectedOrgId ? organizations.find(o => o.id === selectedOrgId)?.name : 'All Organizations'}
+                </Text>
+                <Feather name="chevron-down" size={12} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Project Grid */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -356,8 +395,8 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             ))}
 
-            {/* Add Create Project card — admin/superadmin only */}
-            {(user.role === 'admin' || user.role === 'superadmin') && (
+            {/* Add Create Project card — admin only */}
+            {user.role === 'admin' && (
               <TouchableOpacity
                 onPress={() => setIsCreating(true)}
                 style={{ width: '22%', alignItems: 'center', gap: 4 }}
@@ -499,12 +538,44 @@ export default function DashboardScreen() {
         visible={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
         logoUri={logoUri}
-        canChange={user.role === 'admin' || user.role === 'superadmin'}
+        canChange={user.role === 'admin'}
         onChangePress={() => {
           setIsPreviewOpen(false);
           handleLogoUpload();
         }}
       />
+
+      {/* Org Selection Modal for Superadmin */}
+      <Modal visible={isOrgDropdownOpen} animationType="fade" transparent>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setIsOrgDropdownOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+        >
+          <View style={{ backgroundColor: colors.surface, borderRadius: 20, width: '100%', maxWidth: 400, padding: 10, overflow: 'hidden' }}>
+            <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text }}>Select Organization</Text>
+            </View>
+            <ScrollView style={{ maxHeight: 400 }}>
+              <TouchableOpacity
+                onPress={() => { setSelectedOrgId(null); setIsOrgDropdownOpen(false); }}
+                style={{ padding: 15, backgroundColor: selectedOrgId === null ? colors.background : 'transparent' }}
+              >
+                <Text style={{ fontSize: 14, color: colors.text, fontWeight: selectedOrgId === null ? 'bold' : 'normal' }}>All Organizations</Text>
+              </TouchableOpacity>
+              {organizations.map((org) => (
+                <TouchableOpacity
+                  key={org.id}
+                  onPress={() => { setSelectedOrgId(org.id); setIsOrgDropdownOpen(false); }}
+                  style={{ padding: 15, backgroundColor: selectedOrgId === org.id ? colors.background : 'transparent' }}
+                >
+                  <Text style={{ fontSize: 14, color: colors.text, fontWeight: selectedOrgId === org.id ? 'bold' : 'normal' }}>{org.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 }

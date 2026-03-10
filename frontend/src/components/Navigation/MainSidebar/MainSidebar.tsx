@@ -32,12 +32,12 @@ const MainSidebar = () => {
     ] : []),
   ];
 
-  const roles: { value: UserRole; label: string }[] = [
-    { value: 'superadmin', label: 'Super Admin' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'contributor', label: 'Contributor' },
-    { value: 'client', label: 'Client' },
-  ];
+  // const roles: { value: UserRole; label: string }[] = [
+  //   { value: 'superadmin', label: 'Super Admin' },
+  //   { value: 'admin', label: 'Admin' },
+  //   { value: 'contributor', label: 'Contributor' },
+  //   { value: 'client', label: 'Client' },
+  // ];
 
   return (
     <aside className="w-56 shrink-0 border-r border-border bg-card min-h-[calc(100vh-3.5rem)] flex flex-col">
@@ -63,7 +63,7 @@ const MainSidebar = () => {
         })}
       </nav>
 
-      {user && switchRole && (
+      {/* {user && switchRole && (
         <div className="border-t border-border p-3">
           <p className="text-[10px] font-medium text-muted-foreground mb-2 uppercase tracking-wider">Demo Role</p>
           <div className="space-y-1">
@@ -86,7 +86,7 @@ const MainSidebar = () => {
             ))}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Logout Button */}
       {logout && (

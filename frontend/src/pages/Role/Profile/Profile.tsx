@@ -19,11 +19,11 @@ const Profile = () => {
         router.push('/');
     };
 
-    const roles: { value: UserRole; label: string }[] = [
-        { value: 'admin', label: 'Admin' },
-        { value: 'contributor', label: 'Contributor' },
-        { value: 'client', label: 'Client' },
-    ];
+    // const roles: { value: UserRole; label: string }[] = [
+    //     { value: 'admin', label: 'Admin' },
+    //     { value: 'contributor', label: 'Contributor' },
+    //     { value: 'client', label: 'Client' },
+    // ];
 
     const roleBadgeColor: Record<UserRole, string> = {
         admin: 'bg-accent text-accent-foreground',
@@ -46,7 +46,7 @@ const Profile = () => {
                 </span>
             </div>
 
-            <div className="rounded-xl bg-card border border-border p-4 mb-4">
+            {/* <div className="rounded-xl bg-card border border-border p-4 mb-4">
                 <div className="flex items-center gap-2 mb-3">
                     <Pencil className="h-4 w-4 text-muted-foreground" />
                     <h2 className="text-sm font-bold text-foreground">Switch Demo Role</h2>
@@ -65,7 +65,7 @@ const Profile = () => {
                         </button>
                     ))}
                 </div>
-            </div>
+            </div> */}
 
             <Button
                 variant="outline"

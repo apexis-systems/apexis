@@ -55,9 +55,15 @@ export const getProjects = async (req: Request, res: Response) => {
         // Build WHERE clause based on role
         let whereClause = '';
         const replacements: any = {};
+        const { organization_id } = req.query;
 
         if (authUser.role === 'superadmin') {
-            whereClause = '';
+            if (organization_id) {
+                whereClause = 'WHERE p.organization_id = :org_id';
+                replacements.org_id = organization_id;
+            } else {
+                whereClause = '';
+            }
         } else if (authUser.role === 'admin') {
             whereClause = 'WHERE p.organization_id = :org_id';
             replacements.org_id = authUser.organization_id;

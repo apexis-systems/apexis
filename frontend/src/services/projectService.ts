@@ -1,8 +1,9 @@
 import { PrivateAxios } from "@/helpers/PrivateAxios";
 
-export const getProjects = async () => {
+export const getProjects = async (organization_id?: string) => {
     try {
-        const response = await PrivateAxios.get('/projects');
+        const url = organization_id ? `/projects?organization_id=${organization_id}` : '/projects';
+        const response = await PrivateAxios.get(url);
         return response.data;
     } catch (error) {
         console.error("getProjects Error", error);

@@ -62,3 +62,23 @@ export const getSuperAdmins = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const getOrganizations = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
+        }
+
+        const allOrgs = await organizations.findAll({
+            attributes: ['id', 'name', 'logo'],
+            order: [['name', 'ASC']]
+        });
+
+        res.status(200).json({ organizations: allOrgs });
+    } catch (error) {
+        console.error("Get Organizations Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

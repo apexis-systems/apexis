@@ -3,10 +3,19 @@ import { activities, users, projects } from '../models/index.ts';
 
 export const getActivities = async (req: Request | any, res: Response) => {
     try {
-        const userId = req.user.user_id;
-        const orgId = req.user.organization_id; // Current user's organization
+        const authUser = req.user;
+        const { organization_id } = req.query;
 
-        // Fetch activities only for projects within this user's organization
+        let projectWhere: any = {};
+        if (authUser.role === 'superadmin') {
+            if (organization_id) {
+                projectWhere.organization_id = organization_id;
+            }
+        } else {
+            projectWhere.organization_id = authUser.organization_id;
+        }
+
+        // Fetch activities only for projects within the determined organization(s)
         const feed = await activities.findAll({
             limit: 50,
             order: [['createdAt', 'DESC']],
@@ -19,9 +28,7 @@ export const getActivities = async (req: Request | any, res: Response) => {
                 {
                     model: projects,
                     attributes: ['id', 'name', 'organization_id'],
-                    where: {
-                        organization_id: orgId
-                    }
+                    where: projectWhere
                 }
             ]
         });
