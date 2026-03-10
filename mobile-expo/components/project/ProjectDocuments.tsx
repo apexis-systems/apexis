@@ -274,7 +274,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                 })}
             </View>
 
-            {!loading && currentFolders.length === 0 && docs.filter(d => d.folder_id === selectedFolder).length === 0 && (
+            {!loading && currentFolders.length === 0 && visibleDocs.length === 0 && (
                 <View style={{ marginTop: 20, marginBottom: 10, alignItems: 'center' }}>
                     <Feather name="folder" size={32} color={colors.border} />
                     <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or documents yet</Text>
@@ -368,7 +368,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                 })}
             </View>
 
-            {visibleDocs.length === 0 && (
+            {visibleDocs.length === 0 && currentFolders.length > 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
                     <Feather name="file-text" size={32} color={colors.border} />
                     <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No documents yet</Text>

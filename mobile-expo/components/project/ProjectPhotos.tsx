@@ -334,7 +334,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                 </View>
             )}
 
-            {!loading && currentFolders.length === 0 && photos.filter((p) => p.folder_id === selectedFolder).length === 0 && (
+            {!loading && currentFolders.length === 0 && visiblePhotos.length === 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
                     <Feather name="camera" size={32} color={colors.border} />
                     <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or photos yet</Text>
@@ -614,7 +614,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                 })}
             </View>
 
-            {visiblePhotos.length === 0 && (
+            {visiblePhotos.length === 0 && currentFolders.length > 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
                     <Feather name="camera" size={32} color={colors.border} />
                     <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No photos yet</Text>

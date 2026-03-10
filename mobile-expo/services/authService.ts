@@ -67,8 +67,10 @@ export const getMe = async () => {
     try {
         const response = await PrivateAxios.get('/auth/me');
         return response.data;
-    } catch (error) {
-        console.error("getMe Error", error);
+    } catch (error: any) {
+        if (error?.response?.status !== 401) {
+            console.error("getMe Error", error?.response?.data || error.message);
+        }
         throw error;
     }
 };

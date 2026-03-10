@@ -44,8 +44,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (res?.user) {
                 setUser(res.user);
             }
-        } catch (e) {
-            console.error("Failed to fetch user context", e);
+        } catch (e: any) {
+            if (e?.response?.status !== 401) {
+                console.error("Failed to fetch user context", e?.response?.data || e.message);
+            }
             logout();
         } finally {
             setIsLoading(false);
