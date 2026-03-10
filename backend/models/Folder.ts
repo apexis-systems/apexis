@@ -30,7 +30,7 @@ export default (sequelize: Sequelize) => {
             client_visible: {
                 type: DataTypes.BOOLEAN,
                 allowNull: false,
-                defaultValue: true,
+                defaultValue: false,
             },
         },
         {

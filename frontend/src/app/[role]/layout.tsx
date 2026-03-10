@@ -10,11 +10,11 @@ interface RoleLayoutProps {
 
 const RoleLayout = ({ children }: RoleLayoutProps) => {
     return (
-        <div className="flex min-h-screen flex-col bg-background">
+        <div className="flex h-screen flex-col bg-background overflow-hidden">
             <SiteHeader />
-            <div className="flex flex-1">
+            <div className="flex flex-1 overflow-hidden">
                 <MainSidebar />
-                <main className="flex-1 overflow-auto">{children}</main>
+                <main className="flex-1 overflow-y-auto">{children}</main>
             </div>
         </div>
     );

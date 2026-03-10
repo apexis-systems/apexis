@@ -116,6 +116,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             project_id: parseInt(project_id, 10),
             file_url: s3Key,
             file_name: finalFileName,
+            client_visible: false,
             file_type,
             file_size_mb,
             created_by: authUser.user_id,
