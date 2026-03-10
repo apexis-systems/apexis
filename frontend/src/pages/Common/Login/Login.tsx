@@ -10,8 +10,7 @@ import { loginSuperAdmin, loginAdmin, loginProject, getQrSession } from '@/servi
 import { useAuth } from '@/contexts/AuthContext';
 import { QRCodeCanvas } from 'qrcode.react';
 import { io, Socket } from 'socket.io-client';
-import { QrCode, Mail } from 'lucide-react';
-
+import { QrCode, Monitor, Download, ChevronRight, Lock } from 'lucide-react';
 const Login = () => {
     // Mode toggle
     const [loginMode, setLoginMode] = useState<'qr' | 'email'>('qr');
@@ -134,190 +133,257 @@ const Login = () => {
     ];
 
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-card px-6 relative">
-            <div className="mb-8 text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-                    <span className="text-2xl font-black tracking-tight text-primary-foreground">A</span>
+        <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12 relative overflow-y-auto w-full">
+
+            <div className="w-full max-w-4xl flex flex-col gap-6 items-center">
+
+                <div className="flex flex-col items-center gap-5">
+                    <div className="hidden sm:flex h-14 w-14 bg-secondary/50 rounded-2xl items-center justify-center border border-border/50">
+                        <Monitor className="h-6 w-6 text-foreground/80" />
+                    </div>
+                    <div className='flex flex-col items-center'>
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground uppercase">apexis</h1>
+                        <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground">
+                            RECORD · REPORT · RELEASE
+                        </p>
+                    </div>
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">apexis</h1>
-                <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground">
-                    RECORD · REPORT · RELEASE
-                </p>
-            </div>
 
-            <Card className="w-full max-w-sm border-0 shadow-none">
-                <CardContent className="p-0">
 
-                    {/* View Switcher Tabs */}
-                    <div className="flex rounded-xl bg-secondary p-1 mb-6">
-                        <button
-                            onClick={() => setLoginMode('qr')}
-                            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-all ${loginMode === 'qr' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                        >
-                            <QrCode className="h-4 w-4" />
-                            QR Login
-                        </button>
-                        <button
-                            onClick={() => setLoginMode('email')}
-                            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-all ${loginMode === 'email' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                        >
-                            <Mail className="h-4 w-4" />
-                            Email Login
-                        </button>
+                {/* Main Auth Card */}
+                <Card className="w-full border-0 shadow-md rounded-[32px] overflow-hidden bg-card">
+                    <CardContent className="p-0">
+                        {loginMode === 'qr' ? (
+                            <div className="flex flex-col md:flex-row min-h-[500px]">
+                                {/* Left Side: Scan Instructions */}
+                                <div className="flex-1 p-8 sm:p-14 border-b md:border-b-0 md:border-r border-border/40 flex flex-col">
+                                    <h2 className="text-[32px] font-normal text-foreground mb-10 tracking-tight">Scan to log in</h2>
+
+                                    <div className="space-y-8 flex-1">
+                                        <div className="flex items-start gap-5">
+                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">1</div>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Open the <span className="font-semibold text-foreground inline-flex items-center gap-1.5 bg-secondary px-2 py-0.5 rounded-md">Apexis</span> mobile app & log in</p>
+                                        </div>
+                                        <div className="flex items-start gap-5">
+                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">2</div>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Go to <span className="font-semibold text-foreground">Profile &gt; Linked Devices &gt; Link a Device</span></p>
+                                        </div>
+                                        <div className="flex items-start gap-5">
+                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">3</div>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Point your phone to this screen to capture the code</p>
+                                        </div>
+                                        {/* <div className="pt-2">
+                                            <a href="#" className="flex items-center gap-1 text-[15px] font-medium text-accent hover:underline">
+                                                Need help? <ChevronRight className="h-4 w-4 -ml-0.5" />
+                                            </a>
+                                        </div> */}
+                                    </div>
+
+                                    {/* <div className="mt-8 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-4 w-4 rounded-sm bg-accent flex items-center justify-center">
+                                                <ChevronRight className="h-3 w-3 text-white rotate-90" />
+                                            </div>
+                                            <span className="text-[15px] font-medium text-foreground">Stay logged in on this browser</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setLoginMode('email')}
+                                            className="text-[15px] font-medium text-accent hover:underline flex items-center gap-1"
+                                        >
+                                            Log in with password <ChevronRight className="h-4 w-4 -ml-0.5" />
+                                        </button>
+                                    </div> */}
+                                </div>
+
+                                {/* Right Side: QR Code Area */}
+                                <div className="w-full md:w-[420px] bg-secondary/20 p-8 sm:p-14 flex flex-col items-center justify-center relative">
+                                    <div className="relative">
+                                        {isLoading ? (
+                                            <div className="w-[264px] h-[264px] flex flex-col items-center justify-center bg-secondary/30 rounded-3xl">
+                                                <div className="h-10 w-10 rounded-full border-4 border-accent border-t-transparent animate-spin mb-4"></div>
+                                                <span className="text-sm text-muted-foreground font-medium">Generating secure code...</span>
+                                            </div>
+                                        ) : qrExpired ? (
+                                            <div className="w-[264px] h-[264px] flex flex-col items-center justify-center bg-secondary/50 rounded-3xl text-center p-6 border border-border/50 backdrop-blur-sm">
+                                                <QrCode className="h-12 w-12 text-muted-foreground mb-4 opacity-40" />
+                                                <h3 className="font-bold text-foreground mb-1 text-lg">Code Expired</h3>
+                                                <p className="text-xs text-muted-foreground mb-5 px-2">For your security, QR codes expire after 2 minutes.</p>
+                                                <Button
+                                                    onClick={() => setLoginMode('qr')}
+                                                    className="w-full rounded-xl bg-primary text-primary-foreground font-semibold shadow-sm"
+                                                >
+                                                    Generate New Code
+                                                </Button>
+                                            </div>
+                                        ) : qrSessionId ? (
+                                            <div className="relative bg-white p-2 rounded-2xl shadow-sm border border-border">
+                                                <QRCodeCanvas
+                                                    value={qrSessionId}
+                                                    size={240}
+                                                    bgColor={"#ffffff"}
+                                                    fgColor={"#111b21"}
+                                                    level={"H"}
+                                                />
+                                                {/* Custom center logo/icon overlay */}
+                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                    <div className="bg-white p-1 rounded-full flex items-center justify-center" style={{ width: 54, height: 54 }}>
+                                                        <div className="bg-[#111b21] w-full h-full rounded-full flex items-center justify-center border-2 border-white">
+                                                            <span className="text-2xl font-black text-white">A</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="w-[264px] h-[264px] flex flex-col items-center justify-center text-center p-4">
+                                                <div className="text-red-500 text-sm font-medium">{error}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            /* Email Mode - Styled cleanly in the same card wrapper */
+                            <div className="flex flex-col min-h-[500px] p-8 sm:p-14 max-w-[500px] mx-auto w-full relative">
+                                <button
+                                    onClick={() => setLoginMode('qr')}
+                                    className="absolute top-8 left-8 text-[15px] font-medium text-accent hover:underline flex items-center gap-1 transition-colors"
+                                >
+                                    <ChevronRight className="h-4 w-4 rotate-180 -mr-0.5" /> Back to QR Login
+                                </button>
+
+                                <div className="w-full mt-12 flex-1 flex flex-col justify-center">
+                                    <div className="mb-8 text-center pt-4">
+                                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary">
+                                            <span className="text-xl font-black tracking-tight text-primary-foreground">A</span>
+                                        </div>
+                                        <h2 className="text-2xl font-bold text-foreground">Welcome back</h2>
+                                        <p className="text-sm text-muted-foreground mt-1">Select your role and enter credentials.</p>
+                                    </div>
+
+                                    <form onSubmit={handleEmailLogin} className="space-y-6">
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {roles.map((role) => (
+                                                <button
+                                                    key={role.value}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedRole(role.value);
+                                                        setError('');
+                                                    }}
+                                                    className={`rounded-xl border-2 p-3 text-center transition-all ${selectedRole === role.value
+                                                        ? 'border-primary bg-primary/5'
+                                                        : 'border-border/50 bg-secondary/50'
+                                                        }`}
+                                                >
+                                                    <div className="text-[13px] font-bold">{role.label}</div>
+                                                    <div className="mt-0.5 text-[10px] text-muted-foreground">{role.desc}</div>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {selectedRole === 'client' ? (
+                                            <div className="space-y-2">
+                                                <Label htmlFor="clientName" className="text-sm font-medium">Your Name</Label>
+                                                <Input
+                                                    id="clientName"
+                                                    type="text"
+                                                    placeholder="John Doe"
+                                                    value={clientName}
+                                                    onChange={(e) => setClientName(e.target.value)}
+                                                    className="h-12 rounded-xl bg-secondary/50 border-border/50 text-base"
+                                                    required
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                <Label htmlFor="email" className="text-sm font-medium">Work Email</Label>
+                                                <Input
+                                                    id="email"
+                                                    type="email"
+                                                    placeholder="you@company.com"
+                                                    value={email}
+                                                    onChange={(e) => setEmail(e.target.value)}
+                                                    className="h-12 rounded-xl bg-secondary/50 border-border/50 text-base"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {(selectedRole === 'superadmin' || selectedRole === 'admin') && (
+                                            <div className="space-y-2">
+                                                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                                                <Input
+                                                    id="password"
+                                                    type="password"
+                                                    placeholder="••••••••"
+                                                    value={password}
+                                                    onChange={(e) => setPassword(e.target.value)}
+                                                    className="h-12 rounded-xl bg-secondary/50 border-border/50 text-base"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {(selectedRole === 'contributor' || selectedRole === 'client') && (
+                                            <div className="space-y-2">
+                                                <Label htmlFor="projectCode" className="text-sm font-medium">Project Code</Label>
+                                                <Input
+                                                    id="projectCode"
+                                                    type="text"
+                                                    placeholder="e.g. ABC123XYZ"
+                                                    value={projectCode}
+                                                    onChange={(e) => setProjectCode(e.target.value)}
+                                                    className="h-12 rounded-xl bg-secondary/50 border-border/50 text-base"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {error && (
+                                            <div className="text-red-500 text-sm font-medium text-center bg-red-50 p-3 rounded-lg border border-red-100">
+                                                {error}
+                                            </div>
+                                        )}
+
+                                        <Button
+                                            type="submit"
+                                            disabled={isLoading}
+                                            className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-primary-foreground hover:bg-primary/90 mt-2"
+                                        >
+                                            {isLoading ? 'Signing In...' : 'Sign In'}
+                                        </Button>
+
+                                        <div className="text-center pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => router.push('/signup')}
+                                                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                            >
+                                                Don&apos;t have an account? <span className="font-semibold text-primary">Sign Up</span>
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Bottom Footnote matching the design */}
+                <div className="mt-10 flex flex-col items-center gap-4">
+                    {/* <p className="text-[15px] text-muted-foreground flex items-center gap-1.5">
+                        Don&apos;t have an Apexis account? <button onClick={() => router.push('/signup')} className="text-accent font-medium hover:underline flex items-center gap-1">Get started <ChevronRight className="h-4 w-4 -ml-0.5" /></button>
+                    </p> */}
+
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <Lock className="h-3.5 w-3.5" />
+                        <span className="text-[13px]">Your personal files and data are end-to-end encrypted</span>
                     </div>
 
-                    {loginMode === 'qr' ? (
-                        <div className="flex flex-col items-center py-6">
-                            <h2 className="text-xl font-bold text-foreground mb-2">Scan to Login</h2>
-                            <p className="text-sm text-muted-foreground text-center mb-8 px-4">
-                                Open the Apexis mobile app, go to Settings, and scan this QR code to sign in instantly.
-                            </p>
-
-                            <div className="relative flex items-center justify-center bg-white p-4 rounded-3xl border border-border shadow-sm mb-6 w-64 h-64">
-                                {isLoading ? (
-                                    <div className="animate-pulse flex flex-col items-center gap-3">
-                                        <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-                                        <span className="text-sm text-muted-foreground font-medium">Generating secure code...</span>
-                                    </div>
-                                ) : qrExpired ? (
-                                    <div className="absolute inset-0 z-10 bg-white/90 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center p-6 text-center">
-                                        <QrCode className="h-12 w-12 text-muted-foreground mb-3 opacity-50" />
-                                        <h3 className="font-bold text-foreground mb-1">Code Expired</h3>
-                                        <p className="text-xs text-muted-foreground mb-4">For your security, QR codes expire after 2 minutes.</p>
-                                        <Button
-                                            onClick={() => setLoginMode('qr')}
-                                            className="w-full rounded-xl bg-primary text-primary-foreground font-semibold"
-                                            size="sm"
-                                        >
-                                            Generate New Code
-                                        </Button>
-                                    </div>
-                                ) : qrSessionId ? (
-                                    <QRCodeCanvas
-                                        value={qrSessionId}
-                                        size={220}
-                                        bgColor={"#ffffff"}
-                                        fgColor={"#000000"}
-                                        level={"H"}
-                                    />
-                                ) : (
-                                    <div className="text-red-500 text-sm font-medium">{error}</div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <form onSubmit={handleEmailLogin} className="space-y-5">
-                            {/* Dynamic Input Fields based on Role */}
-                            {selectedRole === 'client' ? (
-                                <div className="space-y-2">
-                                    <Label htmlFor="clientName" className="text-sm font-medium">Your Name</Label>
-                                    <Input
-                                        id="clientName"
-                                        type="text"
-                                        placeholder="John Doe"
-                                        value={clientName}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setClientName(e.target.value)}
-                                        className="h-12 rounded-xl bg-secondary border-0 text-base"
-                                        required
-                                    />
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    <Label htmlFor="email" className="text-sm font-medium">Work Email</Label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        placeholder="you@company.com"
-                                        value={email}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                                        className="h-12 rounded-xl bg-secondary border-0 text-base"
-                                        required
-                                    />
-                                </div>
-                            )}
-
-                            {(selectedRole === 'superadmin' || selectedRole === 'admin') && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                                    <Input
-                                        id="password"
-                                        type="password"
-                                        placeholder="••••••••"
-                                        value={password}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                                        className="h-12 rounded-xl bg-secondary border-0 text-base"
-                                        required
-                                    />
-                                </div>
-                            )}
-
-                            {(selectedRole === 'contributor' || selectedRole === 'client') && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="projectCode" className="text-sm font-medium">Project Code</Label>
-                                    <Input
-                                        id="projectCode"
-                                        type="text"
-                                        placeholder="e.g. ABC123XYZ"
-                                        value={projectCode}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProjectCode(e.target.value)}
-                                        className="h-12 rounded-xl bg-secondary border-0 text-base"
-                                        required
-                                    />
-                                </div>
-                            )}
-
-                            <div className="space-y-2">
-                                <Label className="text-sm font-medium">Select Role</Label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {roles.map((role) => (
-                                        <button
-                                            key={role.value}
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedRole(role.value);
-                                                setError('');
-                                            }}
-                                            className={`rounded-xl border-2 p-3 text-center transition-all ${selectedRole === role.value
-                                                ? 'border-accent bg-accent/10'
-                                                : 'border-border bg-secondary'
-                                                }`}
-                                        >
-                                            <div className="text-xs font-bold">{role.label}</div>
-                                            <div className="mt-0.5 text-[10px] text-muted-foreground">{role.desc}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {error && (
-                                <div className="text-red-500 text-sm font-medium text-center">
-                                    {error}
-                                </div>
-                            )}
-
-                            <Button
-                                type="submit"
-                                disabled={isLoading}
-                                className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-accent-foreground hover:bg-accent/90"
-                            >
-                                {isLoading ? 'Signing In...' : 'Sign In'}
-                            </Button>
-
-                            <div className="text-center">
-                                <button
-                                    type="button"
-                                    onClick={() => router.push('/signup')}
-                                    className="text-sm text-muted-foreground hover:text-foreground"
-                                >
-                                    Don&apos;t have an account? <span className="font-semibold text-accent">Sign Up</span>
-                                </button>
-                            </div>
-                        </form>
-                    )}
-                </CardContent>
-            </Card>
+                    <a href="#" className="text-xs text-muted-foreground/70 hover:underline mt-2">Terms &amp; Privacy Policy</a>
+                </div>
+            </div>
         </div>
     );
 };
