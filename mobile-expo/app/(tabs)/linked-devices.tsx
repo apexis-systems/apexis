@@ -58,6 +58,7 @@ export default function LinkedDevices() {
         try {
             await authorizeWebSession(data);
             Alert.alert("Success", "Web session authorized! Your browser will now log in.");
+            fetchSessions(); // Refresh list immediately
             setIsScannerOpen(false); // Close scanner on success
         } catch (error: any) {
             console.error("QR Auth Error:", error);
