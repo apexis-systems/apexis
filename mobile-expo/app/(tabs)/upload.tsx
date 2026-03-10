@@ -132,15 +132,6 @@ export default function UploadScreen() {
             .finally(() => setLoadingFolders(false));
     }, [selectedProject]);
 
-    // Role check
-    if (!user || user.role === 'client') {
-        return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 12, color: colors.textMuted }}>Upload is not available for your role.</Text>
-            </SafeAreaView>
-        );
-    }
-
     // Auto-expand folder tree to show selected folder on initial load
     useEffect(() => {
         if (selectedFolder && selectedFolder !== 'root' && folders.length > 0 && !folderBrowseId) {
@@ -150,6 +141,15 @@ export default function UploadScreen() {
             }
         }
     }, [folders, selectedFolder]);
+
+    // Role check - moved here to satisfy Rules of Hooks
+    if (!user || user.role === 'client') {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 12, color: colors.textMuted }}>Upload is not available for your role.</Text>
+            </SafeAreaView>
+        );
+    }
 
     // -- File Selection / Capturing Handlers --
 

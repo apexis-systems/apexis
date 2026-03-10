@@ -31,9 +31,11 @@ const Login = () => {
     // QR Code State
     const [qrSessionId, setQrSessionId] = useState<string | null>(null);
     const [qrExpired, setQrExpired] = useState(false);
+    const [qrRefreshTrigger, setQrRefreshTrigger] = useState(0);
 
     useEffect(() => {
         let socket: Socket | null = null;
+        let expiryTimer: NodeJS.Timeout | null = null;
 
         if (loginMode === 'qr') {
             generateSessionAndConnect();
@@ -71,7 +73,7 @@ const Login = () => {
                 });
 
                 // QR Expires in 2 mins, so we force refresh UI
-                setTimeout(() => {
+                expiryTimer = setTimeout(() => {
                     setQrExpired(true);
                     if (socket) socket.disconnect();
                 }, 120 * 1000);
@@ -88,8 +90,11 @@ const Login = () => {
             if (socket) {
                 socket.disconnect();
             }
+            if (expiryTimer) {
+                clearTimeout(expiryTimer);
+            }
         };
-    }, [loginMode]);
+    }, [loginMode, qrRefreshTrigger]);
 
     const handleEmailLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -209,7 +214,7 @@ const Login = () => {
                                                 <h3 className="font-bold text-foreground mb-1 text-lg">Code Expired</h3>
                                                 <p className="text-xs text-muted-foreground mb-5 px-2">For your security, QR codes expire after 2 minutes.</p>
                                                 <Button
-                                                    onClick={() => setLoginMode('qr')}
+                                                    onClick={() => setQrRefreshTrigger(prev => prev + 1)}
                                                     className="w-full rounded-xl bg-primary text-primary-foreground font-semibold shadow-sm"
                                                 >
                                                     Generate New Code

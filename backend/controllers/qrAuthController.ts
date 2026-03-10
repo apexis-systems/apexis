@@ -57,7 +57,8 @@ export const authorizeQrSession = async (req: AuthRequest, res: Response) => {
                 id: user.id || user.user_id, // Normalize based on your JWT payload
                 user_id: user.id || user.user_id,
                 role: user.role,
-                organization_id: user.organization_id
+                organization_id: user.organization_id,
+                project_id: user.project_id
             },
             process.env.JWT_SECRET || 'default_secret',
             { expiresIn: '30d' }
