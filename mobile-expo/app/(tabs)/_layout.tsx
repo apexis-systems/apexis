@@ -59,31 +59,40 @@ export default function TabLayout() {
         name="upload"
         options={{
           href: user?.role === 'client' ? null : '/(tabs)/upload',
-          title: t('tabs.upload'),
+          title: '',
+          tabBarLabel: () => null,
           tabBarIcon: () => <Feather name="plus" size={24} color="#fff" />,
           tabBarItemStyle: {
-            marginTop: -12,
+            // Remove margin here to handle it in icon style
           },
           tabBarIconStyle: {
             backgroundColor: ACCENT,
             borderRadius: 28,
-            width: 44,
-            height: 44,
+            width: 56,
+            height: 56,
             alignItems: 'center',
             justifyContent: 'center',
+            marginTop: -30, // Float upwards
+            shadowColor: ACCENT,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 5,
+            elevation: 5,
           },
-          tabBarLabelStyle: {
-            fontSize: 9,
-            fontWeight: '500',
-            color: ACCENT,
-            marginTop: 14,
-          },
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ color }) => <Feather name="message-circle" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="notifications"
         options={{
           title: 'Notifications',
+          href: null,
           tabBarIcon: ({ color }) => <Feather name="bell" size={22} color={color} />,
         }}
       />

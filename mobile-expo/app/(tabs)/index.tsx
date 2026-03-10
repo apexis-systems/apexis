@@ -207,7 +207,7 @@ export default function DashboardScreen() {
                   <Feather name="globe" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={{ padding: 6, borderRadius: 20, position: 'relative' }}>
+                <TouchableOpacity onPress={() => router.push('/notifications')} style={{ padding: 6, borderRadius: 20, position: 'relative' }}>
                   <Feather name="bell" size={18} color={colors.textMuted} />
                   <View style={{ position: 'absolute', right: 6, top: 6, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                 </TouchableOpacity>
