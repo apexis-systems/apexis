@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard, LogOut, Shield } from 'lucide-react';
+import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard, LogOut, Shield, MessageSquare } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,6 +19,7 @@ const MainSidebar = () => {
     { icon: Home, label: t('dashboard'), path: `${basePath}/dashboard` },
     ...(user?.role !== 'client' ? [{ icon: Upload, label: t('upload'), path: `${basePath}/upload` }] : []),
     { icon: Clock, label: t('activity'), path: `${basePath}/activity` },
+    { icon: MessageSquare, label: 'Chats', path: `${basePath}/chats` },
     { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },
     { icon: User, label: t('profile'), path: `${basePath}/profile` },
     ...(user?.role === 'superadmin' ? [
