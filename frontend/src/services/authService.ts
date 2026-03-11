@@ -128,3 +128,23 @@ export const getQrSession = async () => {
         throw error;
     }
 };
+
+export const verifyInvitation = async (token: string) => {
+    try {
+        const response = await PublicAxios.get(`/auth/verify-invitation?token=${token}`);
+        return response.data; // { email }
+    } catch (error) {
+        console.error("verifyInvitation Error", error);
+        throw error;
+    }
+};
+
+export const completeSuperAdminOnboarding = async (data: { token: string; name: string; password: string }) => {
+    try {
+        const response = await PublicAxios.post("/auth/complete-onboarding", data);
+        return response.data;
+    } catch (error) {
+        console.error("completeSuperAdminOnboarding Error", error);
+        throw error;
+    }
+};

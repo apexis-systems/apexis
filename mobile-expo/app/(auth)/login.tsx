@@ -17,7 +17,7 @@ import { loginAdmin, loginProject, loginSuperAdmin } from '@/services/authServic
 import { useTheme } from '@/contexts/ThemeContext';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
-    { value: 'superadmin', label: 'Super Admin', desc: 'Full system control' },
+    // { value: 'superadmin', label: 'Super Admin', desc: 'Full system control' },
     { value: 'admin', label: 'Admin', desc: 'Full project control' },
     { value: 'contributor', label: 'Contributor', desc: 'Upload & view assigned' },
     { value: 'client', label: 'Client', desc: 'View shared files only' },

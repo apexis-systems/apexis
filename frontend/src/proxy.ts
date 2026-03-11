@@ -6,10 +6,10 @@ export function proxy(request: NextRequest) {
 
     const { pathname } = request.nextUrl;
 
-    const isAuthRoute = pathname === '/login' || pathname === '/signup';
+    const isAuthRoute = pathname === '/login' || pathname === '/signup' || pathname.startsWith('/auth/');
 
     // Allow public assets
-    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname === '/favicon.ico') {
+    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname === '/favicon.ico' || pathname.startsWith('/app-icon.png')) {
         return NextResponse.next();
     }
 
