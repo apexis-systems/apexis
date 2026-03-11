@@ -73,9 +73,17 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const cycleStatus = async (snag: Snag) => {
     const idx = STATUS_CYCLE.indexOf(snag.status);
     const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    const prevStatus = snag.status;
+
     setSnags(prev => prev.map(s => s.id === snag.id ? { ...s, status: next } : s));
-    try { await updateSnagStatus(snag.id, next); }
-    catch { setSnags(prev => prev.map(s => s.id === snag.id ? { ...s, status: snag.status } : s)); }
+
+    try {
+      await updateSnagStatus(snag.id, next);
+      toast.success(`Status updated to ${STATUS_CONFIG[next].label}`);
+    } catch (error) {
+      setSnags(prev => prev.map(s => s.id === snag.id ? { ...s, status: prevStatus } : s));
+      toast.error('Failed to update status');
+    }
   };
 
   // ── Photo pick ──────────────────────────────────────────────────────────────

@@ -105,8 +105,10 @@ export default function Dashboard() {
             setIsCreating(false);
             setNewProject({ name: '', description: '', start_date: '', end_date: '' });
             fetchProjects();
-        } catch (e) {
+            toast.success('Project created successfully');
+        } catch (e: any) {
             console.error("Failed to create project", e);
+            toast.error(e.response?.data?.error || 'Failed to create project');
         } finally {
             setIsSubmitting(false);
         }

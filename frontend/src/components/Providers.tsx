@@ -3,6 +3,7 @@
 import { AuthProvider } from '@/contexts/AuthContext';
 import { InterfaceProvider } from '@/contexts/InterfaceContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import { Toaster } from 'sonner';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
     return (
@@ -10,6 +11,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             <LanguageProvider>
                 <InterfaceProvider>
                     {children}
+                    <Toaster position="top-right" richColors />
                 </InterfaceProvider>
             </LanguageProvider>
         </AuthProvider>
