@@ -50,8 +50,8 @@ const SiteHeader = () => {
       <header className="sticky top-0 z-40 border-b border-border bg-card">
         <div className="flex h-14 items-center justify-between px-6">
           <button onClick={() => router.push(`/${user?.role || 'admin'}/dashboard`)} className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
-              <span className="text-sm font-bold text-accent-foreground">A</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
+              <img src="/app-icon.png" alt="Apexis" className="h-full w-full object-cover" />
             </div>
             <span className="text-base font-bold text-foreground">Apexis</span>
           </button>
@@ -59,8 +59,8 @@ const SiteHeader = () => {
           <div className="flex items-center gap-2">
             {/* Animated Search Bar */}
             <div className={`flex items-center overflow-hidden rounded-lg border transition-all duration-300 ease-in-out ${showSearch
-                ? 'w-56 border-accent bg-secondary px-2'
-                : 'w-8 border-transparent'
+              ? 'w-56 border-accent bg-secondary px-2'
+              : 'w-8 border-transparent'
               }`}>
               <button
                 onClick={() => setShowSearch(!showSearch)}

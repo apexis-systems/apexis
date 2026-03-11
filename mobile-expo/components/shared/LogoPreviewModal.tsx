@@ -6,12 +6,12 @@ import { Feather } from '@expo/vector-icons';
 interface Props {
     visible: boolean;
     onClose: () => void;
-    logoUri: string | null;
+    logoSource: any;
     canChange: boolean;
     onChangePress: () => void;
 }
 
-export default function LogoPreviewModal({ visible, onClose, logoUri, canChange, onChangePress }: Props) {
+export default function LogoPreviewModal({ visible, onClose, logoSource, canChange, onChangePress }: Props) {
     const { colors } = useTheme();
 
     return (
@@ -30,8 +30,8 @@ export default function LogoPreviewModal({ visible, onClose, logoUri, canChange,
 
                     <View style={styles.content}>
                         <View style={[styles.imageWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            {logoUri ? (
-                                <Image source={{ uri: logoUri }} style={styles.image} resizeMode="cover" />
+                            {logoSource ? (
+                                <Image source={logoSource} style={styles.image} resizeMode="cover" />
                             ) : (
                                 <Text style={{ color: colors.textMuted, fontStyle: 'italic' }}>No Logo</Text>
                             )}

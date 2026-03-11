@@ -193,12 +193,14 @@ export default function DashboardScreen() {
                     width: 28,
                     height: 28,
                     borderRadius: 8,
-                    backgroundColor: '#f97316',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    overflow: 'hidden',
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff' }}>A</Text>
+                  <Image
+                    source={require('../../assets/images/app-icon.png')}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
                 </View>
                 <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Apexis</Text>
               </TouchableOpacity>
@@ -271,9 +273,9 @@ export default function DashboardScreen() {
               }}>
                 {isUploadingLogo ? (
                   <ActivityIndicator size="small" color={colors.primary} />
-                ) : logoUri ? (
+                ) : (logoUri || user.role === 'superadmin') ? (
                   <Image
-                    source={{ uri: logoUri }}
+                    source={logoUri ? { uri: logoUri } : require('../../assets/images/icon.png')}
                     style={{ width: '100%', height: '100%' }}
                     resizeMode="cover"
                   />
@@ -552,7 +554,7 @@ export default function DashboardScreen() {
       <LogoPreviewModal
         visible={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
-        logoUri={logoUri}
+        logoSource={logoUri ? { uri: logoUri } : (user.role === 'superadmin' ? require('../../assets/images/icon.png') : null)}
         canChange={user.role === 'admin'}
         onChangePress={() => {
           setIsPreviewOpen(false);
