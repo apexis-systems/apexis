@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { UserRole } from '@/types';
-import { UserPlus, Trash2, ToggleLeft, ToggleRight, Loader2, Mail, Shield } from 'lucide-react';
+import { UserPlus, Trash2, ToggleLeft, ToggleRight, Loader2, Mail, Briefcase, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,15 +11,18 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getOrgUsers, inviteUser } from '@/services/userService';
+import { getProjects } from '@/services/projectService';
 
 const UserManagement = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
     const [users, setUsers] = useState<any[]>([]);
+    const [projects, setProjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showInvite, setShowInvite] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState<UserRole>('contributor');
+    const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [inviting, setInviting] = useState(false);
 
     const fetchUsers = async () => {
@@ -35,8 +38,18 @@ const UserManagement = () => {
         }
     };
 
+    const fetchProjects = async () => {
+        try {
+            const data = await getProjects();
+            setProjects(data.projects || []);
+        } catch (error) {
+            console.error("fetchProjects error", error);
+        }
+    };
+
     useEffect(() => {
         fetchUsers();
+        fetchProjects();
     }, []);
 
     if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
@@ -52,12 +65,27 @@ const UserManagement = () => {
             toast.error('Please enter a valid email');
             return;
         }
+
+        const isProjectRole = inviteRole === 'contributor' || inviteRole === 'client';
+        if (isProjectRole && !selectedProjectId) {
+            toast.error('Please select a project for this role');
+            return;
+        }
+
         setInviting(true);
         try {
-            await inviteUser({ email: inviteEmail.trim(), role: inviteRole });
+            // Send both for safety during migration
+            await inviteUser({
+                email: inviteEmail.trim(),
+                role: inviteRole,
+                project_id: isProjectRole ? selectedProjectId : undefined,
+                projectId: isProjectRole ? selectedProjectId : undefined
+            } as any);
+
             toast.success('Invitation sent successfully');
             setInviteEmail('');
             setInviteRole('contributor');
+            setSelectedProjectId('');
             setShowInvite(false);
             fetchUsers();
         } catch (error: any) {
@@ -69,22 +97,21 @@ const UserManagement = () => {
     };
 
     const toggleActive = (id: string | number) => {
-        // Placeholder for real action
         setUsers(prev => prev.map(u => (u.id === id ? { ...u, active: !u.active } : u)));
         toast.success('User status updated');
     };
 
     const changeRole = (id: string | number, role: UserRole) => {
-        // Placeholder for real action
         setUsers(prev => prev.map(u => (u.id === id ? { ...u, role } : u)));
         toast.success(`Role updated to ${role}`);
     };
 
     const removeUser = (id: string | number) => {
-        // Placeholder for real action
         setUsers(prev => prev.filter(u => u.id !== id));
         toast.success('User removed from organization');
     };
+
+    const isProjectRole = inviteRole === 'contributor' || inviteRole === 'client';
 
     return (
         <div className="p-8 max-w-5xl mx-auto">
@@ -105,9 +132,9 @@ const UserManagement = () => {
             </div>
 
             {showInvite && (
-                <div className="mb-8 p-6 rounded-2xl border border-border bg-card shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
-                    <div className="flex items-end gap-4 flex-wrap">
-                        <div className="flex-1 min-w-[200px]">
+                <div className="mb-8 p-6 rounded-2xl border-2 border-accent/20 bg-card shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+                        <div className="md:col-span-4">
                             <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
                                 Email Address
                             </label>
@@ -116,10 +143,10 @@ const UserManagement = () => {
                                 onChange={e => setInviteEmail(e.target.value)}
                                 placeholder="member@example.com"
                                 type="email"
-                                className="h-11 rounded-xl"
+                                className="h-11 rounded-xl focus-visible:ring-accent"
                             />
                         </div>
-                        <div className="w-40">
+                        <div className="md:col-span-3">
                             <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
                                 Role
                             </label>
@@ -134,15 +161,46 @@ const UserManagement = () => {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <Button
-                            onClick={handleInvite}
-                            disabled={inviting}
-                            className="h-11 bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-8 font-bold"
-                        >
-                            {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
-                            {inviting ? "Inviting..." : "Send Invitation"}
-                        </Button>
+
+                        <div className={cn("md:col-span-3 transition-opacity duration-300", isProjectRole ? "opacity-100" : "opacity-0 pointer-events-none")}>
+                            <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
+                                Assign Project
+                            </label>
+                            {projects.length > 0 ? (
+                                <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                                    <SelectTrigger className="h-11 rounded-xl">
+                                        <SelectValue placeholder="Choose Project" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {projects.map(p => (
+                                            <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <div className="h-11 border border-dashed border-border rounded-xl flex items-center px-3 bg-secondary/20">
+                                    <AlertCircle className="h-4 w-4 text-amber-500 mr-2" />
+                                    <span className="text-[10px] text-muted-foreground">No projects found</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <Button
+                                onClick={handleInvite}
+                                disabled={inviting}
+                                className="w-full h-11 bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl font-bold shadow-md shadow-accent/20"
+                            >
+                                {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
+                                {inviting ? "..." : "Invite"}
+                            </Button>
+                        </div>
                     </div>
+                    {isProjectRole && (
+                        <p className="mt-4 text-[10px] text-muted-foreground flex items-center gap-1.5 bg-secondary/30 p-2 rounded-lg inline-flex">
+                            <Briefcase className="h-3 w-3" /> Note: {inviteRole}s join projects via email access codes.
+                        </p>
+                    )}
                 </div>
             )}
 
@@ -150,13 +208,13 @@ const UserManagement = () => {
                 <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
             ) : (
                 <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-                    <table className="w-full">
+                    <table className="w-full text-left">
                         <thead>
                             <tr className="border-b border-border bg-secondary/30">
-                                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Member</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
+                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Member</th>
+                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</th>
+                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
                                 <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
@@ -172,30 +230,25 @@ const UserManagement = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <Select value={u.role} onValueChange={val => changeRole(u.id, val as UserRole)}>
-                                                <SelectTrigger className="h-8 w-32 text-[10px] font-bold uppercase rounded-lg">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="admin">Admin</SelectItem>
-                                                    <SelectItem value="contributor">Contributor</SelectItem>
-                                                    <SelectItem value="client">Client</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        <Select value={u.role} onValueChange={val => changeRole(u.id, val as UserRole)}>
+                                            <SelectTrigger className="h-8 w-32 text-[10px] font-bold uppercase rounded-lg">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="admin">Admin</SelectItem>
+                                                <SelectItem value="contributor">Contributor</SelectItem>
+                                                <SelectItem value="client">Client</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <button onClick={() => toggleActive(u.id)} className="flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-secondary transition-colors">
+                                        <button onClick={() => toggleActive(u.id)} className="flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-secondary transition-colors text-[10px] font-bold uppercase">
                                             {u.active !== false
-                                                ? <ToggleRight className="h-5 w-5 text-accent" />
-                                                : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}
-                                            <span className={cn('text-[10px] font-bold uppercase', u.active !== false ? 'text-accent' : 'text-muted-foreground')}>
-                                                {u.active !== false ? 'Active' : 'Inactive'}
-                                            </span>
+                                                ? <><ToggleRight className="h-5 w-5 text-accent" /> <span className="text-accent">Active</span></>
+                                                : <><ToggleLeft className="h-5 w-5 text-muted-foreground" /> <span className="text-muted-foreground">Inactive</span></>}
                                         </button>
                                     </td>
-                                    <td className="px-6 py-4 text-xs text-muted-foreground">
+                                    <td className="px-6 py-4 text-xs text-muted-foreground font-medium">
                                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
                                     </td>
                                     <td className="px-6 py-4 text-right">
@@ -211,7 +264,8 @@ const UserManagement = () => {
                     </table>
                     {users.length === 0 && (
                         <div className="p-12 text-center text-muted-foreground">
-                            No users found.
+                            <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                            No users found in your organization.
                         </div>
                     )}
                 </div>

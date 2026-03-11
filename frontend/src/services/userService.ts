@@ -10,12 +10,22 @@ export const getOrgUsers = async () => {
     }
 };
 
-export const inviteUser = async (data: { email: string, role: string }) => {
+export const inviteUser = async (data: { email: string, role: string, project_id?: string | number }) => {
     try {
         const response = await PrivateAxios.post('/users/invite', data);
         return response.data;
     } catch (error) {
         console.error("inviteUser Error", error);
+        throw error;
+    }
+};
+
+export const deleteUser = async (id: string | number) => {
+    try {
+        const response = await PrivateAxios.delete(`/users/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error("deleteUser Error", error);
         throw error;
     }
 };

@@ -238,7 +238,7 @@ export const verifyInvitation = async (req: Request, res: Response) => {
     }
 };
 
-export const completeSuperAdminOnboarding = async (req: Request, res: Response) => {
+export const completeOnboarding = async (req: Request, res: Response) => {
     try {
         const { token, name, password } = req.body;
 
@@ -265,7 +265,7 @@ export const completeSuperAdminOnboarding = async (req: Request, res: Response) 
             email_verified: true
         });
 
-        res.status(200).json({ message: "Onboarding completed successfully" });
+        res.status(200).json({ message: "Account setup successful! You can now log in." });
     } catch (error) {
         console.error("Complete Onboarding Error:", error);
         res.status(400).json({ error: "Invalid or expired token" });

@@ -13,12 +13,8 @@ const SiteHeader = () => {
   const router = useRouter();
   const { user, logout } = useAuth() || {};
   const { setMode } = useInterface() || {};
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return true;
-  });
+  const [isDark, setIsDark] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -26,12 +22,19 @@ const SiteHeader = () => {
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    setIsDark(isDarkMode);
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     if (isDark) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [isDark]);
+  }, [isDark, mounted]);
 
   useEffect(() => {
     if (showSearch && searchRef.current) {

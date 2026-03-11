@@ -25,6 +25,26 @@ export const verifyAdminOtp = async (data: any) => {
     }
 };
 
+export const verifyInvitation = async (token: string) => {
+    try {
+        const response = await PublicAxios.get(`/auth/verify-invitation?token=${token}`);
+        return response.data;
+    } catch (error: any) {
+        console.error("verifyInvitation Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const completeOnboarding = async (data: { token: string, name: string, password: string }) => {
+    try {
+        const response = await PublicAxios.post('/auth/complete-onboarding', data);
+        return response.data;
+    } catch (error: any) {
+        console.error("completeOnboarding Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
 // ==========================
 // AUTHENTICATION (Login)
 // ==========================
