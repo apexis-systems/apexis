@@ -106,8 +106,8 @@ export default function DashboardScreen() {
     p.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalDocs = filteredProjects.reduce((sum, p) => sum + (p.totalDocs || 0), 0);
-  const totalPhotos = filteredProjects.reduce((sum, p) => sum + (p.totalPhotos || 0), 0);
+  const totalDocs = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalDocs, 10) || 0), 0);
+  const totalPhotos = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalPhotos, 10) || 0), 0);
 
   const handleCreate = async () => {
     if (!newProject.name || !newProject.start_date || !newProject.end_date) return;
@@ -385,11 +385,11 @@ export default function DashboardScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                     <Feather name="file-text" size={9} color={colors.textMuted} />
-                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{project.totalDocs || 0}</Text>
+                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{parseInt(project.totalDocs, 10) || 0}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                     <Feather name="camera" size={9} color={colors.textMuted} />
-                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{project.totalPhotos || 0}</Text>
+                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{parseInt(project.totalPhotos, 10) || 0}</Text>
                   </View>
                 </View>
               </TouchableOpacity>

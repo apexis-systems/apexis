@@ -194,8 +194,8 @@ export default function Dashboard() {
         );
     }
 
-    const totalDocs = projects.reduce((sum, p) => sum + (p.totalDocs || 0), 0);
-    const totalPhotos = projects.reduce((sum, p) => sum + (p.totalPhotos || 0), 0);
+    const totalDocs = projects.reduce((sum, p) => sum + (parseInt(p.totalDocs, 10) || 0), 0);
+    const totalPhotos = projects.reduce((sum, p) => sum + (parseInt(p.totalPhotos, 10) || 0), 0);
 
     return (
         <div className="p-8 max-w-6xl mx-auto">

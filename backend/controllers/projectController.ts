@@ -72,11 +72,11 @@ export const getProjects = async (req: Request, res: Response) => {
             attributes: {
                 include: [
                     [
-                        fn('COUNT', literal(`CASE WHEN "files"."file_type" LIKE 'image/%' THEN 1 END`)),
+                        literal(`CAST(COUNT(CASE WHEN "files"."file_type" LIKE 'image/%' THEN 1 END) AS INTEGER)`),
                         'totalPhotos'
                     ],
                     [
-                        fn('COUNT', literal(`CASE WHEN "files"."file_type" NOT LIKE 'image/%' THEN 1 END`)),
+                        literal(`CAST(COUNT(CASE WHEN "files"."file_type" NOT LIKE 'image/%' THEN 1 END) AS INTEGER)`),
                         'totalDocs'
                     ],
                 ],
