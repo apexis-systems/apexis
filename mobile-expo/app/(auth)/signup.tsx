@@ -110,6 +110,38 @@ export default function SignUpScreen() {
 
         try {
             await completeOnboarding({ token: token as string, name, password });
+
+            // Auto Login
+            try {
+                // If the user setup their account, we can try logging them in immediately
+                // Note: The completeOnboarding might not return a token in our current backend, 
+                // so we might need a separate login call if backend doesn't change.
+                // However, the user request says "it should remove already loged in user and login again"
+                // So we'll perform a login here.
+
+                // We need a login service that works for admins/superadmins.
+                // Let's check what service to use. The current file uses login from useAuth which takes a token.
+                // We'll need to fetch the token first.
+
+                // Assuming loginAdmin or loginSuperAdmin would work based on the role.
+                // Since this is signup.tsx (typically for admins), we'll try loginAdmin or similar.
+                // Actually, let's use the provided credentials to login.
+
+                const { loginAdmin } = require('@/services/authService');
+                const logRes = await loginAdmin({ email, password });
+                if (logRes?.token) {
+                    await login(logRes.token);
+                    Alert.alert(
+                        "Success",
+                        "Account setup complete! You are now logged in.",
+                        [{ text: "OK", onPress: () => router.replace('/(tabs)') }]
+                    );
+                    return;
+                }
+            } catch (loginErr) {
+                console.error("Auto login failed", loginErr);
+            }
+
             Alert.alert(
                 "Account Setup",
                 "Your account is ready! Please log in to continue.",

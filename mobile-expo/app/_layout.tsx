@@ -35,9 +35,12 @@ function RootLayoutNav() {
     // Defer navigation by one tick so the Root Layout is fully mounted first
     const timer = setTimeout(() => {
       const inAuthGroup = segments[0] === '(auth)';
+      const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup'; // Check if we are on signup page
+
       if (!isLoggedIn && !inAuthGroup) {
         router.replace('/(auth)/login');
-      } else if (isLoggedIn && inAuthGroup) {
+      } else if (isLoggedIn && inAuthGroup && !isSignupWithToken) {
+        // Only redirect away from auth group if logged in AND not on a special bypass route like signup
         router.replace('/(tabs)');
       }
     }, 0);
