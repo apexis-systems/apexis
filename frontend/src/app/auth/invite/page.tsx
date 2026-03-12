@@ -5,7 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { Smartphone, Download, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export default function InviteLandingPage() {
+import { Suspense } from 'react';
+
+function InviteLandingContent() {
     const searchParams = useSearchParams();
     const token = searchParams?.get('token');
     const [attempted, setAttempted] = useState(false);
@@ -102,5 +104,17 @@ export default function InviteLandingPage() {
                 Powered by Apexis.
             </footer>
         </div>
+    );
+}
+
+export default function InviteLandingPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+                <Loader2 className="h-10 w-10 animate-spin text-accent" />
+            </div>
+        }>
+            <InviteLandingContent />
+        </Suspense>
     );
 }
