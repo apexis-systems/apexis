@@ -19,7 +19,7 @@ const MainSidebar = () => {
     { icon: Home, label: t('dashboard'), path: `${basePath}/dashboard` },
     ...(user?.role !== 'client' ? [{ icon: Upload, label: t('upload'), path: `${basePath}/upload` }] : []),
     { icon: Clock, label: t('activity'), path: `${basePath}/activity` },
-    { icon: MessageSquare, label: 'Chats', path: `${basePath}/chats` },
+    ...(user?.role !== 'superadmin' ? [{ icon: MessageSquare, label: 'Chats', path: `${basePath}/chats` }] : []),
     { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },
     { icon: User, label: t('profile'), path: `${basePath}/profile` },
     ...(user?.role === 'superadmin' ? [

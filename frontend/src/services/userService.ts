@@ -29,3 +29,15 @@ export const deleteUser = async (id: string | number) => {
         throw error;
     }
 };
+
+export const updateUserProfilePic = async (formData: FormData) => {
+    try {
+        const response = await PrivateAxios.patch('/users/profile-pic', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    } catch (error) {
+        console.error("updateUserProfilePic Error", error);
+        throw error;
+    }
+};

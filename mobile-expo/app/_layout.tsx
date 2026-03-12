@@ -15,11 +15,18 @@ import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
 import '@/global.css';
 import '@/i18n';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { registerForPushNotificationsAsync } from '@/services/notificationService';
 
 function RootLayoutNav() {
-  const { isLoggedIn, isLoading } = useAuth();
+  const { isLoggedIn, isLoading, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  useEffect(() => {
+    if (isLoggedIn && user) {
+      registerForPushNotificationsAsync();
+    }
+  }, [isLoggedIn, user]);
 
   useEffect(() => {
     // Wait until initial API token profile fetch resolves
@@ -50,13 +57,16 @@ function RootLayoutNav() {
 }
 
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { SocketProvider } from '@/contexts/SocketContext';
 
 function ThemedLayout() {
   const { isDark } = useTheme();
   return (
     <GluestackUIProvider mode={isDark ? "dark" : "light"}>
       <AuthProvider>
-        <RootLayoutNav />
+        <SocketProvider>
+          <RootLayoutNav />
+        </SocketProvider>
         <StatusBar style={isDark ? "light" : "dark"} />
       </AuthProvider>
     </GluestackUIProvider>

@@ -84,6 +84,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="chat"
         options={{
+          href: user?.role === 'superadmin' ? null : '/(tabs)/chat',
           title: 'Chat',
           tabBarIcon: ({ color }) => <Feather name="message-circle" size={22} color={color} />,
         }}

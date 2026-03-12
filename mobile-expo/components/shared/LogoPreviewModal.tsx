@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Feather } from '@expo/vector-icons';
 
@@ -9,9 +9,25 @@ interface Props {
     logoSource: any;
     canChange: boolean;
     onChangePress: () => void;
+    isCircular?: boolean;
+    uploading?: boolean;
+    title?: string;
+    subtitle?: string;
+    buttonText?: string;
 }
 
-export default function LogoPreviewModal({ visible, onClose, logoSource, canChange, onChangePress }: Props) {
+export default function LogoPreviewModal({
+    visible,
+    onClose,
+    logoSource,
+    canChange,
+    onChangePress,
+    isCircular = false,
+    uploading = false,
+    title = "Organization Logo",
+    subtitle = "This logo represents your organization across the platform.",
+    buttonText = "Change Logo"
+}: Props) {
     const { colors } = useTheme();
 
     return (
@@ -22,33 +38,99 @@ export default function LogoPreviewModal({ visible, onClose, logoSource, canChan
             statusBarTranslucent={true}
             onRequestClose={onClose}
         >
-            <View style={styles.overlay}>
-                <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                        <Feather name="x" size={24} color={colors.textMuted} />
+            <View style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.9)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: 24,
+            }}>
+                <View style={{
+                    width: '100%',
+                    maxWidth: 340,
+                    borderRadius: 24,
+                    padding: 24,
+                    borderWidth: 1,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border
+                }}>
+                    <TouchableOpacity
+                        style={{
+                            position: 'absolute',
+                            top: 16,
+                            right: 16,
+                            padding: 4,
+                            zIndex: 1,
+                        }}
+                        onPress={onClose}
+                        disabled={uploading}
+                    >
+                        <Feather name="x" size={24} color={uploading ? colors.border : colors.textMuted} />
                     </TouchableOpacity>
 
-                    <View style={styles.content}>
-                        <View style={[styles.imageWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <View style={{ alignItems: 'center', paddingTop: 16 }}>
+                        <View style={{
+                            width: 180,
+                            height: 180,
+                            borderRadius: isCircular ? 90 : 20,
+                            borderWidth: 2,
+                            overflow: 'hidden',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: 20,
+                            backgroundColor: colors.background,
+                            borderColor: colors.border
+                        }}>
                             {logoSource ? (
-                                <Image source={logoSource} style={styles.image} resizeMode="cover" />
+                                <Image source={logoSource} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                             ) : (
-                                <Text style={{ color: colors.textMuted, fontStyle: 'italic' }}>No Logo</Text>
+                                <Feather name={isCircular ? "user" : "image"} size={48} color={colors.textMuted} />
+                            )}
+
+                            {uploading && (
+                                <View style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    backgroundColor: 'rgba(255,255,255,0.8)',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    zIndex: 10
+                                }}>
+                                    <ActivityIndicator size="large" color="#f97316" />
+                                    <Text style={{ marginTop: 10, fontSize: 13, fontWeight: '700', color: '#f97316' }}>Uploading...</Text>
+                                </View>
                             )}
                         </View>
 
-                        <Text style={[styles.title, { color: colors.text }]}>Organization Logo</Text>
-                        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-                            This logo represents your organization across the platform.
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8, color: colors.text }}>{title}</Text>
+                        <Text style={{ fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24, color: colors.textMuted }}>
+                            {subtitle}
                         </Text>
 
                         {canChange && (
                             <TouchableOpacity
-                                style={[styles.changeButton, { backgroundColor: '#f97316' }]} // Using specific orange as per app theme
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 8,
+                                    width: '100%',
+                                    height: 50,
+                                    borderRadius: 14,
+                                    backgroundColor: '#f97316',
+                                    opacity: uploading ? 0.7 : 1
+                                }}
                                 onPress={onChangePress}
+                                disabled={uploading}
                             >
-                                <Feather name="camera" size={18} color="#fff" />
-                                <Text style={styles.changeButtonText}>Change Logo</Text>
+                                {uploading ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <>
+                                        <Feather name="camera" size={18} color="#fff" />
+                                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{buttonText}</Text>
+                                    </>
+                                )}
                             </TouchableOpacity>
                         )}
                     </View>
@@ -57,70 +139,3 @@ export default function LogoPreviewModal({ visible, onClose, logoSource, canChan
         </Modal>
     );
 }
-
-const styles = StyleSheet.create({
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.9)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 24,
-    },
-    container: {
-        width: '100%',
-        maxWidth: 340,
-        borderRadius: 24,
-        padding: 24,
-        borderWidth: 1,
-    },
-    closeButton: {
-        position: 'absolute',
-        top: 16,
-        right: 16,
-        padding: 4,
-        zIndex: 1,
-    },
-    content: {
-        alignItems: 'center',
-        paddingTop: 16,
-    },
-    imageWrapper: {
-        width: 180,
-        height: 180,
-        borderRadius: 24,
-        borderWidth: 2,
-        overflow: 'hidden',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-    },
-    image: {
-        width: '100%',
-        height: '100%',
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: '700',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 14,
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 24,
-    },
-    changeButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        width: '100%',
-        height: 50,
-        borderRadius: 14,
-    },
-    changeButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '700',
-    },
-});

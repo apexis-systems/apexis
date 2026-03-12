@@ -13,6 +13,7 @@ interface AuthContextType {
     login: (token: string) => Promise<User | undefined>;
     logout: () => void;
     switchRole: (role: UserRole) => void;
+    setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
     login: async () => undefined,
     logout: () => { },
     switchRole: () => { },
+    setUser: () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -114,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [logout]);
 
     return (
-        <AuthContext.Provider value={{ user, isLoggedIn: !!user, isLoading, login, logout, switchRole }}>
+        <AuthContext.Provider value={{ user, isLoggedIn: !!user, isLoading, login, logout, switchRole, setUser }}>
             {children}
         </AuthContext.Provider>
     );

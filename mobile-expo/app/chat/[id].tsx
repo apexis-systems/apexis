@@ -1,51 +1,93 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
+import { getRoomMessages, sendChatMessage, markMessageSeen } from '@/services/chatService';
 
 export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams();
     const { colors, isDark } = useTheme();
+    const { user } = useAuth();
+    const { socket } = useSocket();
     const router = useRouter();
-    const [message, setMessage] = useState('');
 
-    // Mock Messages combining normal text + system notifications about users joining
-    const MOCK_MESSAGES = [
-        {
-            id: 'sys-1',
-            type: 'system',
-            text: 'Admin created group "Alpha Tower Team"',
-            time: '11:00 AM'
-        },
-        {
-            id: 'sys-2',
-            type: 'system',
-            text: 'Sarah (Client) joined using invite code A1B2',
-            time: '11:05 AM'
-        },
-        {
-            id: 'msg-1',
-            type: 'received',
-            sender: 'Sarah (Client)',
-            text: 'Hi everyone! I just joined visually through the app.',
-            time: '11:10 AM'
-        },
-        {
-            id: 'msg-2',
-            type: 'sent',
-            sender: 'Admin',
-            text: 'Welcome Sarah! Have you checked the latest site snags?',
-            time: '11:15 AM'
-        },
-        {
-            id: 'sys-3',
-            type: 'system',
-            text: 'Admin added David (Contributor) recently',
-            time: '12:45 PM'
+    if (user?.role === 'superadmin') {
+        router.replace('/(tabs)');
+        return null;
+    }
+
+    const [message, setMessage] = useState('');
+    const [messages, setMessages] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const flatListRef = useRef<FlatList>(null);
+
+    useEffect(() => {
+        const fetchMessages = async () => {
+            try {
+                const data = await getRoomMessages(id as string);
+                setMessages(data);
+
+                // Mark unread messages as seen
+                const lastUnread = data.reverse().find((m: any) => !m.seen && m.sender_id !== user?.id);
+                if (lastUnread) {
+                    await markMessageSeen(lastUnread.id);
+                }
+            } catch (error) {
+                console.error("fetchMessages error:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchMessages();
+
+        if (socket) {
+            socket.emit('join-room', id);
+
+            const handleNewMessage = (payload: any) => {
+                if (String(payload.room_id) === String(id)) {
+                    setMessages(prev => [...prev, payload]);
+                    // Auto mark as seen if we are in the room
+                    if (payload.sender_id !== user?.id) {
+                        markMessageSeen(payload.id).catch(console.error);
+                    }
+                }
+            };
+
+            const handleMessageSeen = ({ messageId }: { messageId: number }) => {
+                setMessages(prev => prev.map(m => m.id === messageId ? { ...m, seen: true } : m));
+            };
+
+            socket.on('new-message', handleNewMessage);
+            socket.on('message-seen-update', handleMessageSeen);
+
+            return () => {
+                socket.off('new-message', handleNewMessage);
+                socket.off('message-seen-update', handleMessageSeen);
+            };
         }
-    ];
+    }, [id, socket, user?.id]);
+
+    const handleSend = async () => {
+        if (!message.trim()) return;
+        const textToSubmit = message.trim();
+        setMessage('');
+
+        try {
+            const res = await sendChatMessage({
+                roomId: id as string,
+                text: textToSubmit
+            });
+            // Socket will broadcast 'new-message', but we might want to update locally for responsiveness if not using broadcase-to-sender
+            // The backend socket.ts broadcasts to room, so sender will also receive it.
+        } catch (error) {
+            console.error("handleSend error:", error);
+        }
+    };
 
     const renderMessage = ({ item }: { item: any }) => {
         if (item.type === 'system') {
@@ -60,7 +102,8 @@ export default function ChatDetailScreen() {
             );
         }
 
-        const isMe = item.type === 'sent';
+        const isMe = item.sender_id === user?.id;
+        const time = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return (
             <View style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
@@ -75,14 +118,24 @@ export default function ChatDetailScreen() {
                     borderBottomLeftRadius: isMe ? 16 : 4,
                 }}>
                     {!isMe && (
-                        <Text style={{ fontSize: 12, color: '#f97316', fontWeight: '600', marginBottom: 2 }}>{item.sender}</Text>
+                        <Text style={{ fontSize: 12, color: '#f97316', fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
                     )}
                     <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
                         {item.text}
                     </Text>
-                    <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted, alignSelf: 'flex-end', marginTop: 4 }}>
-                        {item.time} {isMe && <Ionicons name="checkmark-done" size={14} color="#fff" />}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 }}>
+                        <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
+                            {time}
+                        </Text>
+                        {isMe && (
+                            <Ionicons
+                                name="checkmark-done"
+                                size={14}
+                                color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
+                                style={{ marginLeft: 4 }}
+                            />
+                        )}
+                    </View>
                 </View>
             </View>
         );
@@ -102,8 +155,8 @@ export default function ChatDetailScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }} numberOfLines={1}>Alpha Tower Team</Text>
-                    <Text style={{ fontSize: 12, color: colors.textMuted }}>Sarah, David, Michael, You</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }} numberOfLines={1}>Chat Room</Text>
+                    <Text style={{ fontSize: 12, color: colors.textMuted }}>Active Chat</Text>
                 </TouchableOpacity>
 
                 <View style={{ flexDirection: 'row', gap: 16, paddingRight: 8 }}>
@@ -117,18 +170,26 @@ export default function ChatDetailScreen() {
             </View>
 
             {/* Chat Area */}
-            {/* Using a subtle pattern/color like WhatsApp for background */}
             <KeyboardAvoidingView
                 style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
-                <FlatList
-                    data={MOCK_MESSAGES}
-                    keyExtractor={item => item.id}
-                    renderItem={renderMessage}
-                    contentContainerStyle={{ padding: 16 }}
-                />
+                {loading ? (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color="#f97316" />
+                    </View>
+                ) : (
+                    <FlatList
+                        ref={flatListRef}
+                        data={messages}
+                        keyExtractor={item => String(item.id)}
+                        renderItem={renderMessage}
+                        contentContainerStyle={{ padding: 16 }}
+                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    />
+                )}
 
                 {/* Input Area */}
                 <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'flex-end' }}>
@@ -155,6 +216,7 @@ export default function ChatDetailScreen() {
                     </View>
 
                     <TouchableOpacity
+                        onPress={handleSend}
                         style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}
                     >
                         {message ? (

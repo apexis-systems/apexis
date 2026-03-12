@@ -2,85 +2,139 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users } from 'lucide-react';
-
-const MOCK_CHATS: Record<string, { name: string; participants: string }> = {
-    '1': { name: 'Alpha Tower Team', participants: 'Sarah, David, Michael, You' },
-    '2': { name: 'Sarah Jenkins', participants: 'Client' },
-    '3': { name: 'Site Managers', participants: 'Michael, You' },
-    '4': { name: 'David Chen', participants: 'Contributor' },
-};
-
-const MOCK_MESSAGES = [
-    {
-        id: 'sys-1',
-        type: 'system',
-        text: 'Admin created group "Alpha Tower Team"',
-        time: '11:00 AM',
-    },
-    {
-        id: 'sys-2',
-        type: 'system',
-        text: 'Sarah (Client) joined using invite code A1B2',
-        time: '11:05 AM',
-    },
-    {
-        id: 'msg-1',
-        type: 'received',
-        sender: 'Sarah (Client)',
-        text: 'Hi everyone! I just joined visually through the app.',
-        time: '11:10 AM',
-    },
-    {
-        id: 'msg-2',
-        type: 'sent',
-        sender: 'Admin',
-        text: 'Welcome Sarah! Have you checked the latest site snags?',
-        time: '11:15 AM',
-    },
-    {
-        id: 'sys-3',
-        type: 'system',
-        text: 'Admin added David (Contributor) recently',
-        time: '12:45 PM',
-    },
-    {
-        id: 'msg-3',
-        type: 'received',
-        sender: 'David Chen',
-        text: 'Can you upload the latest drawings?',
-        time: '12:50 PM',
-    },
-];
+import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck } from 'lucide-react';
+import { getRoomMessages, sendChatMessage, markMessageSeen } from '@/services/chatService';
+import { useSocket } from '@/contexts/SocketContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ChatDetail() {
     const router = useRouter();
     const params = useParams();
+    const { socket } = useSocket();
+    const { user } = useAuth();
+
     const role = params?.role as string ?? 'admin';
-    const id = params?.id as string ?? '1';
-    const chat = MOCK_CHATS[id] ?? MOCK_CHATS['1'];
+    const roomId = params?.id as string;
 
     const [message, setMessage] = useState('');
-    const [messages, setMessages] = useState(MOCK_MESSAGES);
+
+    if (role === 'superadmin') {
+        router.push('/superadmin/dashboard');
+        return null;
+    }
+
+    const [messages, setMessages] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const bottomRef = useRef<HTMLDivElement>(null);
+
+    // Fetch messages on load
+    useEffect(() => {
+        const fetchMessages = async () => {
+            if (!roomId) return;
+            try {
+                const data = await getRoomMessages(roomId);
+                setMessages(data);
+
+                // Mark unread messages as seen
+                data.forEach((msg: any) => {
+                    if (!msg.seen && msg.sender_id !== user?.id) {
+                        markMessageSeen(msg.id);
+                    }
+                });
+            } catch (err) {
+                console.error("Failed to fetch messages", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchMessages();
+    }, [roomId, user?.id]);
+
+    // Socket listeners
+    useEffect(() => {
+        if (!socket || !roomId) return;
+
+        socket.emit('join-room', roomId);
+
+        const handleNewMessage = (msg: any) => {
+            if (msg.roomId === roomId) {
+                setMessages(prev => [...prev, {
+                    ...msg,
+                    id: msg.id || Date.now(),
+                    sender_id: msg.senderId,
+                    sender: { name: msg.senderName }
+                }]);
+
+                // Play sound if sender is not me
+                if (msg.senderId !== user?.id) {
+                    playNotificationSound();
+                }
+
+                // Auto-mark as seen if we are in the room
+                if (msg.senderId !== user?.id) {
+                    markMessageSeen(msg.id);
+                }
+            }
+        };
+
+        const playNotificationSound = () => {
+            try {
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+                audio.play().catch(e => console.error("Sound play failed:", e));
+            } catch (err) {
+                console.error("Audio error:", err);
+            }
+        };
+
+        const handleMessageSeen = ({ messageId }: { messageId: number }) => {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, seen: true } : m));
+        };
+
+        socket.on('new-message', handleNewMessage);
+        socket.on('message-seen-update', handleMessageSeen);
+
+        return () => {
+            socket.off('new-message', handleNewMessage);
+            socket.off('message-seen-update', handleMessageSeen);
+        };
+    }, [socket, roomId, user?.id]);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const handleSend = () => {
-        if (!message.trim()) return;
-        setMessages(prev => [
-            ...prev,
-            {
-                id: `msg-${Date.now()}`,
-                type: 'sent',
-                sender: 'You',
-                text: message.trim(),
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-        ]);
+    const handleSend = async () => {
+        if (!message.trim() || !roomId) return;
+
+        const tempText = message.trim();
         setMessage('');
+
+        try {
+            // 1. Send via API (persists to DB and triggers push notifications)
+            const res = await sendChatMessage({
+                roomId,
+                text: tempText,
+                // We'll let the backend determine recipient from roomId for group chats, 
+                // or we could pass it here if it's a 1-1 chat.
+            });
+
+            // 2. Broadcast via Socket for immediate UI update in others
+            if (socket) {
+                socket.emit('send-message', {
+                    roomId,
+                    text: tempText,
+                    senderId: user?.id,
+                    senderName: user?.name,
+                    createdAt: new Date()
+                });
+            }
+
+            // Local update (optional if socket broadcasts to self, but better for UX)
+            // If socket doesn't broadcast to sender, we add it manually.
+            // My backend socket.ts uses io.to().emit which includes sender if they are in the room.
+        } catch (err) {
+            console.error("Failed to send message", err);
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -89,6 +143,8 @@ export default function ChatDetail() {
             handleSend();
         }
     };
+
+    if (loading) return <div className="p-6 text-center text-muted-foreground">Loading messages...</div>;
 
     return (
         <div className="flex flex-col h-full">
@@ -106,8 +162,8 @@ export default function ChatDetail() {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    <p className="font-bold text-foreground text-sm truncate">{chat.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{chat.participants}</p>
+                    <p className="font-bold text-foreground text-sm truncate">Chat Detail</p>
+                    <p className="text-xs text-muted-foreground truncate">Real-time Messaging</p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -131,38 +187,33 @@ export default function ChatDetail() {
                 `}</style>
 
                 {messages.map(msg => {
-                    if (msg.type === 'system') {
-                        return (
-                            <div key={msg.id} className="flex justify-center my-3">
-                                <div className="bg-amber-50 dark:bg-card border border-amber-200 dark:border-border text-[#f97316] text-xs font-medium px-3 py-1.5 rounded-full max-w-xs text-center">
-                                    {msg.text}
-                                </div>
-                            </div>
-                        );
-                    }
+                    const isMe = msg.sender_id === user?.id;
+                    const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                    const isMe = msg.type === 'sent';
                     return (
                         <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                             <div
                                 className={`max-w-[75%] px-3.5 py-2.5 shadow-sm ${isMe
-                                        ? 'bg-[#f97316] text-white rounded-2xl rounded-br-sm'
-                                        : 'bg-card text-foreground border border-border rounded-2xl rounded-bl-sm'
+                                    ? 'bg-[#f97316] text-white rounded-2xl rounded-br-sm'
+                                    : 'bg-card text-foreground border border-border rounded-2xl rounded-bl-sm'
                                     }`}
                             >
                                 {!isMe && (
-                                    <p className="text-[#f97316] text-xs font-semibold mb-1">{msg.sender}</p>
+                                    <p className="text-[#f97316] text-xs font-semibold mb-1">{msg.sender?.name || 'User'}</p>
                                 )}
                                 <p className="text-sm leading-relaxed">{msg.text}</p>
                                 <div className={`flex items-center gap-1 mt-1 justify-end`}>
                                     <span className={`text-[10px] ${isMe ? 'text-orange-100' : 'text-muted-foreground'}`}>
-                                        {msg.time}
+                                        {time}
                                     </span>
                                     {isMe && (
-                                        <svg className="w-3.5 h-3.5 text-orange-100" viewBox="0 0 16 11" fill="currentColor">
-                                            <path d="M11.071.653a.75.75 0 0 1 .082 1.057L5.97 8.421l-2.75-2.75A.75.75 0 0 1 4.28 4.61l1.69 1.69 4.046-5.565a.75.75 0 0 1 1.056-.082z" />
-                                            <path d="M14.571.653a.75.75 0 0 1 .082 1.057L9.47 8.421 8.5 7.45l4.714-6.715a.75.75 0 0 1 1.057-.082z" />
-                                        </svg>
+                                        <div className="flex items-center">
+                                            {msg.seen ? (
+                                                <CheckCheck className="w-3.5 h-3.5 text-green-400" />
+                                            ) : (
+                                                <Check className="w-3.5 h-3.5 text-orange-100 opacity-70" />
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>

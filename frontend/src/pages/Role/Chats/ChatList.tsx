@@ -1,65 +1,116 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Search, PlusCircle, Camera, Users, MessageSquare } from 'lucide-react';
-
-const MOCK_CHATS = [
-    {
-        id: '1',
-        name: 'Alpha Tower Team',
-        type: 'group',
-        lastMessage: 'Admin added Sarah (Client) recently.',
-        time: '12:45 PM',
-        unread: 2,
-        isSystem: true,
-        participants: 5,
-        avatar: null,
-    },
-    {
-        id: '2',
-        name: 'Sarah Jenkins',
-        type: 'direct',
-        lastMessage: 'Yes, the inspection is scheduled for tomorrow.',
-        time: 'Yesterday',
-        unread: 0,
-        isSystem: false,
-        role: 'Client',
-        avatar: 'https://i.pravatar.cc/150?u=sarah',
-    },
-    {
-        id: '3',
-        name: 'Site Managers',
-        type: 'group',
-        lastMessage: 'Michael joined using invite code X7B9.',
-        time: 'Monday',
-        unread: 0,
-        isSystem: true,
-        participants: 3,
-        avatar: null,
-    },
-    {
-        id: '4',
-        name: 'David Chen',
-        type: 'direct',
-        lastMessage: 'Can you upload the latest drawings?',
-        time: 'Monday',
-        unread: 0,
-        isSystem: false,
-        role: 'Contributor',
-        avatar: 'https://i.pravatar.cc/150?u=david',
-    },
-];
+import { listRooms } from '@/services/chatService';
+import NewChatModal from '@/components/Chats/NewChatModal';
+import { useSocket } from '@/contexts/SocketContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ChatList() {
     const router = useRouter();
     const params = useParams();
     const role = params?.role as string ?? 'admin';
+    const { socket } = useSocket();
+    const { user: authUser } = useAuth() as any;
     const [searchQuery, setSearchQuery] = useState('');
+    const [rooms, setRooms] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [onlineUsers, setOnlineUsers] = useState<Set<number | string>>(new Set());
 
-    const filtered = MOCK_CHATS.filter(c =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    if (role === 'superadmin') {
+        return (
+            <div className="p-8 max-w-2xl mx-auto text-center">
+                <h1 className="text-2xl font-bold text-foreground mb-4">Access Denied</h1>
+                <p className="text-muted-foreground">Superadmins do not have access to the chat feature.</p>
+                <button
+                    onClick={() => router.push('/superadmin/dashboard')}
+                    className="mt-6 px-4 py-2 bg-accent text-white rounded-lg font-medium"
+                >
+                    Back to Dashboard
+                </button>
+            </div>
+        );
+    }
+
+    const fetchRooms = async () => {
+        try {
+            const data = await listRooms();
+            setRooms(data);
+        } catch (err) {
+            console.error("Failed to fetch rooms", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchRooms();
+    }, []);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        socket.on('new-message-global', (data: any) => {
+            setRooms(prevRooms => {
+                const roomIndex = prevRooms.findIndex(r => r.id === data.room_id);
+                if (roomIndex === -1) {
+                    fetchRooms();
+                    return prevRooms;
+                }
+
+                const updatedRooms = [...prevRooms];
+                const room = { ...updatedRooms[roomIndex] };
+                room.chat_messages = [data.message];
+                room.updatedAt = new Date().toISOString();
+
+                updatedRooms.splice(roomIndex, 1);
+                updatedRooms.unshift(room);
+                return updatedRooms;
+            });
+        });
+
+        socket.on('user-status-changed', ({ userId, status }: { userId: number | string, status: 'online' | 'offline' }) => {
+            setOnlineUsers(prev => {
+                const next = new Set(prev);
+                if (status === 'online') next.add(userId);
+                else next.delete(userId);
+                return next;
+            });
+        });
+
+        // Request current status for room members
+        rooms.forEach((room: any) => {
+            room.room_members?.forEach((m: any) => {
+                if (m.user?.id && m.user.id !== authUser?.id) {
+                    socket.emit('check-user-status', m.user.id);
+                }
+            });
+        });
+
+        socket.on('user-status-response', ({ userId, status }: { userId: number | string, status: 'online' | 'offline' }) => {
+            setOnlineUsers(prev => {
+                const next = new Set(prev);
+                if (status === 'online') next.add(userId);
+                else next.delete(userId);
+                return next;
+            });
+        });
+
+        return () => {
+            socket.off('new-message-global');
+            socket.off('user-status-changed');
+            socket.off('user-status-response');
+        };
+    }, [socket, !!rooms.length, authUser?.id]);
+
+    const filtered = rooms.filter(c =>
+        (c.name || c.room_members?.[0]?.user?.name || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    if (loading) return <div className="p-6 text-center text-muted-foreground">Loading chats...</div>;
 
     return (
         <div className="p-6 max-w-2xl mx-auto">
@@ -70,7 +121,10 @@ export default function ChatList() {
                     <button className="p-2 rounded-lg hover:bg-secondary transition-colors">
                         <Camera className="h-5 w-5 text-muted-foreground" />
                     </button>
-                    <button className="p-2 rounded-lg hover:bg-secondary transition-colors">
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="p-2 rounded-lg hover:bg-secondary transition-colors"
+                    >
                         <PlusCircle className="h-5 w-5 text-muted-foreground" />
                     </button>
                 </div>
@@ -96,53 +150,67 @@ export default function ChatList() {
                         <p className="text-sm">No chats found</p>
                     </div>
                 ) : (
-                    filtered.map((chat, idx) => (
-                        <button
-                            key={chat.id}
-                            onClick={() => router.push(`/${role}/chats/${chat.id}`)}
-                            className={`w-full flex items-center gap-4 px-4 py-3.5 hover:bg-secondary/40 transition-colors text-left ${idx < filtered.length - 1 ? 'border-b border-border' : ''}`}
-                        >
-                            {/* Avatar */}
-                            <div className="relative shrink-0">
-                                {chat.type === 'group' ? (
-                                    <div className="w-12 h-12 rounded-full bg-[#f97316] flex items-center justify-center">
-                                        <Users className="h-5 w-5 text-white" />
-                                    </div>
-                                ) : (
-                                    <img
-                                        src={chat.avatar || 'https://i.pravatar.cc/150'}
-                                        alt={chat.name}
-                                        className="w-12 h-12 rounded-full object-cover"
-                                    />
-                                )}
-                                {chat.unread > 0 && (
-                                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[#25D366] border-2 border-card" />
-                                )}
-                            </div>
+                    filtered.map((chat, idx) => {
+                        const isGroup = chat.type === 'group';
+                        const otherMember = chat.room_members?.find((m: any) => m.user?.id !== authUser?.id);
+                        const displayName = chat.name || otherMember?.user?.name || 'Chat';
+                        const isOnline = otherMember?.user?.id && onlineUsers.has(otherMember.user.id);
+                        const profilePic = otherMember?.user?.profile_pic;
+                        const avatarUrl = profilePic
+                            ? `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}/uploads/${profilePic}`
+                            : null;
 
-                            {/* Info */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-0.5">
-                                    <span className="font-semibold text-foreground text-sm truncate">{chat.name}</span>
-                                    <span className={`text-xs shrink-0 ml-2 ${chat.unread > 0 ? 'text-[#25D366]' : 'text-muted-foreground'}`}>
-                                        {chat.time}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className={`text-xs truncate ${chat.isSystem ? 'text-[#f97316] italic' : 'text-muted-foreground'}`}>
-                                        {chat.lastMessage}
-                                    </p>
-                                    {chat.unread > 0 && (
-                                        <span className="shrink-0 bg-[#25D366] text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
-                                            {chat.unread}
-                                        </span>
+                        return (
+                            <button
+                                key={chat.id}
+                                onClick={() => router.push(`/${role}/chats/${chat.id}`)}
+                                className={`w-full flex items-center gap-4 px-4 py-3.5 hover:bg-secondary/40 transition-colors text-left ${idx < filtered.length - 1 ? 'border-b border-border' : ''}`}
+                            >
+                                {/* Avatar */}
+                                <div className="relative shrink-0">
+                                    {isGroup ? (
+                                        <div className="w-12 h-12 rounded-full bg-[#f97316] flex items-center justify-center">
+                                            <Users className="h-5 w-5 text-white" />
+                                        </div>
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-full bg-[#f97316] flex items-center justify-center overflow-hidden">
+                                            {avatarUrl ? (
+                                                <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-white font-bold">{displayName.charAt(0)}</span>
+                                            )}
+                                        </div>
+                                    )}
+                                    {isOnline && (
+                                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-card rounded-full" />
                                     )}
                                 </div>
-                            </div>
-                        </button>
-                    ))
+
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between mb-0.5">
+                                        <span className="font-semibold text-foreground text-sm truncate">{displayName}</span>
+                                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                                            {new Date(chat.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-xs truncate text-muted-foreground">
+                                            {chat.chat_messages?.[0]?.text || (chat.type === 'group' ? 'Group Chat' : 'Direct Message')}
+                                        </p>
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })
                 )}
             </div>
+
+            <NewChatModal
+                open={isModalOpen}
+                onOpenChange={setIsModalOpen}
+                onSuccess={(newRoom) => router.push(`/${role}/chats/${newRoom.id}`)}
+            />
         </div>
     );
 }
