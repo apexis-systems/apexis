@@ -43,3 +43,15 @@ export const toggleFileVisibility = async (fileId: string | number, client_visib
         throw error;
     }
 };
+
+export const getSecureFileUrl = async (fileKey: string) => {
+    try {
+        const response = await PrivateAxios.post('/files/view', { fileKey }, {
+            responseType: 'blob'
+        });
+        return URL.createObjectURL(response.data);
+    } catch (error) {
+        console.error("getSecureFileUrl Error", error);
+        return null;
+    }
+};

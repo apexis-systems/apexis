@@ -126,6 +126,30 @@ db.projects.hasMany(db.activities, { foreignKey: 'project_id' });
 db.activities.belongsTo(db.users, { foreignKey: 'user_id', as: 'user' });
 db.users.hasMany(db.activities, { foreignKey: 'user_id' });
 
+// Room <-> Organization
+db.rooms.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.rooms, { foreignKey: 'organization_id' });
+
+// Room <-> Project
+db.rooms.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.rooms, { foreignKey: 'project_id' });
+
+// Room <-> RoomMember
+db.room_members.belongsTo(db.rooms, { foreignKey: 'room_id' });
+db.rooms.hasMany(db.room_members, { foreignKey: 'room_id' });
+
+// User <-> RoomMember
+db.room_members.belongsTo(db.users, { foreignKey: 'user_id' });
+db.users.hasMany(db.room_members, { foreignKey: 'user_id' });
+
+// Room <-> ChatMessage
+db.chat_messages.belongsTo(db.rooms, { foreignKey: 'room_id' });
+db.rooms.hasMany(db.chat_messages, { foreignKey: 'room_id' });
+
+// User <-> ChatMessage (Sender)
+db.chat_messages.belongsTo(db.users, { foreignKey: 'sender_id', as: 'sender' });
+db.users.hasMany(db.chat_messages, { foreignKey: 'sender_id' });
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
@@ -142,6 +166,9 @@ export const reports = db.reports;
 export const snags = db.snags;
 export const manuals = db.manuals;
 export const activities = db.activities;
+export const rooms = db.rooms;
+export const room_members = db.room_members;
+export const chat_messages = db.chat_messages;
 
 export { sequelize, Sequelize };
 export default db;

@@ -1,10 +1,15 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useState, useEffect } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import { fetchSecureLogo } from '@/services/organizationService';
+import { updateUserProfilePic } from '@/services/userService';
+import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 
 // const roles: { value: UserRole; label: string }[] = [
 //     { value: 'admin', label: 'Admin' },
@@ -21,13 +26,63 @@ const roleBadgeColor: Record<UserRole, { bg: string; text: string }> = {
 };
 
 export default function ProfileScreen() {
-    const { user, switchRole, logout } = useAuth();
+    const { user, switchRole, logout, updateUser } = useAuth() as any;
     const router = useRouter();
     const { colors } = useTheme();
 
+    const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+    useEffect(() => {
+        const loadProfilePic = async () => {
+            if (user?.profile_pic) {
+                const uri = await fetchSecureLogo(user.profile_pic);
+                setProfilePicUri(uri);
+            }
+        };
+        loadProfilePic();
+    }, [user?.profile_pic]);
+
     if (!user) return null;
 
-    const badge = { ...roleBadgeColor[user.role] };
+    const handleProfilePicUpload = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+
+            if (result.canceled || !result.assets?.length) return;
+
+            setIsUploading(true);
+            const asset = result.assets[0];
+            const formData = new FormData();
+            formData.append('profile_pic', {
+                uri: asset.uri,
+                type: asset.mimeType || 'image/jpeg',
+                name: asset.fileName || 'profile.jpg',
+            } as any);
+
+            const res = await updateUserProfilePic(formData);
+            if (res.profile_pic) {
+                updateUser({ profile_pic: res.profile_pic });
+                const uri = await fetchSecureLogo(res.profile_pic);
+                setProfilePicUri(uri);
+            }
+            setIsPreviewOpen(false);
+            Alert.alert('Success', 'Profile picture updated successfully');
+        } catch (e) {
+            console.error("Profile pic upload error:", e);
+            Alert.alert('Error', 'Failed to upload profile picture');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const badge = { ...roleBadgeColor[user.role as UserRole] };
     if (user.role === 'client') {
         badge.bg = colors.surface;
         badge.text = colors.textMuted;
@@ -54,22 +109,31 @@ export default function ProfileScreen() {
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 {/* Avatar + Info */}
                 <View style={{ alignItems: 'center', marginBottom: 32 }}>
-                    <View
+                    <TouchableOpacity
+                        onPress={() => setIsPreviewOpen(true)}
                         style={{
                             width: 80,
                             height: 80,
-                            borderRadius: 40,
+                            borderRadius: 20,
                             backgroundColor: colors.border,
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginTop: 12,
                             marginBottom: 12,
+                            overflow: 'hidden'
                         }}
                     >
-                        <Feather name="user" size={38} color={colors.text} />
-                    </View>
+                        {isUploading ? (
+                            <ActivityIndicator size="small" color="#f97316" />
+                        ) : profilePicUri ? (
+                            <Image source={{ uri: profilePicUri }} style={{ width: '100%', height: '100%' }} />
+                        ) : (
+                            <Feather name="user" size={38} color={colors.text} />
+                        )}
+                    </TouchableOpacity>
                     <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>{user.name}</Text>
                     <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{user.email}</Text>
+                    {/* ... rest of the component */}
                     <View
                         style={{
                             flexDirection: 'row',
@@ -176,6 +240,19 @@ export default function ProfileScreen() {
                     <Text style={{ fontSize: 14, color: '#ef4444', fontWeight: '500' }}>Sign Out</Text>
                 </TouchableOpacity>
             </ScrollView>
+
+            <LogoPreviewModal
+                visible={isPreviewOpen}
+                onClose={() => setIsPreviewOpen(false)}
+                logoSource={profilePicUri ? { uri: profilePicUri } : null}
+                canChange={true}
+                onChangePress={handleProfilePicUpload}
+                uploading={isUploading}
+                isCircular={false}
+                title="Profile Picture"
+                subtitle="This photo is visible to your team members and clients."
+                buttonText="Change Photo"
+            />
         </SafeAreaView>
     );
 }

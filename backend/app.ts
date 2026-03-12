@@ -16,6 +16,7 @@ import snagRoutes from "./routes/snagRoutes.ts";
 import manualRoutes from "./routes/manualRoutes.ts";
 import activityRoutes from "./routes/activityRoutes.ts";
 import organizationRoutes from "./routes/organizationRoutes.ts";
+import chatRoutes from "./routes/chatRoutes.ts";
 import { startCronJobs } from "./cron.ts";
 import http from 'http';
 import { initIO } from './socket.ts';
@@ -58,6 +59,7 @@ app.use("/api/snags", snagRoutes);
 app.use("/api/manuals", manualRoutes);
 app.use("/api/activities", activityRoutes);
 app.use("/api/organizations", organizationRoutes);
+app.use("/api/chats", chatRoutes);
 
 // Test DB Connection and Start Server
 const startServer = async () => {

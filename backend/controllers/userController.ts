@@ -2,6 +2,8 @@ import type { Request, Response } from "express";
 import { users, projects } from "../models/index.ts";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import sharp from 'sharp';
 
 export const inviteUser = async (req: Request, res: Response) => {
     try {
@@ -146,6 +148,66 @@ export const deleteUser = async (req: Request, res: Response) => {
         res.status(200).json({ message: "User removed successfully" });
     } catch (error) {
         console.error("Delete User Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION || 'ap-south-2',
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    },
+});
+const BUCKET = process.env.S3_BUCKET_NAME || 'apexis-bucket';
+
+export const updatePushToken = async (req: Request, res: Response) => {
+    try {
+        const { token } = req.body;
+        const authUser = (req as any).user;
+
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (!token) return res.status(400).json({ error: "Token is required" });
+
+        await users.update({ fcm_token: token }, { where: { id: authUser.user_id } });
+
+        res.status(200).json({ message: "Push token updated successfully" });
+    } catch (error) {
+        console.error("Update Push Token Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const updateProfilePic = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (!(req as any).file) return res.status(400).json({ error: "No image provided" });
+
+        const file = (req as any).file;
+        const fileBuffer = await sharp(file.buffer)
+            .resize(400, 400, { fit: 'cover' })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+
+        const key = `profiles/${authUser.user_id}/${Date.now()}.jpg`;
+
+        await s3Client.send(new PutObjectCommand({
+            Bucket: BUCKET,
+            Key: key,
+            ContentType: 'image/jpeg',
+            Body: fileBuffer,
+        }));
+
+        await users.update({ profile_pic: key }, { where: { id: authUser.user_id } });
+
+        res.status(200).json({
+            message: "Profile picture updated successfully",
+            profile_pic: key
+        });
+    } catch (error) {
+        console.error("Update Profile Pic Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

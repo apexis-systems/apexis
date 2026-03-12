@@ -6,6 +6,7 @@ export interface User {
     email: string;
     role: UserRole;
     active?: boolean;
+    profile_pic?: string;
 }
 
 export interface Project {

@@ -1,131 +1,212 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, Platform, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, TextInput, Platform, Image, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
-
-// Mock Data
-const MOCK_CHATS = [
-    {
-        id: '1',
-        name: 'Alpha Tower Team',
-        type: 'group',
-        lastMessage: 'Admin added Sarah (Client) recently.',
-        time: '12:45 PM',
-        unread: 2,
-        isSystem: true,
-        participants: 5,
-        avatar: null
-    },
-    {
-        id: '2',
-        name: 'Sarah Jenkins',
-        type: 'direct',
-        lastMessage: 'Yes, the inspection is scheduled for tomorrow.',
-        time: 'Yesterday',
-        unread: 0,
-        isSystem: false,
-        role: 'Client',
-        avatar: 'https://i.pravatar.cc/150?u=sarah'
-    },
-    {
-        id: '3',
-        name: 'Site Managers',
-        type: 'group',
-        lastMessage: 'Michael joined using invite code X7B9.',
-        time: 'Monday',
-        unread: 0,
-        isSystem: true,
-        participants: 3,
-        avatar: null
-    },
-    {
-        id: '4',
-        name: 'David Chen',
-        type: 'direct',
-        lastMessage: 'Can you upload the latest drawings?',
-        time: 'Monday',
-        unread: 0,
-        isSystem: false,
-        role: 'Contributor',
-        avatar: 'https://i.pravatar.cc/150?u=david'
-    }
-];
+import { useAuth } from '@/contexts/AuthContext';
+import { listRooms } from '@/services/chatService';
+import NewChatModal from '@/components/chat/NewChatModal';
+import { useSocket } from '@/contexts/SocketContext';
 
 export default function ChatListScreen() {
+    const { user } = (useAuth() as any) || {};
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
     const router = useRouter();
+    const { socket } = useSocket();
     const [searchQuery, setSearchQuery] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [onlineUsers, setOnlineUsers] = useState<Set<number | string>>(new Set());
 
-    const filteredChats = MOCK_CHATS.filter(c =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    if (user?.role === 'superadmin') {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                <Feather name="lock" size={48} color={colors.textMuted} />
+                <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, marginTop: 16 }}>Access Denied</Text>
+                <Text style={{ fontSize: 16, color: colors.textMuted, textAlign: 'center', marginTop: 8 }}>
+                    Superadmins do not have access to the chat feature.
+                </Text>
+                <TouchableOpacity
+                    onPress={() => router.replace('/(tabs)')}
+                    style={{
+                        marginTop: 24,
+                        backgroundColor: '#f97316',
+                        paddingHorizontal: 20,
+                        paddingVertical: 10,
+                        borderRadius: 10
+                    }}
+                >
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Back to Dashboard</Text>
+                </TouchableOpacity>
+            </SafeAreaView>
+        );
+    }
+    const [rooms, setRooms] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
-    const renderChatItem = ({ item }: { item: typeof MOCK_CHATS[0] }) => (
-        <TouchableOpacity
-            onPress={() => router.push(`/chat/${item.id}`)}
-            style={{
-                flexDirection: 'row',
-                padding: 16,
-                backgroundColor: colors.surface,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border
-            }}
-        >
-            {/* Avatar */}
-            <View style={{ position: 'relative' }}>
-                {item.type === 'group' ? (
-                    <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
-                        <Feather name="users" size={24} color="#fff" />
-                    </View>
-                ) : (
-                    <Image
-                        source={{ uri: item.avatar || 'https://i.pravatar.cc/150' }}
-                        style={{ width: 50, height: 50, borderRadius: 25 }}
-                    />
-                )}
-                {item.unread > 0 && (
-                    <View style={{ position: 'absolute', right: 0, bottom: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#25D366', borderWidth: 2, borderColor: colors.surface }} />
-                )}
-            </View>
+    const fetchRooms = async () => {
+        try {
+            const data = await listRooms();
+            setRooms(data);
+        } catch (error) {
+            console.error("fetchRooms error:", error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
 
-            {/* Chat Info */}
-            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }} numberOfLines={1}>
-                        {item.name}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: item.unread > 0 ? '#25D366' : colors.textMuted }}>
-                        {item.time}
-                    </Text>
-                </View>
+    useEffect(() => {
+        fetchRooms();
+    }, []);
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text
-                        style={{
-                            fontSize: 14,
-                            color: item.isSystem ? '#f97316' : colors.textMuted,
-                            fontStyle: item.isSystem ? 'italic' : 'normal',
-                            flex: 1,
-                            marginRight: 10
-                        }}
-                        numberOfLines={1}
-                    >
-                        {item.lastMessage}
-                    </Text>
+    useEffect(() => {
+        if (!socket) return;
 
-                    {item.unread > 0 && (
-                        <View style={{ backgroundColor: '#25D366', borderRadius: 12, minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
-                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{item.unread}</Text>
+        socket.on('new-message-global', (data: any) => {
+            setRooms(prevRooms => {
+                const roomIndex = prevRooms.findIndex(r => r.id === data.room_id);
+                if (roomIndex === -1) {
+                    fetchRooms(); // New room, re-fetch all
+                    return prevRooms;
+                }
+
+                const updatedRooms = [...prevRooms];
+                const room = { ...updatedRooms[roomIndex] };
+                room.chat_messages = [data.message];
+                room.updatedAt = new Date().toISOString();
+
+                updatedRooms.splice(roomIndex, 1);
+                updatedRooms.unshift(room);
+                return updatedRooms;
+            });
+        });
+
+        socket.on('user-status-changed', ({ userId, status }: { userId: number | string, status: 'online' | 'offline' }) => {
+            setOnlineUsers(prev => {
+                const next = new Set(prev);
+                if (status === 'online') next.add(userId);
+                else next.delete(userId);
+                return next;
+            });
+        });
+
+        // Check status of all members in rooms
+        rooms.forEach((room: any) => {
+            room.room_members?.forEach((m: any) => {
+                if (m.user?.id && m.user.id !== user?.id) {
+                    socket.emit('check-user-status', m.user.id);
+                }
+            });
+        });
+
+        socket.on('user-status-response', ({ userId, status }: { userId: number | string, status: 'online' | 'offline' }) => {
+            setOnlineUsers(prev => {
+                const next = new Set(prev);
+                if (status === 'online') next.add(userId);
+                else next.delete(userId);
+                return next;
+            });
+        });
+
+        return () => {
+            socket.off('new-message-global');
+            socket.off('user-status-changed');
+            socket.off('user-status-response');
+        };
+    }, [socket, !!rooms.length]);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchRooms();
+    };
+
+    const filteredChats = rooms.filter(c => {
+        const name = c.name || (c.room_members?.[0]?.user?.name) || 'Chat';
+        return name.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+
+    const renderChatItem = ({ item }: { item: any }) => {
+        const otherMember = item.room_members?.find((m: any) => m.user?.id !== user?.id);
+        const displayLabel = item.name || otherMember?.user?.name || 'Chat';
+        const displayAvatar = otherMember?.user?.profile_pic
+            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/uploads/${otherMember.user.profile_pic}`
+            : 'https://i.pravatar.cc/150';
+
+        const isOnline = otherMember?.user?.id && onlineUsers.has(otherMember.user.id);
+        const lastMsg = item.chat_messages?.[0];
+        const lastMsgText = lastMsg ? lastMsg.text : 'No messages yet';
+        const time = lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        const unreadCount = item.unread_count || 0;
+
+        return (
+            <TouchableOpacity
+                onPress={() => router.push(`/chat/${item.id}`)}
+                style={{
+                    flexDirection: 'row',
+                    padding: 16,
+                    backgroundColor: colors.surface,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border
+                }}
+            >
+                {/* Avatar */}
+                <View style={{ position: 'relative' }}>
+                    {item.type === 'group' ? (
+                        <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                            <Feather name="users" size={24} color="#fff" />
                         </View>
+                    ) : (
+                        <Image
+                            source={{ uri: displayAvatar }}
+                            style={{ width: 50, height: 50, borderRadius: 25 }}
+                        />
+                    )}
+                    {isOnline && (
+                        <View style={{ position: 'absolute', right: 2, bottom: 2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#25D366', borderWidth: 2, borderColor: colors.surface }} />
+                    )}
+                    {unreadCount > 0 && !isOnline && (
+                        <View style={{ position: 'absolute', right: 0, bottom: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#25D366', borderWidth: 2, borderColor: colors.surface }} />
                     )}
                 </View>
-            </View>
-        </TouchableOpacity>
-    );
+
+                {/* Chat Info */}
+                <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }} numberOfLines={1}>
+                            {displayLabel}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: unreadCount > 0 ? '#25D366' : colors.textMuted }}>
+                            {time}
+                        </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text
+                            style={{
+                                fontSize: 14,
+                                color: colors.textMuted,
+                                flex: 1,
+                                marginRight: 10
+                            }}
+                            numberOfLines={1}
+                        >
+                            {lastMsgText}
+                        </Text>
+
+                        {unreadCount > 0 && (
+                            <View style={{ backgroundColor: '#25D366', borderRadius: 12, minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{unreadCount}</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -133,10 +214,7 @@ export default function ChatListScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>Chats</Text>
                 <View style={{ flexDirection: 'row', gap: 16 }}>
-                    <TouchableOpacity>
-                        <Feather name="camera" size={22} color={colors.text} />
-                    </TouchableOpacity>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={() => setIsModalOpen(true)}>
                         <Feather name="plus-circle" size={22} color={colors.text} />
                     </TouchableOpacity>
                 </View>
@@ -159,13 +237,18 @@ export default function ChatListScreen() {
             {/* Chat List */}
             <FlatList
                 data={filteredChats}
-                keyExtractor={item => item.id}
+                keyExtractor={item => String(item.id)}
                 renderItem={renderChatItem}
                 contentContainerStyle={{ paddingBottom: 100 }}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                }
                 ListEmptyComponent={
                     <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: 100 }}>
                         <Feather name="message-square" size={48} color={colors.border} />
-                        <Text style={{ color: colors.textMuted, marginTop: 16, fontSize: 16 }}>No chats found</Text>
+                        <Text style={{ color: colors.textMuted, marginTop: 16, fontSize: 16 }}>
+                            {loading ? 'Loading chats...' : 'No chats found'}
+                        </Text>
                     </View>
                 }
             />
@@ -191,6 +274,12 @@ export default function ChatListScreen() {
             >
                 <Feather name="message-square" size={24} color="#fff" />
             </TouchableOpacity> */}
+
+            <NewChatModal
+                visible={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSuccess={(room) => router.push(`/chat/${room.id}`)}
+            />
         </SafeAreaView>
     );
 }

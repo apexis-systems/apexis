@@ -6,6 +6,8 @@ export interface User {
     email: string;
     role: UserRole;
     active: boolean;
+    profile_pic?: string;
+    fcm_token?: string;
 }
 
 export interface Project {
