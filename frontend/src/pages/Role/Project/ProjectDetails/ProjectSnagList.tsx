@@ -102,6 +102,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
   const addSnag = async () => {
     if (!newTitle.trim()) { toast.error('Title is required'); return; }
+    if (!newAssignee) { toast.error('Assignee is required'); return; }
+    if (!newPhoto) { toast.error('Photo is required'); return; }
     setSubmitting(true);
     try {
       const form = new FormData();
@@ -262,10 +264,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
             />
 
             <Select value={newAssignee} onValueChange={setNewAssignee}>
-              <SelectTrigger className="text-xs"><SelectValue placeholder="Assign to... (optional)" /></SelectTrigger>
+              <SelectTrigger className="text-xs"><SelectValue placeholder="Assign to... *" /></SelectTrigger>
               <SelectContent>
                 {assignees.map(a => (
-                  <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {a.name} {a.role ? `(${a.role.charAt(0).toUpperCase() + a.role.slice(1)})` : ''}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -273,7 +277,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
-            <Button onClick={addSnag} disabled={submitting || !newTitle.trim() || !newPhoto} className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button onClick={addSnag} disabled={submitting || !newTitle.trim() || !newPhoto || !newAssignee} className="bg-accent text-accent-foreground hover:bg-accent/90">
               {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add Snag'}
             </Button>
           </DialogFooter>

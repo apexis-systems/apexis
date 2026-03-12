@@ -119,6 +119,7 @@ export default function SnagCreateScreen() {
     const handleSubmit = async () => {
         if (!title.trim()) { Alert.alert('Error', 'Title is required'); return; }
         if (!capturedPhoto) { Alert.alert('Error', 'Photo is required'); return; }
+        if (!assigneeId) { Alert.alert('Error', 'Assignee is required'); return; }
         setSubmitting(true);
         try {
             const form = new FormData();
@@ -277,7 +278,7 @@ export default function SnagCreateScreen() {
                     style={{ height: 46, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, marginBottom: 24 }}
                 >
                     <Text style={{ fontSize: 14, color: selectedAssignee ? colors.text : colors.textMuted }}>
-                        {selectedAssignee ? selectedAssignee.name : 'Select team member…'}
+                        {selectedAssignee ? `${selectedAssignee.name} (${selectedAssignee.role.charAt(0).toUpperCase() + selectedAssignee.role.slice(1)})` : 'Select team member… *'}
                     </Text>
                     <Feather name="chevron-down" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
@@ -285,10 +286,10 @@ export default function SnagCreateScreen() {
                 {/* Submit */}
                 <TouchableOpacity
                     onPress={handleSubmit}
-                    disabled={submitting || !title.trim() || !capturedPhoto}
+                    disabled={submitting || !title.trim() || !capturedPhoto || !assigneeId}
                     style={{
                         height: 52, borderRadius: 26, marginBottom: 50,
-                        backgroundColor: (title.trim() && capturedPhoto) ? '#f97316' : colors.border,
+                        backgroundColor: (title.trim() && capturedPhoto && assigneeId) ? '#f97316' : colors.border,
                         alignItems: 'center', justifyContent: 'center',
                     }}
                 >
@@ -314,8 +315,10 @@ export default function SnagCreateScreen() {
                                     style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border }}
                                 >
                                     <View>
-                                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{a.name}</Text>
-                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{a.role}</Text>
+                                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>
+                                            {a.name} <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '400' }}>({a.role.charAt(0).toUpperCase() + a.role.slice(1)})</Text>
+                                        </Text>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{a.email}</Text>
                                     </View>
                                     {assigneeId === a.id && <Feather name="check" size={16} color="#f97316" />}
                                 </TouchableOpacity>
