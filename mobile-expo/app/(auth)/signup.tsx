@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -8,19 +8,21 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { requestAdminOtp, verifyAdminOtp } from '@/services/authService';
+import { requestAdminOtp, verifyAdminOtp, verifyInvitation, completeOnboarding } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
 
-type Step = 'details' | 'otp';
+type Step = 'details' | 'otp' | 'onboarding';
 
 export default function SignUpScreen() {
-    const [step, setStep] = useState<Step>('details');
+    const { token } = useLocalSearchParams();
+    const [step, setStep] = useState<Step>(token ? 'onboarding' : 'details');
 
-    // Details
+    // Details / Onboarding
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [orgName, setOrgName] = useState('');
@@ -35,6 +37,26 @@ export default function SignUpScreen() {
     const { login } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
+
+    useEffect(() => {
+        if (token && typeof token === 'string') {
+            handleVerifyToken(token);
+        }
+    }, [token]);
+
+    const handleVerifyToken = async (t: string) => {
+        setIsLoading(true);
+        try {
+            const res = await verifyInvitation(t);
+            setEmail(res.email);
+            setStep('onboarding');
+        } catch (err: any) {
+            Alert.alert("Invalid Link", "This invitation link is invalid or expired.");
+            setStep('details');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleSendOtp = async () => {
         if (!name || !email || !orgName || password.length < 6) {
@@ -77,6 +99,29 @@ export default function SignUpScreen() {
         }
     };
 
+    const handleCompleteOnboarding = async () => {
+        if (!name || password.length < 6) {
+            setError('Please enter your name and a password (at least 6 chars)');
+            return;
+        }
+
+        setIsLoading(true);
+        setError('');
+
+        try {
+            await completeOnboarding({ token: token as string, name, password });
+            Alert.alert(
+                "Account Setup",
+                "Your account is ready! Please log in to continue.",
+                [{ text: "OK", onPress: () => router.replace('/(auth)/login') }]
+            );
+        } catch (err: any) {
+            setError(err.response?.data?.error || "Failed to complete setup.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
             <KeyboardAvoidingView
@@ -94,7 +139,7 @@ export default function SignUpScreen() {
                                 height: 64,
                                 width: 64,
                                 borderRadius: 16,
-                                backgroundColor: '#f97316',
+                                backgroundColor: colors.primary,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 marginBottom: 16,
@@ -106,27 +151,128 @@ export default function SignUpScreen() {
                             apexis
                         </Text>
                         <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>
-                            CREATE ADMIN ACCOUNT
+                            {step === 'onboarding' ? 'COMPLETE YOUR ACCOUNT' : 'CREATE ADMIN ACCOUNT'}
                         </Text>
                     </View>
 
-                    {/* Step indicators */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 32 }}>
-                        {(['details', 'otp'] as Step[]).map((s, i) => (
-                            <View
-                                key={s}
-                                style={{
-                                    width: step === s ? 24 : 8,
-                                    height: 8,
-                                    borderRadius: 4,
-                                    backgroundColor: step === s ? colors.primary :
-                                        (['details', 'otp'].indexOf(step) > i) ? `${colors.primary}66` : colors.border,
-                                }}
-                            />
-                        ))}
-                    </View>
+                    {/* Step indicators (Hide for onboarding) */}
+                    {step !== 'onboarding' && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 32 }}>
+                            {(['details', 'otp'] as Step[]).map((s, i) => (
+                                <View
+                                    key={s}
+                                    style={{
+                                        width: step === s ? 24 : 8,
+                                        height: 8,
+                                        borderRadius: 4,
+                                        backgroundColor: step === s ? colors.primary :
+                                            (['details', 'otp'].indexOf(step) > i) ? `${colors.primary}66` : colors.border,
+                                    }}
+                                />
+                            ))}
+                        </View>
+                    )}
 
-                    {/* Step 1: Details */}
+                    {/* Onboarding Flow (Invited Admin) */}
+                    {step === 'onboarding' && (
+                        <View style={{ gap: 16 }}>
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    Email Address
+                                </Text>
+                                <TextInput
+                                    value={email}
+                                    editable={false}
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        color: colors.textMuted,
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                            </View>
+
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    Full Name
+                                </Text>
+                                <TextInput
+                                    value={name}
+                                    onChangeText={(val) => { setName(val); setError(''); }}
+                                    placeholder="John Doe"
+                                    placeholderTextColor={colors.textMuted}
+                                    autoCapitalize="words"
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        color: colors.text,
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                            </View>
+
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    Create Password
+                                </Text>
+                                <TextInput
+                                    value={password}
+                                    onChangeText={(val) => { setPassword(val); setError(''); }}
+                                    placeholder="••••••••"
+                                    placeholderTextColor={colors.textMuted}
+                                    secureTextEntry
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        color: colors.text,
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                            </View>
+
+                            {error ? (
+                                <Text style={{ color: '#ef4444', textAlign: 'center', marginBottom: 4, fontSize: 13 }}>
+                                    {error}
+                                </Text>
+                            ) : null}
+
+                            <TouchableOpacity
+                                onPress={handleCompleteOnboarding}
+                                disabled={isLoading}
+                                style={{
+                                    height: 48,
+                                    borderRadius: 12,
+                                    backgroundColor: colors.primary,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginTop: 8,
+                                    opacity: isLoading ? 0.7 : 1,
+                                }}
+                            >
+                                {isLoading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>
+                                        Complete Setup
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* Step 1: Details (Registration) */}
                     {step === 'details' && (
                         <View style={{ gap: 16 }}>
                             <View>
@@ -234,7 +380,7 @@ export default function SignUpScreen() {
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
-                                    backgroundColor: '#f97316',
+                                    backgroundColor: colors.primary,
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     marginTop: 8,
@@ -252,7 +398,7 @@ export default function SignUpScreen() {
                         </View>
                     )}
 
-                    {/* Step 2: OTP */}
+                    {/* Step 2: OTP (Registration) */}
                     {step === 'otp' && (
                         <View style={{ gap: 16 }}>
                             <View>

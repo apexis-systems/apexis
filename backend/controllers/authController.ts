@@ -207,3 +207,67 @@ export const me = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+// ==========================
+// SUPERADMIN INVITATION ONBOARDING
+// ==========================
+
+export const verifyInvitation = async (req: Request, res: Response) => {
+    try {
+        const { token } = req.query;
+
+        if (!token) {
+            return res.status(400).json({ error: "Token is required" });
+        }
+
+        const decoded = jwt.verify(token as string, process.env.JWT_SECRET || "default_secret") as any;
+
+        const user = await users.findByPk(decoded.user_id);
+        if (!user || user.email !== decoded.email) {
+            return res.status(404).json({ error: "Invalid invitation" });
+        }
+
+        if (user.email_verified) {
+            return res.status(400).json({ error: "Invitation already completed" });
+        }
+
+        res.status(200).json({ email: user.email });
+    } catch (error) {
+        console.error("Verify Invitation Error:", error);
+        res.status(400).json({ error: "Invalid or expired token" });
+    }
+};
+
+export const completeOnboarding = async (req: Request, res: Response) => {
+    try {
+        const { token, name, password } = req.body;
+
+        if (!token || !name || !password) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_secret") as any;
+
+        const user = await users.findByPk(decoded.user_id);
+        if (!user || user.email !== decoded.email) {
+            return res.status(404).json({ error: "Invalid invitation" });
+        }
+
+        if (user.email_verified) {
+            return res.status(400).json({ error: "Invitation already completed" });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        await user.update({
+            name,
+            password: hashedPassword,
+            email_verified: true
+        });
+
+        res.status(200).json({ message: "Account setup successful! You can now log in." });
+    } catch (error) {
+        console.error("Complete Onboarding Error:", error);
+        res.status(400).json({ error: "Invalid or expired token" });
+    }
+};

@@ -69,6 +69,7 @@ export interface ActivityItem {
     type: 'upload' | 'edit' | 'delete' | 'share' | 'upload_photo';
     description: string;
     projectName: string;
+    userName?: string;
     timestamp: string;
 }
 

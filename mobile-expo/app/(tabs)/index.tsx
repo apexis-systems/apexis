@@ -106,8 +106,8 @@ export default function DashboardScreen() {
     p.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalDocs = filteredProjects.reduce((sum, p) => sum + (p.totalDocs || 0), 0);
-  const totalPhotos = filteredProjects.reduce((sum, p) => sum + (p.totalPhotos || 0), 0);
+  const totalDocs = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalDocs, 10) || 0), 0);
+  const totalPhotos = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalPhotos, 10) || 0), 0);
 
   const handleCreate = async () => {
     if (!newProject.name || !newProject.start_date || !newProject.end_date) return;
@@ -193,12 +193,14 @@ export default function DashboardScreen() {
                     width: 28,
                     height: 28,
                     borderRadius: 8,
-                    backgroundColor: '#f97316',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    overflow: 'hidden',
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff' }}>A</Text>
+                  <Image
+                    source={require('../../assets/images/app-icon.png')}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
                 </View>
                 <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Apexis</Text>
               </TouchableOpacity>
@@ -271,9 +273,9 @@ export default function DashboardScreen() {
               }}>
                 {isUploadingLogo ? (
                   <ActivityIndicator size="small" color={colors.primary} />
-                ) : logoUri ? (
+                ) : (logoUri || user.role === 'superadmin') ? (
                   <Image
-                    source={{ uri: logoUri }}
+                    source={logoUri ? { uri: logoUri } : require('../../assets/images/icon.png')}
                     style={{ width: '100%', height: '100%' }}
                     resizeMode="cover"
                   />
@@ -385,11 +387,11 @@ export default function DashboardScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                     <Feather name="file-text" size={9} color={colors.textMuted} />
-                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{project.totalDocs || 0}</Text>
+                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{parseInt(project.totalDocs, 10) || 0}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                     <Feather name="camera" size={9} color={colors.textMuted} />
-                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{project.totalPhotos || 0}</Text>
+                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{parseInt(project.totalPhotos, 10) || 0}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -552,7 +554,7 @@ export default function DashboardScreen() {
       <LogoPreviewModal
         visible={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
-        logoUri={logoUri}
+        logoSource={logoUri ? { uri: logoUri } : (user.role === 'superadmin' ? require('../../assets/images/icon.png') : null)}
         canChange={user.role === 'admin'}
         onChangePress={() => {
           setIsPreviewOpen(false);

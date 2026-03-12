@@ -88,7 +88,15 @@ const Activity = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-foreground">{activity.description}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{activity.projectName}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    <span className="font-semibold text-foreground">{activity.userName}</span>
+                                    {activity.projectName && (
+                                        <>
+                                            <span className="mx-1">•</span>
+                                            {activity.projectName}
+                                        </>
+                                    )}
+                                </p>
                                 <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                                     <Clock className="h-3 w-3" />
                                     <span>{activity.timestamp}</span>

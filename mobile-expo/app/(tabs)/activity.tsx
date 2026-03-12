@@ -140,7 +140,8 @@ export default function ActivityScreen() {
                                                 {activity.description}
                                             </Text>
                                             <Text style={{ fontSize: 10, color: themeColors.textMuted, marginTop: 2 }}>
-                                                {activity.projectName}
+                                                <Text style={{ fontWeight: '600', color: themeColors.text }}>{activity.userName}</Text>
+                                                {activity.projectName ? ` • ${activity.projectName}` : ''}
                                             </Text>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                                 <Feather name="clock" size={9} color={themeColors.textMuted} />

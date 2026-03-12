@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { inviteUser, getOrgUsers } from "../controllers/userController.ts";
+import { inviteUser, getOrgUsers, deleteUser } from "../controllers/userController.ts";
 import { verifyToken, isAdmin } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -9,5 +9,6 @@ router.use(verifyToken);
 
 router.post("/invite", isAdmin, inviteUser);
 router.get("/", isAdmin, getOrgUsers);
+router.delete("/:id", isAdmin, deleteUser);
 
 export default router;

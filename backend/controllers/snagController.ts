@@ -57,6 +57,8 @@ export const createSnag = async (req: Request, res: Response) => {
 
         const { project_id, title, description, assigned_to } = req.body;
         if (!project_id || !title) return res.status(400).json({ error: 'project_id and title are required' });
+        if (!assigned_to) return res.status(400).json({ error: 'Assignee is required' });
+        if (!(req as any).file) return res.status(400).json({ error: 'Photo is required' });
 
         let photo_url: string | null = null;
         if ((req as any).file) {

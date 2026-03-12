@@ -52,3 +52,23 @@ export const getOrganizations = async () => {
         throw error;
     }
 };
+
+export const inviteSuperAdmin = async (email: string) => {
+    try {
+        const response = await PrivateAxios.post('/superadmin/invite', { email });
+        return response.data;
+    } catch (error) {
+        console.error("inviteSuperAdmin Error", error);
+        throw error;
+    }
+};
+
+export const deleteSuperAdmin = async (id: number | string) => {
+    try {
+        const response = await PrivateAxios.delete(`/superadmin/teams/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error("deleteSuperAdmin Error", error);
+        throw error;
+    }
+};

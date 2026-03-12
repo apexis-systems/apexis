@@ -3,29 +3,51 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Users, Mail, CheckCircle, Plus } from 'lucide-react';
-import { getOrgUsers, inviteUser } from '@/services/userService';
+import { Users, Mail, Trash2, Loader2, UserPlus, Clock, ShieldCheck, Briefcase, AlertCircle } from 'lucide-react';
+import { getOrgUsers, inviteUser, deleteUser } from '@/services/userService';
+import { getProjects } from '@/services/projectService';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-export default function UserManagementPage() {
+const UserManagementPage = () => {
     const { user } = useAuth() || {};
     const { t } = useLanguage();
     const [orgUsers, setOrgUsers] = useState<any[]>([]);
+    const [projects, setProjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isInviting, setIsInviting] = useState(false);
+    const [showInvite, setShowInvite] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState('contributor');
-    const [inviteLoading, setInviteLoading] = useState(false);
+    const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const [inviting, setInviting] = useState(false);
 
-    useEffect(() => {
-        if (user && user.role === 'admin') {
-            fetchUsers();
-        }
-    }, [user]);
+    const [deleteUserObj, setDeleteUserObj] = useState<any>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const fetchUsers = async () => {
+        setLoading(true);
         try {
             const data = await getOrgUsers();
-            setOrgUsers(data || []);
+
+            // Priority sorting
+            const sorted = (data || []).sort((a: any, b: any) => {
+                if (a.is_primary) return -1;
+                if (b.is_primary) return 1;
+
+                const rolePriority: Record<string, number> = {
+                    admin: 1,
+                    contributor: 2,
+                    client: 3
+                };
+
+                return (rolePriority[a.role] || 4) - (rolePriority[b.role] || 4);
+            });
+
+            setOrgUsers(sorted);
         } catch (e) {
             console.error("Failed to fetch organization users", e);
         } finally {
@@ -33,157 +55,275 @@ export default function UserManagementPage() {
         }
     };
 
-    const handleInvite = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setInviteLoading(true);
+    const fetchProjects = async () => {
         try {
-            await inviteUser({ email: inviteEmail, role: inviteRole });
-            setIsInviting(false);
-            setInviteEmail('');
-            setInviteRole('contributor');
-            fetchUsers();
-        } catch (e) {
-            console.error("Failed to invite user", e);
-        } finally {
-            setInviteLoading(false);
+            const data = await getProjects();
+            setProjects(data.projects || []);
+        } catch (error) {
+            console.error("fetchProjects error", error);
         }
     };
 
-    if (user?.role !== 'admin') {
+    useEffect(() => {
+        if (user && (user.role === 'admin' || user.role === 'superadmin')) {
+            fetchUsers();
+            fetchProjects();
+        }
+    }, [user]);
+
+    if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
         return (
-            <div className="p-8 max-w-6xl mx-auto flex items-center justify-center min-h-[50vh]">
-                <p className="text-muted-foreground">Unauthorized access.</p>
+            <div className="p-8 max-w-5xl mx-auto flex items-center justify-center min-h-[50vh]">
+                <p className="text-muted-foreground">You do not have permission to view this page.</p>
             </div>
         );
     }
 
-    if (loading) {
-        return (
-            <div className="p-8 max-w-6xl mx-auto flex items-center justify-center min-h-[50vh]">
-                <p className="text-muted-foreground">Loading Users...</p>
-            </div>
-        );
-    }
+    const handleInvite = async () => {
+        if (!inviteEmail.trim()) {
+            toast.error("Please enter a valid email");
+            return;
+        }
+
+        const isProjectRole = inviteRole === 'contributor' || inviteRole === 'client';
+        if (isProjectRole && !selectedProjectId) {
+            toast.error('Please select a project for this role');
+            return;
+        }
+
+        setInviting(true);
+        try {
+            await inviteUser({
+                email: inviteEmail.trim(),
+                role: inviteRole,
+                project_id: isProjectRole ? selectedProjectId : undefined,
+                projectId: isProjectRole ? selectedProjectId : undefined
+            } as any);
+
+            toast.success("Invitation sent successfully");
+            setInviteEmail('');
+            setInviteRole('contributor');
+            setSelectedProjectId('');
+            setShowInvite(false);
+            fetchUsers();
+        } catch (error: any) {
+            console.error("Invite Error", error);
+            toast.error(error.response?.data?.error || "Failed to send invitation");
+        } finally {
+            setInviting(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!deleteUserObj) return;
+        setDeleting(true);
+        try {
+            await deleteUser(deleteUserObj.id);
+            toast.success("User removed successfully");
+            setDeleteUserObj(null);
+            fetchUsers();
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || "Failed to remove user");
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const isProjectRole = inviteRole === 'contributor' || inviteRole === 'client';
 
     return (
-        <div className="p-8 max-w-6xl mx-auto">
-            <div className="mb-8 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center overflow-hidden shrink-0">
-                        <Users className="h-5 w-5 text-accent" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">
-                            {t('user_mgmt') || 'User Management'}
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Manage your organization's administrators, contributors, and clients.
-                        </p>
-                    </div>
+        <div className="p-8 max-w-5xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h1 className="text-2xl font-bold text-foreground">{t('user_mgmt') || 'User Management'}</h1>
+                    <p className="text-sm text-muted-foreground mt-1">Manage organization members, roles, and project access.</p>
                 </div>
-                <button
-                    onClick={() => setIsInviting(!isInviting)}
-                    className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                <Button
+                    onClick={() => setShowInvite(!showInvite)}
+                    className={cn(
+                        "transition-all",
+                        showInvite ? "bg-secondary text-foreground hover:bg-secondary/80" : "bg-accent text-accent-foreground hover:bg-accent/90"
+                    )}
                 >
-                    <Plus className="h-4 w-4" /> Invite User
-                </button>
+                    <UserPlus className="h-4 w-4 mr-2" /> {showInvite ? "Cancel" : "Invite Member"}
+                </Button>
             </div>
 
-            {isInviting && (
-                <div className="rounded-xl bg-card border border-border p-6 mb-8 shadow-sm">
-                    <h3 className="text-lg font-bold text-foreground mb-4">Invite New User</h3>
-                    <form onSubmit={handleInvite} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Email Address</label>
-                            <input
-                                required
-                                type="email"
-                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+            {showInvite && (
+                <div className="mb-8 p-6 rounded-2xl border border-border bg-card shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="flex flex-wrap items-end gap-4">
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
+                                Email Address
+                            </label>
+                            <Input
                                 value={inviteEmail}
                                 onChange={e => setInviteEmail(e.target.value)}
-                                placeholder="colleague@company.com"
+                                placeholder="member@example.com"
+                                type="email"
+                                className="h-11 rounded-xl"
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Role</label>
-                            <select
-                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
-                                value={inviteRole}
-                                onChange={e => setInviteRole(e.target.value)}
-                            >
-                                <option value="admin">Admin</option>
-                                <option value="contributor">Contributor</option>
-                                <option value="client">Client</option>
-                            </select>
+                        <div className="w-40">
+                            <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
+                                Role
+                            </label>
+                            <Select value={inviteRole} onValueChange={v => setInviteRole(v as any)}>
+                                <SelectTrigger className="h-11 rounded-xl">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                    <SelectItem value="contributor">Contributor</SelectItem>
+                                    <SelectItem value="client">Client</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <div className="md:col-span-3 flex justify-end gap-3 mt-4">
-                            <button
-                                type="button"
-                                onClick={() => setIsInviting(false)}
-                                className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={inviteLoading}
-                                className="px-4 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
-                            >
-                                {inviteLoading ? 'Sending...' : 'Send Invite'}
-                            </button>
-                        </div>
-                    </form>
+
+                        {isProjectRole && (
+                            <div className="w-56">
+                                <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
+                                    Assigned Project
+                                </label>
+                                {projects.length > 0 ? (
+                                    <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                                        <SelectTrigger className="h-11 rounded-xl">
+                                            <SelectValue placeholder="Choose Project" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {projects.map(p => (
+                                                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <div className="h-11 border border-dashed border-border rounded-xl flex items-center px-3 bg-secondary/20">
+                                        <AlertCircle className="h-4 w-4 text-amber-500 mr-2" />
+                                        <span className="text-[10px] text-muted-foreground font-medium uppercase">No projects</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <Button
+                            onClick={handleInvite}
+                            disabled={inviting}
+                            className="h-11 bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-8 font-bold"
+                        >
+                            {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
+                            {inviting ? "Sending..." : "Send Invitation"}
+                        </Button>
+                    </div>
+                    {isProjectRole && (
+                        <p className="mt-4 text-[10px] text-muted-foreground flex items-center gap-1.5">
+                            <Briefcase className="h-3 w-3" /> Note: {inviteRole}s join projects via email access codes.
+                        </p>
+                    )}
                 </div>
             )}
 
-            <div className="rounded-xl bg-card border border-border overflow-hidden shadow-sm">
-                <div className="grid grid-cols-12 gap-4 border-b border-border bg-muted/50 p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <div className="col-span-3">Name</div>
-                    <div className="col-span-4">Email</div>
-                    <div className="col-span-2">Joined</div>
-                    <div className="col-span-3 text-right">Role</div>
+            {loading ? (
+                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
+            ) : (
+                <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b border-border bg-secondary/30">
+                                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Member</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
+                                <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                            {orgUsers.map(m => (
+                                <tr key={m.id} className="hover:bg-secondary/20 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-foreground">{m.name || 'Invited User'}</span>
+                                            <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                <Mail className="h-3 w-3" /> {m.email}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-1.5">
+                                            {m.role === 'admin' && (
+                                                <>
+                                                    <ShieldCheck className={cn("h-4 w-4", m.is_primary ? "text-accent" : "text-muted-foreground")} />
+                                                    <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                        {m.is_primary ? 'Primary Admin' : 'Admin'}
+                                                    </span>
+                                                </>
+                                            )}
+                                            {(m.role === 'contributor' || m.role === 'client') && (
+                                                <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                    {m.role}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {m.email_verified ? (
+                                            <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-green-600 bg-green-500/5 border-green-500/20 text-[10px] py-0 h-5">
+                                                Active
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-amber-600 bg-amber-500/5 border-amber-500/20 text-[10px] py-0 h-5 flex items-center gap-1">
+                                                <Clock className="h-3 w-3" /> Pending
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4 text-xs text-muted-foreground">
+                                        {m.createdAt ? new Date(m.createdAt).toLocaleDateString() : '—'}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        {!m.is_primary && m.id !== user.id && (
+                                            <button
+                                                onClick={() => setDeleteUserObj(m)}
+                                                className="rounded-lg p-2 hover:bg-destructive/10 transition-colors"
+                                            >
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {orgUsers.length === 0 && (
+                        <div className="p-12 text-center text-muted-foreground">
+                            No users found in your organization.
+                        </div>
+                    )}
                 </div>
-                {orgUsers.length === 0 ? (
-                    <div className="p-8 text-center text-muted-foreground text-sm">
-                        No users found in your organization.
-                    </div>
-                ) : (
-                    <div className="divide-y divide-border">
-                        {orgUsers.map((orgUser) => (
-                            <div key={orgUser.id} className="grid grid-cols-12 gap-4 p-4 items-center hover:bg-muted/20 transition-colors">
-                                <div className="col-span-3 flex items-center gap-3">
-                                    <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center">
-                                        <span className="text-xs font-bold text-foreground">
-                                            {orgUser.name ? orgUser.name.charAt(0).toUpperCase() : '?'}
-                                        </span>
-                                    </div>
-                                    <span className="text-sm font-medium text-foreground">{orgUser.name}</span>
-                                </div>
-                                <div className="col-span-4 flex items-center gap-2">
-                                    <Mail className="h-3 w-3 text-muted-foreground" />
-                                    <span className="text-sm text-muted-foreground">{orgUser.email}</span>
-                                </div>
-                                <div className="col-span-2 flex items-center">
-                                    <span className="text-sm text-muted-foreground">
-                                        {orgUser.createdAt ? new Date(orgUser.createdAt).toLocaleDateString() : '-'}
-                                    </span>
-                                </div>
-                                <div className="col-span-3 flex justify-end items-center gap-2">
-                                    {orgUser.is_primary && (
-                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2 py-1 text-xs font-medium text-accent border border-accent/20">
-                                            <CheckCircle className="h-3 w-3" />
-                                            Primary
-                                        </span>
-                                    )}
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-xs font-medium text-foreground border border-border uppercase">
-                                        {orgUser.role}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+            )}
+
+            {/* Delete Confirmation */}
+            <Dialog open={!!deleteUserObj} onOpenChange={(open) => !open && setDeleteUserObj(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Remove User?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to remove <span className="font-bold text-foreground">{deleteUserObj?.email}</span>? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="ghost" onClick={() => setDeleteUserObj(null)} disabled={deleting}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className="rounded-xl px-6"
+                        >
+                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove User"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
-}
+};
+
+export default UserManagementPage;

@@ -105,8 +105,10 @@ export default function Dashboard() {
             setIsCreating(false);
             setNewProject({ name: '', description: '', start_date: '', end_date: '' });
             fetchProjects();
-        } catch (e) {
+            toast.success('Project created successfully');
+        } catch (e: any) {
             console.error("Failed to create project", e);
+            toast.error(e.response?.data?.error || 'Failed to create project');
         } finally {
             setIsSubmitting(false);
         }
@@ -194,8 +196,8 @@ export default function Dashboard() {
         );
     }
 
-    const totalDocs = projects.reduce((sum, p) => sum + (p.totalDocs || 0), 0);
-    const totalPhotos = projects.reduce((sum, p) => sum + (p.totalPhotos || 0), 0);
+    const totalDocs = projects.reduce((sum, p) => sum + (parseInt(p.totalDocs, 10) || 0), 0);
+    const totalPhotos = projects.reduce((sum, p) => sum + (parseInt(p.totalPhotos, 10) || 0), 0);
 
     return (
         <div className="p-8 max-w-6xl mx-auto">
@@ -210,8 +212,8 @@ export default function Dashboard() {
                 >
                     {isUploadingLogo ? (
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    ) : logoUrl ? (
-                        <img src={logoUrl} alt="Org Logo" className="h-full w-full object-cover" />
+                    ) : logoUrl || (user.role === 'superadmin' ? '/app-icon.png' : null) ? (
+                        <img src={logoUrl || '/app-icon.png'} alt="Org Logo" className="h-full w-full object-cover" />
                     ) : (
                         <span className="text-[10px] text-muted-foreground font-medium">Logo</span>
                     )}
@@ -479,8 +481,8 @@ export default function Dashboard() {
 
                         <div className="p-8 flex flex-col items-center gap-6">
                             <div className="w-48 h-48 rounded-2xl bg-muted border-2 border-border overflow-hidden flex items-center justify-center shadow-inner">
-                                {logoUrl ? (
-                                    <img src={logoUrl} alt="Org Logo Preview" className="h-full w-full object-cover" />
+                                {logoUrl || (user.role === 'superadmin' ? '/app-icon.png' : null) ? (
+                                    <img src={logoUrl || '/app-icon.png'} alt="Org Logo Preview" className="h-full w-full object-cover" />
                                 ) : (
                                     <span className="text-muted-foreground font-medium italic">No Logo</span>
                                 )}
