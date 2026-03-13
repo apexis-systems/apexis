@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { messaging } from '../config/firebase.ts';
 import { users, rooms, room_members, chat_messages, sequelize } from '../models/index.ts';
 import { Op } from 'sequelize';
+import { getIO } from '../socket.ts';
 
 /**
  * List all chat rooms for the current user
@@ -12,14 +13,14 @@ export const listRooms = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        // Find all rooms where the user is a member
+        // Find all rooms where the user is a member using a subquery for filtering
         const userRooms = await rooms.findAll({
+            where: {
+                id: {
+                    [Op.in]: sequelize.literal(`(SELECT room_id FROM room_members WHERE user_id = ${authUser.user_id})`)
+                }
+            },
             include: [
-                {
-                    model: room_members,
-                    where: { user_id: authUser.user_id },
-                    attributes: []
-                },
                 {
                     model: room_members,
                     include: [{ model: users, attributes: ['id', 'name', 'role', 'profile_pic'] }]
@@ -94,12 +95,18 @@ export const sendChatMessage = async (req: Request, res: Response) => {
         // Update room updatedAt for sorting
         await rooms.update({ updatedAt: new Date() }, { where: { id: roomId } });
 
+        // Re-fetch message with sender info for broadcast
+        const messageWithSender = await chat_messages.findByPk(newMessage.id, {
+            include: [{ model: users, as: 'sender', attributes: ['id', 'name', 'profile_pic'] }]
+        });
+
         // 2. Trigger Push Notification to all room members except sender
         const members = await room_members.findAll({
             where: { room_id: roomId, user_id: { [Op.ne]: authUser.user_id } },
             include: [{ model: users, attributes: ['id', 'fcm_token'] }]
         });
 
+        // ... notification loop remains same ...
         for (const member of members) {
             const recipient = (member as any).user;
             if (recipient?.fcm_token) {
@@ -118,26 +125,36 @@ export const sendChatMessage = async (req: Request, res: Response) => {
 
                 try {
                     await messaging.send(payload);
-                    console.log('Push notification sent to', recipient.id);
                 } catch (err) {
-                    console.error('FCM Send Error for user', recipient.id, ':', err);
+                    console.error('FCM Send Error:', err);
                 }
             }
         }
 
-        // 3. Socket broadcast for real-time (done via socket.ts elsewhere, but for global we do it here or in a helper)
-        const io = (req as any).io;
-        if (io) {
+        // 3. Socket broadcast
+        try {
+            const io = getIO();
+            const roomName = `room-${roomId}`;
+            console.log(`[SOCKET] Broadcasting new-message to ${roomName}`);
+            // To the room (for active chat windows)
+            io.to(roomName).emit('new-message', messageWithSender);
+
+            // Globally to each member (for list reordering/notifications)
             for (const member of members) {
-                io.to(`user-${member.user_id}`).emit('new-message-global', {
+                const userRoom = `user-${member.user_id}`;
+                console.log(`[SOCKET] Broadcasting new-message-global to ${userRoom}`);
+                io.to(userRoom).emit('new-message-global', {
                     room_id: roomId,
-                    message: newMessage,
+                    message: messageWithSender,
                     sender_name: authUser.name
                 });
             }
+        } catch (ioErr) {
+
+            console.error('Socket broadcast error:', ioErr);
         }
 
-        res.status(200).json({ success: true, message: newMessage });
+        res.status(200).json({ success: true, message: messageWithSender });
     } catch (error) {
         console.error('Send Chat Message Error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -159,9 +176,11 @@ export const markMessageSeen = async (req: Request, res: Response) => {
         const msg = await chat_messages.findByPk(messageId);
         if (msg) {
             await msg.update({ seen: true });
-            const io = (req as any).io;
-            if (io) {
+            try {
+                const io = getIO();
                 io.to(`room-${msg.room_id}`).emit('message-seen-update', { messageId });
+            } catch (ioErr) {
+                console.error('Socket broadcast error in markSeen:', ioErr);
             }
         }
 
@@ -228,6 +247,9 @@ export const createRoom = async (req: Request, res: Response) => {
 
             return res.status(201).json({ room: roomWithMembers });
         } else if (type === 'group') {
+            if (authUser.role !== 'admin') {
+                return res.status(403).json({ error: 'Only admins can create group chats' });
+            }
             if (!name) return res.status(400).json({ error: 'Group name is required' });
             if (!memberIds || memberIds.length === 0) {
                 return res.status(400).json({ error: 'Group chat requires at least one other member' });

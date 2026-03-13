@@ -24,22 +24,19 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let newSocket: Socket | null = null;
 
         if (isLoggedIn) {
-            // Using a fallback for development; in production this should be your actual backend URL
-            const backendUrl = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:5001';
+            // Using EXPO_PUBLIC_API_URL from .env
+            const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001';
             const socketUrl = backendUrl.replace('/api', '');
 
             newSocket = io(socketUrl, {
-                transports: ['websocket'], // Often needed for React Native
+                transports: ['websocket'],
             });
 
             newSocket.on('connect', () => {
                 setIsConnected(true);
-                console.log('Mobile Socket connected:', newSocket?.id);
-                // Join user-specific room for global notifications and online tracking
-                if (user?.id) {
-                    newSocket?.emit('join-user-room', user.id);
-                }
+                console.log('[SOCKET] Mobile connected:', newSocket?.id);
             });
+
 
             newSocket.on('disconnect', () => {
                 setIsConnected(false);
@@ -54,6 +51,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
     }, [isLoggedIn]);
+
+    // Separate effect for joining user-specific room
+    useEffect(() => {
+        if (socket && isConnected && user?.id) {
+            console.log('Emitting join-user-room for user:', user.id);
+            socket.emit('join-user-room', user.id);
+        }
+    }, [socket, isConnected, user?.id]);
 
     return (
         <SocketContext.Provider value={{ socket, isConnected }}>

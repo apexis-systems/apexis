@@ -41,8 +41,8 @@ export const initIO = (httpServer: HTTPServer) => {
         });
 
         // --- Chat Messaging Events ---
-
-        socket.on('join-user-room', (userId: string | number) => {
+        socket.on('join-user-room', (rawUserId: string | number) => {
+            const userId = String(rawUserId);
             socket.join(`user-${userId}`);
 
             // Track online status
@@ -55,22 +55,27 @@ export const initIO = (httpServer: HTTPServer) => {
             console.log(`Socket ${socket.id} joined user-${userId} (Online: ${onlineUsers.size} users)`);
         });
 
-        socket.on('check-user-status', (userId: string | number) => {
+
+        socket.on('check-user-status', (rawUserId: string | number) => {
+            const userId = String(rawUserId);
             const isOnline = onlineUsers.has(userId);
             socket.emit('user-status-response', { userId, status: isOnline ? 'online' : 'offline' });
         });
 
-        socket.on('join-room', (roomId: string) => {
-            socket.join(`room-${roomId}`);
-            console.log(`Socket ${socket.id} joined room-${roomId}`);
+        socket.on('join-room', (roomId: string | number) => {
+            const roomName = `room-${String(roomId)}`;
+            socket.join(roomName);
+            console.log(`[SOCKET] ${socket.id} joined ${roomName}`);
         });
 
-        socket.on('send-message', (data: { roomId: string; text: string; senderId: number; senderName: string; createdAt: Date }) => {
-            io.to(`room-${data.roomId}`).emit('new-message', data);
+
+
+        socket.on('send-message', (data: { roomId: string | number; text: string; senderId: number; senderName: string; createdAt: Date }) => {
+            io.to(`room-${String(data.roomId)}`).emit('new-message', data);
         });
 
-        socket.on('typing', (data: { roomId: string; userName: string }) => {
-            socket.to(`room-${data.roomId}`).emit('user-typing', data);
+        socket.on('typing', (data: { roomId: string | number; userName: string }) => {
+            socket.to(`room-${String(data.roomId)}`).emit('user-typing', data);
         });
     });
 

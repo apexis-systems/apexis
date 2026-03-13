@@ -8,7 +8,7 @@ const router = Router();
 router.use(verifyToken);
 
 router.post("/invite", isAdmin, inviteUser);
-router.get("/", isAdmin, getOrgUsers);
+router.get("/", getOrgUsers);
 router.delete("/:id", isAdmin, deleteUser);
 
 import multer from 'multer';
