@@ -14,7 +14,10 @@ export function proxy(request: NextRequest) {
     }
 
     // If user tries to access login/signup while already logged in
-    if (isAuthRoute && token) {
+    // Exception: Allow invitation/onboarding routes so they can complete account setup or switch
+    const isInviteOrOnboarding = pathname === '/auth/invite' || pathname === '/auth/superadmin-onboarding';
+
+    if (isAuthRoute && token && !isInviteOrOnboarding) {
         return NextResponse.redirect(new URL('/', request.url));
     }
 

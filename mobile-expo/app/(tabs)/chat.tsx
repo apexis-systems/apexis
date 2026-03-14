@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, Platform, Image, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, FlatList, TouchableOpacity, TextInput, Platform, Image, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import SecureAvatar from '@/components/shared/SecureAvatar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,6 +20,13 @@ export default function ChatListScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState<Set<number | string>>(new Set());
+    const [typingRooms, setTypingRooms] = useState<Record<string, string>>({});
+    const typingTimeoutsRef = useRef<Record<string, any>>({});
+    const pulseAnim = useRef(new Animated.Value(0.4)).current;
+    const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+
+
+
 
     if (user?.role === 'superadmin') {
         return (
@@ -68,7 +76,8 @@ export default function ChatListScreen() {
 
         socket.on('new-message-global', (data: any) => {
             setRooms(prevRooms => {
-                const roomIndex = prevRooms.findIndex(r => r.id === data.room_id);
+                const room_id = data.room_id || data.roomId;
+                const roomIndex = prevRooms.findIndex(r => String(r.id) === String(room_id));
                 if (roomIndex === -1) {
                     fetchRooms(); // New room, re-fetch all
                     return prevRooms;
@@ -77,7 +86,7 @@ export default function ChatListScreen() {
                 const updatedRooms = [...prevRooms];
                 const room = { ...updatedRooms[roomIndex] };
                 room.chat_messages = [data.message];
-                room.updatedAt = new Date().toISOString();
+                room.updatedAt = data.message.createdAt || new Date().toISOString();
 
                 updatedRooms.splice(roomIndex, 1);
                 updatedRooms.unshift(room);
@@ -88,14 +97,16 @@ export default function ChatListScreen() {
         socket.on('user-status-changed', ({ userId, status }: { userId: number | string, status: 'online' | 'offline' }) => {
             setOnlineUsers(prev => {
                 const next = new Set(prev);
-                if (status === 'online') next.add(userId);
-                else next.delete(userId);
+                if (status === 'online') next.add(String(userId));
+                else next.delete(String(userId));
                 return next;
             });
         });
 
-        // Check status of all members in rooms
+        // Check status of all members and join rooms
         rooms.forEach((room: any) => {
+            socket.emit('join-room', room.id);
+
             room.room_members?.forEach((m: any) => {
                 if (m.user?.id && m.user.id !== user?.id) {
                     socket.emit('check-user-status', m.user.id);
@@ -103,40 +114,84 @@ export default function ChatListScreen() {
             });
         });
 
+        const handleTyping = ({ roomId, userName }: { roomId: string | number, userName: string }) => {
+            const rid = String(roomId);
+
+            setTypingRooms(prev => {
+                // If it's the first person typing, start the animation
+                if (Object.keys(prev).length === 0) {
+                    animationRef.current = Animated.loop(
+                        Animated.sequence([
+                            Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+                            Animated.timing(pulseAnim, { toValue: 0.4, duration: 1000, useNativeDriver: true })
+                        ])
+                    );
+                    animationRef.current.start();
+                }
+                return { ...prev, [rid]: userName };
+            });
+
+            if (typingTimeoutsRef.current[rid]) clearTimeout(typingTimeoutsRef.current[rid]);
+            typingTimeoutsRef.current[rid] = setTimeout(() => {
+                setTypingRooms(prev => {
+                    const next = { ...prev };
+                    delete next[rid];
+                    if (Object.keys(next).length === 0) {
+                        animationRef.current?.stop();
+                        animationRef.current = null;
+                        pulseAnim.setValue(0.4);
+                    }
+                    return next;
+                });
+            }, 3000);
+        };
+
+
+
         socket.on('user-status-response', ({ userId, status }: { userId: number | string, status: 'online' | 'offline' }) => {
             setOnlineUsers(prev => {
                 const next = new Set(prev);
-                if (status === 'online') next.add(userId);
-                else next.delete(userId);
+                if (status === 'online') next.add(String(userId));
+                else next.delete(String(userId));
                 return next;
             });
         });
+
+        socket.on('user-typing', handleTyping);
 
         return () => {
             socket.off('new-message-global');
             socket.off('user-status-changed');
             socket.off('user-status-response');
+            socket.off('user-typing');
+            Object.values(typingTimeoutsRef.current).forEach(t => clearTimeout(t));
         };
-    }, [socket, !!rooms.length]);
+    }, [socket, rooms.length]);
+
+
 
     const onRefresh = () => {
         setRefreshing(true);
         fetchRooms();
     };
 
-    const filteredChats = rooms.filter(c => {
-        const name = c.name || (c.room_members?.[0]?.user?.name) || 'Chat';
-        return name.toLowerCase().includes(searchQuery.toLowerCase());
-    });
+    const filteredChats = rooms
+        .filter(c => {
+            const name = c.name || (c.room_members?.[0]?.user?.name) || 'Chat';
+            return name.toLowerCase().includes(searchQuery.toLowerCase());
+        })
+        .sort((a, b) => {
+            const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+            const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+            return timeB - timeA;
+        });
 
     const renderChatItem = ({ item }: { item: any }) => {
-        const otherMember = item.room_members?.find((m: any) => m.user?.id !== user?.id);
+        const otherMember = item.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id));
         const displayLabel = item.name || otherMember?.user?.name || 'Chat';
-        const displayAvatar = otherMember?.user?.profile_pic
-            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/uploads/${otherMember.user.profile_pic}`
-            : 'https://i.pravatar.cc/150';
+        const displayAvatarKey = otherMember?.user?.profile_pic;
 
-        const isOnline = otherMember?.user?.id && onlineUsers.has(otherMember.user.id);
+        const isOnline = otherMember?.user?.id && onlineUsers.has(String(otherMember.user.id));
         const lastMsg = item.chat_messages?.[0];
         const lastMsgText = lastMsg ? lastMsg.text : 'No messages yet';
         const time = lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
@@ -160,9 +215,10 @@ export default function ChatListScreen() {
                             <Feather name="users" size={24} color="#fff" />
                         </View>
                     ) : (
-                        <Image
-                            source={{ uri: displayAvatar }}
-                            style={{ width: 50, height: 50, borderRadius: 25 }}
+                        <SecureAvatar
+                            fileKey={displayAvatarKey}
+                            name={displayLabel}
+                            size={50}
                         />
                     )}
                     {isOnline && (
@@ -185,17 +241,36 @@ export default function ChatListScreen() {
                     </View>
 
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text
-                            style={{
-                                fontSize: 14,
-                                color: colors.textMuted,
-                                flex: 1,
-                                marginRight: 10
-                            }}
-                            numberOfLines={1}
-                        >
-                            {lastMsgText}
-                        </Text>
+                        {typingRooms[String(item.id)] ? (
+                            <Animated.Text
+                                style={{
+                                    fontSize: 14,
+                                    color: '#f97316',
+                                    fontStyle: 'italic',
+                                    fontWeight: '500',
+                                    flex: 1,
+                                    marginRight: 10,
+                                    opacity: pulseAnim
+                                }}
+                                numberOfLines={1}
+                            >
+                                {typingRooms[String(item.id)]} is typing...
+                            </Animated.Text>
+                        ) : (
+
+                            <Text
+                                style={{
+                                    fontSize: 14,
+                                    color: colors.textMuted,
+                                    flex: 1,
+                                    marginRight: 10
+                                }}
+                                numberOfLines={1}
+                            >
+                                {lastMsgText}
+                            </Text>
+                        )}
+
 
                         {unreadCount > 0 && (
                             <View style={{ backgroundColor: '#25D366', borderRadius: 12, minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>

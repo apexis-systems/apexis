@@ -99,8 +99,8 @@ export const getOrgUsers = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
 
-        if (!authUser || authUser.role !== "admin") {
-            return res.status(403).json({ error: "Forbidden: Only admins can view organization users" });
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
         }
 
         const orgUsers = await users.findAll({

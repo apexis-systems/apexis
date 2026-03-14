@@ -271,6 +271,8 @@ export const viewFile = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "No file key provided" });
         }
 
+        // console.log(`[DEBUG] Attempting to view file: ${fileKey} in bucket: ${BUCKET_NAME}`);
+
         const command = new GetObjectCommand({
             Bucket: BUCKET_NAME,
             Key: fileKey,
@@ -282,18 +284,35 @@ export const viewFile = async (req: Request, res: Response) => {
             res.setHeader("Content-Type", s3Item.ContentType);
         }
 
-        // s3Item.Body is a Readable stream in Node.js
-        if (s3Item.Body && typeof (s3Item.Body as any).pipe === "function") {
-            (s3Item.Body as any).pipe(res);
+        // s3Item.Body is a Readable stream in Node.js for AWS SDK v3
+        if (s3Item.Body) {
+            // For AWS SDK v3 responses in Node.js, Body is usually a stream or has transformToWebStream
+            if (typeof (s3Item.Body as any).pipe === "function") {
+                (s3Item.Body as any).pipe(res);
+            } else if (typeof (s3Item.Body as any).transformToWebStream === "function") {
+                // Some versions of SDK v3 might need this or simply be piped
+                const webStream = (s3Item.Body as any).transformToWebStream();
+                const reader = webStream.getReader();
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    res.write(value);
+                }
+                res.end();
+            } else {
+                console.error("[ERROR] Unexpected S3 Body type:", typeof s3Item.Body);
+                res.status(500).json({ error: "S3 item body is not a stream" });
+            }
         } else {
-            console.error("Expected a stream from S3 but got:", typeof s3Item.Body);
-            res.status(500).json({ error: "Failed to read file stream" });
+            console.error("[ERROR] S3 item body is empty for key:", fileKey);
+            res.status(404).json({ error: "File body is empty" });
         }
     } catch (error: any) {
-        console.error("View File Error:", error.message);
+        console.error(`[ERROR] View File Error for key ${req.body.fileKey}:`, error.message);
         if (error.name === "NoSuchKey") {
-            return res.status(404).json({ error: "File not found" });
+            return res.status(404).json({ error: "File not found in S3" });
         }
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({ error: `Internal server error: ${error.message}` });
     }
 };
+

@@ -20,6 +20,8 @@ const config = {
         rejectUnauthorized: false,
       },
     },
+
+
     define: {
       schema: process.env.DB_SCHEMA || 'public',
     },

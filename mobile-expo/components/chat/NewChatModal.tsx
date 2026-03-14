@@ -154,12 +154,14 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                     >
                         <Text style={[styles.typeTabText, { color: type === 'direct' ? '#f97316' : colors.textMuted }]}>Direct</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => { setType('group'); setSelectedUsers([]); }}
-                        style={[styles.typeTab, type === 'group' && { borderBottomColor: '#f97316', borderBottomWidth: 2 }]}
-                    >
-                        <Text style={[styles.typeTabText, { color: type === 'group' ? '#f97316' : colors.textMuted }]}>Group</Text>
-                    </TouchableOpacity>
+                    {authUser?.role === 'admin' && (
+                        <TouchableOpacity
+                            onPress={() => { setType('group'); setSelectedUsers([]); }}
+                            style={[styles.typeTab, type === 'group' && { borderBottomColor: '#f97316', borderBottomWidth: 2 }]}
+                        >
+                            <Text style={[styles.typeTabText, { color: type === 'group' ? '#f97316' : colors.textMuted }]}>Group</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Group Name Input */}

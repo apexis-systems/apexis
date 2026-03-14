@@ -6,12 +6,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { verifyInvitation, completeSuperAdminOnboarding } from '@/services/authService';
+import { verifyInvitation, completeSuperAdminOnboarding, loginSuperAdmin } from '@/services/authService';
+import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, ShieldCheck, Mail, Lock, UserCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const OnboardingContent = () => {
     const router = useRouter();
+    const auth = useAuth();
     const searchParams = useSearchParams();
     const token = searchParams?.get('token') || null;
 
@@ -64,6 +66,22 @@ const OnboardingContent = () => {
                 name: name.trim(),
                 password: password.trim()
             });
+
+            // Auto Logan after setup
+            if (auth?.login) {
+                // If there's an existing user, it's better to log them out first to be safe, 
+                // but the login function in AuthContext usually overwrites the token.
+                const loginRes = await loginSuperAdmin({ email, password: password.trim() });
+                if (loginRes?.token) {
+                    const user = await auth.login(loginRes.token);
+                    if (user?.role) {
+                        toast.success("Account set up & logged in successfully");
+                        router.push(`/${user.role}/dashboard`);
+                        return;
+                    }
+                }
+            }
+
             toast.success("Account set up successfully");
             router.push('/login');
         } catch (err: any) {

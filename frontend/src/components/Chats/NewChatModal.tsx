@@ -100,12 +100,14 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                     >
                         Direct Message
                     </button>
-                    <button
-                        onClick={() => { setType('group'); setSelectedUsers([]); }}
-                        className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'group' ? 'text-[#f97316] border-b-2 border-[#f97316]' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                        Group Chat
-                    </button>
+                    {authUser?.role === 'admin' && (
+                        <button
+                            onClick={() => { setType('group'); setSelectedUsers([]); }}
+                            className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'group' ? 'text-[#f97316] border-b-2 border-[#f97316]' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Group Chat
+                        </button>
+                    )}
                 </div>
 
                 <div className="p-4 bg-secondary/20 border-b">

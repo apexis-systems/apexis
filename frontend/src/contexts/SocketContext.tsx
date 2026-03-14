@@ -30,11 +30,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             newSocket.on('connect', () => {
                 setIsConnected(true);
-                console.log('Socket connected:', newSocket?.id);
-                if (user?.id) {
-                    newSocket?.emit('join-user-room', user.id);
-                }
+                console.log('[SOCKET] Web connected:', newSocket?.id);
             });
+
 
             newSocket.on('new-message-global', (data: any) => {
                 // If we are not on the chat page for this room, play sound
@@ -63,6 +61,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
     }, [isLoggedIn]);
+
+    // Separate effect for joining user-specific room
+    useEffect(() => {
+        if (socket && isConnected && user?.id) {
+            // console.log('[SOCKET] Web Emitting join-user-room for user:', user.id);
+            socket.emit('join-user-room', user.id);
+        }
+    }, [socket, isConnected, user?.id]);
+
 
     return (
         <SocketContext.Provider value={{ socket, isConnected }}>
