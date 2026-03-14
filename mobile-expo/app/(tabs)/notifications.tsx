@@ -26,7 +26,9 @@ export default function NotificationsScreen() {
     const fetchNotifications = async () => {
         try {
             const res = await PrivateAxios.get('/notifications');
-            setNotifications(res.data.notifications);
+            const data = res.data.notifications || [];
+            setNotifications(data);
+            setUnreadNotificationCount(data.filter((n: any) => !n.is_read).length);
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
         }
@@ -65,8 +67,12 @@ export default function NotificationsScreen() {
 
     const markRead = async (id: number) => {
         try {
-            await PrivateAxios.patch(`/notifications/${id}/read`);
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+            const notif = notifications.find(n => n.id === id);
+            if (notif && !notif.is_read) {
+                await PrivateAxios.patch(`/notifications/${id}/read`);
+                setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+                setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+            }
         } catch (error) {
             console.error('Failed to mark read:', error);
         }

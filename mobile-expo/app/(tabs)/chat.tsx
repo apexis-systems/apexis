@@ -59,6 +59,7 @@ export default function ChatListScreen() {
         try {
             const data = await listRooms();
             setRooms(data);
+            setUnreadChatCount(data.filter((r: any) => (r.unread_count || 0) > 0).length);
         } catch (error) {
             console.error("fetchRooms error:", error);
         } finally {
@@ -69,7 +70,6 @@ export default function ChatListScreen() {
 
     useEffect(() => {
         fetchRooms();
-        setUnreadChatCount(0);
     }, []);
 
     useEffect(() => {
@@ -208,6 +208,9 @@ export default function ChatListScreen() {
         return (
             <TouchableOpacity
                 onPress={() => {
+                    if ((item.unread_count || 0) > 0) {
+                        setUnreadChatCount(prev => Math.max(0, prev - 1));
+                    }
                     setRooms(prev => prev.map(r => String(r.id) === String(item.id) ? { ...r, unread_count: 0 } : r));
                     router.push(`/chat/${item.id}`);
                 }}
