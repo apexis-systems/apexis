@@ -5,6 +5,7 @@ import { HapticTab } from '@/components/haptic-tab';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { useTranslation } from 'react-i18next';
 
 const ACCENT = '#f97316';
@@ -14,6 +15,7 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { colors } = useTheme();
+  const { unreadNotificationCount, unreadChatCount } = useSocket();
   const { t } = useTranslation();
 
   // The RootLayoutNav handles redirection. We allow Tabs to render with empty or default placeholders momentarily.
@@ -87,14 +89,18 @@ export default function TabLayout() {
           href: user?.role === 'superadmin' ? null : '/(tabs)/chat',
           title: 'Chat',
           tabBarIcon: ({ color }) => <Feather name="message-circle" size={22} color={color} />,
+          tabBarBadge: unreadChatCount > 0 ? unreadChatCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: ACCENT },
         }}
       />
       <Tabs.Screen
         name="notifications"
         options={{
-          title: 'Notifications',
           href: null,
+          title: 'Notifications',
           tabBarIcon: ({ color }) => <Feather name="bell" size={22} color={color} />,
+          tabBarBadge: unreadNotificationCount > 0 ? unreadNotificationCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: ACCENT },
         }}
       />
       <Tabs.Screen

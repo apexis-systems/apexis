@@ -4,6 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Op } from 'sequelize';
 import sharp from 'sharp';
 import { snags, users, project_members, activities } from '../models/index.ts';
+import { sendNotification } from '../utils/notificationUtils.ts';
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION || 'ap-south-2',
@@ -119,6 +120,17 @@ export const createSnag = async (req: Request, res: Response) => {
             description: `Added snag "${title.trim()}"`
         });
 
+        // Notify assignee
+        if (assigned_to) {
+            await sendNotification({
+                userId: Number(assigned_to),
+                title: 'New Snag Assigned',
+                body: `${authUser.name} assigned a new snag to you: ${title}`,
+                type: 'snag_assigned',
+                data: { snagId: String(snag.id), projectId: String(project_id) }
+            });
+        }
+
         const full = await snags.findByPk((snag as any).id, {
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name'] },
@@ -156,6 +168,21 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
             });
         }
         res.json({ snag });
+
+        // Notify assignee and creator if status changed by someone else
+        const notifyIds = new Set<number>();
+        if (snag.assigned_to && snag.assigned_to !== authUser.user_id) notifyIds.add(snag.assigned_to);
+        if (snag.created_by && snag.created_by !== authUser.user_id) notifyIds.add(snag.created_by);
+
+        for (const uid of notifyIds) {
+            await sendNotification({
+                userId: uid,
+                title: 'Snag Status Updated',
+                body: `${authUser.name} updated status to ${status} for snag: ${snag.title}`,
+                type: 'snag_status_update',
+                data: { snagId: String(snag.id), projectId: String(snag.project_id) }
+            });
+        }
     } catch (err) {
         console.error('updateSnagStatus error:', err);
         res.status(500).json({ error: 'Internal server error' });

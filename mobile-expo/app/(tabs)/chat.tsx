@@ -16,7 +16,7 @@ export default function ChatListScreen() {
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
     const router = useRouter();
-    const { socket } = useSocket();
+    const { socket, setUnreadChatCount } = useSocket();
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState<Set<number | string>>(new Set());
@@ -69,6 +69,7 @@ export default function ChatListScreen() {
 
     useEffect(() => {
         fetchRooms();
+        setUnreadChatCount(0);
     }, []);
 
     useEffect(() => {
@@ -87,6 +88,13 @@ export default function ChatListScreen() {
                 const room = { ...updatedRooms[roomIndex] };
                 room.chat_messages = [data.message];
                 room.updatedAt = data.message.createdAt || new Date().toISOString();
+
+                // Increment unread count if message is from someone else
+                // Use sender_id from message data
+                const senderId = data.message.sender_id || data.message.sender?.id;
+                if (String(senderId) !== String(user?.id)) {
+                    room.unread_count = (Number(room.unread_count) || 0) + 1;
+                }
 
                 updatedRooms.splice(roomIndex, 1);
                 updatedRooms.unshift(room);
@@ -199,7 +207,10 @@ export default function ChatListScreen() {
 
         return (
             <TouchableOpacity
-                onPress={() => router.push(`/chat/${item.id}`)}
+                onPress={() => {
+                    setRooms(prev => prev.map(r => String(r.id) === String(item.id) ? { ...r, unread_count: 0 } : r));
+                    router.push(`/chat/${item.id}`);
+                }}
                 style={{
                     flexDirection: 'row',
                     padding: 16,
@@ -273,8 +284,17 @@ export default function ChatListScreen() {
 
 
                         {unreadCount > 0 && (
-                            <View style={{ backgroundColor: '#25D366', borderRadius: 12, minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
-                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{unreadCount}</Text>
+                            <View style={{
+                                backgroundColor: '#FF3B30',
+                                borderRadius: 12,
+                                minWidth: 20,
+                                height: 20,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                paddingHorizontal: 5,
+                                marginLeft: 8
+                            }}>
+                                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{unreadCount}</Text>
                             </View>
                         )}
                     </View>

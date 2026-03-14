@@ -19,6 +19,11 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: false,
             },
+            last_read_at: {
+                type: DataTypes.DATE,
+                allowNull: false,
+                defaultValue: DataTypes.NOW
+            }
         },
         {
             tableName: "room_members",
