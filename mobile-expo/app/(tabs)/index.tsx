@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSocket } from '@/contexts/SocketContext';
 import HelpSupportModal from '@/components/shared/HelpSupportModal';
 import FeedbackModal from '@/components/shared/FeedbackModal';
 import LanguageSelectorModal from '@/components/shared/LanguageSelectorModal';
@@ -20,6 +21,7 @@ import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 export default function DashboardScreen() {
   const { user } = useAuth();
   const { isDark, toggleTheme, colors } = useTheme();
+  const { unreadNotificationCount } = useSocket();
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -221,13 +223,32 @@ export default function DashboardScreen() {
                   <Feather name="message-square" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
 
+                <TouchableOpacity
+                  onPress={() => router.push('/(tabs)/notifications')}
+                  style={{ padding: 6, borderRadius: 20, position: 'relative' }}
+                >
+                  <Feather name="bell" size={18} color={colors.textMuted} />
+                  {unreadNotificationCount > 0 && (
+                    <View style={{
+                      position: 'absolute',
+                      right: 4,
+                      top: 4,
+                      minWidth: 14,
+                      height: 14,
+                      borderRadius: 7,
+                      backgroundColor: colors.primary,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingHorizontal: 2
+                    }}>
+                      <Text style={{ color: '#fff', fontSize: 8, fontWeight: '700' }}>
+                        {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowLanguage(true)} style={{ padding: 6, borderRadius: 20 }}>
                   <Feather name="globe" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => router.push('/notifications')} style={{ padding: 6, borderRadius: 20, position: 'relative' }}>
-                  <Feather name="bell" size={18} color={colors.textMuted} />
-                  <View style={{ position: 'absolute', right: 6, top: 6, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                 </TouchableOpacity>
 
 

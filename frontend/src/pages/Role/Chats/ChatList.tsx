@@ -70,6 +70,12 @@ export default function ChatList() {
                 room.chat_messages = [data.message];
                 room.updatedAt = data.message.createdAt || new Date().toISOString();
 
+                // Increment unread count if it exists, otherwise start at 1
+                // We only increment if the message is from someone else
+                if (data.message.sender_id !== authUser?.id) {
+                    room.unread_count = (Number(room.unread_count) || 0) + 1;
+                }
+
                 updatedRooms.splice(roomIndex, 1);
                 updatedRooms.unshift(room);
                 return updatedRooms;
@@ -192,7 +198,10 @@ export default function ChatList() {
                         return (
                             <button
                                 key={chat.id}
-                                onClick={() => router.push(`/${role}/chats/${chat.id}`)}
+                                onClick={() => {
+                                    setRooms(prev => prev.map(r => String(r.id) === String(chat.id) ? { ...r, unread_count: 0 } : r));
+                                    router.push(`/${role}/chats/${chat.id}`);
+                                }}
                                 className={`w-full flex items-center gap-4 px-4 py-3.5 hover:bg-secondary/40 transition-colors text-left ${idx < sorted.length - 1 ? 'border-b border-border' : ''}`}
                             >
                                 {/* Avatar */}
@@ -230,6 +239,13 @@ export default function ChatList() {
                                             <p className="text-xs truncate text-muted-foreground">
                                                 {chat.chat_messages?.[0]?.text || (chat.type === 'group' ? 'Group Chat' : 'Direct Message')}
                                             </p>
+                                        )}
+                                        {chat.unread_count > 0 && (
+                                            <div className="h-5 min-w-[20px] px-1.5 rounded-full bg-red-500 flex items-center justify-center shrink-0">
+                                                <span className="text-[10px] font-bold text-white leading-none">
+                                                    {chat.unread_count}
+                                                </span>
+                                            </div>
                                         )}
                                     </div>
 

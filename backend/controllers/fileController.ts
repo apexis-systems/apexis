@@ -5,6 +5,8 @@ import { Op } from "sequelize";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from 'sharp';
+import { sendNotification } from "../utils/notificationUtils.ts";
+import { users as UsersModel } from "../models/index.ts";
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION || "ap-south-2",
@@ -122,13 +124,18 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
         });
 
-        // Grouping API logic - skip if true
-        if (skipActivity !== 'true') {
-            await activities.create({
-                project_id: parseInt(project_id, 10),
-                user_id: authUser.user_id,
-                type: file_type.startsWith('image/') ? 'upload_photo' : 'upload',
-                description: `Uploaded ${finalFileName}`
+        // Send notifications to project members
+        const members = await project_members.findAll({
+            where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
+        });
+
+        for (const member of members) {
+            await sendNotification({
+                userId: member.user_id,
+                title: 'New File Uploaded',
+                body: `${authUser.name} uploaded ${finalFileName}`,
+                type: 'file_upload',
+                data: { fileId: String(newFile.id), projectId: String(project_id) }
             });
         }
 
@@ -256,6 +263,23 @@ export const toggleFileVisibility = async (req: Request, res: Response) => {
 
         file.client_visible = client_visible;
         await file.save();
+
+        if (client_visible) {
+            // Notify clients in the organization
+            const clients = await UsersModel.findAll({
+                where: { organization_id: authUser.organization_id, role: 'client' }
+            });
+
+            for (const client of clients) {
+                await sendNotification({
+                    userId: (client as any).id,
+                    title: 'New File Available',
+                    body: `A new file "${file.file_name}" is now visible to you.`,
+                    type: 'file_visibility',
+                    data: { fileId: String(file.id), projectId: String(file.project_id) }
+                });
+            }
+        }
 
         res.status(200).json({ message: "File visibility updated", file });
     } catch (error) {

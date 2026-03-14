@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { messaging } from '../config/firebase.ts';
-import { users, rooms, room_members, chat_messages, sequelize } from '../models/index.ts';
+import { users, rooms, room_members, chat_messages, sequelize, notifications } from '../models/index.ts';
 import { Op } from 'sequelize';
-import { getIO } from '../socket.ts';
+import { getIO, isUserOnline } from '../socket.ts';
+import { sendNotification } from '../utils/notificationUtils.ts';
 
 /**
  * List all chat rooms for the current user
@@ -13,12 +14,28 @@ export const listRooms = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        // Find all rooms where the user is a member using a subquery for filtering
+        // Find all rooms where the user is a member
         const userRooms = await rooms.findAll({
             where: {
                 id: {
-                    [Op.in]: sequelize.literal(`(SELECT room_id FROM room_members WHERE user_id = ${authUser.user_id})`)
+                    [Op.in]: sequelize.literal(`(SELECT "room_id" FROM "room_members" WHERE "user_id" = ${authUser.user_id})`)
                 }
+            },
+            attributes: {
+                include: [
+                    [
+                        sequelize.literal(`(
+                            SELECT COUNT(*)
+                            FROM "chat_messages" AS cm
+                            JOIN "room_members" AS rm ON cm."room_id" = rm."room_id"
+                            WHERE cm."room_id" = "rooms"."id" 
+                            AND rm."user_id" = ${authUser.user_id}
+                            AND cm."createdAt" > rm."last_read_at"
+                            AND cm."sender_id" != ${authUser.user_id}
+                        )`),
+                        'unread_count'
+                    ]
+                ]
             },
             include: [
                 {
@@ -64,6 +81,12 @@ export const getRoomMessages = async (req: Request, res: Response) => {
             order: [['createdAt', 'ASC']]
         });
 
+        // Mark as read
+        await room_members.update(
+            { last_read_at: new Date() },
+            { where: { room_id: roomId, user_id: authUser.user_id } }
+        );
+
         res.status(200).json({ messages });
     } catch (error) {
         console.error('Get Messages Error:', error);
@@ -100,35 +123,23 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             include: [{ model: users, as: 'sender', attributes: ['id', 'name', 'profile_pic'] }]
         });
 
-        // 2. Trigger Push Notification to all room members except sender
+        // 2. Trigger Notifications
         const members = await room_members.findAll({
             where: { room_id: roomId, user_id: { [Op.ne]: authUser.user_id } },
             include: [{ model: users, attributes: ['id', 'fcm_token'] }]
         });
 
-        // ... notification loop remains same ...
         for (const member of members) {
-            const recipient = (member as any).user;
-            if (recipient?.fcm_token) {
-                const payload = {
-                    notification: {
-                        title: authUser.name || 'New Message',
-                        body: text,
-                    },
-                    data: {
-                        roomId: String(roomId),
-                        type: 'chat',
-                        messageId: String(newMessage.id)
-                    },
-                    token: recipient.fcm_token
-                };
-
-                try {
-                    await messaging.send(payload);
-                } catch (err) {
-                    console.error('FCM Send Error:', err);
+            await sendNotification({
+                userId: member.user_id,
+                title: authUser.name || 'New Message',
+                body: text,
+                type: 'chat',
+                data: {
+                    roomId: String(roomId),
+                    messageId: String(newMessage.id)
                 }
-            }
+            });
         }
 
         // 3. Socket broadcast
@@ -150,7 +161,6 @@ export const sendChatMessage = async (req: Request, res: Response) => {
                 });
             }
         } catch (ioErr) {
-
             console.error('Socket broadcast error:', ioErr);
         }
 
@@ -186,6 +196,28 @@ export const markMessageSeen = async (req: Request, res: Response) => {
 
         res.status(200).json({ success: true });
     } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+/**
+ * Mark all messages in a room as read
+ * PATCH /api/chats/:roomId/read
+ */
+export const markRoomRead = async (req: Request, res: Response) => {
+    try {
+        const { roomId } = req.params;
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
+
+        await room_members.update(
+            { last_read_at: new Date() },
+            { where: { room_id: roomId, user_id: authUser.user_id } }
+        );
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Mark Room Read Error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -270,6 +302,25 @@ export const createRoom = async (req: Request, res: Response) => {
             const roomWithMembers = await rooms.findByPk(newRoom.id, {
                 include: [{ model: room_members, include: [{ model: users, attributes: ['id', 'name', 'role'] }] }]
             });
+
+            // Notify members about new group
+            const otherMembers = allMemberIds.filter(uid => uid !== authUser.user_id);
+            for (const uid of otherMembers) {
+                try {
+                    await sendNotification({
+                        userId: uid,
+                        title: 'New Group',
+                        body: `${authUser.name} added you to a group: ${name}`,
+                        type: 'group_creation',
+                        data: { roomId: String(newRoom.id) }
+                    });
+
+                    // Still need to broadcast room object for dynamic UI update
+                    getIO().to(`user-${uid}`).emit('new-room-created', roomWithMembers);
+                } catch (notifyErr) {
+                    console.error(`Failed to notify user ${uid} of new group:`, notifyErr);
+                }
+            }
 
             return res.status(201).json({ room: roomWithMembers });
         }

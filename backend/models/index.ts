@@ -150,6 +150,10 @@ db.rooms.hasMany(db.chat_messages, { foreignKey: 'room_id' });
 db.chat_messages.belongsTo(db.users, { foreignKey: 'sender_id', as: 'sender' });
 db.users.hasMany(db.chat_messages, { foreignKey: 'sender_id' });
 
+// User <-> Notification
+db.notifications.belongsTo(db.users, { foreignKey: 'user_id' });
+db.users.hasMany(db.notifications, { foreignKey: 'user_id' });
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
@@ -169,6 +173,7 @@ export const activities = db.activities;
 export const rooms = db.rooms;
 export const room_members = db.room_members;
 export const chat_messages = db.chat_messages;
+export const notifications = db.notifications;
 
 export { sequelize, Sequelize };
 export default db;

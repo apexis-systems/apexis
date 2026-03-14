@@ -3,6 +3,9 @@ import type { Server as HTTPServer } from 'http';
 
 let io: SocketIOServer;
 
+// userId -> Set of socket IDs
+const onlineUsers = new Map<number | string, Set<string>>();
+
 export const initIO = (httpServer: HTTPServer) => {
     io = new SocketIOServer(httpServer, {
         cors: {
@@ -10,9 +13,6 @@ export const initIO = (httpServer: HTTPServer) => {
             methods: ["GET", "POST"]
         }
     });
-
-    // userId -> Set of socket IDs
-    const onlineUsers = new Map<number | string, Set<string>>();
 
     io.on('connection', (socket) => {
         console.log(`Socket connected: ${socket.id}`);
@@ -55,7 +55,6 @@ export const initIO = (httpServer: HTTPServer) => {
             console.log(`Socket ${socket.id} joined user-${userId} (Online: ${onlineUsers.size} users)`);
         });
 
-
         socket.on('check-user-status', (rawUserId: string | number) => {
             const userId = String(rawUserId);
             const isOnline = onlineUsers.has(userId);
@@ -67,8 +66,6 @@ export const initIO = (httpServer: HTTPServer) => {
             socket.join(roomName);
             console.log(`[SOCKET] ${socket.id} joined ${roomName}`);
         });
-
-
 
         socket.on('send-message', (data: { roomId: string | number; text: string; senderId: number; senderName: string; createdAt: Date }) => {
             io.to(`room-${String(data.roomId)}`).emit('new-message', data);
@@ -87,4 +84,8 @@ export const getIO = () => {
         throw new Error("Socket.io not initialized!");
     }
     return io;
+};
+
+export const isUserOnline = (userId: number | string) => {
+    return onlineUsers.has(String(userId));
 };

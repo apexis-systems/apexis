@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
-import { folders, project_members, activities } from "../models/index.ts";
+import { folders, project_members, activities, users as UsersModel } from "../models/index.ts";
+import { sendNotification } from "../utils/notificationUtils.ts";
 
 export const createFolder = async (req: Request, res: Response) => {
     try {
@@ -93,6 +94,23 @@ export const toggleFolderVisibility = async (req: Request, res: Response) => {
 
         folder.client_visible = client_visible;
         await folder.save();
+
+        if (client_visible) {
+            // Notify clients in the organization
+            const clients = await UsersModel.findAll({
+                where: { organization_id: authUser.organization_id, role: 'client' }
+            });
+
+            for (const client of clients) {
+                await sendNotification({
+                    userId: (client as any).id,
+                    title: 'New Folder Available',
+                    body: `A new folder "${folder.name}" is now visible to you.`,
+                    type: 'folder_visibility',
+                    data: { folderId: String(folder.id), projectId: String(folder.project_id) }
+                });
+            }
+        }
 
         res.status(200).json({ message: "Folder visibility updated", folder });
     } catch (error) {

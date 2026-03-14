@@ -1,18 +1,21 @@
 "use client";
 
-import { Bell, Search, Sun, Moon, LogOut, HelpCircle, MessageSquarePlus, X } from 'lucide-react';
+import { Bell, Search, Sun, Moon, LogOut, HelpCircle, MessageSquarePlus, MessageSquare, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInterface } from '@/contexts/InterfaceContext';
+import { useSocket } from '@/contexts/SocketContext';
 import HelpSupportDialog from '@/components/shared/HelpSupportDialog';
 import FeedbackDialog from '@/components/shared/FeedbackDialog';
 import LanguageSelector from '@/components/shared/LanguageSelector';
+import NotificationDropdown from '../NotificationDropdown';
 
 const SiteHeader = () => {
   const router = useRouter();
   const { user, logout } = useAuth() || {};
   const { setMode } = useInterface() || {};
+  const { unreadChatCount } = useSocket();
   const [isDark, setIsDark] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -108,10 +111,17 @@ const SiteHeader = () => {
               <MessageSquarePlus className="h-4 w-4 text-muted-foreground" />
             </button>
             <LanguageSelector />
-            <button className="relative rounded-lg p-2 hover:bg-secondary transition-colors">
-              <Bell className="h-4 w-4 text-muted-foreground" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />
+            <button
+              onClick={() => router.push(`/${user?.role || 'admin'}/chats`)}
+              className="relative rounded-lg p-2 hover:bg-secondary transition-colors"
+              title="Chats"
+            >
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              {unreadChatCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 border border-card" />
+              )}
             </button>
+            <NotificationDropdown />
 
             {user && (
               <div className="ml-2 flex items-center gap-3 border-l border-border pl-4">
