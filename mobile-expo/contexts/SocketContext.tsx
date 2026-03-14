@@ -11,8 +11,8 @@ interface SocketContextType {
     isConnected: boolean;
     unreadNotificationCount: number;
     unreadChatCount: number;
-    setUnreadNotificationCount: (count: number) => void;
-    setUnreadChatCount: (count: number) => void;
+    setUnreadNotificationCount: React.Dispatch<React.SetStateAction<number>>;
+    setUnreadChatCount: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const SocketContext = createContext<SocketContextType>({

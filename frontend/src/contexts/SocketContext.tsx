@@ -11,8 +11,8 @@ interface SocketContextType {
     isConnected: boolean;
     unreadChatCount: number;
     unreadNotificationCount: number;
-    setUnreadChatCount: (count: number) => void;
-    setUnreadNotificationCount: (count: number) => void;
+    setUnreadChatCount: React.Dispatch<React.SetStateAction<number>>;
+    setUnreadNotificationCount: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -51,7 +51,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const notifRes = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/notifications`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setUnreadNotificationCount(notifRes.data.notifications.filter((n: any) => !n.is_read).length);
+            setUnreadNotificationCount((notifRes.data.notifications || []).filter((n: any) => !n.is_read).length);
 
             // Fetch chats for unread count
             const chatRes = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/chats`, {
@@ -102,6 +102,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     });
                     setUnreadChatCount(prev => prev + 1);
                 }
+            });
+
+            newSocket.on('new-room-created', () => {
+                fetchInitialCounts(); // Refresh counts if a new room is created for the user
             });
 
             newSocket.on('new-notification', (notif: any) => {

@@ -21,7 +21,9 @@ const NotificationDropdown = () => {
     const fetchNotifications = async () => {
         try {
             const res = await PrivateAxios.get('/notifications');
-            setNotifications(res.data.notifications);
+            const data = res.data.notifications || [];
+            setNotifications(data);
+            setUnreadNotificationCount(data.filter((n: any) => !n.is_read).length);
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
         }
