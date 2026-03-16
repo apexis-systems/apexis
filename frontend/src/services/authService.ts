@@ -148,3 +148,47 @@ export const completeSuperAdminOnboarding = async (data: { token: string; name: 
         throw error;
     }
 };
+
+// ----------------------------------------------------
+// Password Management
+// ----------------------------------------------------
+
+export const forgotPasswordRequestOtp = async (email: string, role: 'admin' | 'superadmin') => {
+    try {
+        const response = await PublicAxios.post("/auth/forgot-password/request-otp", { email, role });
+        return response.data;
+    } catch (error) {
+        console.error("forgotPasswordRequestOtp Error", error);
+        throw error;
+    }
+};
+
+export const forgotPasswordVerifyOtp = async (email: string, otp: string) => {
+    try {
+        const response = await PublicAxios.post("/auth/forgot-password/verify-otp", { email, otp });
+        return response.data; // { resetToken, message }
+    } catch (error) {
+        console.error("forgotPasswordVerifyOtp Error", error);
+        throw error;
+    }
+};
+
+export const resetPassword = async (resetToken: string, newPassword: string) => {
+    try {
+        const response = await PublicAxios.post("/auth/forgot-password/reset", { resetToken, newPassword });
+        return response.data;
+    } catch (error) {
+        console.error("resetPassword Error", error);
+        throw error;
+    }
+};
+
+export const changePassword = async (data: { currentPassword: string; newPassword: string }) => {
+    try {
+        const response = await PrivateAxios.post("/auth/change-password", data);
+        return response.data;
+    } catch (error) {
+        console.error("changePassword Error", error);
+        throw error;
+    }
+};

@@ -262,6 +262,18 @@ export default function LoginScreen() {
                         </Text>
                     ) : null}
 
+                    {/* Forgot Password */}
+                    {(selectedRole === 'admin' || selectedRole === 'superadmin') && (
+                        <TouchableOpacity
+                            onPress={() => router.push('/(auth)/forgot-password')}
+                            style={{ alignSelf: 'flex-end', marginBottom: 20, marginTop: -8 }}
+                        >
+                            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
+                                Forgot Password?
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+
                     {/* Sign In Button */}
                     <TouchableOpacity
                         onPress={handleLogin}
