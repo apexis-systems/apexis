@@ -7,7 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
-import { getProjectFiles, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
@@ -199,6 +199,27 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         } finally {
             setDownloading(false);
         }
+    };
+
+    const confirmDeletePhoto = (photo: any) => {
+        if (!photo?.id) return;
+        Alert.alert('Delete', `Remove "${photo.file_name}"?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete', style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await deleteFile(photo.id);
+                        setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+                        if (viewerOpen) closeViewer();
+                    } catch { Alert.alert('Error', 'Failed to delete'); }
+                }
+            }
+        ]);
+    };
+
+    const handleDeletePhoto = () => {
+        confirmDeletePhoto(visiblePhotos[viewerIndex]);
     };
 
     // ── Toggle helpers ────────────────────────────────────────────────────────
@@ -494,6 +515,14 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                         <Feather name={photo.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={photo.client_visible !== false ? '#f97316' : '#fff'} />
                                                     </TouchableOpacity>
                                                 )}
+                                                {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
+                                                    <TouchableOpacity
+                                                        onPress={(e) => { e.stopPropagation(); confirmDeletePhoto(photo); }}
+                                                        style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
+                                                    >
+                                                        <Feather name="trash-2" size={12} color="#ef4444" />
+                                                    </TouchableOpacity>
+                                                )}
                                             </>
                                         )}
                                     </View>
@@ -560,6 +589,14 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                         style={{ padding: 6 }}
                                                     >
                                                         <Feather name={photo.client_visible !== false ? 'eye' : 'eye-off'} size={16} color={photo.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                                    </TouchableOpacity>
+                                                )}
+                                                {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
+                                                    <TouchableOpacity
+                                                        onPress={(e) => { e.stopPropagation(); confirmDeletePhoto(photo); }}
+                                                        style={{ padding: 6 }}
+                                                    >
+                                                        <Feather name="trash-2" size={16} color="#ef4444" />
                                                     </TouchableOpacity>
                                                 )}
                                             </>
@@ -678,6 +715,11 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                     : <Feather name="download" size={20} color="#f97316" />
                                 }
                             </TouchableOpacity>
+                            {(String(visiblePhotos[viewerIndex]?.created_by) === String(user?.id) || String(visiblePhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
+                                <TouchableOpacity onPress={handleDeletePhoto} style={{ padding: 8 }}>
+                                    <Feather name="trash-2" size={20} color="#ef4444" />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
 

@@ -11,6 +11,7 @@ export interface Manual {
     type: ManualType;
     uploaded_by?: number;
     uploader?: { id: number; name: string };
+    creator?: { id: number; name: string };
     downloadUrl?: string;
     createdAt: string;
 }

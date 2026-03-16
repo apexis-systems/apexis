@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -380,7 +380,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           )}
                         </button>
                       )}
-                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                      {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
                         <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} className="rounded-md p-1 hover:bg-destructive/10">
                           <Trash2 className="h-3.5 w-3.5 text-destructive" />
                         </button>
@@ -457,9 +457,10 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             </div>
             <button
               onClick={clearSelection}
-              className="ml-2 text-muted-foreground hover:text-foreground"
+              className="ml-2 text-muted-foreground hover:text-foreground p-1"
+              title="Clear selection"
             >
-              <Trash2 className="h-4 w-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>

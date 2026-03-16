@@ -402,6 +402,11 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                                         <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
                                                     </TouchableOpacity>
                                                 )}
+                                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
+                                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} style={{ backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, padding: 4 }}>
+                                                        <Feather name="trash-2" size={12} color="#ef4444" />
+                                                    </TouchableOpacity>
+                                                )}
                                             </>
                                         )}
                                     </View>
@@ -459,7 +464,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                                         <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
                                                     </TouchableOpacity>
                                                 )}
-                                                {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && doc.uploaderId === user.id && (
+                                                {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && String(doc.created_by) === String(user.id) && (
                                                     <TouchableOpacity onPress={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} style={{ padding: 4 }}>
                                                         <Feather name="trash-2" size={14} color="#ef4444" />
                                                     </TouchableOpacity>

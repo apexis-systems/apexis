@@ -176,7 +176,12 @@ export const listFiles = async (req: Request, res: Response) => {
                     { project_id: projectId },
                     { folder_id: { [Op.in]: folderIds } }
                 ]
-            }
+            },
+            include: [{
+                model: UsersModel,
+                as: 'creator',
+                attributes: ['id', 'name', 'email']
+            }]
         });
 
         let filteredFolders = folderData.map((f: any) => f.toJSON());
@@ -211,14 +216,18 @@ export const deleteFile = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         const { fileId } = req.params;
 
-        // Only admins and superadmins can delete
-        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
-            return res.status(403).json({ error: "Only admins can delete files" });
-        }
-
         const file = await files.findByPk(fileId);
         if (!file) {
             return res.status(404).json({ error: "File not found" });
+        }
+
+        // Only admins, superadmins, or the creator can delete
+        if (
+            authUser.role !== "admin" &&
+            authUser.role !== "superadmin" &&
+            String(file.created_by) !== String(authUser.user_id)
+        ) {
+            return res.status(403).json({ error: "Unauthorized: only admins or the uploader can delete this file" });
         }
 
         const command = new DeleteObjectCommand({

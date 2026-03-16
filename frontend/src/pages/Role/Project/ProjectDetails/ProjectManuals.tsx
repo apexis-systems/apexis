@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen, Upload, Trash2, Share2, Loader2 } from 'lucide-react';
+import { BookOpen, Upload, Trash2, Share2, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Manual, ManualType, getManuals, uploadManual, deleteManual } from '@/services/manualService';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface Props { project: Project; }
 
@@ -25,9 +26,10 @@ const ProjectManuals = ({ project }: Props) => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selType, setSelType] = useState<ManualType>('manual');
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const [showUpload, setShowUpload] = useState(false);
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'contributor';
 
   // ── Load ─────────────────────────────────────────────────────────────────────
 
@@ -58,7 +60,7 @@ const ProjectManuals = ({ project }: Props) => {
       setItems(prev => [manual, ...prev]);
       toast.success('Uploaded successfully');
     } catch { toast.error('Upload failed'); }
-    finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
+    finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; setShowUpload(false); }
   };
 
   // ── Delete ─────────────────────────────────────────────────────────────────────
@@ -86,34 +88,79 @@ const ProjectManuals = ({ project }: Props) => {
     <div className="mt-3">
       {isAdmin && (
         <div className="flex gap-2 mb-3">
-          {/* Type toggle */}
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            {TYPE_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setSelType(opt.value)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${selType === opt.value ? 'bg-accent text-white' : 'text-muted-foreground hover:bg-secondary'}`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          {/* File input */}
-          <input ref={fileInputRef} type="file" accept={ACCEPT} className="hidden" onChange={handleFileChange} />
           <Button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+            onClick={() => setShowUpload(true)}
             className="flex-1 h-9 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 text-xs font-semibold"
           >
-            {uploading
-              ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              : <Upload className="h-3.5 w-3.5 mr-1.5" />
-            }
-            Upload {selType === 'sop' ? 'SOP' : 'Manual'}
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            Upload Manual / SOP
           </Button>
         </div>
       )}
+
+      {/* Upload Modal */}
+      <Dialog open={showUpload} onOpenChange={(open) => {
+        if (!open) { setPickedFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }
+        setShowUpload(open);
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Upload Manual / SOP</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-semibold">Type</p>
+              <div className="flex gap-2">
+                {TYPE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSelType(opt.value)}
+                    className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${selType === opt.value ? 'bg-accent/10 border-accent text-accent' : 'border-border text-muted-foreground hover:bg-secondary'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 cursor-pointer transition-colors ${pickedFile ? 'border-accent bg-accent/5' : 'border-border bg-secondary/20 hover:border-accent/50'}`}
+            >
+              <input ref={fileInputRef} type="file" accept={ACCEPT} className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setPickedFile(file);
+              }} />
+              <Upload className={`h-8 w-8 mb-2 ${pickedFile ? 'text-accent' : 'text-muted-foreground/50'}`} />
+              <p className="text-xs font-medium text-foreground text-center">
+                {pickedFile ? pickedFile.name : 'Click to select PDF / Word / Excel'}
+              </p>
+              {pickedFile && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {fmtSize(pickedFile.size / (1024 * 1024))}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowUpload(false)} disabled={uploading}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (pickedFile) {
+                  const e = { target: { files: [pickedFile] } } as any;
+                  handleFileChange(e);
+                }
+              }}
+              disabled={uploading || !pickedFile}
+              className="bg-accent text-accent-foreground hover:bg-accent/90 min-w-[80px]"
+            >
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Upload'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-accent" /></div>
@@ -135,7 +182,7 @@ const ProjectManuals = ({ project }: Props) => {
                 <button onClick={() => handleShare(m)} className="rounded-md p-1 hover:bg-secondary" title="Copy link">
                   <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
-                {isAdmin && (
+                {isAdmin && String(m.uploaded_by) === String(user?.id) && (
                   <button onClick={() => handleDelete(m)} className="rounded-md p-1 hover:bg-destructive/10">
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </button>

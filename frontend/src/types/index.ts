@@ -31,32 +31,34 @@ export interface Folder {
     name: string;
     type: 'documents' | 'photos';
 }
-
 export interface ProjectDocument {
     id: string;
-    projectId: string;
-    folderId: string;
-    name: string;
-    type: 'pdf' | 'dwg';
-    uploadDate: string;
-    uploader: string;
-    uploaderId: string;
-    version: number;
-    clientVisible: boolean;
-    size: string;
+    folder_id: string;
+    project_id: string;
+    file_name: string;
+    file_type: string;
+    file_size_mb: number;
+    downloadUrl: string;
+    created_by: string;
+    client_visible: boolean;
+    createdAt: string;
+    creator?: { id: string; name: string };
 }
 
 export interface ProjectPhoto {
     id: string;
-    projectId: string;
-    folderId: string;
-    url: string;
-    date: string;
-    location: string;
-    tags: string[];
-    uploader: string;
-    uploaderId: string;
-    clientVisible: boolean;
+    folder_id: string;
+    project_id: string;
+    file_name: string;
+    file_type: string;
+    file_size_mb: number;
+    downloadUrl: string;
+    created_by: string;
+    client_visible: boolean;
+    createdAt: string;
+    location?: string;
+    tags?: string[];
+    creator?: { id: string; name: string };
 }
 
 export interface Report {
@@ -101,6 +103,8 @@ export interface SnagItem {
     status: SnagStatus;
     comments: string[];
     createdAt: string;
+    created_by: string;
+    creator?: { id: string; name: string };
 }
 
 export interface ManualSOP {
@@ -110,6 +114,6 @@ export interface ManualSOP {
     type: string;
     uploadDate: string;
     uploader: string;
-    uploaderId: string;
+    uploaded_by: string;
     size: string;
 }

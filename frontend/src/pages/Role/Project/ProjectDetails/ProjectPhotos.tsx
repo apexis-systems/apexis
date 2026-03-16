@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -10,7 +10,7 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
-import { getFiles, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
 import MoveToFolderDialog from './MoveToFolderDialog';
 import { Checkbox } from '@/components/ui/Checkbox';
 
@@ -113,6 +113,17 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       toast.success(`Folder marked ${!folder.client_visible ? 'Visible' : 'Hidden'} for clients`);
     } catch (err) {
       toast.error('Failed to toggle visibility');
+    }
+  };
+
+  const deletePhoto = async (photoId: number) => {
+    if (!confirm('Are you sure you want to delete this photo?')) return;
+    try {
+      await deleteFile(photoId);
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+      toast.success('Photo deleted');
+    } catch (error) {
+      toast.error('Failed to delete photo');
     }
   };
 
@@ -348,13 +359,6 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     >
                       <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                     </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: photo.id }); setShowMoveDialog(true); }}
-                      className="rounded-full bg-card/80 p-0.5 backdrop-blur-sm"
-                      title="Move photo"
-                    >
-                      <Move className="h-2.5 w-2.5 text-muted-foreground" />
-                    </button>
                     {user.role === 'admin' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
@@ -368,6 +372,15 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         )}
                       </button>
                     )}
+                    {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
+                        className="rounded-full bg-card/80 p-0.5 backdrop-blur-sm hover:text-destructive"
+                        title="Delete photo"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -377,80 +390,89 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       </div>
 
       {/* Expanded photo comment */}
-      {expandedPhoto && (
-        <div className="mt-2 rounded-lg border border-border bg-card p-3">
-          <p className="text-xs font-medium text-foreground mb-1">
-            {visiblePhotos.find((p) => p.id === expandedPhoto)?.file_name}
-          </p>
-          <CommentThread targetId={expandedPhoto} targetType="photo" />
-        </div>
-      )}
+      {
+        expandedPhoto && (
+          <div className="mt-2 rounded-lg border border-border bg-card p-3">
+            <p className="text-xs font-medium text-foreground mb-1">
+              {visiblePhotos.find((p) => p.id === expandedPhoto)?.file_name}
+            </p>
+            <CommentThread targetId={expandedPhoto} targetType="photo" />
+          </div>
+        )
+      }
 
-      {currentFolders.length === 0 && visiblePhotos.length === 0 && (
-        <div className="mt-12 text-center">
-          <Camera className="mx-auto h-8 w-8 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No folders or photos yet</p>
-        </div>
-      )}
+      {
+        currentFolders.length === 0 && visiblePhotos.length === 0 && (
+          <div className="mt-12 text-center">
+            <Camera className="mx-auto h-8 w-8 text-muted-foreground/30" />
+            <p className="mt-1.5 text-xs text-muted-foreground">No folders or photos yet</p>
+          </div>
+        )
+      }
 
-      {shareItem && (
-        <ShareDialog open={!!shareItem} onOpenChange={() => setShareItem(null)} itemName={shareItem} />
-      )}
+      {
+        shareItem && (
+          <ShareDialog open={!!shareItem} onOpenChange={() => setShareItem(null)} itemName={shareItem} />
+        )
+      }
 
       {/* Bulk Action Bar */}
-      {isSelectionMode && hasSelection && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
-          <div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-4">
-            <div className="text-[10px] font-semibold text-muted-foreground border-r border-border pr-4">
-              {selectedFolders.size + selectedFiles.size} selected
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
-                onClick={handleBulkShare}
+      {
+        isSelectionMode && hasSelection && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
+            <div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-4">
+              <div className="text-[10px] font-semibold text-muted-foreground border-r border-border pr-4">
+                {selectedFolders.size + selectedFiles.size} selected
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
+                  onClick={handleBulkShare}
+                >
+                  <Share2 className="h-3.5 w-3.5 mr-1" /> Share
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
+                  onClick={handleBulkMove}
+                >
+                  <Move className="h-3.5 w-3.5 mr-1" /> Move
+                </Button>
+                {user.role === 'admin' && (
+                  <div className="flex items-center gap-1 border-l border-border pl-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-semibold text-accent"
+                      onClick={() => handleBulkVisibility(true)}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" /> Show
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
+                      onClick={() => handleBulkVisibility(false)}
+                    >
+                      <EyeOff className="h-3.5 w-3.5 mr-1" /> Hide
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={clearSelection}
+                className="ml-2 text-muted-foreground hover:text-foreground p-1"
+                title="Clear selection"
               >
-                <Share2 className="h-3.5 w-3.5 mr-1" /> Share
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
-                onClick={handleBulkMove}
-              >
-                <Move className="h-3.5 w-3.5 mr-1" /> Move
-              </Button>
-              {user.role === 'admin' && (
-                <div className="flex items-center gap-1 border-l border-border pl-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 px-2 text-[10px] font-semibold text-accent"
-                    onClick={() => handleBulkVisibility(true)}
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" /> Show
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
-                    onClick={() => handleBulkVisibility(false)}
-                  >
-                    <EyeOff className="h-3.5 w-3.5 mr-1" /> Hide
-                  </Button>
-                </div>
-              )}
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              onClick={clearSelection}
-              className="ml-2 text-muted-foreground hover:text-foreground"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
           </div>
-        </div>
-      )}
+        )
+      }
 
       <MoveToFolderDialog
         open={showMoveDialog}
@@ -466,7 +488,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           clearSelection();
         }}
       />
-    </div>
+    </div >
   );
 };
 

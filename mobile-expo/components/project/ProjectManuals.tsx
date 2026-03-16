@@ -171,7 +171,7 @@ export default function ProjectManuals({ project }: Props) {
                                 >
                                     <Feather name="share-2" size={14} color="#666" />
                                 </TouchableOpacity>
-                                {isAdmin && (
+                                {isAdmin && (String(item.uploaded_by) === String(user?.id) || String(item.creator?.id) === String(user?.id)) && (
                                     <TouchableOpacity onPress={() => handleDelete(item)} style={{ padding: 6 }}>
                                         <Feather name="trash-2" size={14} color="#ef4444" />
                                     </TouchableOpacity>

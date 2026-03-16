@@ -119,6 +119,27 @@ export default function ProjectSnagList({ project }: Props) {
                                         </View>
                                     ) : null}
                                 </View>
+                                {(String(snag.creator?.id) === String(user?.id)) && (
+                                    <TouchableOpacity
+                                        onPress={async () => {
+                                            Alert.alert('Delete', `Remove "${snag.title}"?`, [
+                                                { text: 'Cancel', style: 'cancel' },
+                                                {
+                                                    text: 'Delete', style: 'destructive',
+                                                    onPress: async () => {
+                                                        try {
+                                                            await deleteSnagApi(snag.id);
+                                                            setSnags((prev) => prev.filter((s) => s.id !== snag.id));
+                                                        } catch { Alert.alert('Error', 'Failed to delete'); }
+                                                    }
+                                                }
+                                            ]);
+                                        }}
+                                        style={{ padding: 4 }}
+                                    >
+                                        <Feather name="trash-2" size={14} color="#ef4444" />
+                                    </TouchableOpacity>
+                                )}
                                 {(snag.photoDownloadUrl || snag.photo_url) ? (
                                     <TouchableOpacity
                                         onPress={() => setViewPhoto(snag.photoDownloadUrl || snag.photo_url!)}
