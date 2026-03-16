@@ -19,3 +19,13 @@ export const getProjectById = async (id: string) => {
         throw error;
     }
 };
+
+export const updateProject = async (id: string, data: any) => {
+    try {
+        const response = await PrivateAxios.patch(`/projects/${id}`, data);
+        return response.data;
+    } catch (error) {
+        console.error("updateProject Error", error);
+        throw error;
+    }
+};

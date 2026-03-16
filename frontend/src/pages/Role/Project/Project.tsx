@@ -115,7 +115,13 @@ export default function Project({ id }: ProjectProps) {
             <div className="flex-1 p-8 max-w-4xl">
                 <h1 className="text-xl font-bold text-foreground mb-1">{visibleNav.find((n) => n.key === activeTab)?.label}</h1>
                 <p className="text-sm text-muted-foreground mb-6">{project.name}</p>
-                {activeTab === 'overview' && !isClient && <ProjectOverview project={project} userRole={user.role} />}
+                {activeTab === 'overview' && !isClient && (
+                    <ProjectOverview
+                        project={project}
+                        userRole={user.role}
+                        onProjectUpdate={(updated) => setProject(updated)}
+                    />
+                )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} />}
                 {activeTab === 'daily' && !isClient && <ProjectDailyReports project={project} userRole={user.role} />}

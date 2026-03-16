@@ -13,9 +13,12 @@ export interface User {
 export interface Project {
     id: string;
     name: string;
+    description: string;
     location: string;
     startDate: string;
     endDate: string;
+    start_date?: string;
+    end_date?: string;
     color: string;
     totalDocs: number;
     totalPhotos: number;

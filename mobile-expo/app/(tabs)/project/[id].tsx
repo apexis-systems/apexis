@@ -143,7 +143,11 @@ export default function ProjectWorkspaceScreen() {
             {/* Tab Content */}
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
                 {activeTab === 'overview' && user.role !== 'client' && (
-                    <ProjectOverview project={project} userRole={user.role} />
+                    <ProjectOverview
+                        project={project}
+                        userRole={user.role}
+                        onUpdate={(updated) => setProject(updated)}
+                    />
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} />}

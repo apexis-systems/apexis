@@ -6,10 +6,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
 import { useEffect, useState } from 'react';
+import EditProjectModal from './EditProjectModal';
 
 interface Props {
     project: Project;
     userRole: UserRole;
+    onUpdate?: (updated: Project) => void;
 }
 
 // Get ISO week number from a date string
@@ -42,7 +44,7 @@ const reportTitle = (r: Report): string => {
     return `Weekly Progress — Week ${wk}`;
 };
 
-export default function ProjectOverview({ project, userRole }: Props) {
+export default function ProjectOverview({ project, userRole, onUpdate }: Props) {
     const { colors } = useTheme();
     const projectId = (project as any)?.id;
 
@@ -54,6 +56,7 @@ export default function ProjectOverview({ project, userRole }: Props) {
     const [weeklyReports, setWeeklyReports] = useState<Report[]>([]);
     const [reportsLoading, setReportsLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     useEffect(() => {
         if (!projectId) return;
@@ -95,6 +98,48 @@ export default function ProjectOverview({ project, userRole }: Props) {
 
     return (
         <View style={{ gap: 16 }}>
+            {/* Project Description — Admin Editable */}
+            {(project.description || userRole === 'admin') && (
+                <View style={{
+                    borderRadius: 14,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 16,
+                    gap: 8
+                }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>About the Project</Text>
+                        {userRole === 'admin' && (
+                            <TouchableOpacity
+                                onPress={() => setIsEditModalOpen(true)}
+                                style={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: 15,
+                                    backgroundColor: colors.background,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 1,
+                                    borderColor: colors.border
+                                }}
+                            >
+                                <Feather name="edit-2" size={12} color={colors.primary} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    {project.description ? (
+                        <Text style={{ fontSize: 14, color: colors.text, fontStyle: 'italic', lineHeight: 20 }}>
+                            "{project.description}"
+                        </Text>
+                    ) : (
+                        <Text style={{ fontSize: 13, color: colors.textMuted, fontStyle: 'italic' }}>
+                            No description provided. Tap the edit icon to add one.
+                        </Text>
+                    )}
+                </View>
+            )}
+
             {/* Stats Grid — 2×2 */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {[
@@ -320,6 +365,17 @@ export default function ProjectOverview({ project, userRole }: Props) {
                     <Feather name="download" size={15} color="#888" />
                     <Text style={{ fontSize: 13, color: colors.textMuted }}>Export Final Handover Package</Text>
                 </TouchableOpacity>
+            )}
+
+            {userRole === 'admin' && (
+                <EditProjectModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    project={project}
+                    onUpdate={(updated) => {
+                        if (onUpdate) onUpdate(updated);
+                    }}
+                />
             )}
         </View>
     );
