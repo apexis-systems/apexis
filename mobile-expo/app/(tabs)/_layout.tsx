@@ -104,10 +104,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="settings"
         options={{
-          title: t('tabs.profile'),
-          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
+          title: t('tabs.settings'),
+          tabBarIcon: ({ color }) => <Feather name="settings" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { Project, UserRole } from '@/types';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -52,6 +53,7 @@ export default function ProjectOverview({ project, userRole }: Props) {
     const [dailyReports, setDailyReports] = useState<Report[]>([]);
     const [weeklyReports, setWeeklyReports] = useState<Report[]>([]);
     const [reportsLoading, setReportsLoading] = useState(true);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
     useEffect(() => {
         if (!projectId) return;
@@ -84,6 +86,13 @@ export default function ProjectOverview({ project, userRole }: Props) {
             .finally(() => setReportsLoading(false));
     }, [projectId]);
 
+    const handleCopy = async (text: string, id: string) => {
+        if (!text) return;
+        await Clipboard.setStringAsync(text);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+    };
+
     return (
         <View style={{ gap: 16 }}>
             {/* Stats Grid — 2×2 */}
@@ -113,6 +122,77 @@ export default function ProjectOverview({ project, userRole }: Props) {
                     </View>
                 ))}
             </View>
+
+            {/* Access Codes Section — Admin Only */}
+            {(userRole === 'admin' || userRole === 'superadmin') && (
+                <View style={{
+                    marginTop: 8,
+                    borderRadius: 14,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 16,
+                    gap: 12
+                }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Access Codes</Text>
+
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <View style={{ flex: 1, gap: 6 }}>
+                            <Text style={{ fontSize: 10, color: colors.textMuted }}>Contributor Code</Text>
+                            <TouchableOpacity
+                                onPress={() => handleCopy((project as any).contributor_code, 'contributor')}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    backgroundColor: colors.background,
+                                    borderRadius: 10,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 10,
+                                    height: 44
+                                }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                    {(project as any).contributor_code || '—'}
+                                </Text>
+                                <Feather
+                                    name={copiedId === 'contributor' ? "check" : "copy"}
+                                    size={16}
+                                    color={copiedId === 'contributor' ? "#22c55e" : colors.textMuted}
+                                />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ flex: 1, gap: 6 }}>
+                            <Text style={{ fontSize: 10, color: colors.textMuted }}>Client Code</Text>
+                            <TouchableOpacity
+                                onPress={() => handleCopy((project as any).client_code, 'client')}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    backgroundColor: colors.background,
+                                    borderRadius: 10,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 10,
+                                    height: 44
+                                }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                    {(project as any).client_code || '—'}
+                                </Text>
+                                <Feather
+                                    name={copiedId === 'client' ? "check" : "copy"}
+                                    size={16}
+                                    color={copiedId === 'client' ? "#22c55e" : colors.textMuted}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            )}
 
             {/* Reports Section */}
             <View>

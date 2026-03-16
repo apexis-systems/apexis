@@ -20,6 +20,8 @@ export interface Project {
     totalPhotos: number;
     assignedTo: string[];
     sharedWith: string[];
+    contributor_code: string;
+    client_code: string;
 }
 
 export interface Folder {

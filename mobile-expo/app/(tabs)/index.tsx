@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { Feather } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -48,6 +49,7 @@ export default function DashboardScreen() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
 
   useEffect(() => {
@@ -125,6 +127,7 @@ export default function DashboardScreen() {
       setIsSubmitting(false);
     }
   };
+
 
   const handleLogoUpload = async () => {
     if (user?.role !== 'admin') return;
@@ -211,18 +214,6 @@ export default function DashboardScreen() {
                   <Feather name="search" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={toggleTheme} style={{ padding: 6, borderRadius: 20 }}>
-                  <Feather name={isDark ? "sun" : "moon"} size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => setShowHelp(true)} style={{ padding: 6, borderRadius: 20 }}>
-                  <Feather name="help-circle" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => setShowFeedback(true)} style={{ padding: 6, borderRadius: 20 }}>
-                  <Feather name="message-square" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-
                 <TouchableOpacity
                   onPress={() => router.push('/(tabs)/notifications')}
                   style={{ padding: 6, borderRadius: 20, position: 'relative' }}
@@ -247,11 +238,10 @@ export default function DashboardScreen() {
                     </View>
                   )}
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShowLanguage(true)} style={{ padding: 6, borderRadius: 20 }}>
-                  <Feather name="globe" size={18} color={colors.textMuted} />
+
+                <TouchableOpacity onPress={() => setShowMoreMenu(true)} style={{ padding: 6, borderRadius: 20 }}>
+                  <Feather name="more-vertical" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
-
-
               </View>
             </>
           ) : (
@@ -415,6 +405,8 @@ export default function DashboardScreen() {
                     <Text style={{ fontSize: 9, color: colors.textMuted }}>{parseInt(project.totalPhotos, 10) || 0}</Text>
                   </View>
                 </View>
+
+
               </TouchableOpacity>
             ))}
 
@@ -566,11 +558,68 @@ export default function DashboardScreen() {
         </Modal>
 
         {/* Action Modals */}
+        {/* More Menu Modal */}
+        <Modal visible={showMoreMenu} transparent animationType="fade">
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setShowMoreMenu(false)}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingRight: 10, paddingTop: 50 }}
+          >
+            <View style={{
+              backgroundColor: colors.surface,
+              borderRadius: 12,
+              width: 180,
+              padding: 4,
+              borderWidth: 1,
+              borderColor: colors.border,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 10,
+              elevation: 10,
+            }}>
+              <TouchableOpacity
+                onPress={() => { setShowMoreMenu(false); toggleTheme(); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+              >
+                <Feather name={isDark ? "sun" : "moon"} size={16} color={colors.textMuted} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => { setShowMoreMenu(false); setShowLanguage(true); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+              >
+                <Feather name="globe" size={16} color={colors.textMuted} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Language</Text>
+              </TouchableOpacity>
+
+              <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4, marginHorizontal: 8 }} />
+
+              <TouchableOpacity
+                onPress={() => { setShowMoreMenu(false); setShowHelp(true); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+              >
+                <Feather name="help-circle" size={16} color={colors.textMuted} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Help & Support</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+              >
+                <Feather name="message-square" size={16} color={colors.textMuted} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Feedback</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
         <HelpSupportModal visible={showHelp} onClose={() => setShowHelp(false)} />
         <FeedbackModal visible={showFeedback} onClose={() => setShowFeedback(false)} />
         <LanguageSelectorModal visible={showLanguage} onClose={() => setShowLanguage(false)} />
 
-      </SafeAreaView>
+      </SafeAreaView >
 
       <LogoPreviewModal
         visible={isPreviewOpen}

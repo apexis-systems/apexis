@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { loginSuperAdmin } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,7 +63,7 @@ const SuperAdminLogin = () => {
                             <Input
                                 id="email"
                                 type="email"
-                                placeholder="admin@apexis.com"
+                                placeholder="admin@apexis.in"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="h-12 rounded-xl bg-secondary border-0 text-base"
@@ -74,9 +75,8 @@ const SuperAdminLogin = () => {
                             <Label htmlFor="password" className="text-sm font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                                 <Lock className="h-4 w-4" /> Password
                             </Label>
-                            <Input
+                            <PasswordInput
                                 id="password"
-                                type="password"
                                 placeholder="••••••••"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}

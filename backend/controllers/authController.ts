@@ -31,7 +31,7 @@ export const superadminLogin = async (req: Request, res: Response) => {
                 organization_id: user.organization_id
             },
             process.env.JWT_SECRET || "default_secret",
-            { expiresIn: "1d" }
+            { expiresIn: "30d" }
         );
 
         res.status(200).json({ token });
@@ -70,7 +70,7 @@ export const adminLogin = async (req: Request, res: Response) => {
                 organization_id: user.organization_id
             },
             process.env.JWT_SECRET || "default_secret",
-            { expiresIn: "1d" }
+            { expiresIn: "30d" }
         );
 
         res.status(200).json({ token });
@@ -168,7 +168,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                 project_id: project.id
             },
             process.env.JWT_SECRET || "default_secret",
-            { expiresIn: "1d" }
+            { expiresIn: "30d" }
         );
 
         res.status(200).json({ token, project_id: project.id, role: user.role });
