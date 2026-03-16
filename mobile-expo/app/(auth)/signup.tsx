@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
     Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,6 +33,7 @@ export default function SignUpScreen() {
     const [otp, setOtp] = useState('');
 
     const [isLoading, setIsLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
 
     const { login } = useAuth();
@@ -255,23 +257,40 @@ export default function SignUpScreen() {
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                     Create Password
                                 </Text>
-                                <TextInput
-                                    value={password}
-                                    onChangeText={(val) => { setPassword(val); setError(''); }}
-                                    placeholder="••••••••"
-                                    placeholderTextColor={colors.textMuted}
-                                    secureTextEntry
-                                    style={{
-                                        height: 48,
-                                        borderRadius: 12,
-                                        backgroundColor: colors.surface,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        color: colors.text,
-                                        paddingHorizontal: 14,
-                                        fontSize: 15,
-                                    }}
-                                />
+                                <View style={{
+                                    height: 48,
+                                    borderRadius: 12,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    paddingHorizontal: 14,
+                                }}>
+                                    <TextInput
+                                        value={password}
+                                        onChangeText={(val) => { setPassword(val); setError(''); }}
+                                        placeholder="••••••••"
+                                        placeholderTextColor={colors.textMuted}
+                                        secureTextEntry={!showPassword}
+                                        style={{
+                                            flex: 1,
+                                            color: colors.text,
+                                            fontSize: 15,
+                                            height: '100%',
+                                        }}
+                                    />
+                                    <TouchableOpacity
+                                        onPress={() => setShowPassword(!showPassword)}
+                                        style={{ padding: 4 }}
+                                    >
+                                        <Ionicons
+                                            name={showPassword ? "eye-off-outline" : "eye-outline"}
+                                            size={20}
+                                            color={colors.textMuted}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
 
                             {error ? (
@@ -381,23 +400,40 @@ export default function SignUpScreen() {
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
                                     Password
                                 </Text>
-                                <TextInput
-                                    value={password}
-                                    onChangeText={(val) => { setPassword(val); setError(''); }}
-                                    placeholder="••••••••"
-                                    placeholderTextColor={colors.textMuted}
-                                    secureTextEntry
-                                    style={{
-                                        height: 48,
-                                        borderRadius: 12,
-                                        backgroundColor: colors.surface,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        color: colors.text,
-                                        paddingHorizontal: 14,
-                                        fontSize: 15,
-                                    }}
-                                />
+                                <View style={{
+                                    height: 48,
+                                    borderRadius: 12,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    paddingHorizontal: 14,
+                                }}>
+                                    <TextInput
+                                        value={password}
+                                        onChangeText={(val) => { setPassword(val); setError(''); }}
+                                        placeholder="••••••••"
+                                        placeholderTextColor={colors.textMuted}
+                                        secureTextEntry={!showPassword}
+                                        style={{
+                                            flex: 1,
+                                            color: colors.text,
+                                            fontSize: 15,
+                                            height: '100%',
+                                        }}
+                                    />
+                                    <TouchableOpacity
+                                        onPress={() => setShowPassword(!showPassword)}
+                                        style={{ padding: 4 }}
+                                    >
+                                        <Ionicons
+                                            name={showPassword ? "eye-off-outline" : "eye-outline"}
+                                            size={20}
+                                            color={colors.textMuted}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
 
                             {error ? (

@@ -88,7 +88,7 @@ export const superadminVerifyOtp = async (req: Request, res: Response) => {
                 organization_id: newUser.organization_id // 1
             },
             process.env.JWT_SECRET || "default_secret",
-            { expiresIn: "1d" }
+            { expiresIn: "30d" }
         );
 
         res.status(201).json({ message: "Signup successful", token });
@@ -210,7 +210,7 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
                 organization_id: newUser.organization_id
             },
             process.env.JWT_SECRET || "default_secret",
-            { expiresIn: "1d" }
+            { expiresIn: "30d" }
         );
 
         res.status(201).json({ message: "Signup successful", token });

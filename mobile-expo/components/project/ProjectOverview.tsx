@@ -1,14 +1,17 @@
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { Project, UserRole } from '@/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
 import { useEffect, useState } from 'react';
+import EditProjectModal from './EditProjectModal';
 
 interface Props {
     project: Project;
     userRole: UserRole;
+    onUpdate?: (updated: Project) => void;
 }
 
 // Get ISO week number from a date string
@@ -41,7 +44,7 @@ const reportTitle = (r: Report): string => {
     return `Weekly Progress — Week ${wk}`;
 };
 
-export default function ProjectOverview({ project, userRole }: Props) {
+export default function ProjectOverview({ project, userRole, onUpdate }: Props) {
     const { colors } = useTheme();
     const projectId = (project as any)?.id;
 
@@ -52,6 +55,8 @@ export default function ProjectOverview({ project, userRole }: Props) {
     const [dailyReports, setDailyReports] = useState<Report[]>([]);
     const [weeklyReports, setWeeklyReports] = useState<Report[]>([]);
     const [reportsLoading, setReportsLoading] = useState(true);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     useEffect(() => {
         if (!projectId) return;
@@ -84,8 +89,57 @@ export default function ProjectOverview({ project, userRole }: Props) {
             .finally(() => setReportsLoading(false));
     }, [projectId]);
 
+    const handleCopy = async (text: string, id: string) => {
+        if (!text) return;
+        await Clipboard.setStringAsync(text);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+    };
+
     return (
         <View style={{ gap: 16 }}>
+            {/* Project Description — Admin Editable */}
+            {(project.description || userRole === 'admin') && (
+                <View style={{
+                    borderRadius: 14,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 16,
+                    gap: 8
+                }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>About the Project</Text>
+                        {userRole === 'admin' && (
+                            <TouchableOpacity
+                                onPress={() => setIsEditModalOpen(true)}
+                                style={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: 15,
+                                    backgroundColor: colors.background,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 1,
+                                    borderColor: colors.border
+                                }}
+                            >
+                                <Feather name="edit-2" size={12} color={colors.primary} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    {project.description ? (
+                        <Text style={{ fontSize: 14, color: colors.text, fontStyle: 'italic', lineHeight: 20 }}>
+                            "{project.description}"
+                        </Text>
+                    ) : (
+                        <Text style={{ fontSize: 13, color: colors.textMuted, fontStyle: 'italic' }}>
+                            No description provided. Tap the edit icon to add one.
+                        </Text>
+                    )}
+                </View>
+            )}
+
             {/* Stats Grid — 2×2 */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {[
@@ -113,6 +167,77 @@ export default function ProjectOverview({ project, userRole }: Props) {
                     </View>
                 ))}
             </View>
+
+            {/* Access Codes Section — Admin Only */}
+            {(userRole === 'admin' || userRole === 'superadmin') && (
+                <View style={{
+                    marginTop: 8,
+                    borderRadius: 14,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 16,
+                    gap: 12
+                }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Access Codes</Text>
+
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <View style={{ flex: 1, gap: 6 }}>
+                            <Text style={{ fontSize: 10, color: colors.textMuted }}>Contributor Code</Text>
+                            <TouchableOpacity
+                                onPress={() => handleCopy((project as any).contributor_code, 'contributor')}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    backgroundColor: colors.background,
+                                    borderRadius: 10,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 10,
+                                    height: 44
+                                }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                    {(project as any).contributor_code || '—'}
+                                </Text>
+                                <Feather
+                                    name={copiedId === 'contributor' ? "check" : "copy"}
+                                    size={16}
+                                    color={copiedId === 'contributor' ? "#22c55e" : colors.textMuted}
+                                />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ flex: 1, gap: 6 }}>
+                            <Text style={{ fontSize: 10, color: colors.textMuted }}>Client Code</Text>
+                            <TouchableOpacity
+                                onPress={() => handleCopy((project as any).client_code, 'client')}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    backgroundColor: colors.background,
+                                    borderRadius: 10,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 10,
+                                    height: 44
+                                }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                    {(project as any).client_code || '—'}
+                                </Text>
+                                <Feather
+                                    name={copiedId === 'client' ? "check" : "copy"}
+                                    size={16}
+                                    color={copiedId === 'client' ? "#22c55e" : colors.textMuted}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            )}
 
             {/* Reports Section */}
             <View>
@@ -240,6 +365,17 @@ export default function ProjectOverview({ project, userRole }: Props) {
                     <Feather name="download" size={15} color="#888" />
                     <Text style={{ fontSize: 13, color: colors.textMuted }}>Export Final Handover Package</Text>
                 </TouchableOpacity>
+            )}
+
+            {userRole === 'admin' && (
+                <EditProjectModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    project={project}
+                    onUpdate={(updated) => {
+                        if (onUpdate) onUpdate(updated);
+                    }}
+                />
             )}
         </View>
     );

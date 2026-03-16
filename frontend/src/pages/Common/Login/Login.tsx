@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { loginSuperAdmin, loginAdmin, loginProject, getQrSession } from '@/services/authService';
@@ -13,7 +14,7 @@ import { io, Socket } from 'socket.io-client';
 import { QrCode, Monitor, Download, ChevronRight, Lock } from 'lucide-react';
 const Login = () => {
     // Mode toggle
-    const [loginMode, setLoginMode] = useState<'qr' | 'email'>('qr');
+    const [loginMode, setLoginMode] = useState<'qr' | 'email'>('email');
 
     // Email/Password State
     const [email, setEmail] = useState('');
@@ -319,9 +320,8 @@ const Login = () => {
                                         {(selectedRole === 'superadmin' || selectedRole === 'admin') && (
                                             <div className="space-y-2">
                                                 <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                                                <Input
+                                                <PasswordInput
                                                     id="password"
-                                                    type="password"
                                                     placeholder="••••••••"
                                                     value={password}
                                                     onChange={(e) => setPassword(e.target.value)}

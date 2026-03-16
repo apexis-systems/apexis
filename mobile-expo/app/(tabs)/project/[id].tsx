@@ -141,14 +141,18 @@ export default function ProjectWorkspaceScreen() {
             </View>
 
             {/* Tab Content */}
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
+            <View style={{ flex: 1 }}>
                 {activeTab === 'overview' && user.role !== 'client' && (
-                    <ProjectOverview project={project} userRole={user.role} />
+                    <ProjectOverview
+                        project={project}
+                        userRole={user.role}
+                        onUpdate={(updated) => setProject(updated)}
+                    />
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} />}
                 {activeTab === 'reports' && user.role !== 'client' && (
-                    <View style={{ flex: 1, marginBottom: 16 }}>
+                    <View style={{ flex: 1, padding: 14 }}>
                         {/* Toggle */}
                         <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.surface : '#e2e8f0', borderRadius: 8, padding: 4, marginBottom: 16 }}>
                             <TouchableOpacity
@@ -173,7 +177,7 @@ export default function ProjectWorkspaceScreen() {
                 )}
                 {activeTab === 'snags' && <ProjectSnagList project={project} />}
                 {activeTab === 'manuals' && <ProjectManuals project={project} />}
-            </ScrollView>
+            </View>
         </SafeAreaView>
     );
 }

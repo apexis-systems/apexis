@@ -156,3 +156,33 @@ export const getProjectById = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const updateProject = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, description, start_date, end_date } = req.body;
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can update projects" });
+        }
+
+        const project = await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+
+        if (!project) {
+            return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        await project.update({
+            name: name || project.name,
+            description: description || project.description,
+            start_date: start_date || project.start_date,
+            end_date: end_date || project.end_date,
+        });
+
+        res.status(200).json({ message: "Project updated successfully", project });
+    } catch (error) {
+        console.error("Update Project Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

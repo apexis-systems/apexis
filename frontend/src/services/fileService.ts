@@ -55,3 +55,13 @@ export const getSecureFileUrl = async (fileKey: string) => {
         return null;
     }
 };
+
+export const bulkUpdateFiles = async (data: { ids: (string | number)[], folder_id?: string | null, client_visible?: boolean }) => {
+    try {
+        const response = await PrivateAxios.put('/files/bulk', data);
+        return response.data;
+    } catch (error) {
+        console.error("bulkUpdateFiles Error", error);
+        throw error;
+    }
+};

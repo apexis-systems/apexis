@@ -13,9 +13,12 @@ export interface User {
 export interface Project {
     id: string;
     name: string;
+    description: string;
     location: string;
     startDate: string;
     endDate: string;
+    start_date?: string;
+    end_date?: string;
     color: string;
     totalDocs: number;
     totalPhotos: number;
@@ -38,10 +41,11 @@ export interface ProjectDocument {
     type: 'pdf' | 'dwg';
     uploadDate: string;
     uploader: string;
-    uploaderId: string;
+    created_by: string;
     version: number;
     clientVisible: boolean;
     size: string;
+    creator?: { id: string; name: string };
 }
 
 export interface ProjectPhoto {
@@ -53,8 +57,9 @@ export interface ProjectPhoto {
     location: string;
     tags: string[];
     uploader: string;
-    uploaderId: string;
+    created_by: string;
     clientVisible: boolean;
+    creator?: { id: string; name: string };
 }
 
 export interface Report {
@@ -99,6 +104,8 @@ export interface SnagItem {
     status: SnagStatus;
     comments: string[];
     createdAt: string;
+    created_by: string;
+    creator?: { id: string; name: string };
 }
 
 export interface ManualSOP {
@@ -108,6 +115,7 @@ export interface ManualSOP {
     type: 'pdf';
     uploadDate: string;
     uploader: string;
-    uploaderId: string;
+    uploaded_by: string;
     size: string;
+    creator?: { id: string; name: string };
 }

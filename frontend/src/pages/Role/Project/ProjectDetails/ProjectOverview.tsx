@@ -2,17 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { CalendarDays, FileText, Camera, Download, Clock, Loader2 } from 'lucide-react';
+import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { getReports, Report } from '@/services/reportService';
 import { getFiles } from '@/services/fileService';
+import EditProjectModal from "@/components/Project/EditProjectModal";
 
 interface ProjectOverviewProps {
   project: Project;
   userRole: UserRole;
+  onProjectUpdate?: (updated: Project) => void;
 }
 
-const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
+const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverviewProps) => {
   if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">Loading project overview...</div>;
 
   const [reports, setReports] = useState<Report[]>([]);
@@ -21,6 +24,8 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
   const [photosCount, setPhotosCount] = useState<number>(0);
   const [docsCount, setDocsCount] = useState<number>(0);
   const [counting, setCounting] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
     if (!project?.id) return;
@@ -50,8 +55,42 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
   const weeklyReports = reports.filter(r => r.type === 'weekly');
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+    toast.success('Copied to clipboard');
+  };
+
   return (
     <div className="mt-4 space-y-4">
+      {/* Project Description */}
+      {(project.description || userRole === 'admin') && (
+        <div className="rounded-xl bg-card border border-border p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">About the Project</h3>
+            {userRole === 'admin' && (
+              <button
+                onClick={() => setIsEditModalOpen(true)}
+                className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-accent"
+                title="Edit Project"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {project.description ? (
+            <p className="text-sm text-foreground leading-relaxed italic">
+              "{project.description}"
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">
+              No description provided. Click the edit icon to add one.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-card border border-border p-4">
@@ -83,6 +122,39 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
           <div className="mt-1 text-xl font-bold">{counting ? '...' : photosCount}</div>
         </div>
       </div>
+
+      {/* Admin Display Codes */}
+      {userRole === 'admin' && (
+        <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Access Codes</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Contributor Code</span>
+              <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
+                <span className="font-mono text-sm font-bold">{project.contributor_code}</span>
+                <button
+                  onClick={() => handleCopy(project.contributor_code, 'contributor')}
+                  className="p-1.5 hover:bg-secondary rounded-md transition-colors"
+                >
+                  {copiedId === 'contributor' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Client Code</span>
+              <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
+                <span className="font-mono text-sm font-bold">{project.client_code}</span>
+                <button
+                  onClick={() => handleCopy(project.client_code, 'client')}
+                  className="p-1.5 hover:bg-secondary rounded-md transition-colors"
+                >
+                  {copiedId === 'client' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reports Section */}
       <div>
@@ -146,6 +218,17 @@ const ProjectOverview = ({ project, userRole }: ProjectOverviewProps) => {
         <Button variant="outline" className="w-full h-11 rounded-xl border-dashed text-sm">
           <Download className="h-4 w-4 mr-2" /> Export Final Handover Package
         </Button>
+      )}
+
+      {userRole === 'admin' && (
+        <EditProjectModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          project={project}
+          onUpdate={(updated) => {
+            if (onProjectUpdate) onProjectUpdate(updated);
+          }}
+        />
       )}
     </div>
   );

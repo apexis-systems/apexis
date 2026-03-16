@@ -178,7 +178,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   </div>
                 )}
               </div>
-
+              {/* Delete */}
+              {(user?.role === 'admin' || user?.role === 'contributor') && (String(snag.created_by) === String(user.id) || String(snag.creator?.id) === String(user.id)) && (
+                <button onClick={() => handleDelete(snag)} className="rounded-md p-1 hover:bg-destructive/10 shrink-0">
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </button>
+              )}
               {/* Photo thumbnail */}
               {photoUrl && (
                 <button
@@ -192,12 +197,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                 </button>
               )}
 
-              {/* Delete */}
-              {(user?.role === 'admin' || user?.role === 'contributor') && (
-                <button onClick={() => handleDelete(snag)} className="rounded-md p-1 hover:bg-destructive/10 shrink-0">
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </button>
-              )}
+
             </div>
           );
         })}

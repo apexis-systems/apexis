@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [isLoggedIn, logout]);
 
     const login = useCallback(async (token: string) => {
-        Cookies.set('token', token, { expires: 1 });
+        Cookies.set('token', token, { expires: 30 });
         try {
             const res = await getMe();
             if (res?.user) {

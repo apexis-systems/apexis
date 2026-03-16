@@ -25,7 +25,7 @@ import DocumentScanProcessor, { DocumentScanProcessorRef } from '@/components/sc
 import { useTheme } from '@/contexts/ThemeContext';
 import { uploadFileWithProgress } from '@/services/fileService';
 import { getProjects } from '@/services/projectService';
-import { getFolders } from '@/services/folderService';
+import { getFolders, createFolder } from '@/services/folderService';
 import { createActivity } from '@/services/activityService';
 import { getActiveProjectContext } from '@/utils/projectSelection';
 
@@ -76,6 +76,9 @@ export default function UploadScreen() {
 
     // State: Processing
     const [isProcessing, setIsProcessing] = useState(false);
+    const [showCreateFolder, setShowCreateFolder] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+    const [creatingFolder, setCreatingFolder] = useState(false);
     // State: Camera doc mode (when true, shutter takes a scan; Files button shown as active)
     const [isDocMode, setIsDocMode] = useState(false);
 
@@ -118,11 +121,9 @@ export default function UploadScreen() {
             .finally(() => setLoadingProjects(false));
     }, [user]);
 
-    useEffect(() => {
+    const fetchFolders = async () => {
         if (!selectedProject) { setFolders([]); return; }
         setLoadingFolders(true);
-        // Load folders for the chosen project. Assuming 'documents' logic for all files right now,
-        // or passing null to get all folders. Let's pass 'documents' to safely pull standard project tree.
         getFolders(selectedProject, 'documents')
             .then((data) => {
                 const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
@@ -130,6 +131,10 @@ export default function UploadScreen() {
             })
             .catch((e) => console.error('fetchFolders', e))
             .finally(() => setLoadingFolders(false));
+    };
+
+    useEffect(() => {
+        fetchFolders();
     }, [selectedProject]);
 
     // Auto-expand folder tree to show selected folder on initial load
@@ -270,6 +275,31 @@ export default function UploadScreen() {
             console.error('Scan Error:', error);
         } finally {
             setIsProcessing(false);
+        }
+    };
+
+
+    const handleCreateFolder = async () => {
+        if (!newFolderName.trim() || !selectedProject) return;
+        setCreatingFolder(true);
+        try {
+            const data = await createFolder({
+                project_id: selectedProject,
+                name: newFolderName.trim(),
+                type: isDocMode ? 'documents' : 'photos',
+                parent_id: folderBrowseId
+            });
+            if (data.folder) {
+                await fetchFolders();
+                setSelectedFolder(String(data.folder.id));
+                setShowCreateFolder(false);
+                setNewFolderName('');
+            }
+        } catch (error) {
+            console.error("Failed to create folder:", error);
+            Alert.alert("Error", "Failed to create folder");
+        } finally {
+            setCreatingFolder(false);
         }
     };
 
@@ -643,7 +673,16 @@ export default function UploadScreen() {
                     {/* Step 2: Folder Selection */}
                     {selectedProject && (
                         <View>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>2. Select Destination Folder</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>2. Select Destination Folder</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowCreateFolder(true)}
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                >
+                                    <Feather name="folder-plus" size={14} color={colors.primary} />
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>New Folder</Text>
+                                </TouchableOpacity>
+                            </View>
 
                             {/* Breadcrumb navigator */}
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
@@ -740,6 +779,34 @@ export default function UploadScreen() {
                             Upload {fileQueue.length} files
                         </Text>
                     </TouchableOpacity>
+
+                    {/* Create Folder Modal */}
+                    <Modal visible={showCreateFolder} transparent animationType="fade">
+                        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
+                            <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 }}>Create New Folder</Text>
+                                <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 16 }}>
+                                    Parent: {folderBrowseId ? folders.find(f => String(f.id) === String(folderBrowseId))?.name : 'Project Root'}
+                                </Text>
+                                <TextInput
+                                    value={newFolderName}
+                                    onChangeText={setNewFolderName}
+                                    placeholder="Folder Name"
+                                    placeholderTextColor={colors.textMuted}
+                                    autoFocus
+                                    style={{ height: 48, backgroundColor: colors.background, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text, marginBottom: 20 }}
+                                />
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 45, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ color: colors.textMuted }}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={handleCreateFolder} disabled={creatingFolder || !newFolderName.trim()} style={{ flex: 1, height: 45, borderRadius: 12, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>{creatingFolder ? 'Creating...' : 'Create'}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+                    </Modal>
                 </View>
             </SafeAreaView>
         );

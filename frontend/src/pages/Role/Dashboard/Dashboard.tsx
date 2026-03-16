@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X } from 'lucide-react';
+import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X, Copy, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getProjects, createProject } from '@/services/projectService';
 import { getOrgOverview, uploadOrgLogo, getSecureFileUrl, getOrganizations } from '@/services/superadminService';
@@ -29,6 +29,7 @@ export default function Dashboard() {
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [organizations, setOrganizations] = useState<any[]>([]);
     const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+    const [copiedId, setCopiedId] = useState<string | null>(null);
     const logoInputRef = useRef<HTMLInputElement>(null);
 
     // Cropping states
@@ -186,6 +187,13 @@ export default function Dashboard() {
             setIsUploadingLogo(false);
             if (logoInputRef.current) logoInputRef.current.value = '';
         }
+    };
+
+    const handleCopy = (text: string, id: string) => {
+        navigator.clipboard.writeText(text);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+        toast.success('Copied to clipboard');
     };
 
     if (!user) {
@@ -388,14 +396,30 @@ export default function Dashboard() {
 
                         {/* Admin Display Codes */}
                         {user.role === 'admin' && (
-                            <div className="mt-3 bg-secondary/50 self-stretch rounded-md p-2 flex flex-col gap-1 border border-border text-xs">
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground font-medium">Contributor:</span>
-                                    <span className="font-mono text-foreground font-bold">{project.contributor_code}</span>
+                            <div className="mt-3 bg-secondary/50 self-stretch rounded-md p-2 flex flex-col gap-1 border border-border text-[10px]">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground font-medium uppercase tracking-wider">Contributor:</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-foreground font-bold">{project.contributor_code}</span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleCopy(project.contributor_code, `${project.id}-contributor`); }}
+                                            className="p-1 hover:bg-secondary rounded transition-colors"
+                                        >
+                                            {copiedId === `${project.id}-contributor` ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground font-medium">Client:</span>
-                                    <span className="font-mono text-foreground font-bold">{project.client_code}</span>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground font-medium uppercase tracking-wider">Client:</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-foreground font-bold">{project.client_code}</span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleCopy(project.client_code, `${project.id}-client`); }}
+                                            className="p-1 hover:bg-secondary rounded transition-colors"
+                                        >
+                                            {copiedId === `${project.id}-client` ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}

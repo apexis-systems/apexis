@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { verifyInvitation, completeSuperAdminOnboarding, loginSuperAdmin } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -143,9 +144,8 @@ const OnboardingContent = () => {
                             <Label htmlFor="password" className="text-sm font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                                 <Lock className="h-4 w-4" /> Set Password
                             </Label>
-                            <Input
+                            <PasswordInput
                                 id="password"
-                                type="password"
                                 placeholder="Min. 6 characters"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
