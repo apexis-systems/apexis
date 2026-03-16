@@ -2,6 +2,10 @@ import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { users, organizations, projects, project_members, Sequelize } from "../models/index.ts";
+import redis from "../config/redis.ts";
+import { sendEmail } from "../utils/email.ts";
+
+const OTP_TTL = 300; // 5 minutes
 // ==========================
 // SUPERADMIN LOGIN
 // ==========================
@@ -269,5 +273,138 @@ export const completeOnboarding = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Complete Onboarding Error:", error);
         res.status(400).json({ error: "Invalid or expired token" });
+    }
+};
+
+// ==========================
+// PASSWORD MANAGEMENT
+// ==========================
+
+export const forgotPasswordRequestOtp = async (req: Request, res: Response) => {
+    try {
+        const { email, role } = req.body; // role: 'superadmin' or 'admin'
+
+        if (!email || !role) {
+            return res.status(400).json({ error: "Email and role are required" });
+        }
+
+        const user = await users.findOne({ where: { email, role } });
+        if (!user) {
+            return res.status(404).json({ error: "User not found with this role" });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log(`Forgot Password OTP for ${email}:`, otp);
+        const otpHash = await bcrypt.hash(otp, 10);
+
+        const redisKey = `otp:forgot-password:${email}`;
+        await redis.set(
+            redisKey,
+            JSON.stringify({ otp_hash: otpHash, role }),
+            "EX",
+            OTP_TTL
+        );
+
+        await sendEmail(
+            email,
+            "Password Reset Verification Code",
+            `Your OTP for password reset is: ${otp}\n\nIt is valid for 5 minutes.`
+        );
+
+        res.status(200).json({ message: "OTP sent to email" });
+    } catch (error) {
+        console.error("Forgot Password Request OTP Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const forgotPasswordVerifyOtp = async (req: Request, res: Response) => {
+    try {
+        const { email, otp } = req.body;
+        const redisKey = `otp:forgot-password:${email}`;
+
+        const redisDataStr = await redis.get(redisKey);
+        if (!redisDataStr) {
+            return res.status(400).json({ error: "OTP expired or invalid" });
+        }
+
+        const { otp_hash, role } = JSON.parse(redisDataStr);
+
+        const isOtpValid = await bcrypt.compare(otp, otp_hash);
+        if (!isOtpValid) {
+            return res.status(400).json({ error: "Invalid OTP" });
+        }
+
+        // Issue a short-lived reset token
+        const resetToken = jwt.sign(
+            { email, role, type: "password_reset" },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "10m" }
+        );
+
+        res.status(200).json({ resetToken, message: "OTP verified" });
+    } catch (error) {
+        console.error("Forgot Password Verify OTP Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+    try {
+        const { resetToken, newPassword } = req.body;
+
+        if (!resetToken || !newPassword) {
+            return res.status(400).json({ error: "Reset token and new password are required" });
+        }
+
+        const decoded = jwt.verify(resetToken, process.env.JWT_SECRET || "default_secret") as any;
+        if (decoded.type !== "password_reset") {
+            return res.status(400).json({ error: "Invalid token type" });
+        }
+
+        const user = await users.findOne({ where: { email: decoded.email, role: decoded.role } });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await user.update({ password: hashedPassword });
+
+        // Clear OTP from redis
+        await redis.del(`otp:forgot-password:${decoded.email}`);
+
+        res.status(200).json({ message: "Password reset successful" });
+    } catch (error) {
+        console.error("Reset Password Error:", error);
+        res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+};
+
+export const changePassword = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: "Current and new password are required" });
+        }
+
+        const user = await users.findByPk(authUser.user_id);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isPasswordValid) {
+            return res.status(400).json({ error: "Current password is incorrect" });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await user.update({ password: hashedPassword });
+
+        res.status(200).json({ message: "Password updated successfully" });
+    } catch (error) {
+        console.error("Change Password Error:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 };

@@ -100,7 +100,14 @@ const SuperAdminLogin = () => {
                         </Button>
                     </form>
 
-                    <div className="mt-8 text-center">
+                    <div className="mt-8 flex flex-col items-center gap-4">
+                        <button
+                            type="button"
+                            onClick={() => router.push('/auth/forgot-password')}
+                            className="text-sm font-medium text-accent hover:underline"
+                        >
+                            Forgot Password?
+                        </button>
                         <button
                             type="button"
                             onClick={() => router.push('/login')}

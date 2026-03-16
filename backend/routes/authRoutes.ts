@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { superadminLogin, adminLogin, projectLogin, me, verifyInvitation, completeOnboarding } from "../controllers/authController.ts";
+import {
+    superadminLogin, adminLogin, projectLogin, me,
+    verifyInvitation, completeOnboarding,
+    forgotPasswordRequestOtp, forgotPasswordVerifyOtp, resetPassword, changePassword
+} from "../controllers/authController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -15,5 +19,11 @@ router.get("/me", verifyToken, me);
 // Invitation / Onboarding
 router.get("/verify-invitation", verifyInvitation);
 router.post("/complete-onboarding", completeOnboarding);
+
+// Password Management
+router.post("/forgot-password/request-otp", forgotPasswordRequestOtp);
+router.post("/forgot-password/verify-otp", forgotPasswordVerifyOtp);
+router.post("/forgot-password/reset", resetPassword);
+router.post("/change-password", verifyToken, changePassword);
 
 export default router;

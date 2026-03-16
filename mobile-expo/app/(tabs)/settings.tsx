@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -9,7 +9,9 @@ import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { fetchSecureLogo } from '@/services/organizationService';
 import { updateUserProfilePic } from '@/services/userService';
+import { changePassword } from '@/services/authService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
+import { Modal, TextInput as RNTextInput } from 'react-native';
 
 // const roles: { value: UserRole; label: string }[] = [
 //     { value: 'admin', label: 'Admin' },
@@ -33,6 +35,13 @@ export default function ProfileScreen() {
     const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+    const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [passwordLoading, setPasswordLoading] = useState(false);
+    const [showPasswords, setShowPasswords] = useState(false);
 
     useEffect(() => {
         const loadProfilePic = async () => {
@@ -102,6 +111,31 @@ export default function ProfileScreen() {
                 },
             },
         ]);
+    };
+
+    const handleChangePassword = async () => {
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            Alert.alert('Error', 'Please fill all fields');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            Alert.alert('Error', 'New passwords do not match');
+            return;
+        }
+
+        setPasswordLoading(true);
+        try {
+            await changePassword({ currentPassword, newPassword });
+            Alert.alert('Success', 'Password updated successfully');
+            setIsPasswordModalVisible(false);
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (error: any) {
+            Alert.alert('Error', error.response?.data?.error || 'Failed to update password');
+        } finally {
+            setPasswordLoading(false);
+        }
     };
 
     return (
@@ -222,6 +256,33 @@ export default function ProfileScreen() {
                     <Feather name="chevron-right" size={20} color={colors.textMuted} />
                 </TouchableOpacity>
 
+                {/* Change Password */}
+                <TouchableOpacity
+                    onPress={() => setIsPasswordModalVisible(true)}
+                    style={{
+                        borderRadius: 14,
+                        backgroundColor: colors.surface,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        padding: 16,
+                        marginBottom: 16,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={{ backgroundColor: 'rgba(249,115,22,0.1)', padding: 8, borderRadius: 8 }}>
+                            <Feather name="lock" size={18} color="#f97316" />
+                        </View>
+                        <View>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Change Password</Text>
+                            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>Update your account password</Text>
+                        </View>
+                    </View>
+                    <Feather name="chevron-right" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+
                 {/* Sign Out */}
                 <TouchableOpacity
                     onPress={handleLogout}
@@ -253,6 +314,92 @@ export default function ProfileScreen() {
                 subtitle="This photo is visible to your team members and clients."
                 buttonText="Change Photo"
             />
+
+            {/* Change Password Modal */}
+            <Modal
+                visible={isPasswordModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setIsPasswordModalVisible(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                            <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text }}>Change Password</Text>
+                            <TouchableOpacity onPress={() => setIsPasswordModalVisible(false)}>
+                                <Feather name="x" size={24} color={colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ gap: 16 }}>
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Current Password</Text>
+                                <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }}>
+                                    <RNTextInput
+                                        style={{ flex: 1, color: colors.text, fontSize: 15 }}
+                                        secureTextEntry={!showPasswords}
+                                        value={currentPassword}
+                                        onChangeText={setCurrentPassword}
+                                        placeholder="••••••••"
+                                        placeholderTextColor={colors.textMuted}
+                                    />
+                                    <TouchableOpacity onPress={() => setShowPasswords(!showPasswords)}>
+                                        <Feather name={showPasswords ? "eye-off" : "eye"} size={18} color={colors.textMuted} />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>New Password</Text>
+                                <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, justifyContent: 'center' }}>
+                                    <RNTextInput
+                                        style={{ color: colors.text, fontSize: 15 }}
+                                        secureTextEntry={!showPasswords}
+                                        value={newPassword}
+                                        onChangeText={setNewPassword}
+                                        placeholder="••••••••"
+                                        placeholderTextColor={colors.textMuted}
+                                    />
+                                </View>
+                            </View>
+
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Confirm New Password</Text>
+                                <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, justifyContent: 'center' }}>
+                                    <RNTextInput
+                                        style={{ color: colors.text, fontSize: 15 }}
+                                        secureTextEntry={!showPasswords}
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                        placeholder="••••••••"
+                                        placeholderTextColor={colors.textMuted}
+                                    />
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                onPress={handleChangePassword}
+                                disabled={passwordLoading}
+                                style={{
+                                    height: 52,
+                                    borderRadius: 14,
+                                    backgroundColor: colors.primary,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginTop: 8,
+                                    opacity: passwordLoading ? 0.7 : 1
+                                }}
+                            >
+                                {passwordLoading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Update Password</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }

@@ -5,12 +5,18 @@ import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
-import { LogOut, Shield, User, Camera, Loader2, X } from 'lucide-react';
+import { LogOut, Shield, User, Camera, Loader2, X, ArrowLeft } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { updateUserProfilePic } from '@/services/userService';
 import { getSecureFileUrl } from '@/services/fileService';
 import { toast } from 'sonner';
+import { changePassword } from '@/services/authService';
 import ProfilePreviewModal from '@/components/shared/ProfilePreviewModal';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
+import { Label } from '@/components/ui/label';
+import { KeyRound, CheckCircle2 } from 'lucide-react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { cn } from '@/lib/utils';
@@ -24,6 +30,11 @@ const Profile = () => {
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [imgError, setImgError] = useState(false);
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [passwordLoading, setPasswordLoading] = useState(false);
 
     // Fetch secure URL for profile pic
     useEffect(() => {
@@ -134,6 +145,28 @@ const Profile = () => {
         }
     };
 
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newPassword !== confirmPassword) {
+            toast.error("Passwords do not match");
+            return;
+        }
+
+        setPasswordLoading(true);
+        try {
+            await changePassword({ currentPassword, newPassword });
+            toast.success("Password updated successfully");
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+            setIsChangingPassword(false);
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || "Failed to update password");
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
+
     const roleBadgeColor: Record<UserRole, string> = {
         admin: 'bg-accent text-accent-foreground',
         superadmin: 'bg-accent text-accent-foreground',
@@ -180,13 +213,77 @@ const Profile = () => {
                 </span>
             </div>
 
-            <Button
-                variant="outline"
-                onClick={handleLogout}
-                className="w-full h-11 rounded-xl text-sm text-destructive border-destructive/30 hover:bg-destructive/5"
-            >
-                <LogOut className="h-4 w-4 mr-2" /> {t('sign_out')}
-            </Button>
+            <div className="space-y-4 mb-8">
+                {/* Change Password Toggle */}
+                <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
+                    <button
+                        onClick={() => setIsChangingPassword(!isChangingPassword)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-secondary/20 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-accent/10 flex items-center justify-center">
+                                <KeyRound className="h-5 w-5 text-accent" />
+                            </div>
+                            <span className="font-bold text-sm uppercase tracking-wide">Change Password</span>
+                        </div>
+                        <span className={cn("transition-transform", isChangingPassword ? "rotate-90" : "")}>
+                            <ArrowLeft className="-rotate-90 h-4 w-4" />
+                        </span>
+                    </button>
+
+                    {isChangingPassword && (
+                        <div className="p-4 pt-0 border-t border-border/50">
+                            <form onSubmit={handleChangePassword} className="space-y-4 pt-4">
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Current Password</Label>
+                                    <PasswordInput
+                                        value={currentPassword}
+                                        onChange={(e) => setCurrentPassword(e.target.value)}
+                                        placeholder="••••••••"
+                                        className="h-11 rounded-xl bg-secondary/50 border-0"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">New Password</Label>
+                                    <PasswordInput
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        placeholder="••••••••"
+                                        className="h-11 rounded-xl bg-secondary/50 border-0"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Confirm New Password</Label>
+                                    <PasswordInput
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        placeholder="••••••••"
+                                        className="h-11 rounded-xl bg-secondary/50 border-0"
+                                        required
+                                    />
+                                </div>
+                                <Button
+                                    type="submit"
+                                    disabled={passwordLoading}
+                                    className="w-full h-11 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-xs"
+                                >
+                                    {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Password"}
+                                </Button>
+                            </form>
+                        </div>
+                    )}
+                </div>
+
+                <Button
+                    variant="outline"
+                    onClick={handleLogout}
+                    className="w-full h-11 rounded-xl text-sm text-destructive border-destructive/30 hover:bg-destructive/5"
+                >
+                    <LogOut className="h-4 w-4 mr-2" /> {t('sign_out')}
+                </Button>
+            </div>
 
             {/* Hidden File Input */}
             <input
