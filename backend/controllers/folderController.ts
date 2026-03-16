@@ -118,3 +118,56 @@ export const toggleFolderVisibility = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const bulkUpdateFolders = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { ids, parent_id, client_visible } = req.body;
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: "No folder IDs provided" });
+        }
+
+        // Move action permissions: Admins and Contributors
+        if (parent_id !== undefined) {
+            if (authUser.role !== "admin" && authUser.role !== "contributor") {
+                return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can move folders" });
+            }
+        }
+
+        // Visibility action permissions: Admins only
+        if (client_visible !== undefined) {
+            if (authUser.role !== "admin" && authUser.role !== "superadmin") {
+                return res.status(403).json({ error: "Forbidden: Only Admins can toggle folder visibility" });
+            }
+        }
+
+        const updateData: any = {};
+        if (parent_id !== undefined) updateData.parent_id = parent_id || null;
+        if (client_visible !== undefined) updateData.client_visible = client_visible;
+
+        await folders.update(updateData, {
+            where: { id: ids }
+        });
+
+        // Activity logging (simplified)
+        if (ids.length > 0) {
+            const firstFolder = await folders.findByPk(ids[0]);
+            if (firstFolder) {
+                await activities.create({
+                    project_id: firstFolder.project_id,
+                    user_id: authUser.user_id,
+                    type: 'edit',
+                    description: `Bulk updated ${ids.length} folders`
+                });
+            }
+        }
+
+        res.status(200).json({ message: "Folders updated successfully" });
+    } catch (error) {
+        console.error("Bulk Update Folders Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

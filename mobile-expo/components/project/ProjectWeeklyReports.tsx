@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getReports, triggerReport, type Report } from '@/services/reportService';
@@ -51,7 +51,7 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
     if (loading) return <ActivityIndicator color="#f97316" style={{ marginTop: 30 }} />;
 
     return (
-        <View>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
             {userRole !== 'client' && (
                 <TouchableOpacity
                     onPress={handleGenerate}
@@ -138,6 +138,6 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                     <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>Reports are auto-generated every Sunday at 11:59 PM</Text>
                 </View>
             )}
-        </View>
+        </ScrollView>
     );
 }

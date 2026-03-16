@@ -340,3 +340,56 @@ export const viewFile = async (req: Request, res: Response) => {
     }
 };
 
+export const bulkUpdateFiles = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { ids, folder_id, client_visible } = req.body;
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: "No file IDs provided" });
+        }
+
+        // Move action permissions: Admins and Contributors
+        if (folder_id !== undefined) {
+            if (authUser.role !== "admin" && authUser.role !== "contributor") {
+                return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can move files" });
+            }
+        }
+
+        // Visibility action permissions: Admins only
+        if (client_visible !== undefined) {
+            if (authUser.role !== "admin" && authUser.role !== "superadmin") {
+                return res.status(403).json({ error: "Forbidden: Only Admins can toggle file visibility" });
+            }
+        }
+
+        const updateData: any = {};
+        if (folder_id !== undefined) updateData.folder_id = (folder_id === '' || folder_id === 'root') ? null : folder_id;
+        if (client_visible !== undefined) updateData.client_visible = client_visible;
+
+        await files.update(updateData, {
+            where: { id: ids }
+        });
+
+        // Activity logging (simplified)
+        if (ids.length > 0) {
+            const firstFile = await files.findByPk(ids[0]);
+            if (firstFile) {
+                await activities.create({
+                    project_id: firstFile.project_id,
+                    user_id: authUser.user_id,
+                    type: 'edit',
+                    description: `Bulk updated ${ids.length} files`
+                });
+            }
+        }
+
+        res.status(200).json({ message: "Files updated successfully" });
+    } catch (error) {
+        console.error("Bulk Update Files Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+

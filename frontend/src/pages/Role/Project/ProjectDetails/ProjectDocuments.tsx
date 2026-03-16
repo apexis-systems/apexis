@@ -2,15 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2 } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
-import { getFolders, createFolder, toggleFolderVisibility } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility } from '@/services/fileService';
+import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
+import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import MoveToFolderDialog from './MoveToFolderDialog';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 interface ProjectDocumentsProps {
   project: Project;
@@ -32,6 +34,13 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [shareItem, setShareItem] = useState<string | null>(null);
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
+
+  // Selection state
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedFolders, setSelectedFolders] = useState<Set<string | number>>(new Set());
+  const [selectedFiles, setSelectedFiles] = useState<Set<string | number>>(new Set());
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
 
   // Keep URL in sync with selectedFolder so returnUrl always has correct folder
   const setSelectedFolder = (folderId: string | null) => {
@@ -140,9 +149,73 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     }
   };
 
+  const toggleSelection = (type: 'folder' | 'file', id: string | number) => {
+    if (type === 'folder') {
+      const newSet = new Set(selectedFolders);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setSelectedFolders(newSet);
+    } else {
+      const newSet = new Set(selectedFiles);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setSelectedFiles(newSet);
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedFolders(new Set());
+    setSelectedFiles(new Set());
+    setIsSelectionMode(false);
+  };
+
+  const hasSelection = selectedFolders.size > 0 || selectedFiles.size > 0;
+
+  const handleBulkMove = () => {
+    setMovingItem(null); // Explicitly null means bulk
+    setShowMoveDialog(true);
+  };
+
+  const handleSingleMove = (type: 'folder' | 'file', id: string | number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setMovingItem({ type, id });
+    setShowMoveDialog(true);
+  };
+
+  const handleBulkVisibility = async (visible: boolean) => {
+    try {
+      const promises = [];
+      if (selectedFolders.size > 0) {
+        promises.push(bulkUpdateFolders({ ids: Array.from(selectedFolders), client_visible: visible }));
+      }
+      if (selectedFiles.size > 0) {
+        promises.push(bulkUpdateFiles({ ids: Array.from(selectedFiles), client_visible: visible }));
+      }
+      await Promise.all(promises);
+      toast.success(`Visibility updated for ${selectedFolders.size + selectedFiles.size} items`);
+      importFolders();
+      clearSelection();
+    } catch (e) {
+      toast.error("Failed to update visibility");
+    }
+  };
+
+  const handleBulkShare = () => {
+    // For now, share first item or concatenated links
+    // The requirement says "share that files", implies some share logic
+    // We'll just open share dialog for the first file if any file is selected
+    if (selectedFiles.size > 0) {
+      const firstId = Array.from(selectedFiles)[0];
+      const firstDoc = docs.find(d => d.id === firstId);
+      if (firstDoc) setShareItem(firstDoc.file_name);
+    } else {
+      toast.info("Select at least one file to share");
+    }
+  };
+
   return (
     <div className="mt-3">
-      {user.role !== 'client' && (
+      {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
         <div className="flex gap-2 mb-3">
           <Button
             onClick={handleUpload}
@@ -156,6 +229,16 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             className="h-9 rounded-lg text-xs font-semibold"
           >
             <FolderPlus className="h-3.5 w-3.5 mr-1.5" /> New Folder
+          </Button>
+          <Button
+            onClick={() => {
+              if (isSelectionMode) clearSelection();
+              else setIsSelectionMode(true);
+            }}
+            variant={isSelectionMode ? "secondary" : "outline"}
+            className="h-9 rounded-lg text-xs font-semibold px-3"
+          >
+            {isSelectionMode ? 'Cancel' : 'Select'}
           </Button>
         </div>
       )}
@@ -194,12 +277,21 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         {currentFolders.map((folder) => {
           const folderDocs = docs.filter((d) => d.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
+          const isSelected = selectedFolders.has(folder.id);
           return (
             <button
               key={folder.id}
-              onClick={() => setSelectedFolder(folder.id)}
-              className="flex flex-col items-center gap-1 p-3 rounded-lg bg-card border border-border hover:border-accent transition-colors"
+              onClick={() => {
+                if (isSelectionMode) toggleSelection('folder', folder.id);
+                else setSelectedFolder(folder.id);
+              }}
+              className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-colors ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
             >
+              {isSelectionMode && (
+                <div className="absolute top-2 right-2 z-10">
+                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
+                </div>
+              )}
               <FolderIcon className="h-8 w-8 text-accent" />
               <span className="text-[10px] font-medium text-foreground text-center leading-tight line-clamp-2 mt-1">
                 {folder.name}
@@ -208,14 +300,15 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 <span className="text-[9px] text-muted-foreground mr-1">
                   {folderDocs.length} files{subFolders.length > 0 ? `, ${subFolders.length} folder${subFolders.length === 1 ? '' : 's'}` : ''}
                 </span>
-                {(user.role === 'admin' || user.role === 'superadmin') && (
-                  <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded p-1 hover:bg-secondary transition-colors" title={`Toggle client visibility (Currently: ${folder.client_visible !== false ? 'Visible' : 'Hidden'})`}>
-                    {folder.client_visible !== false ? (
-                      <Eye className="h-3 w-3 text-accent" />
-                    ) : (
-                      <EyeOff className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </button>
+                {(user.role === 'admin' || user.role === 'superadmin') && !isSelectionMode && (
+                  <div className="flex items-center gap-1">
+                    <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded p-1 hover:bg-secondary transition-colors">
+                      {folder.client_visible !== false ? <Eye className="h-3 w-3 text-accent" /> : <EyeOff className="h-3 w-3 text-muted-foreground" />}
+                    </button>
+                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded p-1 hover:bg-secondary transition-colors" title="Move folder">
+                      <Move className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
                 )}
               </div>
             </button>
@@ -233,45 +326,77 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       />
 
       <div className="space-y-1.5">
-        {visibleDocs.map((doc) => (
-          <div key={doc.id}>
-            <div className="flex items-center gap-2 rounded-lg bg-card border border-border p-2">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950' : 'bg-blue-50 dark:bg-blue-950'}`}>
-                <FileText className={`h-4 w-4 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
-              </div>
-              <button onClick={() => window.open(doc.downloadUrl, '_blank')} className="flex-1 min-w-0 text-left cursor-pointer hover:underline">
-                <p className="text-[10px] font-semibold truncate">{doc.file_name}</p>
-                <p className="text-[9px] text-muted-foreground">
-                  {doc.file_size_mb} MB
-                </p>
-              </button>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setShareItem(doc.name)} className="rounded-md p-1 hover:bg-secondary">
-                  <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
+        {visibleDocs.map((doc) => {
+          const isSelected = selectedFiles.has(doc.id);
+          return (
+            <div key={doc.id}>
+              <div
+                className={`flex items-center gap-2 rounded-lg bg-card border p-2 cursor-pointer transition-colors ${isSelected ? 'border-accent bg-accent/5' : 'border-border'}`}
+                onClick={() => {
+                  if (isSelectionMode) toggleSelection('file', doc.id);
+                }}
+              >
+                {isSelectionMode && (
+                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} className="mr-1" />
+                )}
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950' : 'bg-blue-50 dark:bg-blue-950'}`}>
+                  <FileText className={`h-4 w-4 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
+                </div>
+                <button
+                  onClick={(e) => {
+                    if (isSelectionMode) {
+                      e.stopPropagation();
+                      toggleSelection('file', doc.id);
+                    } else {
+                      window.open(doc.downloadUrl, '_blank');
+                    }
+                  }}
+                  className="flex-1 min-w-0 text-left hover:underline"
+                >
+                  <p className="text-[10px] font-semibold truncate">{doc.file_name}</p>
+                  <p className="text-[9px] text-muted-foreground">
+                    {doc.file_size_mb} MB
+                  </p>
                 </button>
-                {user.role === 'admin' && (
-                  <button onClick={() => toggleDocVisibility(doc)} className="rounded-md p-1 hover:bg-secondary" title={`Toggle client visibility (Currently: ${doc.client_visible !== false ? 'Visible' : 'Hidden'})`}>
-                    {doc.client_visible !== false ? (
-                      <Eye className="h-3.5 w-3.5 text-accent" />
-                    ) : (
-                      <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                  </button>
-                )}
-                {(user.role === 'admin' || user.role === 'superadmin') && (
-                  <button onClick={() => deleteDoc(doc.id)} className="rounded-md p-1 hover:bg-destructive/10">
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </button>
-                )}
+                <div className="flex items-center gap-1">
+                  {!isSelectionMode && (
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); setShareItem(doc.file_name); }} className="rounded-md p-1 hover:bg-secondary">
+                        <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
+                        className="rounded-md p-1 hover:bg-secondary"
+                        title="Move file"
+                      >
+                        <Move className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      {user.role === 'admin' && (
+                        <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={`Toggle client visibility (Currently: ${doc.client_visible !== false ? 'Visible' : 'Hidden'})`}>
+                          {doc.client_visible !== false ? (
+                            <Eye className="h-3.5 w-3.5 text-accent" />
+                          ) : (
+                            <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                          )}
+                        </button>
+                      )}
+                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                        <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} className="rounded-md p-1 hover:bg-destructive/10">
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
+              {expandedDoc === doc.id && (
+                <div className="ml-2 mr-2">
+                  <CommentThread targetId={doc.id} targetType="document" />
+                </div>
+              )}
             </div>
-            {expandedDoc === doc.id && (
-              <div className="ml-2 mr-2">
-                <CommentThread targetId={doc.id} targetType="document" />
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {currentFolders.length === 0 && visibleDocs.length === 0 && (
@@ -284,6 +409,76 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       {shareItem && (
         <ShareDialog open={!!shareItem} onOpenChange={() => setShareItem(null)} itemName={shareItem} />
       )}
+
+      {/* Bulk Action Bar */}
+      {isSelectionMode && hasSelection && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
+          <div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-4">
+            <div className="text-[10px] font-semibold text-muted-foreground border-r border-border pr-4">
+              {selectedFolders.size + selectedFiles.size} selected
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
+                onClick={handleBulkShare}
+              >
+                <Share2 className="h-3.5 w-3.5 mr-1" /> Share
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
+                onClick={handleBulkMove}
+              >
+                <Move className="h-3.5 w-3.5 mr-1" /> Move
+              </Button>
+              {user.role === 'admin' && (
+                <div className="flex items-center gap-1 border-l border-border pl-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-[10px] font-semibold text-accent"
+                    onClick={() => handleBulkVisibility(true)}
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" /> Show
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
+                    onClick={() => handleBulkVisibility(false)}
+                  >
+                    <EyeOff className="h-3.5 w-3.5 mr-1" /> Hide
+                  </Button>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={clearSelection}
+              className="ml-2 text-muted-foreground hover:text-foreground"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <MoveToFolderDialog
+        open={showMoveDialog}
+        onOpenChange={(open: boolean) => {
+          setShowMoveDialog(open);
+          if (!open) setMovingItem(null);
+        }}
+        project={project}
+        item={movingItem}
+        selectedItems={{ folders: Array.from(selectedFolders), files: Array.from(selectedFiles) }}
+        onMoveComplete={() => {
+          importFolders();
+          clearSelection();
+        }}
+      />
     </div>
   );
 };

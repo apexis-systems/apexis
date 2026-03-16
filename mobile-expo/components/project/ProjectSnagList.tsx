@@ -74,7 +74,7 @@ export default function ProjectSnagList({ project }: Props) {
     // ── Render ─────────────────────────────────────────────────────────────────
 
     return (
-        <View>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
             {/* Add Snag button */}
             {user?.role !== 'client' && (
                 <TouchableOpacity
@@ -156,6 +156,6 @@ export default function ProjectSnagList({ project }: Props) {
                     </TouchableOpacity>
                 </TouchableOpacity>
             </Modal>
-        </View >
+        </ScrollView>
     );
 }

@@ -29,3 +29,13 @@ export const toggleFolderVisibility = async (folderId: string | number, client_v
         throw error;
     }
 };
+
+export const bulkUpdateFolders = async (data: { ids: (string | number)[], parent_id?: string | null, client_visible?: boolean }) => {
+    try {
+        const response = await PrivateAxios.put('/folders/bulk', data);
+        return response.data;
+    } catch (error) {
+        console.error("bulkUpdateFolders Error", error);
+        throw error;
+    }
+};
