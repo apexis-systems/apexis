@@ -220,6 +220,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
             const data = await createFolder({ project_id: project.id, name: newFolderName.trim(), parent_id: selectedFolder, type: 'photos' });
             if (data.folder) {
                 setFolders([...folders, data.folder]);
+                setSelectedFolder(String(data.folder.id));
                 setShowCreateFolder(false);
                 setNewFolderName('');
             }

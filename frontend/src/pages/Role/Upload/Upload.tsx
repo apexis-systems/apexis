@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getProjects } from '@/services/projectService';
-import { getFolders } from '@/services/folderService';
+import { getFolders, createFolder } from '@/services/folderService';
 import { uploadFile } from '@/services/fileService';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, Chevro
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { createActivity } from '@/services/activityService';
+import CreateFolderDialog from '../Project/ProjectDetails/CreateFolderDialog';
 
 function UploadInner() {
     const { user } = useAuth();
@@ -42,6 +43,7 @@ function UploadInner() {
     const [metaOpen, setMetaOpen] = useState(false);
     const [projectOpen, setProjectOpen] = useState(!urlProjectId);
     const [folderOpen, setFolderOpen] = useState(false);
+    const [showCreateFolder, setShowCreateFolder] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +94,15 @@ function UploadInner() {
         if (selectedProject) fetchFolders();
     }, [selectedProject]);
 
+    const importFolders = async () => {
+        if (!selectedProject) return;
+        try {
+            const data = await getFolders(selectedProject);
+            const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
+            setAllFolders(rawFolders);
+        } catch (err) { console.error("Failed to reload folders", err); }
+    };
+
     if (!user || user.role === 'client') {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh]">
@@ -139,6 +150,21 @@ function UploadInner() {
                 if (detectedType === 'photos') setMetaOpen(true);
                 else setMetaOpen(false);
             }
+        }
+    };
+
+    const handleCreateFolder = async (name: string) => {
+        if (!selectedProject) return;
+        try {
+            const res = await createFolder({ project_id: selectedProject, name, parent_id: folderBrowseId });
+            toast.success(`Folder "${name}" created`);
+            await importFolders();
+            if (res.folder) {
+                setSelectedFolder(String(res.folder.id));
+                setFolderOpen(false);
+            }
+        } catch (e) {
+            toast.error("Failed to create folder");
         }
     };
 
@@ -365,7 +391,15 @@ function UploadInner() {
                         {selectedProject && (
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <p className="text-xs text-muted-foreground">Destination folder</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-xs text-muted-foreground">Destination folder</p>
+                                        <button
+                                            onClick={() => setShowCreateFolder(true)}
+                                            className="flex items-center gap-1 text-[10px] text-accent font-semibold hover:underline"
+                                        >
+                                            + New Folder
+                                        </button>
+                                    </div>
                                     <button
                                         className="text-[10px] text-muted-foreground hover:underline"
                                         onClick={() => setFolderOpen(p => !p)}
@@ -495,6 +529,13 @@ function UploadInner() {
             >
                 {isUploading ? 'Uploading...' : `Upload ${files.length > 0 ? files.length + ' file(s)' : 'Files'}`}
             </Button>
+
+            <CreateFolderDialog
+                open={showCreateFolder}
+                onOpenChange={setShowCreateFolder}
+                onCreateFolder={handleCreateFolder}
+                type={uploadType || 'documents'}
+            />
         </div>
     );
 }

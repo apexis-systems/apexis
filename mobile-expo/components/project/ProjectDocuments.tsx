@@ -129,7 +129,8 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
             });
             if (data.folder) {
                 setFolders([...folders, data.folder]);
-                setShowCreateFolder(false); // Changed from setModalVisible to setShowCreateFolder
+                setSelectedFolder(String(data.folder.id));
+                setShowCreateFolder(false);
                 setNewFolderName('');
             }
         } catch (error) {

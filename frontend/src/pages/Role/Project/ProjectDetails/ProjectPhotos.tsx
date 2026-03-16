@@ -118,9 +118,12 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
 
   const handleCreateFolder = async (name: string) => {
     try {
-      await createFolder({ project_id: project.id, name, parent_id: selectedFolder });
+      const res = await createFolder({ project_id: project.id, name, parent_id: selectedFolder });
       toast.success(`Folder "${name}" created`);
-      importFolders(); // Refetch
+      await importFolders(); // Refetch
+      if (res.folder) {
+        setSelectedFolder(String(res.folder.id));
+      }
     } catch (e) {
       toast.error("Failed to create folder");
     }
