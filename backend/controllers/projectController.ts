@@ -79,6 +79,10 @@ export const getProjects = async (req: Request, res: Response) => {
                         literal(`CAST(COUNT(CASE WHEN "files"."file_type" NOT LIKE 'image/%' THEN 1 END) AS INTEGER)`),
                         'totalDocs'
                     ],
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "folders" WHERE "folders"."project_id" = "projects"."id")`),
+                        'totalFolders'
+                    ],
                 ],
             },
             include: [

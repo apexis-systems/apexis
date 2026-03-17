@@ -18,6 +18,7 @@ export default function ChatListScreen() {
     const router = useRouter();
     const { socket, setUnreadChatCount } = useSocket();
     const [searchQuery, setSearchQuery] = useState('');
+    const joinedRoomsRef = useRef<Set<string>>(new Set());
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState<Set<number | string>>(new Set());
     const [typingRooms, setTypingRooms] = useState<Record<string, string>>({});
@@ -111,9 +112,13 @@ export default function ChatListScreen() {
             });
         });
 
-        // Check status of all members and join rooms
+        // Join rooms once
         rooms.forEach((room: any) => {
-            socket.emit('join-room', room.id);
+            const rid = String(room.id);
+            if (!joinedRoomsRef.current.has(rid)) {
+                socket.emit('join-room', room.id);
+                joinedRoomsRef.current.add(rid);
+            }
 
             room.room_members?.forEach((m: any) => {
                 if (m.user?.id && m.user.id !== user?.id) {
@@ -185,7 +190,8 @@ export default function ChatListScreen() {
 
     const filteredChats = rooms
         .filter(c => {
-            const name = c.name || (c.room_members?.[0]?.user?.name) || 'Chat';
+            const otherMember = c.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id));
+            const name = c.name || otherMember?.user?.name || 'Chat';
             return name.toLowerCase().includes(searchQuery.toLowerCase());
         })
         .sort((a, b) => {
@@ -306,7 +312,7 @@ export default function ChatListScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
             {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>Chats</Text>
@@ -318,16 +324,35 @@ export default function ChatListScreen() {
             </View>
 
             {/* Search Bar */}
-            <View style={{ padding: 12, backgroundColor: colors.surface }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 12, height: 36, borderWidth: 1, borderColor: colors.border }}>
-                    <Feather name="search" size={16} color={colors.textMuted} />
+            <View style={{ paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8, backgroundColor: colors.background }}>
+                <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.background,
+                    borderRadius: 14,
+                    paddingHorizontal: 12,
+                    height: 44,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 4,
+                    elevation: 2,
+                }}>
+                    <Feather name="search" size={18} color={colors.textMuted} />
                     <TextInput
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         placeholder="Search chats..."
                         placeholderTextColor={colors.textMuted}
-                        style={{ flex: 1, color: colors.text, marginLeft: 8, fontSize: 15 }}
+                        style={{ flex: 1, color: colors.text, marginLeft: 10, fontSize: 15 }}
                     />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+                            <Feather name="x-circle" size={18} color={colors.textMuted} />
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
 
@@ -342,10 +367,27 @@ export default function ChatListScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: 100 }}>
-                        <Feather name="message-square" size={48} color={colors.border} />
-                        <Text style={{ color: colors.textMuted, marginTop: 16, fontSize: 16 }}>
-                            {loading ? 'Loading chats...' : 'No chats found'}
+                        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                            <Feather name={searchQuery ? "search" : "message-square"} size={40} color={colors.border} />
+                        </View>
+                        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
+                            {loading ? 'Loading...' : searchQuery ? 'No Matches Found' : 'No Conversations'}
                         </Text>
+                        <Text style={{ color: colors.textMuted, marginTop: 8, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 }}>
+                            {loading
+                                ? 'Fetching your messages...'
+                                : searchQuery
+                                    ? `We couldn't find any chats matching "${searchQuery}"`
+                                    : "Start a conversation by clicking the plus icon above."}
+                        </Text>
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity
+                                onPress={() => setSearchQuery('')}
+                                style={{ marginTop: 24, paddingVertical: 10, paddingHorizontal: 20, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+                            >
+                                <Text style={{ color: colors.primary, fontWeight: '600' }}>Clear Search</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 }
             />

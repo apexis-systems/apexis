@@ -83,7 +83,7 @@ export default function NotificationsScreen() {
         <TouchableOpacity
             style={[
                 styles.notificationItem,
-                { 
+                {
                     backgroundColor: item.is_read ? colors.surface : 'rgba(249,115,22,0.05)',
                     borderColor: item.is_read ? colors.border : 'rgba(249,115,22,0.2)',
                     borderWidth: 1,
@@ -95,7 +95,7 @@ export default function NotificationsScreen() {
             ]}
             onPress={() => markRead(item.id)}
         >
-            <View style={[styles.iconContainer, { 
+            <View style={[styles.iconContainer, {
                 backgroundColor: item.is_read ? colors.background : 'rgba(249,115,22,0.1)',
                 width: 36,
                 height: 36,
@@ -136,7 +136,7 @@ export default function NotificationsScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
                 {notifications.some(n => !n.is_read) && (

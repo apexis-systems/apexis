@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
@@ -9,9 +9,7 @@ import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { fetchSecureLogo } from '@/services/organizationService';
 import { updateUserProfilePic } from '@/services/userService';
-import { changePassword } from '@/services/authService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
-import { Modal, TextInput as RNTextInput } from 'react-native';
 
 // const roles: { value: UserRole; label: string }[] = [
 //     { value: 'admin', label: 'Admin' },
@@ -35,13 +33,6 @@ export default function ProfileScreen() {
     const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
-    const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [passwordLoading, setPasswordLoading] = useState(false);
-    const [showPasswords, setShowPasswords] = useState(false);
 
     useEffect(() => {
         const loadProfilePic = async () => {
@@ -113,33 +104,10 @@ export default function ProfileScreen() {
         ]);
     };
 
-    const handleChangePassword = async () => {
-        if (!currentPassword || !newPassword || !confirmPassword) {
-            Alert.alert('Error', 'Please fill all fields');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            Alert.alert('Error', 'New passwords do not match');
-            return;
-        }
-
-        setPasswordLoading(true);
-        try {
-            await changePassword({ currentPassword, newPassword });
-            Alert.alert('Success', 'Password updated successfully');
-            setIsPasswordModalVisible(false);
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
-        } catch (error: any) {
-            Alert.alert('Error', error.response?.data?.error || 'Failed to update password');
-        } finally {
-            setPasswordLoading(false);
-        }
-    };
+    const insets = useSafeAreaInsets();
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 {/* Avatar + Info */}
                 <View style={{ alignItems: 'center', marginBottom: 32 }}>
@@ -196,7 +164,7 @@ export default function ProfileScreen() {
                 <View style={{ gap: 12, marginBottom: 24 }}>
                     {user.role === 'admin' && (
                         <TouchableOpacity
-                            onPress={() => router.push('/(tabs)')} // Corrected navigation path
+                            onPress={() => router.push('/(tabs)/company-settings')}
                             style={{
                                 borderRadius: 16,
                                 backgroundColor: colors.surface,
@@ -242,7 +210,7 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        onPress={() => setIsPasswordModalVisible(true)}
+                        onPress={() => router.push('/(tabs)/change-password')}
                         style={{
                             borderRadius: 16,
                             backgroundColor: colors.surface,
@@ -266,7 +234,7 @@ export default function ProfileScreen() {
                 </View>
 
                 {/* Role Switcher */}
-                <View
+                {/* <View
                     style={{
                         borderRadius: 16,
                         backgroundColor: colors.surface,
@@ -307,7 +275,7 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                         ))}
                     </View>
-                </View>
+                </View> */}
 
                 {/* Sign Out */}
                 <TouchableOpacity
@@ -342,91 +310,6 @@ export default function ProfileScreen() {
                 buttonText="Change Photo"
             />
 
-            {/* Change Password Modal */}
-            <Modal
-                visible={isPasswordModalVisible}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setIsPasswordModalVisible(false)}
-            >
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                            <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text }}>Change Password</Text>
-                            <TouchableOpacity onPress={() => setIsPasswordModalVisible(false)}>
-                                <Feather name="x" size={24} color={colors.text} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={{ gap: 16 }}>
-                            <View>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Current Password</Text>
-                                <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }}>
-                                    <RNTextInput
-                                        style={{ flex: 1, color: colors.text, fontSize: 15 }}
-                                        secureTextEntry={!showPasswords}
-                                        value={currentPassword}
-                                        onChangeText={setCurrentPassword}
-                                        placeholder="••••••••"
-                                        placeholderTextColor={colors.textMuted}
-                                    />
-                                    <TouchableOpacity onPress={() => setShowPasswords(!showPasswords)}>
-                                        <Feather name={showPasswords ? "eye-off" : "eye"} size={18} color={colors.textMuted} />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            <View>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>New Password</Text>
-                                <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, justifyContent: 'center' }}>
-                                    <RNTextInput
-                                        style={{ color: colors.text, fontSize: 15 }}
-                                        secureTextEntry={!showPasswords}
-                                        value={newPassword}
-                                        onChangeText={setNewPassword}
-                                        placeholder="••••••••"
-                                        placeholderTextColor={colors.textMuted}
-                                    />
-                                </View>
-                            </View>
-
-                            <View>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Confirm New Password</Text>
-                                <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, justifyContent: 'center' }}>
-                                    <RNTextInput
-                                        style={{ color: colors.text, fontSize: 15 }}
-                                        secureTextEntry={!showPasswords}
-                                        value={confirmPassword}
-                                        onChangeText={setConfirmPassword}
-                                        placeholder="••••••••"
-                                        placeholderTextColor={colors.textMuted}
-                                    />
-                                </View>
-                            </View>
-
-                            <TouchableOpacity
-                                onPress={handleChangePassword}
-                                disabled={passwordLoading}
-                                style={{
-                                    height: 52,
-                                    borderRadius: 14,
-                                    backgroundColor: colors.primary,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginTop: 8,
-                                    opacity: passwordLoading ? 0.7 : 1
-                                }}
-                            >
-                                {passwordLoading ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Update Password</Text>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
         </SafeAreaView>
     );
 }

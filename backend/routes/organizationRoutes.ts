@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { uploadLogo } from "../controllers/organizationController.ts";
+import { uploadLogo, updateOrganization } from "../controllers/organizationController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 import multer from "multer";
 
@@ -8,5 +8,8 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Upload organization logo (only admins / superadmins)
 router.post("/logo", verifyToken, upload.single("logo"), uploadLogo);
+
+// Update organization details
+router.patch("/", verifyToken, updateOrganization);
 
 export default router;

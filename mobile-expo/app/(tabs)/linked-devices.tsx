@@ -134,7 +134,7 @@ export default function LinkedDevices() {
         <View style={{ flex: 1, backgroundColor: colors.background }}>
             <View style={{ paddingTop: insets.top + 20, paddingHorizontal: 24 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 30 }}>
-                    <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} style={{ marginRight: 16 }}>
+                    <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={{ marginRight: 16 }}>
                         <Feather name="arrow-left" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>Linked Devices</Text>
