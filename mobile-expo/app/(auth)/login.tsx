@@ -88,11 +88,11 @@ export default function LoginScreen() {
                                 marginBottom: 16,
                             }}
                         >
-                           <Image 
-                                source={require('../../assets/images/app-icon.png')} 
+                            <Image
+                                source={require('../../assets/images/app-icon.png')}
                                 style={{ width: '100%', height: '100%' }}
                                 resizeMode="contain"
-                           />
+                            />
                         </View>
                         <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, letterSpacing: -0.5, fontFamily: Platform.OS === 'ios' ? 'Angelica' : 'sans-serif' }}>
                             apexis
@@ -105,7 +105,7 @@ export default function LoginScreen() {
                     {/* Role Selector */}
                     <View style={{ marginBottom: 24 }}>
                         <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 8 }}>
-                            Select your demo role
+                            Select your role
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             {roles.map((role) => (
@@ -188,9 +188,6 @@ export default function LoginScreen() {
                                         fontSize: 15,
                                     }}
                                 />
-                                <TouchableOpacity style={{ marginTop: 4 }}>
-                                    <Text style={{ fontSize: 10, color: colors.primary }}>Forgot email?</Text>
-                                </TouchableOpacity>
                             </View>
                         )}
 
@@ -231,9 +228,15 @@ export default function LoginScreen() {
                                         />
                                     </TouchableOpacity>
                                 </View>
-                                <TouchableOpacity style={{ marginTop: 4 }}>
-                                    <Text style={{ fontSize: 10, color: colors.primary }}>Forgot password?</Text>
-                                </TouchableOpacity>
+                                {/* Forgot Password - Functionality from snippet, UI from old code */}
+                                {(selectedRole === 'admin' || selectedRole === 'superadmin') && (
+                                    <TouchableOpacity
+                                        onPress={() => router.push('/(auth)/forgot-password')}
+                                        style={{ marginTop: 4 }}
+                                    >
+                                        <Text style={{ fontSize: 10, color: colors.primary }}>Forgot password?</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         )}
 
@@ -292,9 +295,9 @@ export default function LoginScreen() {
                     </TouchableOpacity>
 
                     {/* SSO */}
-                    <TouchableOpacity style={{ alignItems: 'center', marginBottom: 20 }}>
+                    {/* <TouchableOpacity style={{ alignItems: 'center', marginBottom: 20 }}>
                         <Text style={{ fontSize: 13, color: colors.textMuted }}>Login with SSO</Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
 
                     {/* Sign Up */}
                     <TouchableOpacity onPress={() => router.push('/(auth)/signup')} style={{ alignItems: 'center' }}>

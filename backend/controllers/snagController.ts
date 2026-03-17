@@ -131,6 +131,29 @@ export const createSnag = async (req: Request, res: Response) => {
             });
         }
 
+        // Notify Admins in the organization (except creator and assignee)
+        try {
+            const admins = await users.findAll({
+                where: {
+                    organization_id: authUser.organization_id,
+                    role: 'admin',
+                    id: { [Op.notIn]: [authUser.user_id, Number(assigned_to)].filter(Boolean) }
+                }
+            });
+
+            for (const adminUser of admins) {
+                await sendNotification({
+                    userId: adminUser.id,
+                    title: 'New Snag Created',
+                    body: `${authUser.name} created a new snag: ${title}`,
+                    type: 'snag_creation_admin',
+                    data: { snagId: String(snag.id), projectId: String(project_id) }
+                });
+            }
+        } catch (err) {
+            console.error('Error notifying admins of new snag:', err);
+        }
+
         const full = await snags.findByPk((snag as any).id, {
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name'] },

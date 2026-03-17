@@ -54,3 +54,29 @@ export const uploadLogo = async (req: Request | any, res: Response | any) => {
         res.status(500).json({ error: "Failed to upload logo" });
     }
 };
+
+export const updateOrganization = async (req: Request | any, res: Response | any) => {
+    try {
+        const user = (req as any).user;
+        if (!user || user.role !== "admin") {
+            return res.status(403).json({ error: "Access denied" });
+        }
+
+        const orgId = user.organization_id;
+        const { name } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: "Name is required" });
+        }
+
+        await organizations.update(
+            { name },
+            { where: { id: orgId } }
+        );
+
+        res.status(200).json({ message: "Organization updated successfully" });
+    } catch (error) {
+        console.error("Update Organization Error:", error);
+        res.status(500).json({ error: "Failed to update organization" });
+    }
+};

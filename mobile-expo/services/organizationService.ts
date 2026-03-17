@@ -42,3 +42,12 @@ export const getOrganizations = async () => {
         throw error;
     }
 };
+export const updateOrganization = async (data: { name: string }) => {
+    try {
+        const response = await PrivateAxios.patch('/organizations', data);
+        return response.data;
+    } catch (error) {
+        console.error("updateOrganization Error", error);
+        throw error;
+    }
+};

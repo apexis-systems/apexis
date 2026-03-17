@@ -109,10 +109,10 @@ export default function ProjectWorkspaceScreen() {
             }}>
                 <View>
                     <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
-                        {project.name}
+                        {project.name.charAt(0).toUpperCase() + project.name.slice(1)}
                     </Text>
                     <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                        {project.location || 'Location not set'}
+                        {project.location ? (project.location.charAt(0).toUpperCase() + project.location.slice(1)) : 'Location not set'}
                     </Text>
                 </View>
             </View>

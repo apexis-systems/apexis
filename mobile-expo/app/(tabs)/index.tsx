@@ -107,6 +107,7 @@ export default function DashboardScreen() {
 
   const totalDocs = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalDocs, 10) || 0), 0);
   const totalPhotos = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalPhotos, 10) || 0), 0);
+  const totalFolders = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalFolders, 10) || 0), 0);
 
   const handleCreate = async () => {
     if (!newProject.name || !newProject.start_date || !newProject.end_date) return;
@@ -165,9 +166,16 @@ export default function DashboardScreen() {
           ? t('dashboard.roles.contributor')
           : t('dashboard.roles.client');
 
+  const getTimeGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
+
   return (
     <>
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
         <MainHeader
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search projects by name..."
@@ -179,7 +187,7 @@ export default function DashboardScreen() {
           {/* Centered Company Logo + User Name */}
           <View style={{ alignItems: 'center', marginBottom: 20 }}>
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/settings')}
+              onPress={() => setIsPreviewOpen(true)}
               style={{
                 width: 80,
                 height: 80,
@@ -209,9 +217,11 @@ export default function DashboardScreen() {
               )}
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 2 }}>{(user as any).organization?.name || 'Apexis'}</Text>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 2 }}>
+                {`${((user as any).organization?.name || 'Apexis').charAt(0).toUpperCase() + ((user as any).organization?.name || 'Apexis').slice(1)}`}
+              </Text>
               <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
-                {t('dashboard.hi', { name: user.name.split(' ')[0] }) || `Hi, ${user.name.split(' ')[0]} 👋`}
+                {`Hi ${user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1)}, ${getTimeGreeting()} 👋`}
               </Text>
               <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{roleSubtitle}</Text>
             </View>
@@ -220,10 +230,10 @@ export default function DashboardScreen() {
           {/* Stats Row */}
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
             {[
-              { label: t('dashboard.stats.projects') || 'Projects', value: filteredProjects.length },
-              { label: t('dashboard.stats.folders') || 'Folders', value: 0 }, // Placeholder for now
-              { label: t('dashboard.stats.documents') || 'Documents', value: totalDocs },
-              { label: t('dashboard.stats.photos') || 'Photos', value: totalPhotos },
+              { label: 'Projects', value: filteredProjects.length },
+              { label: 'Folders', value: totalFolders },
+              { label: 'Documents', value: totalDocs },
+              { label: 'Photos', value: totalPhotos },
             ].map((stat) => (
               <View
                 key={stat.label}
@@ -321,7 +331,7 @@ export default function DashboardScreen() {
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
                     <Feather name="folder" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>0</Text>
+                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalFolders, 10) || 0}</Text>
                   </View>
                 </View>
               </TouchableOpacity>

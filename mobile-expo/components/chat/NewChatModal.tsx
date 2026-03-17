@@ -57,8 +57,8 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
     }, [visible, authUser?.id]);
 
     const filteredUsers = users.filter(u =>
-        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchQuery.toLowerCase())
+        (u.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (u.email?.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
     const toggleUser = (userId: number) => {
@@ -178,15 +178,36 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                 )}
 
                 {/* Search Input */}
-                <View style={[styles.searchContainer, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-                    <Feather name="search" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
-                    <TextInput
-                        placeholder="Search people..."
-                        placeholderTextColor={colors.textMuted}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        style={[styles.searchInput, { color: colors.text }]}
-                    />
+                <View style={{ padding: 16, backgroundColor: colors.background }}>
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: colors.surface,
+                        borderRadius: 14,
+                        paddingHorizontal: 16,
+                        height: 48,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 4,
+                        elevation: 2,
+                    }}>
+                        <Feather name="search" size={20} color={colors.textMuted} style={{ marginRight: 10 }} />
+                        <TextInput
+                            placeholder="Search people..."
+                            placeholderTextColor={colors.textMuted}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            style={{ flex: 1, color: colors.text, fontSize: 16, height: '100%' }}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <Feather name="x-circle" size={18} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
 
                 {/* User List */}

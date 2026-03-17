@@ -68,7 +68,7 @@ export default function ActivityScreen() {
     if (!user) return null;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }} edges={['top', 'left', 'right']}>
             <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 14 }}>
                 {/* Header */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>

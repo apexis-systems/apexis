@@ -7,6 +7,7 @@ import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
 import { useEffect, useState } from 'react';
 import EditProjectModal from './EditProjectModal';
+import { getSnags } from '@/services/snagService';
 
 interface Props {
     project: Project;
@@ -55,6 +56,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     const [dailyReports, setDailyReports] = useState<Report[]>([]);
     const [weeklyReports, setWeeklyReports] = useState<Report[]>([]);
+    const [snagsCount, setSnagsCount] = useState<number>(0);
     const [reportsLoading, setReportsLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -88,6 +90,13 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             })
             .catch(() => { })
             .finally(() => setReportsLoading(false));
+
+        // Load snags count
+        getSnags(projectId)
+            .then((snags) => {
+                setSnagsCount(snags?.length || 0);
+            })
+            .catch(() => { });
     }, [projectId]);
 
     const handleCopy = async (text: string, id: string) => {
@@ -140,7 +149,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                     {[
                         { id: 'reports', icon: 'file-text', label: 'Reports', color: '#f97316', sub: `${dailyReports.length + weeklyReports.length} total` },
-                        { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: '0 open' },
+                        { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
                         { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
                     ].map((action) => (
                         <TouchableOpacity

@@ -8,6 +8,11 @@ export interface User {
     active: boolean;
     profile_pic?: string;
     fcm_token?: string;
+    organization?: {
+        id: string;
+        name: string;
+        logo: string;
+    };
 }
 
 export interface Project {

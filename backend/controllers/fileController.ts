@@ -129,7 +129,9 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
         });
 
+        const notifiedUserIds = new Set<number>();
         for (const member of members) {
+            notifiedUserIds.add(member.user_id);
             await sendNotification({
                 userId: member.user_id,
                 title: 'New File Uploaded',
@@ -137,6 +139,29 @@ export const uploadFile = async (req: Request | any, res: Response) => {
                 type: 'file_upload',
                 data: { fileId: String(newFile.id), projectId: String(project_id) }
             });
+        }
+
+        // Notify Admins in the organization (if they weren't already notified as project members)
+        try {
+            const admins = await UsersModel.findAll({
+                where: {
+                    organization_id: authUser.organization_id,
+                    role: 'admin',
+                    id: { [Op.notIn]: Array.from(notifiedUserIds).concat(authUser.user_id) }
+                }
+            });
+
+            for (const adminUser of admins) {
+                await sendNotification({
+                    userId: adminUser.id,
+                    title: 'New File Uploaded',
+                    body: `${authUser.name} uploaded ${finalFileName}`,
+                    type: 'file_upload_admin',
+                    data: { fileId: String(newFile.id), projectId: String(project_id) }
+                });
+            }
+        } catch (err) {
+            console.error('Error notifying admins of new file upload:', err);
         }
 
         res.status(200).json({
