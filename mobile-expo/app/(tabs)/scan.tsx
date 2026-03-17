@@ -132,30 +132,32 @@ export default function ScanScreen() {
                     {/* Visual Guideline overlay */}
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                         <View style={{
-                            width: '80%',
-                            height: '65%',
+                            width: 250,
+                            height: 250,
                             borderWidth: 2,
-                            borderColor: isProcessing ? '#f97316' : 'rgba(255,255,255,0.5)',
-                            borderRadius: 12,
+                            borderColor: 'rgba(255,255,255,0.3)',
+                            borderRadius: 24,
                             borderStyle: 'dashed',
                             justifyContent: 'center',
                             alignItems: 'center',
                         }}>
                             {/* Corner markers */}
                             {[
-                                { top: -2, left: -2 }, { top: -2, right: -2 },
-                                { bottom: -2, left: -2 }, { bottom: -2, right: -2 },
+                                { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
+                                { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },
+                                { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 12 },
+                                { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 12 },
                             ].map((pos, i) => (
                                 <View key={i} style={[{
-                                    position: 'absolute', width: 20, height: 20,
-                                    borderColor: isProcessing ? '#f97316' : '#fff',
-                                    borderTopWidth: i < 2 ? 3 : 0,
-                                    borderLeftWidth: i % 2 === 0 ? 3 : 0,
-                                    borderRightWidth: i % 2 === 1 ? 3 : 0,
-                                    borderBottomWidth: i >= 2 ? 3 : 0,
+                                    position: 'absolute', width: 32, height: 32,
+                                    borderColor: colors.primary,
                                 }, pos]} />
                             ))}
+                            
+                            {/* Subtle scan line indicator */}
+                            <View style={{ width: '80%', height: 2, backgroundColor: 'rgba(249,115,22,0.3)', borderRadius: 1 }} />
                         </View>
+                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 24, fontWeight: '600' }}>Align document within frame</Text>
                     </View>
                 </CameraView>
 

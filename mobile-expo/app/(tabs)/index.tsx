@@ -18,6 +18,7 @@ import { setActiveProjectContext } from '@/utils/projectSelection';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadOrganizationLogo, fetchSecureLogo, getOrganizations } from '@/services/organizationService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
+import MainHeader from '@/components/shared/MainHeader';
 
 export default function DashboardScreen() {
   const { user } = useAuth();
@@ -35,12 +36,7 @@ export default function DashboardScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
-  const [showHelp, setShowHelp] = useState(false);
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [showLanguage, setShowLanguage] = useState(false);
-
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchActive, setIsSearchActive] = useState(false);
 
   const [localLogoKey, setLocalLogoKey] = useState<string | null>(null);
   const [logoUri, setLogoUri] = useState<string | null>(null);
@@ -49,7 +45,6 @@ export default function DashboardScreen() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
 
   useEffect(() => {
@@ -173,157 +168,77 @@ export default function DashboardScreen() {
   return (
     <>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* Top Header */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-            backgroundColor: colors.surface,
-            minHeight: 52,
-          }}
-        >
-          {!isSearchActive ? (
-            <>
-              <TouchableOpacity
-                onPress={() => router.push('/(tabs)')}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-              >
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 8,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <Image
-                    source={require('../../assets/images/app-icon.png')}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="cover"
-                  />
-                </View>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Apexis</Text>
-              </TouchableOpacity>
-              <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
-                <TouchableOpacity onPress={() => setIsSearchActive(true)} style={{ padding: 6, borderRadius: 20 }}>
-                  <Feather name="search" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
+        <MainHeader
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search projects by name..."
+        />
 
-                <TouchableOpacity
-                  onPress={() => router.push('/(tabs)/notifications')}
-                  style={{ padding: 6, borderRadius: 20, position: 'relative' }}
-                >
-                  <Feather name="bell" size={18} color={colors.textMuted} />
-                  {unreadNotificationCount > 0 && (
-                    <View style={{
-                      position: 'absolute',
-                      right: 4,
-                      top: 4,
-                      minWidth: 14,
-                      height: 14,
-                      borderRadius: 7,
-                      backgroundColor: colors.primary,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingHorizontal: 2
-                    }}>
-                      <Text style={{ color: '#fff', fontSize: 8, fontWeight: '700' }}>
-                        {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => setShowMoreMenu(true)} style={{ padding: 6, borderRadius: 20 }}>
-                  <Feather name="more-vertical" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 8, paddingHorizontal: 10, height: 36, borderWidth: 1, borderColor: colors.border }}>
-                <Feather name="search" size={16} color={colors.textMuted} />
-                <TextInput
-                  autoFocus
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholder="Search projects by name..."
-                  placeholderTextColor={colors.textMuted}
-                  style={{ flex: 1, color: colors.text, marginLeft: 8, fontSize: 14 }}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Feather name="x-circle" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
-                )}
-              </View>
-              <TouchableOpacity onPress={() => { setIsSearchActive(false); setSearchQuery(''); }}>
-                <Text style={{ color: '#f97316', fontWeight: '600', fontSize: 13 }}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
-          {/* Left Side: Org Logo & Greeting */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          {/* Centered Company Logo + User Name */}
+          <View style={{ alignItems: 'center', marginBottom: 20 }}>
             <TouchableOpacity
-              style={{ position: 'relative' }}
-              onPress={() => setIsPreviewOpen(true)}
-              disabled={isUploadingLogo}
+              onPress={() => router.push('/(tabs)/settings')}
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 20,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                marginBottom: 12,
+              }}
             >
-              <View style={{
-                width: 50, height: 50, borderRadius: 12, backgroundColor: colors.surface,
-                borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden'
-              }}>
-                {isUploadingLogo ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (logoUri || user.role === 'superadmin') ? (
-                  <Image
-                    source={logoUri ? { uri: logoUri } : require('../../assets/images/icon.png')}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Text style={{ fontSize: 10, color: colors.textMuted, fontFamily: 'PlusJakartaSans-Medium' }}>Logo</Text>
-                )}
-              </View>
+              {isUploadingLogo ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (logoUri || user.role === 'superadmin') ? (
+                <Image
+                  source={logoUri ? { uri: logoUri } : require('../../assets/images/app-icon.png')}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="contain"
+                />
+              ) : (
+                <View style={{ alignItems: 'center' }}>
+                  <Feather name="camera" size={20} color={colors.textMuted} />
+                  <Text style={{ fontSize: 8, color: colors.textMuted }}>Add Logo</Text>
+                </View>
+              )}
             </TouchableOpacity>
-            <View>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
-                {t('dashboard.greeting', { name: user.name.split(' ')[0] })}
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 2 }}>{(user as any).organization?.name || 'Apexis'}</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
+                {t('dashboard.hi', { name: user.name.split(' ')[0] }) || `Hi, ${user.name.split(' ')[0]} 👋`}
               </Text>
-              <Text style={{ fontSize: 12, color: colors.textMuted }}>{roleSubtitle}</Text>
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{roleSubtitle}</Text>
             </View>
           </View>
 
           {/* Stats Row */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
             {[
-              { label: t('dashboard.stats.projects'), value: filteredProjects.length },
-              { label: t('dashboard.stats.documents'), value: totalDocs },
-              { label: t('dashboard.stats.photos'), value: totalPhotos },
+              { label: t('dashboard.stats.projects') || 'Projects', value: filteredProjects.length },
+              { label: t('dashboard.stats.folders') || 'Folders', value: 0 }, // Placeholder for now
+              { label: t('dashboard.stats.documents') || 'Documents', value: totalDocs },
+              { label: t('dashboard.stats.photos') || 'Photos', value: totalPhotos },
             ].map((stat) => (
               <View
                 key={stat.label}
                 style={{
                   flex: 1,
-                  borderRadius: 10,
+                  borderRadius: 12,
                   backgroundColor: colors.surface,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  padding: 10,
+                  padding: 8,
                   alignItems: 'center',
                 }}
               >
-                <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>{stat.value}</Text>
-                <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{stat.label}</Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{stat.value}</Text>
+                <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2, textAlign: 'center' }}>{stat.label}</Text>
               </View>
             ))}
           </View>
@@ -362,22 +277,22 @@ export default function DashboardScreen() {
               <TouchableOpacity
                 key={project.id}
                 onPress={() => router.push(`/project/${project.id}`)}
-                style={{ width: '22%', alignItems: 'center', gap: 4 }}
+                style={{ width: '22%', alignItems: 'center', gap: 6 }}
               >
                 {/* Thumbnail */}
                 <View
                   style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 14,
+                    width: 58,
+                    height: 58,
+                    borderRadius: 16,
                     backgroundColor: project.color || '#f97316',
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: 'rgba(255,255,255,0.1)',
                   }}
                 >
-                  <Text style={{ fontSize: 22, fontWeight: '700', color: '#fff' }}>
+                  <Text style={{ fontSize: 24, fontWeight: '800', color: '#fff' }}>
                     {project.name ? project.name.charAt(0).toUpperCase() : '?'}
                   </Text>
                 </View>
@@ -386,7 +301,7 @@ export default function DashboardScreen() {
                   numberOfLines={2}
                   style={{
                     fontSize: 10,
-                    fontWeight: '500',
+                    fontWeight: '600',
                     color: colors.text,
                     textAlign: 'center',
                     lineHeight: 13,
@@ -395,18 +310,20 @@ export default function DashboardScreen() {
                   {project.name.split(' ').slice(0, 2).join(' ')}
                 </Text>
                 {/* Stats */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <Feather name="file-text" size={9} color={colors.textMuted} />
-                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{parseInt(project.totalDocs, 10) || 0}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                    <Feather name="file-text" size={8} color={colors.textMuted} />
+                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalDocs, 10) || 0}</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <Feather name="camera" size={9} color={colors.textMuted} />
-                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{parseInt(project.totalPhotos, 10) || 0}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                    <Feather name="camera" size={8} color={colors.textMuted} />
+                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalPhotos, 10) || 0}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                    <Feather name="folder" size={8} color={colors.textMuted} />
+                    <Text style={{ fontSize: 8, color: colors.textMuted }}>0</Text>
                   </View>
                 </View>
-
-
               </TouchableOpacity>
             ))}
 
@@ -557,67 +474,6 @@ export default function DashboardScreen() {
           </KeyboardAvoidingView>
         </Modal>
 
-        {/* Action Modals */}
-        {/* More Menu Modal */}
-        <Modal visible={showMoreMenu} transparent animationType="fade">
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={() => setShowMoreMenu(false)}
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingRight: 10, paddingTop: 50 }}
-          >
-            <View style={{
-              backgroundColor: colors.surface,
-              borderRadius: 12,
-              width: 180,
-              padding: 4,
-              borderWidth: 1,
-              borderColor: colors.border,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.15,
-              shadowRadius: 10,
-              elevation: 10,
-            }}>
-              <TouchableOpacity
-                onPress={() => { setShowMoreMenu(false); toggleTheme(); }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-              >
-                <Feather name={isDark ? "sun" : "moon"} size={16} color={colors.textMuted} />
-                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => { setShowMoreMenu(false); setShowLanguage(true); }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-              >
-                <Feather name="globe" size={16} color={colors.textMuted} />
-                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Language</Text>
-              </TouchableOpacity>
-
-              <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4, marginHorizontal: 8 }} />
-
-              <TouchableOpacity
-                onPress={() => { setShowMoreMenu(false); setShowHelp(true); }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-              >
-                <Feather name="help-circle" size={16} color={colors.textMuted} />
-                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Help & Support</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-              >
-                <Feather name="message-square" size={16} color={colors.textMuted} />
-                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Feedback</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </Modal>
-
-        <HelpSupportModal visible={showHelp} onClose={() => setShowHelp(false)} />
-        <FeedbackModal visible={showFeedback} onClose={() => setShowFeedback(false)} />
-        <LanguageSelectorModal visible={showLanguage} onClose={() => setShowLanguage(false)} />
 
       </SafeAreaView >
 

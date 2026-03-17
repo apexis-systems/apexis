@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { Project, UserRole } from '@/types';
@@ -12,6 +12,7 @@ interface Props {
     project: Project;
     userRole: UserRole;
     onUpdate?: (updated: Project) => void;
+    onActionPress?: (actionId: string) => void;
 }
 
 // Get ISO week number from a date string
@@ -44,7 +45,7 @@ const reportTitle = (r: Report): string => {
     return `Weekly Progress — Week ${wk}`;
 };
 
-export default function ProjectOverview({ project, userRole, onUpdate }: Props) {
+export default function ProjectOverview({ project, userRole, onUpdate, onActionPress }: Props) {
     const { colors } = useTheme();
     const projectId = (project as any)?.id;
 
@@ -97,286 +98,242 @@ export default function ProjectOverview({ project, userRole, onUpdate }: Props) 
     };
 
     return (
-        <View style={{ gap: 16 }}>
-            {/* Project Description — Admin Editable */}
-            {(project.description || userRole === 'admin') && (
-                <View style={{
-                    borderRadius: 14,
-                    backgroundColor: colors.surface,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    padding: 16,
-                    gap: 8
-                }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>About the Project</Text>
-                        {userRole === 'admin' && (
-                            <TouchableOpacity
-                                onPress={() => setIsEditModalOpen(true)}
-                                style={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: 15,
-                                    backgroundColor: colors.background,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderWidth: 1,
-                                    borderColor: colors.border
-                                }}
-                            >
-                                <Feather name="edit-2" size={12} color={colors.primary} />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                    {project.description ? (
-                        <Text style={{ fontSize: 14, color: colors.text, fontStyle: 'italic', lineHeight: 20 }}>
-                            "{project.description}"
-                        </Text>
-                    ) : (
-                        <Text style={{ fontSize: 13, color: colors.textMuted, fontStyle: 'italic' }}>
-                            No description provided. Tap the edit icon to add one.
-                        </Text>
-                    )}
-                </View>
-            )}
-
-            {/* Stats Grid — 2×2 */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                {[
-                    { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate) },
-                    { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate) },
-                    { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount) },
-                    { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount) },
-                ].map((item) => (
-                    <View
-                        key={item.label}
-                        style={{
-                            width: '47%',
-                            borderRadius: 14,
-                            backgroundColor: colors.background,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            padding: 14,
-                        }}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <Feather name={item.icon as any} size={14} color="#888" />
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{item.label}</Text>
-                        </View>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{item.value}</Text>
-                    </View>
-                ))}
-            </View>
-
-            {/* Access Codes Section — Admin Only */}
-            {(userRole === 'admin' || userRole === 'superadmin') && (
-                <View style={{
-                    marginTop: 8,
-                    borderRadius: 14,
-                    backgroundColor: colors.surface,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    padding: 16,
-                    gap: 12
-                }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Access Codes</Text>
-
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                        <View style={{ flex: 1, gap: 6 }}>
-                            <Text style={{ fontSize: 10, color: colors.textMuted }}>Contributor Code</Text>
-                            <TouchableOpacity
-                                onPress={() => handleCopy((project as any).contributor_code, 'contributor')}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    backgroundColor: colors.background,
-                                    borderRadius: 10,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    padding: 10,
-                                    height: 44
-                                }}
-                            >
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                                    {(project as any).contributor_code || '—'}
-                                </Text>
-                                <Feather
-                                    name={copiedId === 'contributor' ? "check" : "copy"}
-                                    size={16}
-                                    color={copiedId === 'contributor' ? "#22c55e" : colors.textMuted}
-                                />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={{ flex: 1, gap: 6 }}>
-                            <Text style={{ fontSize: 10, color: colors.textMuted }}>Client Code</Text>
-                            <TouchableOpacity
-                                onPress={() => handleCopy((project as any).client_code, 'client')}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    backgroundColor: colors.background,
-                                    borderRadius: 10,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    padding: 10,
-                                    height: 44
-                                }}
-                            >
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                                    {(project as any).client_code || '—'}
-                                </Text>
-                                <Feather
-                                    name={copiedId === 'client' ? "check" : "copy"}
-                                    size={16}
-                                    color={copiedId === 'client' ? "#22c55e" : colors.textMuted}
-                                />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            )}
-
-            {/* Reports Section */}
-            <View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Reports</Text>
-                </View>
-
-                {reportsLoading ? (
-                    <ActivityIndicator size="small" color="#f97316" style={{ marginVertical: 12 }} />
-                ) : (
-                    <>
-                        {/* Daily Site Reports */}
-                        {dailyReports.length > 0 && (
-                            <View style={{ marginBottom: 12 }}>
-                                <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8 }}>Daily Site Reports</Text>
-                                <View style={{ gap: 6 }}>
-                                    {dailyReports.map((report) => (
-                                        <View
-                                            key={report.id}
-                                            style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                gap: 10,
-                                                borderRadius: 12,
-                                                backgroundColor: colors.background,
-                                                borderWidth: 1,
-                                                borderColor: colors.border,
-                                                padding: 10,
-                                            }}
-                                        >
-                                            <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}>
-                                                <Feather name="file-text" size={16} color="#888" />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>
-                                                    {reportTitle(report)}
-                                                </Text>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                                    <Feather name="clock" size={9} color="#555" />
-                                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>
-                                                        {report.period_start} · Auto-generated
-                                                    </Text>
-                                                </View>
-                                                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                                                    <Text style={{ fontSize: 9, color: '#f97316' }}>📸 {report.photos_count} photos</Text>
-                                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>📄 {report.docs_count} docs</Text>
-                                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>💬 {report.comments_count}</Text>
-                                                </View>
-                                            </View>
-                                        </View>
-                                    ))}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 0 }} showsVerticalScrollIndicator={false}>
+            <View style={{ gap: 20 }}>
+                {/* Stats Grid — 2×2 */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                    {[
+                        { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate) },
+                        { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate) },
+                        { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount) },
+                        { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount) },
+                    ].map((item) => (
+                        <View
+                            key={item.label}
+                            style={{
+                                flex: 1,
+                                minWidth: '45%',
+                                borderRadius: 16,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: 16,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.05,
+                                shadowRadius: 4,
+                                elevation: 1,
+                            }}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Feather name={item.icon as any} size={12} color={colors.textMuted} />
                                 </View>
+                                <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '500' }}>{item.label}</Text>
                             </View>
-                        )}
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{item.value}</Text>
+                        </View>
+                    ))}
+                </View>
 
-                        {/* Weekly Progress Reports */}
-                        {weeklyReports.length > 0 && (
-                            <View>
-                                <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8 }}>Weekly Progress Reports</Text>
-                                <View style={{ gap: 6 }}>
-                                    {weeklyReports.map((report) => (
-                                        <View
-                                            key={report.id}
-                                            style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                gap: 10,
-                                                borderRadius: 12,
-                                                backgroundColor: colors.background,
-                                                borderWidth: 1,
-                                                borderColor: colors.border,
-                                                padding: 10,
-                                            }}
-                                        >
-                                            <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: 'rgba(249,115,22,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Feather name="file-text" size={16} color="#f97316" />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>
-                                                    {reportTitle(report)}
-                                                </Text>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                                    <Feather name="clock" size={9} color="#555" />
-                                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>
-                                                        {report.period_start} – {report.period_end} · Auto-generated
-                                                    </Text>
-                                                </View>
-                                                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                                                    <Text style={{ fontSize: 9, color: '#f97316' }}>📸 {report.photos_count} photos</Text>
-                                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>📄 {report.docs_count} docs</Text>
-                                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>💬 {report.comments_count}</Text>
-                                                </View>
-                                            </View>
-                                        </View>
-                                    ))}
-                                </View>
+                {/* Quick Actions */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {[
+                        { id: 'reports', icon: 'file-text', label: 'Reports', color: '#f97316', sub: `${dailyReports.length + weeklyReports.length} total` },
+                        { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: '0 open' },
+                        { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
+                    ].map((action) => (
+                        <TouchableOpacity
+                            key={action.id}
+                            onPress={() => onActionPress && onActionPress(action.id)}
+                            style={{
+                                flex: 1,
+                                alignItems: 'center',
+                                gap: 10,
+                                padding: 16,
+                                borderRadius: 16,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.05,
+                                shadowRadius: 4,
+                                elevation: 1,
+                            }}
+                        >
+                            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                                <Feather name={action.icon as any} size={20} color={action.color} />
                             </View>
-                        )}
-
-                        {!reportsLoading && dailyReports.length === 0 && weeklyReports.length === 0 && (
-                            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
-                                <Feather name="file-text" size={24} color={colors.border} />
-                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>No reports yet. Reports auto-generate each evening.</Text>
+                            <View style={{ alignItems: 'center' }}>
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{action.label}</Text>
+                                <Text style={{ fontSize: 10, color: colors.textMuted }}>{action.sub}</Text>
                             </View>
-                        )}
-                    </>
-                )}
-            </View>
+                        </TouchableOpacity>
+                    ))}
+                </View>
 
-            {/* Export Final Handover Package */}
-            {(userRole === 'admin' || userRole === 'superadmin') && (
-                <TouchableOpacity
-                    style={{
-                        height: 44,
+
+                {/* Reports Section */}
+                <View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
+                        <TouchableOpacity style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            backgroundColor: '#f97316',
+                            paddingHorizontal: 16,
+                            paddingVertical: 10,
+                            borderRadius: 12
+                        }}>
+                            <Feather name="upload" size={14} color="#fff" />
+                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Upload Report</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Branded Bar */}
+                    <View style={{
+                        backgroundColor: '#fff7ed',
+                        paddingVertical: 10,
+                        paddingHorizontal: 16,
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: colors.border,
-                        borderStyle: 'dashed',
+                        borderColor: '#fed7aa',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        flexDirection: 'row',
-                        gap: 6,
-                    }}
-                >
-                    <Feather name="download" size={15} color="#888" />
-                    <Text style={{ fontSize: 13, color: colors.textMuted }}>Export Final Handover Package</Text>
-                </TouchableOpacity>
-            )}
+                        marginBottom: 20
+                    }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#f97316', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            Generated Via Apexis — Construction Communication Platform
+                        </Text>
+                    </View>
 
-            {userRole === 'admin' && (
-                <EditProjectModal
-                    isOpen={isEditModalOpen}
-                    onClose={() => setIsEditModalOpen(false)}
-                    project={project}
-                    onUpdate={(updated) => {
-                        if (onUpdate) onUpdate(updated);
-                    }}
-                />
-            )}
-        </View>
+                    {reportsLoading ? (
+                        <ActivityIndicator size="small" color="#f97316" style={{ marginVertical: 12 }} />
+                    ) : (
+                        <>
+                            {/* Daily Site Reports */}
+                            {dailyReports.length > 0 && (
+                                <View style={{ marginBottom: 20 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Daily Site Reports</Text>
+                                    <View style={{ gap: 10 }}>
+                                        {dailyReports.slice(0, 3).map((report) => (
+                                            <View
+                                                key={report.id}
+                                                style={{
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 14,
+                                                    borderRadius: 16,
+                                                    backgroundColor: colors.surface,
+                                                    borderWidth: 1,
+                                                    borderColor: colors.border,
+                                                    padding: 16,
+                                                }}
+                                            >
+                                                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Feather name="file-text" size={20} color={colors.textMuted} />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
+                                                        {reportTitle(report)}
+                                                    </Text>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                                        <Feather name="clock" size={12} color={colors.textMuted} />
+                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                                                            {report.period_start} · Priya Sharma
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Weekly Progress Reports */}
+                            {weeklyReports.length > 0 && (
+                                <View>
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Weekly Progress Reports</Text>
+                                    <View style={{ gap: 10 }}>
+                                        {weeklyReports.slice(0, 3).map((report) => (
+                                            <View
+                                                key={report.id}
+                                                style={{
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 14,
+                                                    borderRadius: 16,
+                                                    backgroundColor: colors.surface,
+                                                    borderWidth: 1,
+                                                    borderColor: colors.border,
+                                                    padding: 16,
+                                                }}
+                                            >
+                                                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(249,115,22,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Feather name="file-text" size={20} color="#f97316" />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
+                                                        {reportTitle(report)}
+                                                    </Text>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                                        <Feather name="clock" size={12} color={colors.textMuted} />
+                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                                                            {report.period_start} – Rajesh Kumar
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
+                            {!reportsLoading && dailyReports.length === 0 && weeklyReports.length === 0 && (
+                                <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
+                                    <Feather name="file-text" size={32} color={colors.border} />
+                                    <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 10 }}>No reports available for this project.</Text>
+                                </View>
+                            )}
+                        </>
+                    )}
+                </View>
+
+                {/* Handover - admin only */}
+                {userRole === 'admin' && (
+                    <TouchableOpacity
+                        style={{
+                            width: '100%',
+                            height: 48,
+                            borderRadius: 16,
+                            borderWidth: 1,
+                            borderColor: colors.primary,
+                            borderStyle: 'dashed',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            backgroundColor: colors.background,
+                            marginBottom: 20
+                        }}
+                    >
+                        <Feather name="download" size={16} color={colors.text} />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Export Final Handover Package</Text>
+                    </TouchableOpacity>
+                )}
+
+                {userRole === 'admin' && (
+                    <EditProjectModal
+                        isOpen={isEditModalOpen}
+                        onClose={() => setIsEditModalOpen(false)}
+                        project={project}
+                        onUpdate={(updated) => {
+                            if (onUpdate) onUpdate(updated);
+                        }}
+                    />
+                )}
+            </View>
+        </ScrollView>
     );
 }

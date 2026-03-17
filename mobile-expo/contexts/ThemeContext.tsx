@@ -15,21 +15,21 @@ interface ThemeContextType {
 }
 
 const darkColors = {
-    background: '#0d0d0d',
-    surface: '#111111',
-    text: '#ffffff',
-    textMuted: '#888888',
-    border: '#2a2a2a',
-    primary: '#f97316',
+    background: '#09090b', // slate-950
+    surface: '#18181b',    // slate-900
+    text: '#fafafa',       // slate-50
+    textMuted: '#a1a1aa',  // slate-400
+    border: '#27272a',     // slate-800
+    primary: '#f97316',    // orange-500
 };
 
 const lightColors = {
-    background: '#f8f9fa',
-    surface: '#ffffff',
-    text: '#1a1a1a',
-    textMuted: '#666666',
-    border: '#e5e7eb',
-    primary: '#f97316',
+    background: '#f4f4f5', // slate-100
+    surface: '#ffffff',    // white
+    text: '#09090b',       // slate-950
+    textMuted: '#71717a',  // slate-500
+    border: '#e4e4e7',     // slate-200
+    primary: '#f97316',    // orange-500
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);

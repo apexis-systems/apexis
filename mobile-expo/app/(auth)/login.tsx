@@ -8,6 +8,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
+    Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -80,18 +81,20 @@ export default function LoginScreen() {
                     <View style={{ alignItems: 'center', marginBottom: 40 }}>
                         <View
                             style={{
-                                height: 64,
-                                width: 64,
-                                borderRadius: 16,
-                                backgroundColor: '#f97316',
+                                height: 128,
+                                width: 128,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 marginBottom: 16,
                             }}
                         >
-                            <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>A</Text>
+                           <Image 
+                                source={require('../../assets/images/app-icon.png')} 
+                                style={{ width: '100%', height: '100%' }}
+                                resizeMode="contain"
+                           />
                         </View>
-                        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.text, letterSpacing: -0.5 }}>
+                        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, letterSpacing: -0.5, fontFamily: Platform.OS === 'ios' ? 'Angelica' : 'sans-serif' }}>
                             apexis
                         </Text>
                         <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>
@@ -99,126 +102,10 @@ export default function LoginScreen() {
                         </Text>
                     </View>
 
-                    {/* Dynamic Inputs Based on Role */}
-                    {selectedRole === 'client' ? (
-                        <View style={{ marginBottom: 16 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                Your Name
-                            </Text>
-                            <TextInput
-                                value={clientName}
-                                onChangeText={setClientName}
-                                placeholder="John Doe"
-                                placeholderTextColor={colors.textMuted}
-                                style={{
-                                    height: 48,
-                                    borderRadius: 12,
-                                    backgroundColor: colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    color: colors.text,
-                                    paddingHorizontal: 14,
-                                    fontSize: 15,
-                                }}
-                            />
-                        </View>
-                    ) : (
-                        <View style={{ marginBottom: 16 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                Work Email
-                            </Text>
-                            <TextInput
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder="you@company.com"
-                                placeholderTextColor={colors.textMuted}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                style={{
-                                    height: 48,
-                                    borderRadius: 12,
-                                    backgroundColor: colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    color: colors.text,
-                                    paddingHorizontal: 14,
-                                    fontSize: 15,
-                                }}
-                            />
-                        </View>
-                    )}
-
-                    {(selectedRole === 'admin' || selectedRole === 'superadmin') && (
-                        <View style={{ marginBottom: 16 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                Password
-                            </Text>
-                            <View style={{
-                                height: 48,
-                                borderRadius: 12,
-                                backgroundColor: colors.surface,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                paddingHorizontal: 14,
-                            }}>
-                                <TextInput
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    placeholder="••••••••"
-                                    placeholderTextColor={colors.textMuted}
-                                    secureTextEntry={!showPassword}
-                                    style={{
-                                        flex: 1,
-                                        color: colors.text,
-                                        fontSize: 15,
-                                        height: '100%',
-                                    }}
-                                />
-                                <TouchableOpacity
-                                    onPress={() => setShowPassword(!showPassword)}
-                                    style={{ padding: 4 }}
-                                >
-                                    <Ionicons
-                                        name={showPassword ? "eye-off-outline" : "eye-outline"}
-                                        size={20}
-                                        color={colors.textMuted}
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
-
-                    {(selectedRole === 'contributor' || selectedRole === 'client') && (
-                        <View style={{ marginBottom: 16 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                Project Code
-                            </Text>
-                            <TextInput
-                                value={projectCode}
-                                onChangeText={setProjectCode}
-                                placeholder="e.g. ABC123XYZ"
-                                placeholderTextColor={colors.textMuted}
-                                autoCapitalize="characters"
-                                style={{
-                                    height: 48,
-                                    borderRadius: 12,
-                                    backgroundColor: colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    color: colors.text,
-                                    paddingHorizontal: 14,
-                                    fontSize: 15,
-                                }}
-                            />
-                        </View>
-                    )}
-
                     {/* Role Selector */}
                     <View style={{ marginBottom: 24 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 8 }}>
-                            Select Role
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 8 }}>
+                            Select your demo role
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             {roles.map((role) => (
@@ -234,9 +121,10 @@ export default function LoginScreen() {
                                         borderWidth: 2,
                                         borderColor: selectedRole === role.value ? colors.primary : colors.border,
                                         backgroundColor: selectedRole === role.value ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                        padding: 8,
+                                        padding: 10,
                                         alignItems: 'center',
                                         justifyContent: 'center',
+                                        minHeight: 60,
                                     }}
                                 >
                                     <Text
@@ -244,6 +132,7 @@ export default function LoginScreen() {
                                             fontSize: 11,
                                             fontWeight: '700',
                                             color: selectedRole === role.value ? colors.primary : colors.text,
+                                            textAlign: 'center',
                                         }}
                                     >
                                         {role.label}
@@ -256,32 +145,139 @@ export default function LoginScreen() {
                         </View>
                     </View>
 
+                    {/* Dynamic Inputs Based on Role */}
+                    <View style={{ gap: 16 }}>
+                        {selectedRole === 'client' ? (
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    Your Name
+                                </Text>
+                                <TextInput
+                                    value={clientName}
+                                    onChangeText={setClientName}
+                                    placeholder="John Doe"
+                                    placeholderTextColor={colors.textMuted}
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: colors.surface,
+                                        color: colors.text,
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                            </View>
+                        ) : (
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    {selectedRole === 'contributor' ? 'Email or Phone' : 'Work Email'}
+                                </Text>
+                                <TextInput
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    placeholder={selectedRole === 'contributor' ? "email@example.com / +91..." : "you@company.com"}
+                                    placeholderTextColor={colors.textMuted}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: colors.surface,
+                                        color: colors.text,
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                                <TouchableOpacity style={{ marginTop: 4 }}>
+                                    <Text style={{ fontSize: 10, color: colors.primary }}>Forgot email?</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {(selectedRole === 'admin' || selectedRole === 'superadmin') && (
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    Password
+                                </Text>
+                                <View style={{
+                                    height: 48,
+                                    borderRadius: 12,
+                                    backgroundColor: colors.surface,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    paddingHorizontal: 14,
+                                }}>
+                                    <TextInput
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        placeholder="••••••••"
+                                        placeholderTextColor={colors.textMuted}
+                                        secureTextEntry={!showPassword}
+                                        style={{
+                                            flex: 1,
+                                            color: colors.text,
+                                            fontSize: 15,
+                                            height: '100%',
+                                        }}
+                                    />
+                                    <TouchableOpacity
+                                        onPress={() => setShowPassword(!showPassword)}
+                                        style={{ padding: 4 }}
+                                    >
+                                        <Ionicons
+                                            name={showPassword ? "eye-off-outline" : "eye-outline"}
+                                            size={20}
+                                            color={colors.textMuted}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+                                <TouchableOpacity style={{ marginTop: 4 }}>
+                                    <Text style={{ fontSize: 10, color: colors.primary }}>Forgot password?</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {(selectedRole === 'contributor' || selectedRole === 'client') && (
+                            <View>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    Project Code
+                                </Text>
+                                <TextInput
+                                    value={projectCode}
+                                    onChangeText={setProjectCode}
+                                    placeholder="Enter project code"
+                                    placeholderTextColor={colors.textMuted}
+                                    autoCapitalize="characters"
+                                    style={{
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: colors.surface,
+                                        color: colors.text,
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                    }}
+                                />
+                                <TouchableOpacity style={{ marginTop: 4 }}>
+                                    <Text style={{ fontSize: 10, color: colors.primary }}>Forgot project code?</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+
                     {error ? (
-                        <Text style={{ color: '#ef4444', textAlign: 'center', marginBottom: 12, fontSize: 13 }}>
+                        <Text style={{ color: '#ef4444', textAlign: 'center', marginVertical: 12, fontSize: 13 }}>
                             {error}
                         </Text>
-                    ) : null}
-
-                    {/* Forgot Password */}
-                    {(selectedRole === 'admin' || selectedRole === 'superadmin') && (
-                        <TouchableOpacity
-                            onPress={() => router.push('/(auth)/forgot-password')}
-                            style={{ alignSelf: 'flex-end', marginBottom: 20, marginTop: -8 }}
-                        >
-                            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
-                                Forgot Password?
-                            </Text>
-                        </TouchableOpacity>
-                    )}
+                    ) : <View style={{ height: 24 }} />}
 
                     {/* Sign In Button */}
                     <TouchableOpacity
                         onPress={handleLogin}
                         disabled={isLoading}
                         style={{
-                            height: 48,
-                            borderRadius: 12,
-                            backgroundColor: '#f97316',
+                            height: 52,
+                            borderRadius: 14,
+                            backgroundColor: colors.primary,
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginBottom: 14,
@@ -291,8 +287,13 @@ export default function LoginScreen() {
                         {isLoading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Sign In</Text>
+                            <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>
                         )}
+                    </TouchableOpacity>
+
+                    {/* SSO */}
+                    <TouchableOpacity style={{ alignItems: 'center', marginBottom: 20 }}>
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>Login with SSO</Text>
                     </TouchableOpacity>
 
                     {/* Sign Up */}

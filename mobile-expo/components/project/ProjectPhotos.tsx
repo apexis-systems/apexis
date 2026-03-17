@@ -345,7 +345,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
 
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: isSelectionMode ? 100 : 14 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity
@@ -422,31 +422,43 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         }}
                                         onLongPress={() => handleLongPress('folder', folder.id)}
                                         style={{
-                                            width: '23%',
+                                            width: '31.5%',
+                                            aspectRatio: 1,
                                             alignItems: 'center',
-                                            gap: 4,
-                                            borderRadius: 10,
-                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
+                                            justifyContent: 'center',
+                                            borderRadius: 16,
+                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
                                             borderWidth: 1,
                                             borderColor: isSelected ? '#f97316' : colors.border,
-                                            padding: 8
+                                            padding: 12,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.05,
+                                            shadowRadius: 4,
+                                            elevation: 1,
                                         }}
                                     >
-                                        <Feather name="folder" size={32} color="#f97316" />
+                                        <View style={{ marginBottom: 8 }}>
+                                            <Feather name="folder" size={36} color="#f97316" />
+                                        </View>
                                         {isSelected && (
-                                            <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#f97316', borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+                                            <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#f97316', borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '500', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
-                                        <View style={{ flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                            <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center' }}>{count} photos{subcount > 0 ? `\n${subcount} folder${subcount === 1 ? '' : 's'}` : ''}</Text>
-                                            {(user.role === 'admin' || user.role === 'superadmin') && !isSelectionMode && (
-                                                <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleFolderVis(folder); }} style={{ padding: 4 }}>
-                                                    <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={folder.client_visible !== false ? '#f97316' : colors.textMuted} />
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
+                                        <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
+                                            {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
+                                        </Text>
+
+                                        {(user.role === 'admin' || user.role === 'superadmin') && !isSelectionMode && (
+                                            <TouchableOpacity
+                                                onPress={(e) => { e.stopPropagation(); toggleFolderVis(folder); }}
+                                                style={{ position: 'absolute', bottom: 6, right: 6, padding: 4 }}
+                                            >
+                                                <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                            </TouchableOpacity>
+                                        )}
                                     </TouchableOpacity>
                                 );
                             })}
@@ -642,27 +654,47 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
 
             {/* Bulk Action Bar */}
             {isSelectionMode && (selectedFolders.size > 0 || selectedFiles.size > 0) && (
-                <View style={{ position: 'absolute', bottom: 20, left: 10, right: 10, backgroundColor: colors.surface, borderRadius: 30, padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, borderWidth: 1, borderColor: colors.border }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <TouchableOpacity onPress={clearSelection} style={{ padding: 8 }}>
-                            <Feather name="x" size={20} color={colors.text} />
+                <View style={{
+                    position: 'absolute',
+                    bottom: 15,
+                    left: 20,
+                    right: 20,
+                    backgroundColor: colors.surface,
+                    borderRadius: 35,
+                    height: 64,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 20,
+                    elevation: 12,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    zIndex: 1000,
+                }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                        <TouchableOpacity onPress={clearSelection} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                            <Feather name="x" size={18} color={colors.text} />
                         </TouchableOpacity>
-                        <Text style={{ color: colors.text, fontSize: 12, fontWeight: 'bold' }}>{selectedFolders.size + selectedFiles.size} selected</Text>
+                        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{selectedFolders.size + selectedFiles.size} selected</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 15, marginRight: 10 }}>
-                        <TouchableOpacity onPress={handleBulkShare}>
-                            <Feather name="share-2" size={18} color="#f97316" />
+                    <View style={{ flexDirection: 'row', gap: 20 }}>
+                        <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
+                            <Feather name="share-2" size={20} color="#f97316" />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }}>
-                            <Feather name="move" size={18} color="#f97316" />
+                        <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
+                            <Feather name="move" size={20} color="#f97316" />
                         </TouchableOpacity>
                         {user.role === 'admin' && (
-                            <View style={{ flexDirection: 'row', gap: 15 }}>
-                                <TouchableOpacity onPress={() => handleBulkVisibility(true)}>
-                                    <Feather name="eye" size={18} color="#f97316" />
+                            <View style={{ flexDirection: 'row', gap: 20 }}>
+                                <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
+                                    <Feather name="eye" size={20} color="#f97316" />
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleBulkVisibility(false)}>
-                                    <Feather name="eye-off" size={18} color="#f97316" />
+                                <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
+                                    <Feather name="eye-off" size={20} color="#f97316" />
                                 </TouchableOpacity>
                             </View>
                         )}

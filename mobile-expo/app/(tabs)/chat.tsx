@@ -216,40 +216,40 @@ export default function ChatListScreen() {
                 }}
                 style={{
                     flexDirection: 'row',
-                    padding: 16,
+                    padding: 14,
                     backgroundColor: colors.surface,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 12,
+                    marginHorizontal: 14,
+                    marginBottom: 10,
                 }}
             >
                 {/* Avatar */}
                 <View style={{ position: 'relative' }}>
                     {item.type === 'group' ? (
-                        <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
-                            <Feather name="users" size={24} color="#fff" />
+                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(249,115,22,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                            <Feather name="users" size={20} color={colors.primary} />
                         </View>
                     ) : (
                         <SecureAvatar
                             fileKey={displayAvatarKey}
                             name={displayLabel}
-                            size={50}
+                            size={44}
                         />
                     )}
                     {isOnline && (
-                        <View style={{ position: 'absolute', right: 2, bottom: 2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#25D366', borderWidth: 2, borderColor: colors.surface }} />
-                    )}
-                    {unreadCount > 0 && !isOnline && (
-                        <View style={{ position: 'absolute', right: 0, bottom: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#25D366', borderWidth: 2, borderColor: colors.surface }} />
+                        <View style={{ position: 'absolute', right: 0, bottom: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: '#25D366', borderWidth: 2, borderColor: colors.surface }} />
                     )}
                 </View>
 
                 {/* Chat Info */}
-                <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }} numberOfLines={1}>
+                <View style={{ flex: 1, marginLeft: 12, justifyContent: 'center' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={1}>
                             {displayLabel}
                         </Text>
-                        <Text style={{ fontSize: 12, color: unreadCount > 0 ? '#25D366' : colors.textMuted }}>
+                        <Text style={{ fontSize: 10, color: colors.textMuted }}>
                             {time}
                         </Text>
                     </View>
@@ -258,23 +258,23 @@ export default function ChatListScreen() {
                         {typingRooms[String(item.id)] ? (
                             <Animated.Text
                                 style={{
-                                    fontSize: 14,
-                                    color: '#f97316',
+                                    fontSize: 12,
+                                    color: colors.primary,
                                     fontStyle: 'italic',
-                                    fontWeight: '500',
+                                    fontWeight: '600',
                                     flex: 1,
                                     marginRight: 10,
                                     opacity: pulseAnim
                                 }}
                                 numberOfLines={1}
                             >
-                                {typingRooms[String(item.id)]} is typing...
+                                {typingRooms[String(item.id)]} typing...
                             </Animated.Text>
                         ) : (
 
                             <Text
                                 style={{
-                                    fontSize: 14,
+                                    fontSize: 12,
                                     color: colors.textMuted,
                                     flex: 1,
                                     marginRight: 10
@@ -288,16 +288,15 @@ export default function ChatListScreen() {
 
                         {unreadCount > 0 && (
                             <View style={{
-                                backgroundColor: '#FF3B30',
-                                borderRadius: 12,
-                                minWidth: 20,
-                                height: 20,
+                                backgroundColor: colors.primary,
+                                borderRadius: 10,
+                                minWidth: 18,
+                                height: 18,
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                paddingHorizontal: 5,
-                                marginLeft: 8
+                                paddingHorizontal: 4,
                             }}>
-                                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{unreadCount}</Text>
+                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{unreadCount}</Text>
                             </View>
                         )}
                     </View>

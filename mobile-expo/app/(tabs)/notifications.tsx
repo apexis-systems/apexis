@@ -83,25 +83,43 @@ export default function NotificationsScreen() {
         <TouchableOpacity
             style={[
                 styles.notificationItem,
-                { borderBottomColor: colors.border },
-                !item.is_read && { backgroundColor: colors.primary + '10' }
+                { 
+                    backgroundColor: item.is_read ? colors.surface : 'rgba(249,115,22,0.05)',
+                    borderColor: item.is_read ? colors.border : 'rgba(249,115,22,0.2)',
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    marginHorizontal: 14,
+                    marginBottom: 8,
+                    padding: 12,
+                }
             ]}
             onPress={() => markRead(item.id)}
         >
-            <View style={styles.iconContainer}>
+            <View style={[styles.iconContainer, { 
+                backgroundColor: item.is_read ? colors.background : 'rgba(249,115,22,0.1)',
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12
+            }]}>
                 <Ionicons
                     name={getIconName(item.type)}
-                    size={24}
+                    size={20}
                     color={item.is_read ? colors.textMuted : colors.primary}
                 />
             </View>
             <View style={styles.contentContainer}>
                 <View style={styles.headerRow}>
-                    <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
-                    {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
+                    <Text style={[styles.title, { color: colors.text, fontSize: 13, fontWeight: '700' }]}>{item.title}</Text>
+                    {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: colors.primary, width: 8, height: 8, borderRadius: 4 }]} />}
                 </View>
-                <Text style={[styles.body, { color: colors.textMuted }]}>{item.body}</Text>
-                <Text style={styles.time}>{new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                <Text style={[styles.body, { color: colors.textMuted, fontSize: 11, marginTop: 2 }]}>{item.body}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                    <Ionicons name="time-outline" size={10} color={colors.textMuted} />
+                    <Text style={[styles.time, { fontSize: 10 }]}>{new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                </View>
             </View>
         </TouchableOpacity>
     );

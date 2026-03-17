@@ -6,15 +6,20 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { PanResponder, Dimensions } from 'react-native';
 import ProjectOverview from '@/components/project/ProjectOverview';
 import ProjectDocuments from '@/components/project/ProjectDocuments';
 import ProjectPhotos from '@/components/project/ProjectPhotos';
+import ProjectRFI from '@/components/project/ProjectRFI';
 import ProjectDailyReports from '@/components/project/ProjectDailyReports';
 import ProjectWeeklyReports from '@/components/project/ProjectWeeklyReports';
 import ProjectSnagList from '@/components/project/ProjectSnagList';
 import ProjectManuals from '@/components/project/ProjectManuals';
+import MainHeader from '@/components/shared/MainHeader';
 
-type Tab = 'overview' | 'documents' | 'photos' | 'reports' | 'snags' | 'manuals';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+type Tab = 'overview' | 'documents' | 'photos' | 'rfi' | 'reports' | 'snags' | 'sops';
 
 export default function ProjectWorkspaceScreen() {
     const { id, tab, folderId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string }>();
@@ -25,12 +30,26 @@ export default function ProjectWorkspaceScreen() {
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    const defaultTab: Tab = (tab as Tab) || (user?.role === 'client' ? 'documents' : 'overview');
-    const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
+    const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [reportType, setReportType] = useState<'daily' | 'weekly'>('daily');
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const panResponder = PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+            return Math.abs(gestureState.dx) > 10 && gestureState.dx > 40 && Math.abs(gestureState.dy) < 30;
+        },
+        onPanResponderRelease: (_, gestureState) => {
+            if (gestureState.dx > SCREEN_WIDTH * 0.2) {
+                if (['reports', 'snags', 'sops'].includes(activeTab)) {
+                    setActiveTab('overview');
+                }
+            }
+        },
+    });
+    const panHandlers = ['reports', 'snags', 'sops'].includes(activeTab) ? panResponder.panHandlers : {};
 
     useEffect(() => {
-        if (tab && ['overview', 'documents', 'photos', 'reports', 'snags', 'manuals'].includes(tab)) {
+        if (tab && ['overview', 'documents', 'photos', 'rfi', 'reports', 'snags', 'sops'].includes(tab)) {
             setActiveTab(tab as Tab);
         }
     }, [tab]);
@@ -66,69 +85,76 @@ export default function ProjectWorkspaceScreen() {
         { key: 'overview', label: 'Overview', hideForClient: true },
         { key: 'documents', label: 'Docs' },
         { key: 'photos', label: 'Photos' },
-        { key: 'reports', label: 'Reports', hideForClient: true },
-        { key: 'snags', label: 'Snags', hideForClient: true },
-        { key: 'manuals', label: 'SOPs', hideForClient: true },
+        { key: 'rfi', label: 'RFI' },
     ];
 
     const visibleTabs = tabs.filter((t) => !(t.hideForClient && user.role === 'client'));
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-            {/* Header */}
-            <View
-                style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 14,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
-                    <Feather name="arrow-left" size={20} color={colors.text} />
-                </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+            <MainHeader
+                showBack
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Search in project..."
+            />
+
+            {/* Project Title Header */}
+            <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                backgroundColor: colors.background,
+            }}>
+                <View>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
                         {project.name}
                     </Text>
-                    {/* <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{project.location || 'Location not set'}</Text> */}
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                        {project.location || 'Location not set'}
+                    </Text>
                 </View>
             </View>
 
             {/* Tab Bar */}
-            <View style={{ backgroundColor: colors.surface }}>
+            <View style={{ backgroundColor: colors.background }}>
                 <View style={{
-                    paddingHorizontal: 8,
-                    paddingBottom: 14,
-                    paddingTop: 4,
+                    paddingHorizontal: 12,
+                    paddingBottom: 0,
+                    paddingTop: 8,
                 }}>
                     <View style={{
                         flexDirection: 'row',
-                        flexWrap: 'wrap',
-                        justifyContent: 'center',
-                        backgroundColor: isDark ? colors.surface : colors.border,
+                        backgroundColor: isDark ? colors.border : '#e2e8f0',
                         borderRadius: 12,
-                        paddingHorizontal: 0,
-                        paddingVertical: 6,
-                        gap: 4
+                        padding: 4,
+                        gap: 2
                     }}>
                         {visibleTabs.map((tab) => (
                             <TouchableOpacity
                                 key={tab.key}
                                 onPress={() => setActiveTab(tab.key)}
                                 style={{
-                                    borderRadius: 12,
-                                    paddingHorizontal: 8,
-                                    paddingVertical: 6,
-                                    backgroundColor: activeTab === tab.key ? (isDark ? colors.border : colors.surface) : 'transparent',
+                                    flex: 1,
+                                    borderRadius: 10,
+                                    paddingVertical: 10,
+                                    alignItems: 'center',
+                                    backgroundColor: activeTab === tab.key ? colors.surface : 'transparent',
+                                    // Subtle shadow for active tab
+                                    ...(activeTab === tab.key && !isDark ? {
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 1 },
+                                        shadowOpacity: 0.1,
+                                        shadowRadius: 2,
+                                        elevation: 2,
+                                    } : {})
                                 }}
                             >
                                 <Text
                                     style={{
-                                        fontSize: 10,
-                                        fontWeight: '600',
+                                        fontSize: 12,
+                                        fontWeight: activeTab === tab.key ? '700' : '500',
                                         color: activeTab === tab.key ? colors.text : colors.textMuted,
                                     }}
                                 >
@@ -147,26 +173,38 @@ export default function ProjectWorkspaceScreen() {
                         project={project}
                         userRole={user.role}
                         onUpdate={(updated) => setProject(updated)}
+                        onActionPress={(actionId: string) => setActiveTab(actionId as Tab)}
                     />
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} />}
-                {activeTab === 'reports' && user.role !== 'client' && (
-                    <View style={{ flex: 1, padding: 14 }}>
-                        {/* Toggle */}
-                        <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.surface : '#e2e8f0', borderRadius: 8, padding: 4, marginBottom: 16 }}>
-                            <TouchableOpacity
-                                onPress={() => setReportType('daily')}
-                                style={{ flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: reportType === 'daily' ? colors.background : 'transparent', borderRadius: 6 }}
-                            >
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>Daily</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => setReportType('weekly')}
-                                style={{ flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: reportType === 'weekly' ? colors.background : 'transparent', borderRadius: 6 }}
-                            >
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
-                            </TouchableOpacity>
+                {activeTab === 'rfi' && <ProjectRFI project={project} user={user} />}
+
+                {/* Internal / Hidden Tabs */}
+                {activeTab === 'reports' && (
+                    <View style={{ flex: 1 }} {...panHandlers}>
+                        <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                    <Feather name="arrow-left" size={20} color={colors.text} />
+                                </TouchableOpacity>
+                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#e2e8f0', borderRadius: 8, padding: 2 }}>
+                                <TouchableOpacity
+                                    onPress={() => setReportType('daily')}
+                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'daily' ? colors.surface : 'transparent' }}
+                                >
+                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>Daily</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setReportType('weekly')}
+                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'weekly' ? colors.surface : 'transparent' }}
+                                >
+                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                         {reportType === 'daily' ? (
                             <ProjectDailyReports project={project} userRole={user.role} />
@@ -175,8 +213,29 @@ export default function ProjectWorkspaceScreen() {
                         )}
                     </View>
                 )}
-                {activeTab === 'snags' && <ProjectSnagList project={project} />}
-                {activeTab === 'manuals' && <ProjectManuals project={project} />}
+                {activeTab === 'snags' && (
+                    <View style={{ flex: 1 }} {...panHandlers}>
+                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                <Feather name="arrow-left" size={20} color={colors.text} />
+                            </TouchableOpacity>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
+                        </View>
+                        <ProjectSnagList project={project} />
+                    </View>
+                )}
+                {activeTab === 'sops' && (
+                    <View style={{ flex: 1 }} {...panHandlers}>
+                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                <Feather name="arrow-left" size={20} color={colors.text} />
+                            </TouchableOpacity>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>SOPs & Manuals</Text>
+                        </View>
+                        <ProjectManuals project={project} />
+                    </View>
+                )}
+
             </View>
         </SafeAreaView>
     );

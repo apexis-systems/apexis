@@ -115,37 +115,37 @@ export default function ActivityScreen() {
                                         style={{
                                             flexDirection: 'row',
                                             alignItems: 'flex-start',
-                                            gap: 10,
-                                            borderRadius: 10,
+                                            gap: 12,
+                                            borderRadius: 12,
                                             backgroundColor: themeColors.surface,
                                             borderWidth: 1,
                                             borderColor: themeColors.border,
-                                            padding: 10,
+                                            padding: 12,
                                         }}
                                     >
                                         <View
                                             style={{
-                                                width: 32,
-                                                height: 32,
-                                                borderRadius: 8,
+                                                width: 36,
+                                                height: 36,
+                                                borderRadius: 10,
                                                 backgroundColor: colors.bg,
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                             }}
                                         >
-                                            <Feather name={iconName} size={15} color={colors.icon} />
+                                            <Feather name={iconName} size={16} color={colors.icon} />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 11, fontWeight: '500', color: themeColors.text }}>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: themeColors.text }}>
                                                 {activity.description}
                                             </Text>
-                                            <Text style={{ fontSize: 10, color: themeColors.textMuted, marginTop: 2 }}>
-                                                <Text style={{ fontWeight: '600', color: themeColors.text }}>{activity.userName}</Text>
+                                            <Text style={{ fontSize: 11, color: themeColors.textMuted, marginTop: 2 }}>
+                                                <Text style={{ fontWeight: '700', color: themeColors.text }}>{activity.userName}</Text>
                                                 {activity.projectName ? ` • ${activity.projectName}` : ''}
                                             </Text>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                                                <Feather name="clock" size={9} color={themeColors.textMuted} />
-                                                <Text style={{ fontSize: 9, color: themeColors.textMuted }}>{activity.timestamp}</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                                                <Feather name="clock" size={10} color={themeColors.textMuted} />
+                                                <Text style={{ fontSize: 10, color: themeColors.textMuted }}>{activity.timestamp}</Text>
                                             </View>
                                         </View>
                                     </View>

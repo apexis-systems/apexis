@@ -39,7 +39,7 @@ interface FileProgress {
     source?: 'camera' | 'gallery' | 'document' | 'scan';
 }
 
-type Mode = 'capture' | 'destination' | 'uploading' | 'done';
+type Mode = 'capture' | 'project' | 'folder' | 'review' | 'uploading' | 'done';
 
 export default function UploadScreen() {
     const { user } = useAuth();
@@ -66,8 +66,6 @@ export default function UploadScreen() {
     const [selectedFolder, setSelectedFolder] = useState<string | null>(params.folderId || null);
     const [projects, setProjects] = useState<any[]>([]);
     const [folders, setFolders] = useState<any[]>([]);
-    const [loadingProjects, setLoadingProjects] = useState(false);
-    const [loadingFolders, setLoadingFolders] = useState(false);
     const [photoLocation, setPhotoLocation] = useState('');
     const [photoTags, setPhotoTags] = useState('');
 
@@ -98,6 +96,10 @@ export default function UploadScreen() {
                     setSelectedProject(projectId);
                     if (folderId) {
                         setSelectedFolder(folderId);
+                        // If both are present, we probably want to go to capture or review
+                        setMode('capture');
+                    } else {
+                        setMode('capture');
                     }
                 }
             }
@@ -114,23 +116,19 @@ export default function UploadScreen() {
     // Data Fetching
     useEffect(() => {
         if (!user) return;
-        setLoadingProjects(true);
         getProjects()
             .then((data) => { if (data.projects) setProjects(data.projects); })
-            .catch((e) => console.error('fetchProjects', e))
-            .finally(() => setLoadingProjects(false));
+            .catch((e) => console.error('fetchProjects', e));
     }, [user]);
 
     const fetchFolders = async () => {
         if (!selectedProject) { setFolders([]); return; }
-        setLoadingFolders(true);
         getFolders(selectedProject, 'documents')
             .then((data) => {
                 const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
                 setFolders(rawFolders);
             })
-            .catch((e) => console.error('fetchFolders', e))
-            .finally(() => setLoadingFolders(false));
+            .catch((e) => console.error('fetchFolders', e));
     };
 
     useEffect(() => {
@@ -455,11 +453,7 @@ export default function UploadScreen() {
 
                         <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff' }}>Capture</Text>
 
-                        {fileQueue.length > 0 ? (
-                            <TouchableOpacity onPress={() => setMode('destination')} style={{ backgroundColor: '#f97316', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Next</Text>
-                            </TouchableOpacity>
-                        ) : <View style={{ width: 60 }} />}
+                        <View style={{ width: 60 }} />
                     </View>
 
                     {/* Camera */}
@@ -484,301 +478,300 @@ export default function UploadScreen() {
                     )}
 
                     {/* Bottom Controls Area */}
-                    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.85)', paddingBottom: Math.max(insets.bottom, 16), zIndex: 15 }}>
+                    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 15 }}>
 
-                        {/* Inline Previews */}
+                        {/* Next Button Row (Above Thumbnails) */}
                         {fileQueue.length > 0 && (
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
-                                {fileQueue.map((item, idx) => (
-                                    <View key={idx} style={{ marginRight: 12, position: 'relative' }}>
-                                        {item.source === 'document' ? (
-                                            <View style={{ width: 60, height: 60, borderRadius: 8, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Feather name="file-text" size={24} color="#f97316" />
-                                            </View>
-                                        ) : (
-                                            <Image source={{ uri: item.asset.uri }} style={{ width: 60, height: 60, borderRadius: 8 }} />
-                                        )}
-                                        <TouchableOpacity
-                                            onPress={() => setFileQueue(prev => prev.filter((_, i) => i !== idx))}
-                                            style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', borderRadius: 12, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}
-                                        >
-                                            <Feather name="x" size={12} color="#fff" />
-                                        </TouchableOpacity>
-                                    </View>
-                                ))}
-                            </ScrollView>
+                            <View style={{
+                                paddingHorizontal: 16,
+                                paddingVertical: 12,
+                                flexDirection: 'row',
+                                justifyContent: 'flex-end',
+                                // Fade from transparent to black-ish background to highlight button
+                                backgroundColor: 'rgba(0,0,0,0.4)',
+                                borderTopLeftRadius: 30,
+                                borderTopRightRadius: 30,
+                            }}>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        if (selectedProject && selectedFolder) setMode('review');
+                                        else if (selectedProject) setMode('folder');
+                                        else setMode('project');
+                                    }}
+                                    style={{
+                                        backgroundColor: '#f97316',
+                                        paddingHorizontal: 24,
+                                        paddingVertical: 12,
+                                        borderRadius: 25,
+                                        elevation: 5,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.3,
+                                        shadowRadius: 4,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 6
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#fff' }}>Next</Text>
+                                    <Feather name="arrow-right" size={16} color="#fff" />
+                                </TouchableOpacity>
+                            </View>
                         )}
 
-                        {/* 3-button capture row */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: 16 }}>
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingBottom: Math.max(insets.bottom, 16) }}>
 
-                            {/* Left Button: Gallery (Photo Mode) OR Pick File (Doc Mode) */}
-                            {isDocMode ? (
-                                <TouchableOpacity onPress={pickDocument} style={{ alignItems: 'center', width: 70 }}>
-                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="file-text" size={22} color="#fff" />
-                                    </View>
-                                    <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Pick File</Text>
-                                </TouchableOpacity>
-                            ) : (
-                                <TouchableOpacity onPress={pickFromGallery} style={{ alignItems: 'center', width: 70 }}>
-                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="image" size={22} color="#fff" />
-                                    </View>
-                                    <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Gallery</Text>
-                                </TouchableOpacity>
+                            {/* Inline Previews */}
+                            {fileQueue.length > 0 && (
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+                                    {fileQueue.map((item, idx) => (
+                                        <View key={idx} style={{ marginRight: 12, position: 'relative' }}>
+                                            {item.source === 'document' ? (
+                                                <View style={{ width: 60, height: 60, borderRadius: 8, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Feather name="file-text" size={24} color="#f97316" />
+                                                </View>
+                                            ) : (
+                                                <Image source={{ uri: item.asset.uri }} style={{ width: 60, height: 60, borderRadius: 8 }} />
+                                            )}
+                                            <TouchableOpacity
+                                                onPress={() => setFileQueue(prev => prev.filter((_, i) => i !== idx))}
+                                                style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', borderRadius: 12, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                                <Feather name="x" size={12} color="#fff" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </ScrollView>
                             )}
 
-                            {/* Center Button: Shutter (Photo or Scan) */}
-                            <TouchableOpacity
-                                onPress={isDocMode ? captureScan : capturePhoto}
-                                disabled={isProcessing}
-                                style={{ alignItems: 'center' }}
-                            >
-                                <View style={{
-                                    width: 76, height: 76, borderRadius: 38,
-                                    borderWidth: 4, borderColor: '#fff',
-                                    backgroundColor: isDocMode ? '#f97316' : '#ea8c0a', // Space between is orange
-                                    alignItems: 'center', justifyContent: 'center',
-                                }}>
+                            {/* 3-button capture row */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: 16 }}>
+
+                                {/* Left Button: Gallery (Photo Mode) OR Pick File (Doc Mode) */}
+                                {isDocMode ? (
+                                    <TouchableOpacity onPress={pickDocument} style={{ alignItems: 'center', width: 70 }}>
+                                        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="file-text" size={22} color="#fff" />
+                                        </View>
+                                        <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Pick File</Text>
+                                    </TouchableOpacity>
+                                ) : (
+                                    <TouchableOpacity onPress={pickFromGallery} style={{ alignItems: 'center', width: 70 }}>
+                                        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="image" size={22} color="#fff" />
+                                        </View>
+                                        <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Gallery</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Center Button: Shutter (Photo or Scan) */}
+                                <TouchableOpacity
+                                    onPress={isDocMode ? captureScan : capturePhoto}
+                                    disabled={isProcessing}
+                                    style={{ alignItems: 'center' }}
+                                >
                                     <View style={{
-                                        width: 52, height: 52, borderRadius: 26,
-                                        backgroundColor: '#fff', // Inner circle is white
-                                    }} />
-                                </View>
-                                <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>
-                                    {isDocMode ? 'Scan Doc' : 'Photo'}
-                                </Text>
-                            </TouchableOpacity>
+                                        width: 76, height: 76, borderRadius: 38,
+                                        borderWidth: 4, borderColor: '#fff',
+                                        backgroundColor: isDocMode ? '#f97316' : '#ea8c0a', // Space between is orange
+                                        alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                        <View style={{
+                                            width: 52, height: 52, borderRadius: 26,
+                                            backgroundColor: '#fff', // Inner circle is white
+                                        }} />
+                                    </View>
+                                    <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>
+                                        {isDocMode ? 'Scan Doc' : 'Photo'}
+                                    </Text>
+                                </TouchableOpacity>
 
-                            {/* Right Button: Toggle Mode (Files or Photo) */}
-                            {isDocMode ? (
-                                <TouchableOpacity onPress={() => setIsDocMode(false)} style={{ alignItems: 'center', width: 70 }}>
-                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="camera" size={22} color="#fff" />
-                                    </View>
-                                    <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Photo</Text>
-                                </TouchableOpacity>
-                            ) : (
-                                <TouchableOpacity onPress={() => setIsDocMode(true)} style={{ alignItems: 'center', width: 70 }}>
-                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="file" size={22} color="#fff" />
-                                    </View>
-                                    <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Files</Text>
-                                </TouchableOpacity>
-                            )}
+                                {/* Right Button: Toggle Mode (Files or Photo) */}
+                                {isDocMode ? (
+                                    <TouchableOpacity onPress={() => setIsDocMode(false)} style={{ alignItems: 'center', width: 70 }}>
+                                        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="camera" size={22} color="#fff" />
+                                        </View>
+                                        <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Photo</Text>
+                                    </TouchableOpacity>
+                                ) : (
+                                    <TouchableOpacity onPress={() => setIsDocMode(true)} style={{ alignItems: 'center', width: 70 }}>
+                                        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="file" size={22} color="#fff" />
+                                        </View>
+                                        <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Files</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                            </View>
 
                         </View>
-
                     </View>
                 </View>
             </SafeAreaView>
         );
     }
 
-    // 2. Destination Mode
-    if (mode === 'destination') {
-        const canUpload = selectedProject && selectedFolder !== null;
+    // 2. Step-based Selection Flow
+    if (['project', 'folder', 'review'].includes(mode)) {
+
+        const goBack = () => {
+            if (mode === 'project') setMode('capture');
+            else if (mode === 'folder') setMode('project');
+            else if (mode === 'review') setMode('folder');
+        };
+
+        const currentBrowseFolders = getFolderChildren(folderBrowseId);
 
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                    <TouchableOpacity onPress={() => {
-                        // If we are strictly bound to a project and folder, and have no other choice,
-                        // back button here could either go to capture mode or cancel upload. Let's go to capture.
-                        setMode('capture');
-                    }}>
-                        <Feather name="arrow-left" size={24} color={colors.text} />
+                {/* Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                    <TouchableOpacity onPress={goBack}>
+                        <Feather name="arrow-left" size={20} color={colors.text} />
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>Upload Details</Text>
-                    <View style={{ width: 24 }} />
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>
+                        {mode === 'project' ? 'Select Project' : mode === 'folder' ? 'Select Folder' : 'Review & Upload'}
+                    </Text>
                 </View>
 
                 <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
 
-                    {/* Selected Files Preview */}
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Selected Files ({fileQueue.length})</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+                    {/* Tiny Previews Strip */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginRight: 12, alignSelf: 'center' }}>{fileQueue.length} files</Text>
                         {fileQueue.map((item, idx) => (
-                            <View key={idx} style={{ marginRight: 8, alignItems: 'center', width: 64 }}>
-                                {item.source === 'document' ? (
-                                    <View style={{ width: 60, height: 60, borderRadius: 8, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
-                                        <Feather name="file-text" size={24} color={colors.primary} />
-                                    </View>
-                                ) : (
-                                    <Image source={{ uri: item.asset.uri }} style={{ width: 60, height: 60, borderRadius: 8, borderWidth: 1, borderColor: colors.border }} />
-                                )}
-                                <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted, marginTop: 4, width: '100%', textAlign: 'center' }}>
-                                    {item.asset.fileName}
-                                </Text>
+                            <View key={idx} style={{ marginRight: 8 }}>
+                                <Image source={{ uri: item.asset.uri }} style={{ width: 40, height: 40, borderRadius: 8, borderWidth: 1, borderColor: colors.border }} />
                             </View>
                         ))}
                     </ScrollView>
 
-                    {/* Metadata fields for photos */}
-                    {fileQueue.some(f => f.source === 'camera' || f.source === 'gallery') && (
-                        <View style={{ gap: 12, marginBottom: 24 }}>
-                            <View>
-                                <Text style={{ fontSize: 12, fontWeight: '500', color: colors.text, marginBottom: 4 }}>Location (Optional)</Text>
-                                <TextInput
-                                    value={photoLocation} onChangeText={setPhotoLocation}
-                                    placeholder="e.g., Block A, Level 2" placeholderTextColor={colors.textMuted}
-                                    style={{ height: 44, borderRadius: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, color: colors.text, paddingHorizontal: 12 }}
-                                />
-                            </View>
-                            <View>
-                                <Text style={{ fontSize: 12, fontWeight: '500', color: colors.text, marginBottom: 4 }}>Tags (Optional)</Text>
-                                <TextInput
-                                    value={photoTags} onChangeText={setPhotoTags}
-                                    placeholder="e.g., concrete, footing" placeholderTextColor={colors.textMuted}
-                                    style={{ height: 44, borderRadius: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, color: colors.text, paddingHorizontal: 12 }}
-                                />
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Auto-selected destination notice */}
-                    {(params.projectId || selectedProject) && (
-                        <View style={{ backgroundColor: 'rgba(249,115,22,0.1)', padding: 12, borderRadius: 10, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(249,115,22,0.3)' }}>
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#f97316', marginBottom: 4 }}>Current Destination</Text>
-                            <Text style={{ fontSize: 13, color: colors.text }}>
-                                {projects.find(p => p.id === selectedProject)?.name || 'Project'}
-                                {selectedFolder ? ` / ${selectedFolder === 'root' ? 'Root Folder' : folders.find(f => String(f.id) === String(selectedFolder))?.name || 'Folder'}` : ' (Please choose a folder below)'}
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* Step 1: Project Selection */}
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>1. Select Project</Text>
-                    {loadingProjects ? <Text style={{ color: colors.textMuted, marginBottom: 20 }}>Loading...</Text> : (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
-                            {projects.map((project) => (
+                    {/* Step: Project Selection (4-column Grid) */}
+                    {mode === 'project' && (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                            {projects.map((p) => (
                                 <TouchableOpacity
-                                    key={project.id}
-                                    onPress={() => { setSelectedProject(project.id); setSelectedFolder(null); setFolderBrowseId(null); }}
-                                    style={{
-                                        paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
-                                        borderWidth: 1.5, borderColor: selectedProject === project.id ? '#f97316' : colors.border,
-                                        backgroundColor: selectedProject === project.id ? 'rgba(249,115,22,0.1)' : colors.surface,
+                                    key={p.id}
+                                    onPress={() => {
+                                        setSelectedProject(p.id);
+                                        setSelectedFolder(null);
+                                        setFolderBrowseId(null);
+                                        setMode('folder');
                                     }}
+                                    style={{ width: '22%', alignItems: 'center', gap: 6 }}
                                 >
-                                    <Text style={{ fontSize: 13, fontWeight: '500', color: selectedProject === project.id ? '#f97316' : colors.text }}>
-                                        {project.name}
-                                    </Text>
+                                    <View style={{
+                                        width: 60, height: 60, borderRadius: 16,
+                                        backgroundColor: p.color || colors.primary,
+                                        alignItems: 'center', justifyContent: 'center',
+                                        elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3
+                                    }}>
+                                        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>{p.name.charAt(0)}</Text>
+                                    </View>
+                                    <Text numberOfLines={2} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center' }}>{p.name}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
                     )}
 
-                    {/* Step 2: Folder Selection */}
-                    {selectedProject && (
+                    {/* Step: Folder Selection (3-column Grid) */}
+                    {mode === 'folder' && (
                         <View>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>2. Select Destination Folder</Text>
-                                <TouchableOpacity
-                                    onPress={() => setShowCreateFolder(true)}
-                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                                >
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <TouchableOpacity onPress={() => setFolderBrowseId(null)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: !folderBrowseId ? colors.primary : colors.textMuted }}>Root</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setShowCreateFolder(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                     <Feather name="folder-plus" size={14} color={colors.primary} />
-                                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>New Folder</Text>
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>New</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Breadcrumb navigator */}
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <TouchableOpacity onPress={() => setFolderBrowseId(null)}>
-                                        <Text style={{ fontSize: 12, fontWeight: '700', color: !folderBrowseId ? '#f97316' : colors.textMuted }}>
-                                            {projects.find(p => String(p.id) === String(selectedProject))?.name || 'Root'}
-                                        </Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                {!folderBrowseId && (
+                                    <TouchableOpacity
+                                        onPress={() => { setSelectedFolder('root'); setMode('review'); }}
+                                        style={{ 
+                                            width: '31%', 
+                                            aspectRatio: 1, 
+                                            borderRadius: 12, 
+                                            backgroundColor: colors.surface, 
+                                            borderWidth: 1, 
+                                            borderColor: colors.border, 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center',
+                                            padding: 8
+                                        }}
+                                    >
+                                        <Feather name="folder" size={32} color={colors.primary} />
+                                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginTop: 6, textAlign: 'center', width: '100%' }}>Root Folder</Text>
                                     </TouchableOpacity>
-                                    {browseBreadcrumbs.map((b) => (
-                                        <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Text style={{ fontSize: 12, color: colors.textMuted, marginHorizontal: 6 }}>/</Text>
-                                            <TouchableOpacity onPress={() => setFolderBrowseId(b.id)}>
-                                                <Text style={{ fontSize: 12, fontWeight: '700', color: folderBrowseId === b.id ? '#f97316' : colors.textMuted }}>
-                                                    {b.name}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    ))}
-                                </View>
-                            </ScrollView>
-
-                            {loadingFolders ? <Text style={{ color: colors.textMuted }}>Loading folders...</Text> : (
-                                <View style={{ gap: 8, paddingBottom: 40 }}>
-                                    {!folderBrowseId && (
-                                        <TouchableOpacity
-                                            onPress={() => setSelectedFolder('root')} // 'root' is visually distinct, gets turned to null on submit if we want root
-                                            style={{
-                                                flexDirection: 'row', alignItems: 'center', gap: 12,
-                                                borderRadius: 12, backgroundColor: colors.surface, padding: 14,
-                                                borderWidth: 2, borderColor: selectedFolder === 'root' ? '#f97316' : colors.border,
-                                            }}
-                                        >
-                                            <Feather name="folder" size={20} color="#f97316" />
-                                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Root Folder</Text>
-                                        </TouchableOpacity>
-                                    )}
-
-                                    {currentBrowseFolders.map((folder) => {
-                                        const hasChildren = folders.some((f) => f.parent_id === folder.id);
-                                        return (
-                                            <View key={folder.id} style={{ flexDirection: 'row', gap: 8 }}>
-                                                <TouchableOpacity
-                                                    onPress={() => setSelectedFolder(folder.id)}
-                                                    style={{
-                                                        flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12,
-                                                        borderRadius: 12, backgroundColor: colors.surface, padding: 14,
-                                                        borderWidth: 2, borderColor: selectedFolder === folder.id ? '#f97316' : colors.border,
-                                                    }}
-                                                >
-                                                    <Feather name="folder" size={20} color="#f97316" />
-                                                    <Text style={{ fontSize: 14, fontWeight: '500', color: colors.text }} numberOfLines={1}>{folder.name}</Text>
-                                                </TouchableOpacity>
-
-                                                {hasChildren && (
-                                                    <TouchableOpacity
-                                                        onPress={() => setFolderBrowseId(folder.id)}
-                                                        style={{ width: 50, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
-                                                    >
-                                                        <Feather name="chevron-right" size={20} color={colors.textMuted} />
-                                                    </TouchableOpacity>
-                                                )}
-                                            </View>
-                                        );
-                                    })}
-
-                                    {currentBrowseFolders.length === 0 && folderBrowseId && (
-                                        <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                                            <Text style={{ color: colors.textMuted }}>No subfolders.</Text>
-                                            <TouchableOpacity onPress={() => setSelectedFolder(folderBrowseId)} style={{ marginTop: 12, backgroundColor: colors.border, padding: 10, borderRadius: 6 }}>
-                                                <Text style={{ color: colors.text, fontSize: 12 }}>Select '{browseBreadcrumbs[browseBreadcrumbs.length - 1]?.name}'</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    )}
-                                </View>
-                            )}
+                                )}
+                                {currentBrowseFolders.map((f) => (
+                                    <TouchableOpacity
+                                        key={f.id}
+                                        onPress={() => { setSelectedFolder(f.id); setMode('review'); }}
+                                        style={{ 
+                                            width: '31%', 
+                                            aspectRatio: 1, 
+                                            borderRadius: 12, 
+                                            backgroundColor: colors.surface, 
+                                            borderWidth: 1, 
+                                            borderColor: colors.border, 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center',
+                                            padding: 8
+                                        }}
+                                    >
+                                        <Feather name="folder" size={32} color={colors.primary} />
+                                        <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginTop: 6, textAlign: 'center', width: '100%' }}>{f.name}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
                     )}
 
-                </ScrollView>
+                    {/* Step: Review & Final Details */}
+                    {mode === 'review' && (
+                        <View style={{ gap: 20 }}>
+                            <View style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Destination</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginTop: 2 }}>
+                                    {projects.find(p => p.id === selectedProject)?.name} › {selectedFolder === 'root' ? 'Root' : folders.find(f => f.id === selectedFolder)?.name}
+                                </Text>
+                            </View>
 
-                {/* Sticky Bottom Upload Bar */}
-                <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }}>
-                    <TouchableOpacity
-                        onPress={handleUpload}
-                        disabled={!canUpload}
-                        style={{
-                            height: 50, borderRadius: 25,
-                            backgroundColor: canUpload ? '#f97316' : colors.border,
-                            alignItems: 'center', justifyContent: 'center',
-                        }}
-                    >
-                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>
-                            Upload {fileQueue.length} files
-                        </Text>
-                    </TouchableOpacity>
+                            <View style={{ gap: 12 }}>
+                                <View>
+                                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 6 }}>Location (Optional)</Text>
+                                    <TextInput
+                                        value={photoLocation} onChangeText={setPhotoLocation}
+                                        placeholder="e.g., Block A, Level 1" placeholderTextColor={colors.textMuted}
+                                        style={{ height: 44, borderRadius: 10, backgroundColor: colors.surface, paddingHorizontal: 12, color: colors.text, borderWidth: 1, borderColor: colors.border }}
+                                    />
+                                </View>
+                                <View>
+                                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 6 }}>Tags (Optional)</Text>
+                                    <TextInput
+                                        value={photoTags} onChangeText={setPhotoTags}
+                                        placeholder="e.g., concrete, finishing" placeholderTextColor={colors.textMuted}
+                                        style={{ height: 44, borderRadius: 10, backgroundColor: colors.surface, paddingHorizontal: 12, color: colors.text, borderWidth: 1, borderColor: colors.border }}
+                                    />
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                onPress={handleUpload}
+                                style={{
+                                    height: 50, borderRadius: 25, backgroundColor: colors.primary,
+                                    alignItems: 'center', justifyContent: 'center', marginTop: 20
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Confirm & Upload</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     {/* Create Folder Modal */}
                     <Modal visible={showCreateFolder} transparent animationType="fade">
@@ -807,14 +800,13 @@ export default function UploadScreen() {
                             </View>
                         </View>
                     </Modal>
-                </View>
-            </SafeAreaView>
+                </ScrollView>
+            </SafeAreaView >
         );
     }
 
     // 3. Uploading & Done Mode
-    const doneCount = fileQueue.filter((f) => f.status === 'done').length;
-    const errorCount = fileQueue.filter((f) => f.status === 'error').length;
+    const doneCount = fileQueue.filter((f: any) => f.status === 'done').length;
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
