@@ -27,7 +27,7 @@ export const createFolder = async (req: Request, res: Response) => {
         const newFolder = await folders.create({
             project_id,
             name,
-            client_visible: false,
+            client_visible: true,
             parent_id: parent_id || null,
             created_by: authUser.user_id,
         });

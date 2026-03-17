@@ -123,7 +123,7 @@ export default function UploadScreen() {
 
     const fetchFolders = async () => {
         if (!selectedProject) { setFolders([]); return; }
-        getFolders(selectedProject, 'documents')
+        getFolders(selectedProject, isDocMode ? 'documents' : 'photos')
             .then((data) => {
                 const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
                 setFolders(rawFolders);
@@ -133,7 +133,7 @@ export default function UploadScreen() {
 
     useEffect(() => {
         fetchFolders();
-    }, [selectedProject]);
+    }, [selectedProject, isDocMode]);
 
     // Auto-expand folder tree to show selected folder on initial load
     useEffect(() => {
@@ -617,7 +617,14 @@ export default function UploadScreen() {
 
         const goBack = () => {
             if (mode === 'project') setMode('capture');
-            else if (mode === 'folder') setMode('project');
+            else if (mode === 'folder') {
+                if (folderBrowseId) {
+                    const current = folders.find(f => String(f.id) === String(folderBrowseId));
+                    setFolderBrowseId(current?.parent_id ? String(current.parent_id) : null);
+                } else {
+                    setMode('project');
+                }
+            }
             else if (mode === 'review') setMode('folder');
         };
 
@@ -679,47 +686,40 @@ export default function UploadScreen() {
                     {mode === 'folder' && (
                         <View>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                <TouchableOpacity onPress={() => setFolderBrowseId(null)} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: !folderBrowseId ? colors.primary : colors.textMuted }}>Root</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setShowCreateFolder(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', gap: 6 }}>
+                                    <TouchableOpacity onPress={() => setFolderBrowseId(null)}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: !folderBrowseId ? colors.primary : colors.textMuted }}>Root</Text>
+                                    </TouchableOpacity>
+                                    {browseBreadcrumbs.map((b, i) => (
+                                        <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Feather name="chevron-right" size={12} color={colors.textMuted} />
+                                            <TouchableOpacity onPress={() => setFolderBrowseId(b.id)}>
+                                                <Text style={{ fontSize: 13, fontWeight: '700', color: i === browseBreadcrumbs.length - 1 ? colors.primary : colors.textMuted }}>
+                                                    {b.name}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                                <TouchableOpacity onPress={() => setShowCreateFolder(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 12 }}>
                                     <Feather name="folder-plus" size={14} color={colors.primary} />
                                     <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>New</Text>
                                 </TouchableOpacity>
                             </View>
 
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                                {!folderBrowseId && (
-                                    <TouchableOpacity
-                                        onPress={() => { setSelectedFolder('root'); setMode('review'); }}
-                                        style={{ 
-                                            width: '31%', 
-                                            aspectRatio: 1, 
-                                            borderRadius: 12, 
-                                            backgroundColor: colors.surface, 
-                                            borderWidth: 1, 
-                                            borderColor: colors.border, 
-                                            alignItems: 'center', 
-                                            justifyContent: 'center',
-                                            padding: 8
-                                        }}
-                                    >
-                                        <Feather name="folder" size={32} color={colors.primary} />
-                                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginTop: 6, textAlign: 'center', width: '100%' }}>Root Folder</Text>
-                                    </TouchableOpacity>
-                                )}
                                 {currentBrowseFolders.map((f) => (
                                     <TouchableOpacity
                                         key={f.id}
-                                        onPress={() => { setSelectedFolder(f.id); setMode('review'); }}
-                                        style={{ 
-                                            width: '31%', 
-                                            aspectRatio: 1, 
-                                            borderRadius: 12, 
-                                            backgroundColor: colors.surface, 
-                                            borderWidth: 1, 
-                                            borderColor: colors.border, 
-                                            alignItems: 'center', 
+                                        onPress={() => setFolderBrowseId(String(f.id))}
+                                        style={{
+                                            width: '31%',
+                                            aspectRatio: 1,
+                                            borderRadius: 12,
+                                            backgroundColor: colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            alignItems: 'center',
                                             justifyContent: 'center',
                                             padding: 8
                                         }}
@@ -728,7 +728,37 @@ export default function UploadScreen() {
                                         <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginTop: 6, textAlign: 'center', width: '100%' }}>{f.name}</Text>
                                     </TouchableOpacity>
                                 ))}
+                                {currentBrowseFolders.length === 0 && (
+                                    <View style={{ width: '100%', paddingVertical: 40, alignItems: 'center' }}>
+                                        <Feather name="folder" size={40} color={colors.border} />
+                                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 10 }}>No subfolders here</Text>
+                                    </View>
+                                )}
                             </View>
+
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setSelectedFolder(folderBrowseId || 'root');
+                                    setMode('review');
+                                }}
+                                style={{
+                                    marginTop: 32,
+                                    height: 52,
+                                    borderRadius: 16,
+                                    backgroundColor: colors.primary,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    elevation: 2,
+                                    shadowColor: colors.primary,
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.2,
+                                    shadowRadius: 5
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>
+                                    Select {folderBrowseId ? (browseBreadcrumbs[browseBreadcrumbs.length - 1]?.name) : 'Root Folder'}
+                                </Text>
+                            </TouchableOpacity>
                         </View>
                     )}
 
