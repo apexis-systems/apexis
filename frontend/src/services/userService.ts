@@ -41,3 +41,13 @@ export const updateUserProfilePic = async (formData: FormData) => {
         throw error;
     }
 };
+
+export const updateUserName = async (data: { name: string }) => {
+    try {
+        const response = await PrivateAxios.patch('/users/name', data);
+        return response.data;
+    } catch (error) {
+        console.error("updateUserName Error", error);
+        throw error;
+    }
+};

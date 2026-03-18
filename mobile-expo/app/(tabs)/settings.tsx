@@ -1,5 +1,5 @@
 import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform } from 'react-native';
-import { Text } from '@/components/ui/AppText';
+
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -9,8 +9,9 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { fetchSecureLogo } from '@/services/organizationService';
-import { updateUserProfilePic } from '@/services/userService';
+import { updateUserProfilePic, updateUserName } from '@/services/userService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
+import { Text, TextInput } from '@/components/ui/AppText';
 
 // const roles: { value: UserRole; label: string }[] = [
 //     { value: 'admin', label: 'Admin' },
@@ -34,6 +35,16 @@ export default function ProfileScreen() {
     const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editNameValue, setEditNameValue] = useState('');
+    const [nameLoading, setNameLoading] = useState(false);
+
+    useEffect(() => {
+        if (user) {
+            setEditNameValue(user.name || '');
+        }
+    }, [user?.name]);
 
     useEffect(() => {
         const loadProfilePic = async () => {
@@ -80,6 +91,24 @@ export default function ProfileScreen() {
             Alert.alert('Error', 'Failed to upload profile picture');
         } finally {
             setIsUploading(false);
+        }
+    };
+
+    const handleSaveName = async () => {
+        if (!editNameValue.trim() || editNameValue === user.name) {
+            setIsEditingName(false);
+            return;
+        }
+        setNameLoading(true);
+        try {
+            await updateUserName({ name: editNameValue });
+            updateUser({ name: editNameValue.trim() });
+            Alert.alert('Success', 'Name updated successfully');
+            setIsEditingName(false);
+        } catch (e) {
+            Alert.alert('Error', 'Failed to update name');
+        } finally {
+            setNameLoading(false);
         }
     };
 
@@ -142,7 +171,40 @@ export default function ProfileScreen() {
                             <Feather name="camera" size={12} color="#fff" />
                         </View>
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text }}>{user.name}</Text>
+
+                    {isEditingName ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                            <TextInput
+                                value={editNameValue}
+                                onChangeText={setEditNameValue}
+                                autoFocus
+                                style={{
+                                    height: 40,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    borderRadius: 8,
+                                    paddingHorizontal: 16,
+                                    color: colors.text,
+                                    fontSize: 18,
+                                    minWidth: 150,
+                                    textAlign: 'center'
+                                }}
+                            />
+                            <TouchableOpacity onPress={handleSaveName} disabled={nameLoading} style={{ padding: 8, backgroundColor: 'rgba(34,197,94,0.1)', borderRadius: 20 }}>
+                                {nameLoading ? <ActivityIndicator size="small" color="#22c55e" /> : <Feather name="check" size={20} color="#22c55e" />}
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => { setIsEditingName(false); setEditNameValue(user?.name); }} style={{ padding: 8, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 20 }}>
+                                <Feather name="x" size={20} color="#ef4444" />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <TouchableOpacity onPress={() => setIsEditingName(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                            <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text }}>{user.name}</Text>
+                            <Feather name="edit-2" size={16} color={colors.textMuted} />
+                        </TouchableOpacity>
+                    )}
+
                     <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 2 }}>{user.email}</Text>
                     <View
                         style={{
@@ -184,6 +246,7 @@ export default function ProfileScreen() {
                                 <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Company Settings</Text>
                                 <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Manage logo and branding</Text>
                             </View>
+                            <Feather name="chevron-right" size={18} color={colors.textMuted} />
                         </TouchableOpacity>
                     )}
 
