@@ -52,7 +52,7 @@ const Billing = () => {
     if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
         return (
             <div className="p-8 max-w-5xl mx-auto flex items-center justify-center min-h-[50vh]">
-                <p className="text-muted-foreground">You do not have permission to view billing.</p>
+                <p className="text-muted-foreground">You do not have permission to view plan/upgrade.</p>
             </div>
         );
     }

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -49,7 +50,7 @@ export default function LinkedDevices() {
 
         // A basic UUID check (length 36, contains hyphens)
         if (!data || data.length < 32 || !data.includes('-')) {
-            Alert.alert("Invalid QR Code", "This doesn't look like an Apexis login code.");
+            Alert.alert("Invalid QR Code", "This doesn't look like an APEXIS login code.");
             setTimeout(() => setScanned(false), 2000);
             return;
         }
@@ -83,7 +84,7 @@ export default function LinkedDevices() {
                 </Text>
                 <TouchableOpacity
                     onPress={requestPermission}
-                    style={{ backgroundColor: '#f97316', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
+                    style={{ backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
                 >
                     <Text style={{ color: '#fff', fontWeight: 'bold' }}>Grant Permission</Text>
                 </TouchableOpacity>
@@ -113,16 +114,16 @@ export default function LinkedDevices() {
                     </View>
 
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} pointerEvents="none">
-                        <View style={{ width: 250, height: 250, borderWidth: 2, borderColor: '#f97316', borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                        <View style={{ width: 250, height: 250, borderWidth: 2, borderColor: colors.primary, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.1)' }}>
                             {authorizing && (
                                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 22 }}>
-                                    <ActivityIndicator size="large" color="#f97316" />
+                                    <ActivityIndicator size="large" color={colors.primary} />
                                     <Text style={{ color: '#fff', marginTop: 12, fontWeight: '600' }}>Authorizing...</Text>
                                 </View>
                             )}
                         </View>
                         <Text style={{ color: '#fff', marginTop: 30, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 }}>
-                            Point your camera at the QR code displayed on the Apexis web login page.
+                            Point your camera at the QR code displayed on the APEXIS web login page.
                         </Text>
                     </View>
                 </View>
@@ -143,7 +144,7 @@ export default function LinkedDevices() {
                 <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 24 }}>
                     <Feather name="monitor" size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
                     <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, textAlign: 'center', marginBottom: 8 }}>
-                        Use Apexis on your computer
+                        Use <Text className="font-angelica" style={{ letterSpacing: 0.5 }}>APEXIS</Text> on your computer
                     </Text>
                     <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
                         Open web.apexis.in on your computer and scan the QR code to sign in instantly.
@@ -151,7 +152,7 @@ export default function LinkedDevices() {
 
                     <TouchableOpacity
                         onPress={() => setIsScannerOpen(true)}
-                        style={{ backgroundColor: '#f97316', width: '100%', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }}
+                        style={{ backgroundColor: colors.primary, width: '100%', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }}
                     >
                         <Feather name="maximize" size={18} color="#fff" />
                         <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Link a Device</Text>
@@ -170,7 +171,7 @@ export default function LinkedDevices() {
                                         <Feather name="globe" size={20} color={colors.text} />
                                     </View>
                                     <View>
-                                        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{session.device || "Apexis Web API Session"}</Text>
+                                        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{session.device || "APEXIS Web API Session"}</Text>
                                         <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>Active now · Web Browser</Text>
                                     </View>
                                 </View>

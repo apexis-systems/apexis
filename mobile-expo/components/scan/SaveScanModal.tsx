@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, Modal, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, TouchableOpacity, Image, Modal, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getProjects } from '@/services/projectService';
 import { getProjectFiles } from '@/services/fileService';
 import { uploadFile } from '@/services/fileService';
@@ -15,6 +17,7 @@ interface SaveScanModalProps {
 
 export default function SaveScanModal({ imageUri, onDiscard, onSaveSuccess }: SaveScanModalProps) {
     const { user } = useAuth();
+    const { colors } = useTheme();
 
     const [projects, setProjects] = useState<any[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
@@ -128,9 +131,9 @@ export default function SaveScanModal({ imageUri, onDiscard, onSaveSuccess }: Sa
                     <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Save Scan</Text>
                     <TouchableOpacity onPress={handleUpload} disabled={uploading || !selectedProjectId}>
                         {uploading ? (
-                            <ActivityIndicator size="small" color="#f97316" />
+                            <ActivityIndicator size="small" color={colors.primary} />
                         ) : (
-                            <Text style={{ color: selectedProjectId ? '#f97316' : '#666', fontSize: 16, fontWeight: '600' }}>Save</Text>
+                            <Text style={{ color: selectedProjectId ? colors.primary : '#666', fontSize: 16, fontWeight: '600' }}>Save</Text>
                         )}
                     </TouchableOpacity>
                 </View>
@@ -173,7 +176,7 @@ export default function SaveScanModal({ imageUri, onDiscard, onSaveSuccess }: Sa
                             <View style={{ backgroundColor: '#333', borderRadius: 8, overflow: 'hidden' }}>
                                 {loadingData ? (
                                     <View style={{ height: 50, justifyContent: 'center', alignItems: 'flex-start', paddingLeft: 16 }}>
-                                        <ActivityIndicator size="small" color="#f97316" />
+                                        <ActivityIndicator size="small" color={colors.primary} />
                                     </View>
                                 ) : (
                                     <Picker

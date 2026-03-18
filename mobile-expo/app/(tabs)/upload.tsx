@@ -1,15 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    ScrollView,
-    Alert,
-    Animated,
-    Image,
-    Modal
+    View, TouchableOpacity, ScrollView, Alert, Animated, Image, Modal
 } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { useRouter, useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useLayoutEffect } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -464,7 +457,7 @@ export default function UploadScreen() {
                     ) : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                             <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
-                            <TouchableOpacity onPress={requestCameraPermission} style={{ padding: 12, backgroundColor: '#f97316', borderRadius: 8 }}>
+                            <TouchableOpacity onPress={requestCameraPermission} style={{ padding: 12, backgroundColor: colors.primary, borderRadius: 8 }}>
                                 <Text style={{ color: '#fff', fontWeight: 'bold' }}>Grant Permission</Text>
                             </TouchableOpacity>
                         </View>
@@ -499,7 +492,7 @@ export default function UploadScreen() {
                                         else setMode('project');
                                     }}
                                     style={{
-                                        backgroundColor: '#f97316',
+                                        backgroundColor: colors.primary,
                                         paddingHorizontal: 24,
                                         paddingVertical: 12,
                                         borderRadius: 25,
@@ -528,7 +521,7 @@ export default function UploadScreen() {
                                         <View key={idx} style={{ marginRight: 12, position: 'relative' }}>
                                             {item.source === 'document' ? (
                                                 <View style={{ width: 60, height: 60, borderRadius: 8, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Feather name="file-text" size={24} color="#f97316" />
+                                                    <Feather name="file-text" size={24} color={colors.primary} />
                                                 </View>
                                             ) : (
                                                 <Image source={{ uri: item.asset.uri }} style={{ width: 60, height: 60, borderRadius: 8 }} />
@@ -573,7 +566,7 @@ export default function UploadScreen() {
                                     <View style={{
                                         width: 76, height: 76, borderRadius: 38,
                                         borderWidth: 4, borderColor: '#fff',
-                                        backgroundColor: isDocMode ? '#f97316' : '#ea8c0a', // Space between is orange
+                                        backgroundColor: isDocMode ? colors.primary : '#ea8c0a', // Space between is orange
                                         alignItems: 'center', justifyContent: 'center',
                                     }}>
                                         <View style={{
@@ -823,7 +816,7 @@ export default function UploadScreen() {
                                     <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 45, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
                                         <Text style={{ color: colors.textMuted }}>Cancel</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={handleCreateFolder} disabled={creatingFolder || !newFolderName.trim()} style={{ flex: 1, height: 45, borderRadius: 12, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                                    <TouchableOpacity onPress={handleCreateFolder} disabled={creatingFolder || !newFolderName.trim()} style={{ flex: 1, height: 45, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
                                         <Text style={{ color: '#fff', fontWeight: 'bold' }}>{creatingFolder ? 'Creating...' : 'Create'}</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -844,7 +837,7 @@ export default function UploadScreen() {
                 {mode === 'done' && (
                     <View style={{ alignItems: 'center', marginBottom: 30 }}>
                         <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                            <Feather name="check" size={40} color="#f97316" />
+                            <Feather name="check" size={40} color={colors.primary} />
                         </View>
                         <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8 }}>Done!</Text>
                         <Text style={{ fontSize: 14, color: colors.textMuted }}>Uploaded {doneCount} of {fileQueue.length} files.</Text>
@@ -864,7 +857,7 @@ export default function UploadScreen() {
                                 <Feather
                                     name={item.status === 'done' ? 'check-circle' : item.status === 'error' ? 'x-circle' : 'upload-cloud'}
                                     size={18}
-                                    color={item.status === 'done' ? '#22c55e' : item.status === 'error' ? '#ef4444' : '#f97316'}
+                                    color={item.status === 'done' ? '#22c55e' : item.status === 'error' ? '#ef4444' : colors.primary}
                                 />
                                 <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: colors.text }}>{item.asset.fileName || `file_${idx + 1}`}</Text>
                             </View>
@@ -872,7 +865,7 @@ export default function UploadScreen() {
                                 <Animated.View
                                     style={{
                                         height: 16, borderRadius: 8,
-                                        backgroundColor: item.status === 'error' ? '#ef4444' : item.status === 'done' ? '#22c55e' : '#f97316',
+                                        backgroundColor: item.status === 'error' ? '#ef4444' : item.status === 'done' ? '#22c55e' : colors.primary,
                                         width: item.status === 'done' ? '100%' : `${item.progress}%`,
                                     }}
                                 />
@@ -886,7 +879,7 @@ export default function UploadScreen() {
 
                 {mode === 'done' && (
                     <View style={{ flexDirection: 'column', gap: 12 }}>
-                        <TouchableOpacity onPress={reset} style={{ height: 50, borderRadius: 25, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                        <TouchableOpacity onPress={reset} style={{ height: 50, borderRadius: 25, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
                             <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Upload More</Text>
                         </TouchableOpacity>
 

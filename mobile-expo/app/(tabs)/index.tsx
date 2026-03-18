@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Platform, Image, KeyboardAvoidingView } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -218,7 +219,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 2 }}>
-                {`${((user as any).organization?.name || 'Apexis').charAt(0).toUpperCase() + ((user as any).organization?.name || 'Apexis').slice(1)}`}
+                {`${((user as any).organization?.name || 'APEXIS').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXIS').slice(1)}`}
               </Text>
               <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
                 {`Hi ${user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1)}, ${getTimeGreeting()} 👋`}
@@ -295,7 +296,7 @@ export default function DashboardScreen() {
                     width: 58,
                     height: 58,
                     borderRadius: 16,
-                    backgroundColor: project.color || '#f97316',
+                    backgroundColor: project.color || colors.primary,
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
@@ -353,16 +354,16 @@ export default function DashboardScreen() {
                     justifyContent: 'center',
                     borderWidth: 2,
                     borderStyle: 'dashed',
-                    borderColor: '#f97316',
+                    borderColor: colors.primary,
                   }}
                 >
-                  <Feather name="plus" size={24} color="#f97316" />
+                  <Feather name="plus" size={24} color={colors.primary} />
                 </View>
                 <Text
                   style={{
                     fontSize: 10,
                     fontWeight: '500',
-                    color: '#f97316',
+                    color: colors.primary,
                     textAlign: 'center',
                     lineHeight: 13,
                   }}

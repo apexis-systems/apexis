@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { Modal, View, TouchableOpacity, ScrollView } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Feather } from '@expo/vector-icons';
 
@@ -9,7 +10,7 @@ interface Props {
 }
 
 const videos = [
-    { title: 'Getting Started with Apexis', duration: '3:45', type: 'video' },
+    { title: 'Getting Started with APEXIS', duration: '3:45', type: 'video' },
     { title: 'Uploading Documents & Photos', duration: '2:30', type: 'video' },
     { title: 'Managing Project Permissions', duration: '4:10', type: 'video' },
     { title: 'Using the Snag List', duration: '3:00', type: 'video' },

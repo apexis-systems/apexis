@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getReports, triggerReport, type Report } from '@/services/reportService';
@@ -45,7 +46,7 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
     const formatDate = (d: string) =>
         new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
-    if (loading) return <ActivityIndicator color="#f97316" style={{ marginTop: 30 }} />;
+    if (loading) return <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />;
 
     return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
@@ -53,7 +54,7 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
                 <TouchableOpacity
                     onPress={handleGenerate}
                     disabled={generating}
-                    style={{ height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
+                    style={{ height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
                 >
                     {generating
                         ? <ActivityIndicator size="small" color="#fff" />
@@ -75,14 +76,14 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
                         {/* Header row */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 }}>
                             <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                                <Feather name="file-text" size={18} color="#f97316" />
+                                <Feather name="file-text" size={18} color={colors.primary} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>
                                     Daily Report — {formatDate(report.period_start)}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 3 }}>
-                                    <Text style={{ fontSize: 10, color: '#f97316' }}>📸 {report.photos_count} photos</Text>
+                                    <Text style={{ fontSize: 10, color: colors.primary }}>📸 {report.photos_count} photos</Text>
                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>📄 {report.docs_count} docs</Text>
                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>👁️ {report.releases_count} released</Text>
                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>💬 {report.comments_count}</Text>
@@ -126,7 +127,7 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
                                             <View style={{ marginTop: 8 }}>
                                                 <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginBottom: 4 }}>Released to Client</Text>
                                                 {report.summary.released_files.map((name, i) => (
-                                                    <Text key={i} style={{ fontSize: 10, color: '#f97316', marginBottom: 2 }}>• {name}</Text>
+                                                    <Text key={i} style={{ fontSize: 10, color: colors.primary, marginBottom: 2 }}>• {name}</Text>
                                                 ))}
                                             </View>
                                         )}

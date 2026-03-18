@@ -1,15 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    ScrollView,
-    KeyboardAvoidingView,
-    Platform,
-    ActivityIndicator,
-    Alert,
+    View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert
 } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -181,8 +174,8 @@ export default function SignUpScreen() {
                         >
                             <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>A</Text>
                         </View>
-                        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.text, letterSpacing: -0.5 }}>
-                            apexis
+                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.text, letterSpacing: 1 }}>
+                            APEXIS
                         </Text>
                         <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>
                             {step === 'onboarding' ? 'COMPLETE YOUR ACCOUNT' : 'CREATE ADMIN ACCOUNT'}

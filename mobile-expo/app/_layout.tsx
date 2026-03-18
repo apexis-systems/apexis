@@ -2,7 +2,13 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, TextInput } from 'react-native';
+import { Text } from '@/components/ui/AppText';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Prevent the splash screen from auto-hiding before asset loading is complete.
+SplashScreen.preventAutoHideAsync();
 
 // Suppress the non-critical expo-keep-awake warning from expo-camera in Expo Go
 LogBox.ignoreLogs([
@@ -18,9 +24,24 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
 
 function RootLayoutNav() {
-  const { isLoggedIn, isLoading, user } = useAuth();
+  const { isLoggedIn, isLoading: isAuthLoading, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  const [fontsLoaded, fontError] = useFonts({
+    'Angelica': require('../assets/fonts/Angelica-C.otf'),
+    'Montserrat': require('../assets/fonts/Montserrat-Regular.ttf'),
+    'Montserrat-Medium': require('../assets/fonts/Montserrat-Medium.ttf'),
+    'Montserrat-SemiBold': require('../assets/fonts/Montserrat-SemiBold.ttf'),
+    'Montserrat-Bold': require('../assets/fonts/Montserrat-Bold.ttf'),
+    'Montserrat-ExtraBold': require('../assets/fonts/Montserrat-ExtraBold.ttf'),
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
 
   useEffect(() => {
     if (isLoggedIn && user) {
@@ -30,9 +51,6 @@ function RootLayoutNav() {
 
   useEffect(() => {
     // Wait until initial API token profile fetch resolves
-    if (isLoading) return;
-
-    // Defer navigation by one tick so the Root Layout is fully mounted first
     const timer = setTimeout(() => {
       const inAuthGroup = segments[0] === '(auth)';
       const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup'; // Check if we are on signup page
@@ -45,9 +63,9 @@ function RootLayoutNav() {
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [isLoggedIn, isLoading, segments]);
+  }, [isLoggedIn, isAuthLoading, segments]);
 
-  if (isLoading) {
+  if (isAuthLoading || !fontsLoaded) {
     return null;
   }
 

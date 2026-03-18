@@ -10,7 +10,7 @@ interface HelpSupportDialogProps {
 }
 
 const videos = [
-  { title: 'Getting Started with Apexis', duration: '3:45' },
+  { title: 'Getting Started with APEXIS', duration: '3:45' },
   { title: 'Uploading Documents & Photos', duration: '2:30' },
   { title: 'Managing Project Permissions', duration: '4:10' },
   { title: 'Using the Snag List', duration: '3:00' },
@@ -46,7 +46,13 @@ const HelpSupportDialog = ({ open, onOpenChange }: HelpSupportDialogProps) => {
               <button key={i} className="flex w-full items-center gap-3 rounded-lg border border-border p-3 hover:bg-secondary/50 transition-colors text-left">
                 <PlayCircle className="h-8 w-8 text-accent shrink-0" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">{v.title}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {v.title.includes('APEXIS') ? (
+                      <>
+                        {v.title.split('APEXIS')[0]}<span className="font-angelica">APEXIS</span>{v.title.split('APEXIS')[1]}
+                      </>
+                    ) : v.title}
+                  </p>
                   <p className="text-xs text-muted-foreground">{v.duration}</p>
                 </div>
               </button>
@@ -58,7 +64,13 @@ const HelpSupportDialog = ({ open, onOpenChange }: HelpSupportDialogProps) => {
               <button key={i} className="flex w-full items-center gap-3 rounded-lg border border-border p-3 hover:bg-secondary/50 transition-colors text-left">
                 <Video className="h-8 w-8 text-destructive shrink-0" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">{v.title}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {v.title.includes('APEXIS') ? (
+                      <>
+                        {v.title.split('APEXIS')[0]}<span className="font-angelica">APEXIS</span>{v.title.split('APEXIS')[1]}
+                      </>
+                    ) : v.title}
+                  </p>
                   <p className="text-xs text-muted-foreground">YouTube · {v.duration}</p>
                 </div>
               </button>

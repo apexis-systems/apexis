@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated } from 'react-native';
+import { View, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -194,7 +195,7 @@ export default function ChatDetailScreen() {
             return (
                 <View style={{ alignItems: 'center', marginVertical: 12 }}>
                     <View style={{ backgroundColor: isDark ? colors.surface : '#FFF3E0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: isDark ? colors.border : '#FFE0B2' }}>
-                        <Text style={{ fontSize: 12, color: '#f97316', fontWeight: '500', textAlign: 'center' }}>
+                        <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '500', textAlign: 'center' }}>
                             {item.text}
                         </Text>
                     </View>
@@ -209,7 +210,7 @@ export default function ChatDetailScreen() {
             <View style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
                 <View style={{
                     maxWidth: '80%',
-                    backgroundColor: isMe ? '#f97316' : colors.surface,
+                    backgroundColor: isMe ? colors.primary : colors.surface,
                     borderWidth: isMe ? 0 : 1,
                     borderColor: colors.border,
                     padding: 12,
@@ -218,7 +219,7 @@ export default function ChatDetailScreen() {
                     borderBottomLeftRadius: isMe ? 16 : 4,
                 }}>
                     {!isMe && (
-                        <Text style={{ fontSize: 12, color: '#f97316', fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
+                        <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
                     )}
                     <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
                         {item.text}
@@ -248,9 +249,9 @@ export default function ChatDetailScreen() {
             {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 10, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <TouchableOpacity onPress={() => router.back()} style={{ padding: 8, flexDirection: 'row', alignItems: 'center' }}>
-                    <Feather name="chevron-left" size={28} color="#f97316" style={{ marginLeft: -8 }} />
+                    <Feather name="chevron-left" size={28} color={colors.primary} style={{ marginLeft: -8 }} />
                     {room?.type === 'group' ? (
-                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', marginLeft: 4 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 4 }}>
                             <Feather name="users" size={18} color="#fff" />
                         </View>
                     ) : (
@@ -277,10 +278,10 @@ export default function ChatDetailScreen() {
 
                 <View style={{ flexDirection: 'row', gap: 16, paddingRight: 8 }}>
                     <TouchableOpacity>
-                        <Feather name="video" size={22} color="#f97316" />
+                        <Feather name="video" size={22} color={colors.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity>
-                        <Feather name="phone" size={20} color="#f97316" />
+                        <Feather name="phone" size={20} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -293,7 +294,7 @@ export default function ChatDetailScreen() {
             >
                 {loading ? (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                        <ActivityIndicator size="large" color="#f97316" />
+                        <ActivityIndicator size="large" color={colors.primary} />
                     </View>
                 ) : (
                     <FlatList
@@ -310,7 +311,7 @@ export default function ChatDetailScreen() {
 
                 {typingUser && (
                     <Animated.View style={{ paddingHorizontal: 20, paddingVertical: 4, opacity: pulseAnim }}>
-                        <Text style={{ fontSize: 12, color: '#f97316', fontWeight: '600', fontStyle: 'italic' }}>
+                        <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', fontStyle: 'italic' }}>
                             {typingUser} is typing...
                         </Text>
                     </Animated.View>
@@ -350,7 +351,7 @@ export default function ChatDetailScreen() {
 
                     <TouchableOpacity
                         onPress={handleSend}
-                        style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}
+                        style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}
                     >
                         {message ? (
                             <Feather name="send" size={20} color="#fff" style={{ marginLeft: 2, marginTop: 2 }} />

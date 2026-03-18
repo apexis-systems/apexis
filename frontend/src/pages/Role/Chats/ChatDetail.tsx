@@ -177,13 +177,13 @@ export default function ChatDetail() {
             <div className="flex items-center gap-3 px-4 py-3 bg-card border-b border-border shrink-0">
                 <button
                     onClick={() => router.push(`/${role}/chats`)}
-                    className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-[#f97316]"
+                    className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-primary"
                 >
                     <ChevronLeft className="h-5 w-5" />
                 </button>
 
                 {room?.type === 'group' ? (
-                    <div className="w-9 h-9 rounded-full bg-[#f97316] flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0">
                         <Users className="h-4 w-4 text-white" />
                     </div>
                 ) : (
@@ -206,10 +206,10 @@ export default function ChatDetail() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-[#f97316]">
+                    <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-primary">
                         <Video className="h-5 w-5" />
                     </button>
-                    <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-[#f97316]">
+                    <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-primary">
                         <Phone className="h-4.5 w-4.5" />
                     </button>
                 </div>
@@ -234,12 +234,12 @@ export default function ChatDetail() {
                             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                                 <div
                                     className={`max-w-[75%] px-3.5 py-2.5 shadow-sm ${isMe
-                                        ? 'bg-[#f97316] text-white rounded-2xl rounded-br-sm'
+                                        ? 'bg-primary text-white rounded-2xl rounded-br-sm'
                                         : 'bg-card text-foreground border border-border rounded-2xl rounded-bl-sm'
                                         }`}
                                 >
                                     {!isMe && (
-                                        <p className="text-[#f97316] text-xs font-semibold mb-1">{msg.sender?.name || 'User'}</p>
+                                        <p className="text-primary text-xs font-semibold mb-1">{msg.sender?.name || 'User'}</p>
                                     )}
                                     <p className="text-sm leading-relaxed">{msg.text}</p>
                                     <div className={`flex items-center gap-1 mt-1 justify-end`}>
@@ -266,7 +266,7 @@ export default function ChatDetail() {
                 {/* Floating Typing Indicator */}
                 {typingUser && (
                     <div className="absolute bottom-3 left-5 z-20 pointer-events-none">
-                        <p className="text-[#f97316] text-[11px] font-semibold animate-pulse italic drop-shadow-sm">
+                        <p className="text-primary text-[11px] font-semibold animate-pulse italic drop-shadow-sm">
                             {typingUser} is typing...
                         </p>
                     </div>
@@ -310,7 +310,7 @@ export default function ChatDetail() {
 
                     <button
                         onClick={handleSend}
-                        className="w-11 h-11 rounded-full bg-[#f97316] flex items-center justify-center shrink-0 hover:bg-[#ea6c10] transition-colors shadow-md"
+                        className="w-11 h-11 rounded-full bg-primary flex items-center justify-center shrink-0 hover:bg-[#ea6c10] transition-colors shadow-md"
                     >
                         {message ? (
                             <Send className="h-4.5 w-4.5 text-white translate-x-0.5" />

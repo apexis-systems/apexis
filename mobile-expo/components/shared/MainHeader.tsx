@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Image, Modal, TextInput } from 'react-native';
+import { View, TouchableOpacity, Image, Modal, TextInput } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -71,7 +72,7 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                                 resizeMode="cover"
                             />
                         </View>
-                        <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>APEXIS</Text>
+                        <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, letterSpacing: 0.5 }}>APEXIS</Text>
                     </TouchableOpacity>
 
                     {showBack && (
@@ -165,7 +166,7 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                             )}
                         </View>
                         <TouchableOpacity onPress={handleCloseSearch}>
-                            <Text style={{ color: '#f97316', fontWeight: '700', fontSize: 14 }}>Cancel</Text>
+                            <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 14 }}>Cancel</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

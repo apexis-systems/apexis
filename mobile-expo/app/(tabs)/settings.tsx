@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -19,7 +20,7 @@ import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 // ];
 
 const roleBadgeColor: Record<UserRole, { bg: string; text: string }> = {
-    admin: { bg: '#f97316', text: '#fff' },
+    admin: { bg: '#f97415', text: '#fff' },
     contributor: { bg: '#3b3b3b', text: '#fff' },
     client: { bg: '#1e1e1e', text: '#888' },
     superadmin: { bg: '#ef4444', text: '#fff' },

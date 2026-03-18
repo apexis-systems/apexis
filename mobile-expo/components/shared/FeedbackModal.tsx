@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { Modal, View, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Feather } from '@expo/vector-icons';
 

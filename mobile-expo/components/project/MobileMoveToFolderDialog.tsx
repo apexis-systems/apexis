@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, bulkUpdateFolders } from '@/services/folderService';
@@ -90,11 +91,11 @@ export default function MobileMoveToFolderDialog({
                             onPress={() => setTargetFolder(folder.id)}
                             style={[
                                 styles.folderItem,
-                                isSelected && { backgroundColor: '#f97316' },
+                                isSelected && { backgroundColor: colors.primary },
                                 { paddingLeft: depth * 20 + 12 }
                             ]}
                         >
-                            <Feather name="folder" size={16} color={isSelected ? "#fff" : "#f97316"} />
+                            <Feather name="folder" size={16} color={isSelected ? "#fff" : colors.primary} />
                             <Text style={[styles.folderName, { color: isSelected ? "#fff" : colors.text }]}>{folder.name}</Text>
                         </TouchableOpacity>
                         {renderFolderTree(folder.id, depth + 1)}
@@ -119,10 +120,10 @@ export default function MobileMoveToFolderDialog({
                             onPress={() => setTargetFolder(null)}
                             style={[
                                 styles.folderItem,
-                                targetFolder === null && { backgroundColor: '#f97316' }
+                                targetFolder === null && { backgroundColor: colors.primary }
                             ]}
                         >
-                            <Feather name="folder" size={16} color={targetFolder === null ? "#fff" : "#f97316"} />
+                            <Feather name="folder" size={16} color={targetFolder === null ? "#fff" : colors.primary} />
                             <Text style={[styles.folderName, { color: targetFolder === null ? "#fff" : colors.text }]}>Root Folder</Text>
                         </TouchableOpacity>
                         {renderFolderTree(null)}
@@ -192,6 +193,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     moveButton: {
-        backgroundColor: '#f97316',
+        backgroundColor: '#f97415',
     }
 });

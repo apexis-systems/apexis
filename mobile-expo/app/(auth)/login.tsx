@@ -1,15 +1,7 @@
 import { useState } from 'react';
-import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    ScrollView,
-    KeyboardAvoidingView,
-    Platform,
-    ActivityIndicator,
-    Image,
-} from 'react-native';
+import { 
+    View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -94,8 +86,8 @@ export default function LoginScreen() {
                                 resizeMode="contain"
                             />
                         </View>
-                        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, letterSpacing: -0.5, fontFamily: Platform.OS === 'ios' ? 'Angelica' : 'sans-serif' }}>
-                            apexis
+                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary, letterSpacing: 1 }}>
+                            APEXIS
                         </Text>
                         <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>
                             RECORD · REPORT · RELEASE

@@ -207,7 +207,7 @@ export default function ChatList() {
                                 {/* Avatar */}
                                 <div className="relative shrink-0">
                                     {isGroup ? (
-                                        <div className="w-12 h-12 rounded-full bg-[#f97316] flex items-center justify-center">
+                                        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
                                             <Users className="h-5 w-5 text-white" />
                                         </div>
                                     ) : (
@@ -232,7 +232,7 @@ export default function ChatList() {
                                     </div>
                                     <div className="flex items-center justify-between gap-2">
                                         {typingRooms[String(chat.id)] ? (
-                                            <p className="text-xs truncate text-[#f97316] italic font-medium animate-pulse">
+                                            <p className="text-xs truncate text-primary italic font-medium animate-pulse">
                                                 {typingRooms[String(chat.id)]} is typing...
                                             </p>
                                         ) : (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Share, ScrollView } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
@@ -230,7 +231,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 flex: 1,
                                 height: 38,
                                 borderRadius: 10,
-                                backgroundColor: '#f97316',
+                                backgroundColor: colors.primary,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 flexDirection: 'row',
@@ -266,12 +267,12 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                             <Feather name="arrow-left" size={16} color={colors.text} />
                         </TouchableOpacity>
                     )}
-                    <Feather name="folder" size={16} color="#f97316" />
+                    <Feather name="folder" size={16} color={colors.primary} />
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <TouchableOpacity onPress={(() => setSelectedFolder(null))}>
                                 <View style={{ paddingVertical: 4 }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '600', color: !selectedFolder ? '#f97316' : colors.textMuted }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: !selectedFolder ? colors.primary : colors.textMuted }}>
                                         {project?.name}
                                     </Text>
                                 </View>
@@ -281,7 +282,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                     <Text style={{ fontSize: 12, color: colors.textMuted, marginHorizontal: 4 }}>/</Text>
                                     <TouchableOpacity onPress={(() => setSelectedFolder(b.id))}>
                                         <View style={{ paddingVertical: 4 }}>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: selectedFolder === b.id ? '#f97316' : colors.textMuted }}>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: selectedFolder === b.id ? colors.primary : colors.textMuted }}>
                                                 {b.name}
                                             </Text>
                                         </View>
@@ -321,7 +322,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                     borderRadius: 16,
                                     backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
                                     borderWidth: 1,
-                                    borderColor: isSelected ? '#f97316' : colors.border,
+                                    borderColor: isSelected ? colors.primary : colors.border,
                                     padding: 12,
                                     shadowColor: '#000',
                                     shadowOffset: { width: 0, height: 2 },
@@ -331,10 +332,10 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 }}
                             >
                                 <View style={{ marginBottom: 8 }}>
-                                    <Feather name="folder" size={36} color="#f97316" />
+                                    <Feather name="folder" size={36} color={colors.primary} />
                                 </View>
                                 {isSelected && (
-                                    <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#f97316', borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+                                    <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
                                         <Feather name="check" size={10} color="#fff" />
                                     </View>
                                 )}
@@ -345,7 +346,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         onPress={(e) => { e.stopPropagation(); toggleFolderVis(folder); }}
                                         style={{ position: 'absolute', bottom: 6, right: 6, padding: 4 }}
                                     >
-                                        <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                        <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? colors.primary : colors.textMuted} />
                                     </TouchableOpacity>
                                 )}
                             </TouchableOpacity>
@@ -379,7 +380,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         borderRadius: 10,
                                         overflow: 'hidden',
                                         borderWidth: 1,
-                                        borderColor: isSelected ? '#f97316' : colors.border,
+                                        borderColor: isSelected ? colors.primary : colors.border,
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         padding: 8
@@ -387,7 +388,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 >
                                     <Feather name="file-text" size={32} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
                                     {isSelected && (
-                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#f97316', borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
@@ -400,7 +401,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
                                                     <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, padding: 4 }}>
-                                                        <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                                        <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={doc.client_visible !== false ? colors.primary : colors.textMuted} />
                                                     </TouchableOpacity>
                                                 )}
                                                 {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
@@ -429,7 +430,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         borderRadius: 10,
                                         backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
                                         borderWidth: 1,
-                                        borderColor: isSelected ? '#f97316' : colors.border,
+                                        borderColor: isSelected ? colors.primary : colors.border,
                                         padding: 10,
                                     }}
                                 >
@@ -446,7 +447,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         <Feather name="file-text" size={16} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} />
                                     </View>
                                     {isSelected && (
-                                        <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: '#f97316', borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                        <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
@@ -462,7 +463,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
                                                     <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ padding: 4 }}>
-                                                        <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? '#f97316' : colors.textMuted} />
+                                                        <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? colors.primary : colors.textMuted} />
                                                     </TouchableOpacity>
                                                 )}
                                                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && String(doc.created_by) === String(user.id) && (
@@ -503,7 +504,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                             <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
                                 <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={handleCreateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                            <TouchableOpacity onPress={handleCreateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
                                 <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Creating…' : 'Create'}</Text>
                             </TouchableOpacity>
                         </View>
@@ -542,18 +543,18 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                     </View>
                     <View style={{ flexDirection: 'row', gap: 20 }}>
                         <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
-                            <Feather name="share-2" size={20} color="#f97316" />
+                            <Feather name="share-2" size={20} color={colors.primary} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
-                            <Feather name="move" size={20} color="#f97316" />
+                            <Feather name="move" size={20} color={colors.primary} />
                         </TouchableOpacity>
                         {user.role === 'admin' && (
                             <View style={{ flexDirection: 'row', gap: 20 }}>
                                 <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
-                                    <Feather name="eye" size={20} color="#f97316" />
+                                    <Feather name="eye" size={20} color={colors.primary} />
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
-                                    <Feather name="eye-off" size={20} color="#f97316" />
+                                    <Feather name="eye-off" size={20} color={colors.primary} />
                                 </TouchableOpacity>
                             </View>
                         )}

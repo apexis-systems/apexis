@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { Project, UserRole } from '@/types';
@@ -148,7 +149,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {/* Quick Actions */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                     {[
-                        { id: 'reports', icon: 'file-text', label: 'Reports', color: '#f97316', sub: `${dailyReports.length + weeklyReports.length} total` },
+                        { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
                         { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
                         { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
                     ].map((action) => (
@@ -191,7 +192,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 6,
-                            backgroundColor: '#f97316',
+                            backgroundColor: colors.primary,
                             paddingHorizontal: 16,
                             paddingVertical: 10,
                             borderRadius: 12
@@ -212,13 +213,13 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         alignItems: 'center',
                         marginBottom: 20
                     }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#f97316', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                            Generated Via Apexis — Construction Communication Platform
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            Generated Via APEXIS — Construction Communication Platform
                         </Text>
                     </View>
 
                     {reportsLoading ? (
-                        <ActivityIndicator size="small" color="#f97316" style={{ marginVertical: 12 }} />
+                        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
                     ) : (
                         <>
                             {/* Daily Site Reports */}
@@ -280,7 +281,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                 }}
                                             >
                                                 <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(249,115,22,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Feather name="file-text" size={20} color="#f97316" />
+                                                    <Feather name="file-text" size={20} color={colors.primary} />
                                                 </View>
                                                 <View style={{ flex: 1 }}>
                                                     <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>

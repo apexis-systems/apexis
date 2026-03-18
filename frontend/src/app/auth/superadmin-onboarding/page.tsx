@@ -107,7 +107,7 @@ const OnboardingContent = () => {
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
                     <ShieldCheck className="h-10 w-10 text-primary-foreground" />
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">apexis</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground font-angelica uppercase">APEXIS</h1>
                 <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground">COMPLETE YOUR SETUP</p>
             </div>
 
@@ -172,7 +172,7 @@ const OnboardingContent = () => {
 
                     <div className="mt-8 text-center">
                         <p className="text-xs text-muted-foreground italic">
-                            By completing your setup, you agree to join the Apexis platform as a SuperAdmin.
+                            By completing your setup, you agree to join the <span className="font-angelica uppercase tracking-tight">APEXIS</span> platform as a SuperAdmin.
                         </p>
                     </div>
                 </CardContent>

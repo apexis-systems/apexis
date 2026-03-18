@@ -8,7 +8,6 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useTranslation } from 'react-i18next';
 
-const ACCENT = '#f97316';
 const INACTIVE = '#666666';
 
 export default function TabLayout() {
@@ -23,7 +22,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: ACCENT,
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: INACTIVE,
         headerShown: false,
         tabBarButton: HapticTab,
@@ -37,8 +36,9 @@ export default function TabLayout() {
           height: Platform.OS === 'android' ? 60 + insets.bottom : 82,
         },
         tabBarLabelStyle: {
+          fontFamily: 'Montserrat', // or Montserrat-Medium if they prefer
           fontSize: 9,
-          fontWeight: '500',
+          // Removed fontWeight: '500' to prevent Android fallback
           marginTop: 2,
         },
       }}
@@ -68,14 +68,14 @@ export default function TabLayout() {
             // Remove margin here to handle it in icon style
           },
           tabBarIconStyle: {
-            backgroundColor: ACCENT,
+            backgroundColor: colors.primary,
             borderRadius: 28,
             width: 56,
             height: 56,
             alignItems: 'center',
             justifyContent: 'center',
             marginTop: -30, // Float upwards
-            shadowColor: ACCENT,
+            shadowColor: colors.primary,
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.3,
             shadowRadius: 5,
@@ -90,7 +90,7 @@ export default function TabLayout() {
           title: 'Chat',
           tabBarIcon: ({ color }) => <Feather name="message-circle" size={22} color={color} />,
           tabBarBadge: unreadChatCount > 0 ? unreadChatCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: ACCENT },
+          tabBarBadgeStyle: { backgroundColor: colors.primary },
         }}
       />
       <Tabs.Screen
@@ -100,7 +100,7 @@ export default function TabLayout() {
           title: 'Notifications',
           tabBarIcon: ({ color }) => <Feather name="bell" size={22} color={color} />,
           tabBarBadge: unreadNotificationCount > 0 ? unreadNotificationCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: ACCENT },
+          tabBarBadgeStyle: { backgroundColor: colors.primary },
         }}
       />
       <Tabs.Screen

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -27,7 +28,7 @@ export default function ScanScreen() {
     if (!permission) {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-                <ActivityIndicator size="large" color="#f97316" />
+                <ActivityIndicator size="large" color={colors.primary} />
             </SafeAreaView>
         );
     }
@@ -46,7 +47,7 @@ export default function ScanScreen() {
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 8,
-                            backgroundColor: '#f97316',
+                            backgroundColor: colors.primary,
                             paddingHorizontal: 20,
                             paddingVertical: 12,
                             borderRadius: 10,
@@ -167,7 +168,7 @@ export default function ScanScreen() {
                         position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
                         justifyContent: 'center', alignItems: 'center', zIndex: 20,
                     }}>
-                        <ActivityIndicator size="large" color="#f97316" />
+                        <ActivityIndicator size="large" color={colors.primary} />
                         <Text style={{ color: '#fff', marginTop: 12, fontSize: 14, fontWeight: '600' }}>
                             {processingStep === 'capturing' ? 'Capturing...' : '✦ Enhancing document...'}
                         </Text>
@@ -198,7 +199,7 @@ export default function ScanScreen() {
                             borderRadius: 36,
                             backgroundColor: 'transparent',
                             borderWidth: 4,
-                            borderColor: isProcessing ? '#f97316' : '#fff',
+                            borderColor: isProcessing ? colors.primary : '#fff',
                             alignItems: 'center',
                             justifyContent: 'center',
                         }}
@@ -207,7 +208,7 @@ export default function ScanScreen() {
                             width: 56,
                             height: 56,
                             borderRadius: 28,
-                            backgroundColor: isProcessing ? '#f97316' : '#fff',
+                            backgroundColor: isProcessing ? colors.primary : '#fff',
                         }} />
                     </TouchableOpacity>
 

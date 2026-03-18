@@ -1,8 +1,7 @@
 import { useState, useRef } from 'react';
-import {
-    View, Text, TouchableOpacity, TextInput, ScrollView,
-    Image, ActivityIndicator, Alert, Platform,
-} from 'react-native';
+import { 
+    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform, } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -205,7 +204,7 @@ export default function SnagCreateScreen() {
                 ) : (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                         <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
-                        <TouchableOpacity onPress={requestCameraPermission} style={{ padding: 12, backgroundColor: '#f97316', borderRadius: 8 }}>
+                        <TouchableOpacity onPress={requestCameraPermission} style={{ padding: 12, backgroundColor: colors.primary, borderRadius: 8 }}>
                             <Text style={{ color: '#fff', fontWeight: 'bold' }}>Grant Permission</Text>
                         </TouchableOpacity>
                     </View>
@@ -289,7 +288,7 @@ export default function SnagCreateScreen() {
                     disabled={submitting || !title.trim() || !capturedPhoto || !assigneeId}
                     style={{
                         height: 52, borderRadius: 26, marginBottom: 50,
-                        backgroundColor: (title.trim() && capturedPhoto && assigneeId) ? '#f97316' : colors.border,
+                        backgroundColor: (title.trim() && capturedPhoto && assigneeId) ? colors.primary : colors.border,
                         alignItems: 'center', justifyContent: 'center',
                     }}
                 >
@@ -320,7 +319,7 @@ export default function SnagCreateScreen() {
                                         </Text>
                                         <Text style={{ fontSize: 10, color: colors.textMuted }}>{a.email}</Text>
                                     </View>
-                                    {assigneeId === a.id && <Feather name="check" size={16} color="#f97316" />}
+                                    {assigneeId === a.id && <Feather name="check" size={16} color={colors.primary} />}
                                 </TouchableOpacity>
                             ))}
                             {assignees.length === 0 && (

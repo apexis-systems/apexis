@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
-    View, Text, TouchableOpacity, Alert, ActivityIndicator,
-    Modal, Share, Platform,
+    View, TouchableOpacity, Alert, ActivityIndicator, Modal, Share, Platform,
 } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { Feather } from '@expo/vector-icons';
@@ -125,7 +125,7 @@ export default function ProjectManuals({ project }: Props) {
             {isAdmin && (
                 <TouchableOpacity
                     onPress={() => setShowUpload(true)}
-                    style={{ height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
+                    style={{ height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
                 >
                     <Feather name="upload" size={13} color="#fff" />
                     <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Manual / SOP</Text>
@@ -134,7 +134,7 @@ export default function ProjectManuals({ project }: Props) {
 
             {/* List */}
             {loading ? (
-                <ActivityIndicator color="#f97316" style={{ marginTop: 20 }} />
+                <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
             ) : (
                 <View style={{ gap: 6 }}>
                     {items.map((item) => (
@@ -144,7 +144,7 @@ export default function ProjectManuals({ project }: Props) {
                         >
                             {/* Icon */}
                             <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: 'rgba(249,115,22,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                                <Feather name="book-open" size={16} color="#f97316" />
+                                <Feather name="book-open" size={16} color={colors.primary} />
                             </View>
 
                             {/* Info */}
@@ -210,12 +210,12 @@ export default function ProjectManuals({ project }: Props) {
                                     onPress={() => setSelectedType(opt.value)}
                                     style={{
                                         flex: 1, height: 38, borderRadius: 10, borderWidth: 2,
-                                        borderColor: selectedType === opt.value ? '#f97316' : colors.border,
+                                        borderColor: selectedType === opt.value ? colors.primary : colors.border,
                                         backgroundColor: selectedType === opt.value ? 'rgba(249,115,22,0.1)' : colors.background,
                                         alignItems: 'center', justifyContent: 'center',
                                     }}
                                 >
-                                    <Text style={{ fontSize: 12, fontWeight: '600', color: selectedType === opt.value ? '#f97316' : colors.textMuted }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: selectedType === opt.value ? colors.primary : colors.textMuted }}>
                                         {opt.label}
                                     </Text>
                                 </TouchableOpacity>
@@ -227,13 +227,13 @@ export default function ProjectManuals({ project }: Props) {
                             onPress={pickFile}
                             style={{
                                 height: 80, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed',
-                                borderColor: pickedFile ? '#f97316' : colors.border,
+                                borderColor: pickedFile ? colors.primary : colors.border,
                                 alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16,
                                 backgroundColor: pickedFile ? 'rgba(249,115,22,0.05)' : 'transparent',
                             }}
                         >
-                            <Feather name={pickedFile ? 'file-text' : 'file-plus'} size={22} color={pickedFile ? '#f97316' : colors.textMuted} />
-                            <Text style={{ fontSize: 11, color: pickedFile ? '#f97316' : colors.textMuted, textAlign: 'center' }}>
+                            <Feather name={pickedFile ? 'file-text' : 'file-plus'} size={22} color={pickedFile ? colors.primary : colors.textMuted} />
+                            <Text style={{ fontSize: 11, color: pickedFile ? colors.primary : colors.textMuted, textAlign: 'center' }}>
                                 {pickedFile ? pickedFile.name : 'Tap to select PDF / Word / Excel'}
                             </Text>
                             {pickedFile && (
@@ -254,7 +254,7 @@ export default function ProjectManuals({ project }: Props) {
                             <TouchableOpacity
                                 onPress={handleUpload}
                                 disabled={submitting || !pickedFile}
-                                style={{ flex: 1, height: 42, borderRadius: 10, backgroundColor: submitting || !pickedFile ? '#f9731680' : '#f97316', alignItems: 'center', justifyContent: 'center' }}
+                                style={{ flex: 1, height: 42, borderRadius: 10, backgroundColor: submitting || !pickedFile ? colors.primary + '80' : colors.primary, alignItems: 'center', justifyContent: 'center' }}
                             >
                                 {submitting
                                     ? <ActivityIndicator size="small" color="#fff" />
