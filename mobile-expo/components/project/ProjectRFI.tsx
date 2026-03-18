@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, TouchableOpacity, FlatList } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, TouchableOpacity, FlatList, BackHandler } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useFocusEffect } from 'expo-router';
 import { Project, User } from '@/types';
 
 interface RFIItem {
@@ -52,6 +53,21 @@ export default function ProjectRFI({ project, user }: Props) {
 
   const filteredRfis = rfis.filter(r => statusFilter === 'all' || r.status === statusFilter);
 
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (statusFilter !== 'all') {
+          setStatusFilter('all');
+          return true;
+        }
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [statusFilter])
+  );
+
   const renderRFI = ({ item }: { item: RFIItem }) => {
     const config = statusConfig[item.status];
     return (
@@ -75,11 +91,11 @@ export default function ProjectRFI({ project, user }: Props) {
               </View>
             </View>
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>{item.description}</Text>
-            
+
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{item.createdBy.charAt(0)}</Text>
+                  <Text style={{ fontSize: 8, color: colors.textMuted }}>{item.createdBy.charAt(0)}</Text>
                 </View>
                 <Text style={{ fontSize: 10, color: colors.textMuted }}>by {item.createdBy}</Text>
               </View>

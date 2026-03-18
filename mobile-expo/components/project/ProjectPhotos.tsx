@@ -1,5 +1,5 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share, Image, FlatList, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform
+    View, TouchableOpacity, Alert, Modal, Share, Image, FlatList, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
@@ -150,6 +150,29 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     };
 
     const closeViewer = () => setViewerOpen(false);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (viewerOpen) {
+                    closeViewer();
+                    return true;
+                }
+                if (isSelectionMode) {
+                    clearSelection();
+                    return true;
+                }
+                if (selectedFolder) {
+                    goBack();
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [viewerOpen, isSelectionMode, selectedFolder, goBack])
+    );
 
     const goNext = () => {
         const next = Math.min(viewerIndex + 1, visiblePhotos.length - 1);

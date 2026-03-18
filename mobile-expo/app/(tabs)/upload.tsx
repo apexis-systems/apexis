@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-    View, TouchableOpacity, ScrollView, Alert, Animated, Image, Modal
+    View, TouchableOpacity, ScrollView, Alert, Animated, Image, Modal, BackHandler
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { useRouter, useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
@@ -387,7 +387,7 @@ export default function UploadScreen() {
         }
     };
 
-    const handleClose = () => {
+    const handleClose = useCallback(() => {
         // Always reset file queue so stale photos don't persist when upload tab is re-visited
         const snapshotProject = selectedProject;
         const snapshotFolder = selectedFolder;
@@ -420,7 +420,32 @@ export default function UploadScreen() {
         } else {
             router.push('/');
         }
-    };
+    }, [selectedProject, selectedFolder, isDocMode, mode, params.projectId, params.folderId, router]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                const close = () => handleClose();
+
+                if (fileQueue.length > 0) {
+                    Alert.alert(
+                        'Discard?',
+                        'Are you sure you want to discard your selections?',
+                        [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Discard', style: 'destructive', onPress: close }
+                        ]
+                    );
+                } else {
+                    close();
+                }
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [handleClose, fileQueue.length])
+    );
 
     // ── RENDER ──────────────────────────────────────────────────────────────
 

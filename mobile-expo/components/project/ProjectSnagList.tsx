@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
-    View, TouchableOpacity, Modal, ScrollView, Image, ActivityIndicator, Alert, Platform
+    View, TouchableOpacity, Modal, ScrollView, Image, ActivityIndicator, Alert, Platform, BackHandler
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,7 +52,18 @@ export default function ProjectSnagList({ project }: Props) {
                     .catch(e => console.error('fetchSnags error', e))
                     .finally(() => setLoading(false));
             }
-        }, [projectId])
+
+            const onBackPress = () => {
+                if (viewPhoto) {
+                    setViewPhoto(null);
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [projectId, viewPhoto])
     );
 
     // ── Status cycle ───────────────────────────────────────────────────────────

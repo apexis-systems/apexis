@@ -1,9 +1,10 @@
-import { View, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, ScrollView, BackHandler } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getReports, triggerReport, type Report } from '@/services/reportService';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 
 interface Props {
     project: any;
@@ -30,6 +31,21 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
     };
 
     useEffect(() => { if (project?.id) fetchReports(); }, [project?.id]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (expanded !== null) {
+                    setExpanded(null);
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [expanded])
+    );
 
     const handleGenerate = async () => {
         setGenerating(true);

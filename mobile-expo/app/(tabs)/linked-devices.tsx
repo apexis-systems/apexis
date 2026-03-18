@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, Alert, Platform, ActivityIndicator, BackHandler } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
@@ -27,6 +27,14 @@ export default function LinkedDevices() {
                 requestPermission();
             }
             fetchSessions();
+
+            const onBackPress = () => {
+                router.push('/(tabs)/settings');
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
         }, [permission])
     );
 

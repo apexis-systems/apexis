@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler } from 'react-native';
 import { Text } from '@/components/ui/AppText';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,6 +48,22 @@ export default function ProjectWorkspaceScreen() {
         },
     });
     const panHandlers = ['reports', 'snags', 'sops'].includes(activeTab) ? panResponder.panHandlers : {};
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (activeTab !== 'overview') {
+                    setActiveTab('overview');
+                    return true;
+                }
+                router.push('/(tabs)');
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [activeTab])
+    );
 
     useEffect(() => {
         if (tab && ['overview', 'documents', 'photos', 'rfi', 'reports', 'snags', 'sops'].includes(tab)) {

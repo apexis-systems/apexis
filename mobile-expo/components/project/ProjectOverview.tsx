@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
@@ -6,7 +6,8 @@ import { Project, UserRole } from '@/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import EditProjectModal from './EditProjectModal';
 import { getSnags } from '@/services/snagService';
 
@@ -99,6 +100,21 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             })
             .catch(() => { });
     }, [projectId]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (isEditModalOpen) {
+                    setIsEditModalOpen(false);
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [isEditModalOpen])
+    );
 
     const handleCopy = async (text: string, id: string) => {
         if (!text) return;

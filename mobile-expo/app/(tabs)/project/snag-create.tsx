@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
-import { 
-    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform, } from 'react-native';
+import {
+    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform,
+} from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
@@ -12,7 +13,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSnag, getAssignees, Assignee } from '@/services/snagService';
 import { useEffect, useCallback, useLayoutEffect } from 'react';
-import { Modal } from 'react-native';
+import { Modal, BackHandler } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 
 type Step = 'camera' | 'details';
@@ -45,6 +46,7 @@ export default function SnagCreateScreen() {
         }
     }, [projectId]);
 
+
     useLayoutEffect(() => {
         navigation.setOptions({
             tabBarStyle: { display: 'none' },
@@ -64,7 +66,7 @@ export default function SnagCreateScreen() {
         setStep('camera');
     };
 
-    const handleBack = () => {
+    const handleBack = useCallback(() => {
         const goBack = () => {
             resetState();
             if (projectId) {
@@ -86,7 +88,19 @@ export default function SnagCreateScreen() {
         } else {
             goBack();
         }
-    };
+    }, [capturedPhoto, title, projectId, router]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                handleBack();
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [handleBack])
+    );
 
     const capturePhoto = async () => {
         if (!cameraRef.current || isCapturing) return;

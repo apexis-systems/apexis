@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { View, TouchableOpacity, Alert, Platform, ActivityIndicator, TextInput as RNTextInput, KeyboardAvoidingView, ScrollView, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { useState, useCallback } from 'react';
+import { View, TouchableOpacity, Alert, Platform, ActivityIndicator, TextInput as RNTextInput, KeyboardAvoidingView, ScrollView, TouchableWithoutFeedback, Keyboard, BackHandler } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { changePassword } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -19,6 +19,18 @@ export default function ChangePasswordScreen() {
     const [showCurrent, setShowCurrent] = useState(false);
     const [showNew, setShowNew] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                router.push('/(tabs)/settings');
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [])
+    );
 
     const handleChangePassword = async () => {
         if (!currentPassword || !newPassword || !confirmPassword) {

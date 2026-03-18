@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
@@ -70,11 +70,30 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible !== false) : currentFolderDocs;
     const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
-    const goBack = () => {
+    const goBack = useCallback(() => {
         if (!selectedFolder) return;
         const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
-    };
+    }, [selectedFolder, currentFolder]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (isSelectionMode) {
+                    clearSelection();
+                    return true;
+                }
+                if (selectedFolder) {
+                    goBack();
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [isSelectionMode, selectedFolder, goBack])
+    );
 
     const toggleDocVisibility = async (doc: any) => {
         try {
