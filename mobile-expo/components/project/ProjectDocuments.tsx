@@ -8,7 +8,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 
@@ -125,6 +125,16 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
             Alert.alert('Updated', `Document marked ${!doc.client_visible ? 'Visible' : 'Hidden'} for clients`);
         } catch (e) {
             Alert.alert('Error', 'Failed to toggle visibility');
+        }
+    };
+
+    const toggleDocDoNotFollow = async (doc: any) => {
+        try {
+            await toggleDoNotFollow(doc.id, !doc.do_not_follow);
+            setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, do_not_follow: !doc.do_not_follow } : d)));
+            Alert.alert('Updated', `Document ${!doc.do_not_follow ? 'marked' : 'unmarked'} as 'Do Not Follow'`);
+        } catch (e) {
+            Alert.alert('Error', 'Failed to toggle Do Not Follow');
         }
     };
 
@@ -248,6 +258,22 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
             clearSelection();
         } catch (e) {
             Alert.alert("Error", "Failed to update visibility");
+        }
+    };
+
+    const handleBulkDoNotFollow = async (value: boolean) => {
+        try {
+            if (selectedFiles.size > 0) {
+                await bulkUpdateFiles({ ids: Array.from(selectedFiles), do_not_follow: value });
+                Alert.alert("Success", "'Do Not Follow' status updated");
+                // Refresh
+                const data = await getProjectFiles(project.id);
+                if (data.folderData) setFolders(data.folderData);
+                if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+                clearSelection();
+            }
+        } catch (e) {
+            Alert.alert("Error", "Failed to update 'Do Not Follow' status");
         }
     };
 
@@ -452,30 +478,53 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 >
                                     <Feather name="file-text" size={32} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
                                     {isSelected && (
-                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+                                        <View style={{ position: 'absolute', top: 4, left: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
                                     <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: colors.text, textAlign: 'center' }}>{doc.file_name}</Text>
-                                    <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 4 }}>
+                                    <View style={{ position: 'absolute', top: 2, right: 2, flexDirection: 'column', gap: 2, zIndex: 30 }}>
                                         {!isSelectionMode && (
                                             <>
-                                                <TouchableOpacity onPress={(e) => { e.stopPropagation(); handleShare(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, padding: 4 }}>
-                                                    <Feather name="share-2" size={12} color={colors.text} />
+                                                <TouchableOpacity onPress={(e) => { e.stopPropagation(); handleShare(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
+                                                    <Feather name="share-2" size={9} color="#fff" />
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
-                                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, padding: 4 }}>
-                                                        <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={doc.client_visible !== false ? colors.primary : colors.textMuted} />
-                                                    </TouchableOpacity>
+                                                    <>
+                                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
+                                                            <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={9} color={doc.client_visible !== false ? colors.primary : "#fff"} />
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
+                                                            <Feather name="shield" size={9} color={doc.do_not_follow ? '#ef4444' : "#fff"} />
+                                                        </TouchableOpacity>
+                                                    </>
                                                 )}
                                                 {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
-                                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} style={{ backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, padding: 4 }}>
-                                                        <Feather name="trash-2" size={12} color="#ef4444" />
+                                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
+                                                        <Feather name="trash-2" size={9} color="#ef4444" />
                                                     </TouchableOpacity>
                                                 )}
                                             </>
                                         )}
                                     </View>
+                                    {doc.do_not_follow && (
+                                        <View style={{
+                                            position: 'absolute',
+                                            top: '30%',
+                                            left: '20%',
+                                            right: '20%',
+                                            backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                                            borderRadius: 4,
+                                            paddingHorizontal: 4,
+                                            paddingVertical: 2,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            zIndex: 20,
+                                            transform: [{ rotate: '-10deg' }]
+                                        }}>
+                                            <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
+                                        </View>
+                                    )}
                                 </TouchableOpacity>
                             );
                         } else {
@@ -515,20 +564,33 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
-                                    <View style={{ flex: 1 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text }}>{doc.file_name}</Text>
+                                    <View style={{ flex: 1, marginRight: 4 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text, flexShrink: 1 }}>{doc.file_name}</Text>
+                                            {doc.do_not_follow && (
+                                                <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                                    <Feather name="shield" size={8} color="#ef4444" />
+                                                    <Text style={{ fontSize: 7, fontWeight: '800', color: '#ef4444' }}>DNF</Text>
+                                                </View>
+                                            )}
+                                        </View>
                                         <Text style={{ fontSize: 9, color: colors.textMuted }}>{doc.file_size_mb} MB</Text>
                                     </View>
-                                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
                                         {!isSelectionMode && (
                                             <>
                                                 <TouchableOpacity onPress={(e) => { e.stopPropagation(); handleShare(doc); }} style={{ padding: 4 }}>
                                                     <Feather name="share-2" size={14} color="#666" />
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
-                                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ padding: 4 }}>
-                                                        <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? colors.primary : colors.textMuted} />
-                                                    </TouchableOpacity>
+                                                    <>
+                                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ padding: 4 }}>
+                                                            <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? colors.primary : colors.textMuted} />
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} style={{ padding: 4 }}>
+                                                            <Feather name="shield" size={14} color={doc.do_not_follow ? '#ef4444' : colors.textMuted} />
+                                                        </TouchableOpacity>
+                                                    </>
                                                 )}
                                                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && String(doc.created_by) === String(user.id) && (
                                                     <TouchableOpacity onPress={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} style={{ padding: 4 }}>
@@ -605,24 +667,37 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                         </TouchableOpacity>
                         <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{selectedFolders.size + selectedFiles.size} selected</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 20 }}>
-                        <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
-                            <Feather name="share-2" size={20} color={colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
-                            <Feather name="move" size={20} color={colors.primary} />
-                        </TouchableOpacity>
-                        {user.role === 'admin' && (
-                            <View style={{ flexDirection: 'row', gap: 20 }}>
-                                <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
-                                    <Feather name="eye" size={20} color={colors.primary} />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
-                                    <Feather name="eye-off" size={20} color={colors.primary} />
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', paddingRight: 10 }}>
+                        <View style={{ flexDirection: 'row', gap: 15, alignItems: 'center', marginLeft: 10 }}>
+                            <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
+                                <Feather name="share-2" size={18} color={colors.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
+                                <Feather name="move" size={18} color={colors.primary} />
+                            </TouchableOpacity>
+                            {user.role === 'admin' && (
+                                <>
+                                    <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
+                                    <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
+                                        <Feather name="eye" size={18} color={colors.primary} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
+                                        <Feather name="eye-off" size={18} color={colors.primary} />
+                                    </TouchableOpacity>
+                                    <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
+                                    <TouchableOpacity onPress={() => handleBulkDoNotFollow(true)} style={{ padding: 4 }}>
+                                        <View style={{ position: 'relative' }}>
+                                            <Feather name="shield" size={18} color="#ef4444" />
+                                            <Text style={{ position: 'absolute', top: -4, right: -4, fontSize: 7, color: '#ef4444', fontWeight: 'bold' }}>!</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => handleBulkDoNotFollow(false)} style={{ padding: 4 }}>
+                                        <Feather name="shield" size={18} color={colors.primary} />
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                        </View>
+                    </ScrollView>
                 </View>
             )}
 

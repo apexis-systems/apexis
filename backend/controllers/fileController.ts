@@ -339,6 +339,33 @@ export const toggleFileVisibility = async (req: Request, res: Response) => {
     }
 };
 
+export const toggleDoNotFollow = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
+            return res.status(403).json({ error: "Forbidden: Only Admins can toggle 'Do Not Follow'" });
+        }
+
+        const { fileId } = req.params;
+        const { do_not_follow } = req.body;
+
+        const file = await files.findByPk(fileId);
+        if (!file) {
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        file.do_not_follow = do_not_follow;
+        await file.save();
+
+        res.status(200).json({ message: "File 'Do Not Follow' status updated", file });
+    } catch (error) {
+        console.error("Toggle Do Not Follow Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const viewFile = async (req: Request, res: Response) => {
     try {
         const { fileKey } = req.body;
@@ -396,7 +423,7 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { ids, folder_id, client_visible } = req.body;
+        const { ids, folder_id, client_visible, do_not_follow } = req.body;
 
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ error: "No file IDs provided" });
@@ -410,15 +437,16 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
         }
 
         // Visibility action permissions: Admins only
-        if (client_visible !== undefined) {
+        if (client_visible !== undefined || do_not_follow !== undefined) {
             if (authUser.role !== "admin" && authUser.role !== "superadmin") {
-                return res.status(403).json({ error: "Forbidden: Only Admins can toggle file visibility" });
+                return res.status(403).json({ error: "Forbidden: Only Admins can toggle file visibility or 'Do Not Follow'" });
             }
         }
 
         const updateData: any = {};
         if (folder_id !== undefined) updateData.folder_id = (folder_id === '' || folder_id === 'root') ? null : folder_id;
         if (client_visible !== undefined) updateData.client_visible = client_visible;
+        if (do_not_follow !== undefined) updateData.do_not_follow = do_not_follow;
 
         await files.update(updateData, {
             where: { id: ids }

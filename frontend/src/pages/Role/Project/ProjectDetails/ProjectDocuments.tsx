@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -11,7 +11,7 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
 import MoveToFolderDialog from './MoveToFolderDialog';
 import { Checkbox } from '@/components/ui/Checkbox';
 
@@ -131,6 +131,16 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     }
   };
 
+  const toggleDocDoNotFollow = async (doc: any) => {
+    try {
+      await toggleDoNotFollow(doc.id, !doc.do_not_follow);
+      setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, do_not_follow: !doc.do_not_follow } : d));
+      toast.success(`Document ${!doc.do_not_follow ? 'marked' : 'unmarked'} as 'Do Not Follow'`);
+    } catch (e) {
+      toast.error('Failed to toggle Do Not Follow');
+    }
+  };
+
   const toggleFolderVis = async (folder: any, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -223,6 +233,19 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       clearSelection();
     } catch (e) {
       toast.error("Failed to update visibility");
+    }
+  };
+
+  const handleBulkDoNotFollow = async (value: boolean) => {
+    try {
+      if (selectedFiles.size > 0) {
+        await bulkUpdateFiles({ ids: Array.from(selectedFiles), do_not_follow: value });
+        toast.success(`'Do Not Follow' updated for ${selectedFiles.size} files`);
+        importFolders();
+        clearSelection();
+      }
+    } catch (e) {
+      toast.error("Failed to update 'Do Not Follow'");
     }
   };
 
@@ -430,13 +453,23 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
                       {user.role === 'admin' && (
-                        <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full bg-card/80 p-1 backdrop-blur-sm shadow-sm border border-border">
-                          {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
-                        </button>
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full bg-card/80 p-1 backdrop-blur-sm shadow-sm border border-border" title="Toggle Visibility">
+                            {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-full bg-card/80 p-1 backdrop-blur-sm shadow-sm border border-border" title="Toggle Do Not Follow">
+                            <ShieldAlert className={`h-2.5 w-2.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                          </button>
+                        </>
                       )}
                     </>
                   )}
                 </div>
+                {doc.do_not_follow && (
+                  <div className="absolute top-2 left-2 flex items-center gap-0.5 bg-red-500/10 text-red-500 text-[8px] font-bold px-1 py-0.5 rounded-full backdrop-blur-sm">
+                    <ShieldAlert className="h-2 w-2" /> DNF
+                  </div>
+                )}
               </div>
             );
           }
@@ -449,7 +482,6 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   if (isSelectionMode) toggleSelection('file', doc.id);
                 }}
               >
-                ...
                 {isSelectionMode && (
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} className="mr-1" />
                 )}
@@ -486,13 +518,18 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         <Move className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                       {user.role === 'admin' && (
-                        <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={`Toggle client visibility (Currently: ${doc.client_visible !== false ? 'Visible' : 'Hidden'})`}>
-                          {doc.client_visible !== false ? (
-                            <Eye className="h-3.5 w-3.5 text-accent" />
-                          ) : (
-                            <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                          )}
-                        </button>
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={`Toggle client visibility (Currently: ${doc.client_visible !== false ? 'Visible' : 'Hidden'})`}>
+                            {doc.client_visible !== false ? (
+                              <Eye className="h-3.5 w-3.5 text-accent" />
+                            ) : (
+                              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-md p-1 hover:bg-secondary" title={`Toggle Do Not Follow (Currently: ${doc.do_not_follow ? 'Enabled' : 'Disabled'})`}>
+                            <ShieldAlert className={`h-3.5 w-3.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                          </button>
+                        </>
                       )}
                       {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
                         <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} className="rounded-md p-1 hover:bg-destructive/10">
@@ -502,6 +539,11 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                     </>
                   )}
                 </div>
+                {doc.do_not_follow && (
+                  <div className="flex items-center gap-1 bg-red-500/10 text-red-500 text-[9px] font-bold px-2 py-0.5 rounded-full ml-1">
+                    <ShieldAlert className="h-3 w-3" /> DO NOT FOLLOW
+                  </div>
+                )}
               </div>
               {expandedDoc === doc.id && (
                 <div className="ml-2 mr-2">
@@ -513,72 +555,94 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         })}
       </div>
 
-      {currentFolders.length === 0 && visibleDocs.length === 0 && (
-        <div className="mt-12 text-center">
-          <FileText className="mx-auto h-8 w-8 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No folders or documents yet</p>
-        </div>
-      )}
+      {
+        currentFolders.length === 0 && visibleDocs.length === 0 && (
+          <div className="mt-12 text-center">
+            <FileText className="mx-auto h-8 w-8 text-muted-foreground/30" />
+            <p className="mt-1.5 text-xs text-muted-foreground">No folders or documents yet</p>
+          </div>
+        )
+      }
 
-      {shareItem && (
-        <ShareDialog open={!!shareItem} onOpenChange={() => setShareItem(null)} itemName={shareItem} />
-      )}
+      {
+        shareItem && (
+          <ShareDialog open={!!shareItem} onOpenChange={() => setShareItem(null)} itemName={shareItem} />
+        )
+      }
 
       {/* Bulk Action Bar */}
-      {isSelectionMode && hasSelection && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
-          <div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-4">
-            <div className="text-[10px] font-semibold text-muted-foreground border-r border-border pr-4">
-              {selectedFolders.size + selectedFiles.size} selected
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
-                onClick={handleBulkShare}
+      {
+        isSelectionMode && hasSelection && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
+            <div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-4">
+              <div className="text-[10px] font-semibold text-muted-foreground border-r border-border pr-4">
+                {selectedFolders.size + selectedFiles.size} selected
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
+                  onClick={handleBulkShare}
+                >
+                  <Share2 className="h-3.5 w-3.5 mr-1" /> Share
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
+                  onClick={handleBulkMove}
+                >
+                  <Move className="h-3.5 w-3.5 mr-1" /> Move
+                </Button>
+                {user.role === 'admin' && (
+                  <div className="flex items-center gap-1 border-l border-border pl-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-semibold text-accent"
+                      onClick={() => handleBulkVisibility(true)}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" /> Show
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
+                      onClick={() => handleBulkVisibility(false)}
+                    >
+                      <EyeOff className="h-3.5 w-3.5 mr-1" /> Hide
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-semibold text-red-500"
+                      onClick={() => handleBulkDoNotFollow(true)}
+                    >
+                      <ShieldAlert className="h-3.5 w-3.5 mr-1" /> DNF
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
+                      onClick={() => handleBulkDoNotFollow(false)}
+                    >
+                      <ShieldAlert className="h-3.5 w-3.5 mr-1" /> Regular
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={clearSelection}
+                className="ml-2 text-muted-foreground hover:text-foreground p-1"
+                title="Clear selection"
               >
-                <Share2 className="h-3.5 w-3.5 mr-1" /> Share
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
-                onClick={handleBulkMove}
-              >
-                <Move className="h-3.5 w-3.5 mr-1" /> Move
-              </Button>
-              {user.role === 'admin' && (
-                <div className="flex items-center gap-1 border-l border-border pl-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 px-2 text-[10px] font-semibold text-accent"
-                    onClick={() => handleBulkVisibility(true)}
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" /> Show
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
-                    onClick={() => handleBulkVisibility(false)}
-                  >
-                    <EyeOff className="h-3.5 w-3.5 mr-1" /> Hide
-                  </Button>
-                </div>
-              )}
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              onClick={clearSelection}
-              className="ml-2 text-muted-foreground hover:text-foreground p-1"
-              title="Clear selection"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
-        </div>
-      )}
+        )
+      }
 
       <MoveToFolderDialog
         open={showMoveDialog}

@@ -2,8 +2,8 @@ import type { Sequelize } from "sequelize";
 import { DataTypes } from "sequelize";
 
 export default (sequelize: Sequelize) => {
-    const File = sequelize.define(
-        "files",
+    const RFI = sequelize.define(
+        "rfis",
         {
             id: {
                 type: DataTypes.INTEGER,
@@ -11,50 +11,46 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 autoIncrement: true,
             },
-            folder_id: {
-                type: DataTypes.INTEGER,
-                allowNull: true,
-            },
             project_id: {
                 type: DataTypes.INTEGER,
+                allowNull: false,
+            },
+            title: {
+                type: DataTypes.STRING,
+                allowNull: false,
+            },
+            description: {
+                type: DataTypes.TEXT,
                 allowNull: true,
             },
-            file_url: {
-                type: DataTypes.STRING,
+            status: {
+                type: DataTypes.ENUM("open", "closed", "overdue"),
                 allowNull: false,
+                defaultValue: "open",
             },
-            file_name: {
-                type: DataTypes.STRING,
-                allowNull: false,
-            },
-            file_type: {
-                type: DataTypes.STRING,
-                allowNull: false,
-            },
-            file_size_mb: {
+            assigned_to: {
                 type: DataTypes.INTEGER,
-                allowNull: false,
+                allowNull: true,
             },
             created_by: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
             },
-            client_visible: {
+            is_client_visible: {
                 type: DataTypes.BOOLEAN,
                 allowNull: false,
                 defaultValue: false,
             },
-            do_not_follow: {
-                type: DataTypes.BOOLEAN,
-                allowNull: false,
-                defaultValue: false,
+            photos: {
+                type: DataTypes.JSON,
+                allowNull: true,
             },
         },
         {
-            tableName: "files",
+            tableName: "rfis",
             timestamps: true,
         }
     );
 
-    return File;
+    return RFI;
 };

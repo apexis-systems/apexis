@@ -1,22 +1,62 @@
-import { DataTypes, Model } from 'sequelize';
+import type { Sequelize } from "sequelize";
+import { DataTypes } from "sequelize";
 
-export default (sequelize: any, dataTypes: typeof DataTypes) => {
-    class reports extends Model { }
-    reports.init({
-        id: { type: dataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-        project_id: { type: dataTypes.INTEGER, allowNull: false },
-        type: { type: dataTypes.ENUM('daily', 'weekly'), allowNull: false },
-        period_start: { type: dataTypes.DATEONLY, allowNull: false },
-        period_end: { type: dataTypes.DATEONLY, allowNull: false },
-        photos_count: { type: dataTypes.INTEGER, defaultValue: 0 },
-        docs_count: { type: dataTypes.INTEGER, defaultValue: 0 },
-        releases_count: { type: dataTypes.INTEGER, defaultValue: 0 },
-        comments_count: { type: dataTypes.INTEGER, defaultValue: 0 },
-        summary: { type: dataTypes.JSONB, allowNull: true },
-    }, {
-        sequelize,
-        modelName: 'reports',
-        tableName: 'reports',
-    });
-    return reports;
+export default (sequelize: Sequelize) => {
+    const Report = sequelize.define(
+        "reports",
+        {
+            id: {
+                type: DataTypes.INTEGER,
+                primaryKey: true,
+                allowNull: false,
+                autoIncrement: true,
+            },
+            project_id: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+            },
+            type: {
+                type: DataTypes.ENUM("daily", "weekly"),
+                allowNull: false,
+            },
+            period_start: {
+                type: DataTypes.DATEONLY,
+                allowNull: false,
+            },
+            period_end: {
+                type: DataTypes.DATEONLY,
+                allowNull: false,
+            },
+            photos_count: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+            },
+            docs_count: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+            },
+            releases_count: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+            },
+            comments_count: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+            },
+            summary: {
+                type: DataTypes.JSONB,
+                allowNull: true,
+            },
+        },
+        {
+            tableName: "reports",
+            timestamps: true,
+        }
+    );
+
+    return Report;
 };

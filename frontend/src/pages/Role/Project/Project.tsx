@@ -12,10 +12,11 @@ import ProjectDailyReports from '@/pages/Role/Project/ProjectDetails/ProjectDail
 import ProjectWeeklyReports from '@/pages/Role/Project/ProjectDetails/ProjectWeeklyReports';
 import ProjectSnagList from '@/pages/Role/Project/ProjectDetails/ProjectSnagList';
 import ProjectManuals from '@/pages/Role/Project/ProjectDetails/ProjectManuals';
+import ProjectRFI from '@/pages/Role/Project/ProjectDetails/ProjectRFI';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle } from 'lucide-react';
 
-type TabKey = 'overview' | 'documents' | 'photos' | 'daily' | 'weekly' | 'snags' | 'manuals';
+type TabKey = 'overview' | 'documents' | 'photos' | 'daily' | 'weekly' | 'snags' | 'manuals' | 'rfi';
 
 interface ProjectProps {
     id: string;
@@ -81,6 +82,7 @@ export default function Project({ id }: ProjectProps) {
         { key: 'daily' as TabKey, label: t('daily_reports'), icon: ClipboardList, adminOnly: true },
         { key: 'weekly' as TabKey, label: t('weekly_reports'), icon: BarChart3, adminOnly: true },
         { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle, adminOnly: true },
+        { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle },
         { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen, adminOnly: true },
     ];
 
@@ -127,6 +129,7 @@ export default function Project({ id }: ProjectProps) {
                 {activeTab === 'daily' && !isClient && <ProjectDailyReports project={project} userRole={user.role} />}
                 {activeTab === 'weekly' && !isClient && <ProjectWeeklyReports project={project} userRole={user.role} />}
                 {activeTab === 'snags' && <ProjectSnagList project={project} />}
+                {activeTab === 'rfi' && <ProjectRFI project={project} />}
                 {activeTab === 'manuals' && <ProjectManuals project={project} />}
             </div>
         </div>
