@@ -36,6 +36,19 @@ export const createProject = async (req: Request, res: Response) => {
             created_by: authUser.user_id,
         });
 
+        // Create default folders
+        const defaultFolders = ["Drawings", "Photos"];
+        await Promise.all(
+            defaultFolders.map((folderName) =>
+                folders.create({
+                    project_id: newProject.id,
+                    name: folderName,
+                    created_by: authUser.user_id,
+                    client_visible: true,
+                })
+            )
+        );
+
         res.status(201).json({ message: "Project created successfully", project: newProject });
     } catch (error) {
         console.error("Create Project Error:", error);

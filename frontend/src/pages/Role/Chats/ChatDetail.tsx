@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck } from 'lucide-react';
-import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms } from '@/services/chatService';
+import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck, X, FileText, Download } from 'lucide-react';
+import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile } from '@/services/chatService';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
@@ -32,6 +32,14 @@ export default function ChatDetail() {
     const [typingUser, setTypingUser] = useState<string | null>(null);
     const typingTimeoutRef = useRef<any>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+
+    const [selectedFile, setSelectedFile] = useState<any>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+    const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
     // Fetch messages on load
     useEffect(() => {
@@ -146,11 +154,37 @@ export default function ChatDetail() {
     }, [messages]);
 
     const handleSend = async () => {
-        if (!message.trim() || !roomId) return;
+        if ((!message.trim() && !selectedFile) || !roomId) return;
+
         const tempText = message.trim();
+        const fileToUpload = selectedFile;
+
         setMessage('');
+        setSelectedFile(null);
+        setShowEmojiPicker(false);
+
         try {
-            const res = await sendChatMessage({ roomId, text: tempText });
+            let fileData = null;
+            if (fileToUpload) {
+                setIsUploading(true);
+                const uploadRes = await uploadChatFile(fileToUpload);
+                if (uploadRes.success) {
+                    fileData = uploadRes;
+                }
+                setIsUploading(false);
+            }
+
+            const payload: any = {
+                roomId,
+                type: fileData ? (fileData.file_type.startsWith('image/') ? 'image' : 'file') : 'text',
+                file_url: fileData?.file_url,
+                file_name: fileData?.file_name,
+                file_type: fileData?.file_type,
+                file_size: fileData?.file_size
+            };
+            if (tempText) payload.text = tempText;
+
+            const res = await sendChatMessage(payload);
             if (res.success && res.message) {
                 setMessages(prev => {
                     if (prev.find(m => m.id === res.message.id)) return prev;
@@ -159,7 +193,20 @@ export default function ChatDetail() {
             }
         } catch (err) {
             console.error("Failed to send message", err);
+            setIsUploading(false);
         }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+        }
+    };
+
+    const addEmoji = (emoji: string) => {
+        setMessage(prev => prev + emoji);
+        // setShowEmojiPicker(false);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -183,7 +230,7 @@ export default function ChatDetail() {
                 </button>
 
                 {room?.type === 'group' ? (
-                    <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center shrink-0">
                         <Users className="h-4 w-4 text-white" />
                     </div>
                 ) : (
@@ -206,12 +253,7 @@ export default function ChatDetail() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-primary">
-                        <Video className="h-5 w-5" />
-                    </button>
-                    <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-primary">
-                        <Phone className="h-4.5 w-4.5" />
-                    </button>
+                    {/* Call icons removed as requested */}
                 </div>
             </div>
 
@@ -234,14 +276,42 @@ export default function ChatDetail() {
                             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                                 <div
                                     className={`max-w-[75%] px-3.5 py-2.5 shadow-sm ${isMe
-                                        ? 'bg-primary text-white rounded-2xl rounded-br-sm'
+                                        ? 'bg-accent text-white rounded-2xl rounded-br-sm'
                                         : 'bg-card text-foreground border border-border rounded-2xl rounded-bl-sm'
                                         }`}
                                 >
                                     {!isMe && (
-                                        <p className="text-primary text-xs font-semibold mb-1">{msg.sender?.name || 'User'}</p>
+                                        <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || 'User'}</p>
                                     )}
-                                    <p className="text-sm leading-relaxed">{msg.text}</p>
+
+                                    {msg.type === 'image' && msg.downloadUrl && (
+                                        <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20">
+                                            <img
+                                                src={msg.downloadUrl}
+                                                alt={msg.file_name}
+                                                className="max-w-full h-auto cursor-pointer block"
+                                                onClick={() => window.open(msg.downloadUrl, '_blank')}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {msg.type === 'file' && msg.downloadUrl && (
+                                        <div className={`p-2 mb-2 rounded-lg flex items-center gap-3 ${isMe ? 'bg-white/10' : 'bg-secondary/50'}`}>
+                                            <FileText className="h-8 w-8 text-accent" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium truncate">{msg.file_name}</p>
+                                                <p className="text-[10px] opacity-70">{msg.file_size || '0 KB'}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => window.open(msg.downloadUrl, '_blank')}
+                                                className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
+                                            >
+                                                <Download className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
                                     <div className={`flex items-center gap-1 mt-1 justify-end`}>
                                         <span className={`text-[10px] ${isMe ? 'text-orange-100' : 'text-muted-foreground'}`}>
                                             {time}
@@ -275,13 +345,66 @@ export default function ChatDetail() {
             </div>
 
 
-            {/* Input Area Container */}
+            <div className="shrink-0 bg-card border-t border-border relative">
+                {/* Emoji Picker */}
+                {showEmojiPicker && (
+                    <div className="absolute bottom-full left-4 mb-2 bg-card border border-border rounded-xl shadow-xl p-3 z-50 grid grid-cols-7 gap-2">
+                        {commonEmojis.map(emoji => (
+                            <button
+                                key={emoji}
+                                onClick={() => addEmoji(emoji)}
+                                className="text-xl hover:scale-125 transition-transform"
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
-            <div className="shrink-0 bg-card border-t border-border">
+                {/* File Preview */}
+                {selectedFile && (
+                    <div className="px-4 py-2 bg-secondary/30 flex items-center gap-3 border-b border-border animate-in slide-in-from-bottom-2">
+                        <div className="h-10 w-10 rounded bg-accent/20 flex items-center justify-center">
+                            {selectedFile.type.startsWith('image/') ? (
+                                <img src={URL.createObjectURL(selectedFile)} className="h-full w-full object-cover rounded" />
+                            ) : (
+                                <FileText className="h-6 w-6 text-accent" />
+                            )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{selectedFile.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                        <button
+                            onClick={() => setSelectedFile(null)}
+                            className="p-1 rounded-full hover:bg-secondary transition-colors"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                )}
 
                 <div className="px-3 py-3 flex items-end gap-2">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleFileSelect}
+                    />
+                    <input
+                        type="file"
+                        ref={cameraInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleFileSelect}
+                    />
+
                     <div className="flex-1 flex items-end bg-secondary/50 border border-border rounded-2xl px-3 py-2 gap-2 min-h-[44px]">
-                        <button className="text-muted-foreground hover:text-foreground transition-colors pb-0.5">
+                        <button
+                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                            className={`transition-colors pb-0.5 ${showEmojiPicker ? 'text-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
                             <Smile className="h-5 w-5" />
                         </button>
                         <textarea
@@ -298,24 +421,29 @@ export default function ChatDetail() {
                             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none max-h-32 py-0.5"
                             style={{ lineHeight: '1.4' }}
                         />
-                        <button className="text-muted-foreground hover:text-foreground transition-colors rotate-[-45deg] pb-0.5">
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-muted-foreground hover:text-foreground transition-colors rotate-[-45deg] pb-0.5"
+                        >
                             <Paperclip className="h-5 w-5" />
                         </button>
-                        {!message && (
-                            <button className="text-muted-foreground hover:text-foreground transition-colors pb-0.5">
-                                <Camera className="h-5 w-5" />
-                            </button>
-                        )}
+                        <button
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="text-muted-foreground hover:text-foreground transition-colors pb-0.5"
+                        >
+                            <Camera className="h-5 w-5" />
+                        </button>
                     </div>
 
                     <button
                         onClick={handleSend}
-                        className="w-11 h-11 rounded-full bg-primary flex items-center justify-center shrink-0 hover:bg-[#ea6c10] transition-colors shadow-md"
+                        disabled={isUploading}
+                        className="w-11 h-11 rounded-full bg-accent flex items-center justify-center shrink-0 hover:bg-accent/90 transition-colors shadow-md disabled:opacity-50"
                     >
-                        {message ? (
-                            <Send className="h-4.5 w-4.5 text-white translate-x-0.5" />
+                        {isUploading ? (
+                            <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         ) : (
-                            <Mic className="h-5 w-5 text-white" />
+                            <Send className="h-4.5 w-4.5 text-white translate-x-0.5" />
                         )}
                     </button>
                 </div>

@@ -48,7 +48,7 @@ export default function SecureAvatar({ fileKey, name, size = "h-10 w-10", classN
     }
 
     return (
-        <div className={`${size} rounded-full bg-primary flex items-center justify-center shrink-0 ${className}`}>
+        <div className={`${size} rounded-full bg-accent flex items-center justify-center shrink-0 ${className}`}>
             <span className="text-white font-bold text-sm">
                 {name ? name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
             </span>

@@ -156,9 +156,9 @@ export default function ChatList() {
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-bold text-foreground">Chats</h1>
                 <div className="flex items-center gap-3">
-                    <button className="p-2 rounded-lg hover:bg-secondary transition-colors">
+                    {/* <button className="p-2 rounded-lg hover:bg-secondary transition-colors">
                         <Camera className="h-5 w-5 text-muted-foreground" />
-                    </button>
+                    </button> */}
                     <button
                         onClick={() => setIsModalOpen(true)}
                         className="p-2 rounded-lg hover:bg-secondary transition-colors"
@@ -207,7 +207,7 @@ export default function ChatList() {
                                 {/* Avatar */}
                                 <div className="relative shrink-0">
                                     {isGroup ? (
-                                        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
+                                        <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center">
                                             <Users className="h-5 w-5 text-white" />
                                         </div>
                                     ) : (
@@ -232,7 +232,7 @@ export default function ChatList() {
                                     </div>
                                     <div className="flex items-center justify-between gap-2">
                                         {typingRooms[String(chat.id)] ? (
-                                            <p className="text-xs truncate text-primary italic font-medium animate-pulse">
+                                            <p className="text-xs truncate text-accent italic font-medium animate-pulse">
                                                 {typingRooms[String(chat.id)]} is typing...
                                             </p>
                                         ) : (
@@ -241,7 +241,7 @@ export default function ChatList() {
                                             </p>
                                         )}
                                         {chat.unread_count > 0 && (
-                                            <div className="h-5 min-w-[20px] px-1.5 rounded-full bg-red-500 flex items-center justify-center shrink-0">
+                                            <div className="h-5 min-w-[20px] px-1.5 rounded-full bg-accent flex items-center justify-center shrink-0">
                                                 <span className="text-[10px] font-bold text-white leading-none">
                                                     {chat.unread_count}
                                                 </span>

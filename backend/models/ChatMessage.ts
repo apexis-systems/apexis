@@ -21,11 +21,27 @@ export default (sequelize: Sequelize) => {
             },
             text: {
                 type: DataTypes.TEXT,
-                allowNull: false,
+                allowNull: true,
             },
             type: {
-                type: DataTypes.ENUM('text', 'image', 'system'),
+                type: DataTypes.ENUM('text', 'image', 'file', 'system'),
                 defaultValue: 'text',
+            },
+            file_url: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            file_name: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
+            file_type: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
+            file_size: {
+                type: DataTypes.STRING,
+                allowNull: true,
             },
             seen: {
                 type: DataTypes.BOOLEAN,

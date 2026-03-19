@@ -6,6 +6,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, FileText, Camera, Clock, Loader2, ChevronDown } from 'lucide-react';
 import { getActivities } from '@/services/activityService';
 import { getOrganizations } from '@/services/superadminService';
+import { getOrgUsers } from '@/services/userService';
+import { getProjects } from '@/services/projectService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ActivityItem as GlobalActivityItem } from '@/types';
 
@@ -13,12 +15,28 @@ interface ActivityItem extends GlobalActivityItem {
     userName?: string;
 }
 
+const actionTypes = [
+    { label: 'All Actions', value: 'all' },
+    { label: 'Upload', value: 'upload' },
+    { label: 'Edit', value: 'edit' },
+    { label: 'Delete', value: 'delete' },
+    { label: 'Share', value: 'share' },
+    { label: 'Photo Upload', value: 'upload_photo' },
+];
+
 const Activity = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [organizations, setOrganizations] = useState<any[]>([]);
-    const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+    const [usersList, setUsersList] = useState<any[]>([]);
+    const [projectsList, setProjectsList] = useState<any[]>([]);
+
+    const [selectedOrgId, setSelectedOrgId] = useState<string>('all');
+    const [selectedUserId, setSelectedUserId] = useState<string>('all');
+    const [selectedType, setSelectedType] = useState<string>('all');
+    const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -27,13 +45,38 @@ const Activity = () => {
         }
     }, [user]);
 
+    // Fetch users and projects when organization changes (or on mount for non-superadmin)
+    useEffect(() => {
+        const fetchFilters = async () => {
+            try {
+                const orgId = selectedOrgId !== 'all' ? selectedOrgId : undefined;
+
+                // Users
+                const usersData = await getOrgUsers(); // This currently doesn't take orgId, but backend handles it via JWT for non-superadmin
+                setUsersList(usersData || []);
+
+                // Projects
+                const projectsData = await getProjects(orgId);
+                setProjectsList(projectsData.projects || []);
+            } catch (error) {
+                console.error("Error fetching filters", error);
+            }
+        };
+        fetchFilters();
+    }, [user, selectedOrgId]);
+
     useEffect(() => {
         const load = async () => {
             if (!user) return;
             setLoading(true);
             try {
-                const orgId = (selectedOrgId && selectedOrgId !== 'all') ? selectedOrgId : undefined;
-                const feed = await getActivities(orgId);
+                const filters = {
+                    organization_id: selectedOrgId !== 'all' ? selectedOrgId : undefined,
+                    user_id: selectedUserId !== 'all' ? selectedUserId : undefined,
+                    type: selectedType !== 'all' ? selectedType : undefined,
+                    project_id: selectedProjectId !== 'all' ? selectedProjectId : undefined,
+                };
+                const feed = await getActivities(filters);
 
                 // Format timestamps locally
                 const formatted = feed.map((act: any) => ({
@@ -51,30 +94,68 @@ const Activity = () => {
             }
         };
         load();
-    }, [user, selectedOrgId]);
+    }, [user, selectedOrgId, selectedUserId, selectedType, selectedProjectId]);
 
     if (!user) return null;
 
     return (
         <div className="max-w-4xl p-8 mx-auto">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col gap-6 mb-8">
                 <div>
                     <h1 className="text-xl font-bold text-foreground">{t('activity')}</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Updates from your projects</p>
                 </div>
-                {user.role === 'superadmin' && (
-                    <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
-                        <SelectTrigger className="w-48 text-xs">
-                            <SelectValue placeholder="All Organizations" />
+
+                <div className="flex flex-wrap gap-3">
+                    {user.role === 'superadmin' && (
+                        <Select value={selectedOrgId} onValueChange={(val) => { setSelectedOrgId(val); setSelectedUserId('all'); setSelectedProjectId('all'); }}>
+                            <SelectTrigger className="w-40 text-xs">
+                                <SelectValue placeholder="All Organizations" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Organizations</SelectItem>
+                                {organizations.map(org => (
+                                    <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+
+                    <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                        <SelectTrigger className="w-40 text-xs">
+                            <SelectValue placeholder="All Projects" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All Organizations</SelectItem>
-                            {organizations.map(org => (
-                                <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
+                            <SelectItem value="all">All Projects</SelectItem>
+                            {projectsList.map(proj => (
+                                <SelectItem key={proj.id} value={String(proj.id)}>{proj.name}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                )}
+
+                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                        <SelectTrigger className="w-40 text-xs">
+                            <SelectValue placeholder="All Users" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Users</SelectItem>
+                            {usersList.map(u => (
+                                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={selectedType} onValueChange={setSelectedType}>
+                        <SelectTrigger className="w-40 text-xs">
+                            <SelectValue placeholder="All Actions" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {actionTypes.map(type => (
+                                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             {loading ? (

@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated } from 'react-native';
+import { View, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
-import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms } from '@/services/chatService';
+import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile } from '@/services/chatService';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as WebBrowser from 'expo-web-browser';
+import ChatCameraModal from '@/components/chat/ChatCameraModal';
+import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 
 export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams();
@@ -32,6 +37,14 @@ export default function ChatDetailScreen() {
     const pulseAnim = useRef(new Animated.Value(0.3)).current;
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
     const flatListRef = useRef<FlatList>(null);
+
+    const [attachment, setAttachment] = useState<any>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [showEmojis, setShowEmojis] = useState(false);
+    const [isCameraVisible, setIsCameraVisible] = useState(false);
+    const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+
+    const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
 
 
@@ -153,40 +166,90 @@ export default function ChatDetailScreen() {
 
 
     const handleSend = async () => {
-        if (!message.trim()) return;
+        if (!message.trim() && !attachment) return;
+
         const textToSubmit = message.trim();
+        const fileToUpload = attachment;
+
         setMessage('');
+        setAttachment(null);
+        setShowEmojis(false);
 
         try {
-            // 1. Send via API (persists and broadcasts to others)
-            const res = await sendChatMessage({
-                roomId: id as string,
-                text: textToSubmit
-            });
+            let fileData = null;
+            if (fileToUpload) {
+                setIsUploading(true);
+                const uploadRes = await uploadChatFile(
+                    fileToUpload.uri,
+                    fileToUpload.name,
+                    fileToUpload.mimeType || fileToUpload.type || 'application/octet-stream'
+                );
+                if (uploadRes.success) {
+                    fileData = uploadRes;
+                }
+                setIsUploading(false);
+            }
 
-            // 2. Immediate local update if successful
+            const payload: any = {
+                roomId: id as string,
+                type: fileData ? (fileData.file_type.startsWith('image/') ? 'image' : 'file') : 'text',
+                file_url: fileData?.file_url,
+                file_name: fileData?.file_name,
+                file_type: fileData?.file_type,
+                file_size: fileData?.file_size
+            };
+            if (textToSubmit) payload.text = textToSubmit;
+
+            const res = await sendChatMessage(payload);
+
             if (res.success && res.message) {
                 setMessages(prev => {
                     if (prev.find(m => String(m.id) === String(res.message.id))) return prev;
                     return [...prev, res.message];
                 });
             }
-
-            // 3. REMOVED: Redundant manual socket emit. 
-            // The backend controller already broadcasts 'new-message' to the room.
-            /*
-            if (socket) {
-                socket.emit('send-message', {
-                    roomId: id,
-                    text: textToSubmit,
-                    senderId: user?.id,
-                    senderName: user?.name,
-                    createdAt: new Date()
-                });
-            }
-            */
         } catch (error) {
             console.error("handleSend error:", error);
+            setIsUploading(false);
+        }
+    };
+
+    const pickImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            const asset = result.assets[0];
+            setAttachment({
+                uri: asset.uri,
+                name: asset.fileName || `image_${Date.now()}.jpg`,
+                type: asset.mimeType || 'image/jpeg',
+                size: asset.fileSize || 0
+            });
+        }
+    };
+
+    const takePhoto = async () => {
+        setIsCameraVisible(true);
+    };
+
+    const pickDocument = async () => {
+        const result = await DocumentPicker.getDocumentAsync({
+            type: '*/*',
+            copyToCacheDirectory: true,
+        });
+
+        if (!result.canceled) {
+            const asset = result.assets[0];
+            setAttachment({
+                uri: asset.uri,
+                name: asset.name,
+                type: asset.mimeType,
+                size: asset.size || 0
+            });
         }
     };
 
@@ -221,9 +284,50 @@ export default function ChatDetailScreen() {
                     {!isMe && (
                         <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
                     )}
-                    <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
-                        {item.text}
-                    </Text>
+
+                    {item.type === 'image' && item.downloadUrl && (
+                        <TouchableOpacity
+                            onPress={() => setFullScreenImage(item.downloadUrl)}
+                            style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
+                        >
+                            <Image
+                                source={{ uri: item.downloadUrl }}
+                                style={{ width: 240, height: 240, borderRadius: 12 }}
+                                resizeMode="cover"
+                            />
+                        </TouchableOpacity>
+                    )}
+
+                    {item.type === 'file' && item.downloadUrl && (
+                        <TouchableOpacity
+                            onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                padding: 12,
+                                borderRadius: 12,
+                                marginBottom: 10,
+                                gap: 12,
+                                width: 240
+                            }}
+                        >
+                            <View style={{ width: 48, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                <Feather name="file-text" size={22} color="#fff" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
+                                <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
+                            </View>
+                            <Feather name="external-link" size={16} color={isMe ? '#fff' : colors.primary} />
+                        </TouchableOpacity>
+                    )}
+
+                    {item.text ? (
+                        <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
+                            {item.text}
+                        </Text>
+                    ) : null}
                     <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 }}>
                         <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
                             {time}
@@ -277,12 +381,7 @@ export default function ChatDetailScreen() {
 
 
                 <View style={{ flexDirection: 'row', gap: 16, paddingRight: 8 }}>
-                    <TouchableOpacity>
-                        <Feather name="video" size={22} color={colors.primary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity>
-                        <Feather name="phone" size={20} color={colors.primary} />
-                    </TouchableOpacity>
+                    {/* Call icons removed as requested */}
                 </View>
             </View>
 
@@ -320,46 +419,101 @@ export default function ChatDetailScreen() {
                 {/* Input Area */}
 
 
-                <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'flex-end' }}>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, minHeight: 48 }}>
-                        <TouchableOpacity style={{ padding: 4 }}>
-                            <Feather name="smile" size={24} color={colors.textMuted} />
-                        </TouchableOpacity>
-                        <TextInput
-                            value={message}
-                            onChangeText={(text) => {
-                                setMessage(text);
-                                if (socket && id && user?.name) {
-                                    socket.emit('typing', { roomId: id, userName: user.name });
-                                }
-                            }}
-                            placeholder="Message..."
-                            placeholderTextColor={colors.textMuted}
-                            multiline
-                            style={{ flex: 1, color: colors.text, fontSize: 16, marginHorizontal: 8, maxHeight: 100, paddingTop: Platform.OS === 'ios' ? 4 : 0 }}
-                        />
+                <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.background, paddingHorizontal: 0, paddingVertical: 0 }}>
+                    {/* Emoji Bar */}
+                    {showEmojis && (
+                        <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 10, paddingHorizontal: 16 }}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                {commonEmojis.map(emoji => (
+                                    <TouchableOpacity
+                                        key={emoji}
+                                        onPress={() => setMessage(prev => prev + emoji)}
+                                        style={{ marginRight: 20 }}
+                                    >
+                                        <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    )}
 
-                        <TouchableOpacity style={{ padding: 4 }}>
-                            <Feather name="paperclip" size={22} color={colors.textMuted} style={{ transform: [{ rotate: '-45deg' }] }} />
-                        </TouchableOpacity>
-                        {!message && (
-                            <TouchableOpacity style={{ padding: 4, marginLeft: 4 }}>
+                    {/* Attachment Preview */}
+                    {attachment && (
+                        <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                                {attachment.type?.startsWith('image/') ? (
+                                    <Image source={{ uri: attachment.uri }} style={{ width: 44, height: 44 }} />
+                                ) : (
+                                    <Feather name="file" size={20} color={colors.textMuted} />
+                                )}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }} numberOfLines={1}>{attachment.name}</Text>
+                                <Text style={{ fontSize: 11, color: colors.textMuted }}>{(attachment.size / 1024).toFixed(1)} KB</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setAttachment(null)} style={{ padding: 4 }}>
+                                <Ionicons name="close-circle" size={24} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'flex-end' }}>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, minHeight: 48 }}>
+                            <TouchableOpacity
+                                onPress={() => setShowEmojis(!showEmojis)}
+                                style={{ padding: 4 }}
+                            >
+                                <Feather name="smile" size={24} color={showEmojis ? colors.primary : colors.textMuted} />
+                            </TouchableOpacity>
+                            <TextInput
+                                value={message}
+                                onChangeText={(text) => {
+                                    setMessage(text);
+                                    if (socket && id && user?.name) {
+                                        socket.emit('typing', { roomId: id, userName: user.name });
+                                    }
+                                }}
+                                placeholder="Message..."
+                                placeholderTextColor={colors.textMuted}
+                                multiline
+                                style={{ flex: 1, color: colors.text, fontSize: 16, marginHorizontal: 8, maxHeight: 100, paddingTop: Platform.OS === 'ios' ? 4 : 0 }}
+                            />
+
+                            <TouchableOpacity onPress={pickDocument} style={{ padding: 4 }}>
+                                <Feather name="paperclip" size={22} color={colors.textMuted} style={{ transform: [{ rotate: '-45deg' }] }} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={takePhoto} style={{ padding: 4, marginLeft: 4 }}>
                                 <Feather name="camera" size={22} color={colors.textMuted} />
                             </TouchableOpacity>
-                        )}
-                    </View>
+                        </View>
 
-                    <TouchableOpacity
-                        onPress={handleSend}
-                        style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}
-                    >
-                        {message ? (
-                            <Feather name="send" size={20} color="#fff" style={{ marginLeft: 2, marginTop: 2 }} />
-                        ) : (
-                            <Feather name="mic" size={22} color="#fff" />
-                        )}
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={handleSend}
+                            disabled={isUploading}
+                            style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 8, opacity: isUploading ? 0.6 : 1 }}
+                        >
+                            {isUploading ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <Feather name="send" size={20} color="#fff" style={{ marginLeft: 2, marginTop: 2 }} />
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </SafeAreaView>
+
+                <ChatCameraModal
+                    visible={isCameraVisible}
+                    onClose={() => setIsCameraVisible(false)}
+                    onCapture={(asset) => {
+                        setAttachment(asset);
+                    }}
+                />
+
+                <FullScreenImageModal
+                    visible={!!fullScreenImage}
+                    onClose={() => setFullScreenImage(null)}
+                    uri={fullScreenImage}
+                />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
