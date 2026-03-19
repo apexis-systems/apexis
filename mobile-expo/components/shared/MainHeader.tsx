@@ -75,14 +75,14 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                         <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, letterSpacing: 0.5 }}>APEXIS</Text>
                     </TouchableOpacity>
 
-                    {showBack && (
+                    {/* {showBack && (
                         <TouchableOpacity
                             onPress={() => router.back()}
                             style={{ padding: 6, borderRadius: 20, backgroundColor: colors.background, marginLeft: 4 }}
                         >
                             <Feather name="arrow-left" size={16} color={colors.textMuted} />
                         </TouchableOpacity>
-                    )}
+                    )} */}
                 </View>
 
                 <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>

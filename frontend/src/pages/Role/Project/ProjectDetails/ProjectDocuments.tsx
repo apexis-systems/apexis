@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -42,6 +43,10 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
 
+  // View state
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
+
   // Keep URL in sync with selectedFolder so returnUrl always has correct folder
   const setSelectedFolder = (folderId: string | null) => {
     setRawSelectedFolder(folderId);
@@ -75,6 +80,27 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
   const currentFolderDocs = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
   const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible) : currentFolderDocs;
+
+  const sortItems = (items: any[], type: 'folder' | 'file') => {
+    return [...items].sort((a: any, b: any) => {
+      if (sortBy === 'name') {
+        const nameA = type === 'folder' ? a.name : a.file_name;
+        const nameB = type === 'folder' ? b.name : b.file_name;
+        return (nameA || '').localeCompare(nameB || '');
+      }
+      if (sortBy === 'date') {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      if (sortBy === 'size') {
+        if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
+        return (b.file_size_mb || 0) - (a.file_size_mb || 0);
+      }
+      return 0;
+    });
+  };
+
+  const sortedFolders = sortItems(currentFolders, 'folder');
+  const sortedDocs = sortItems(visibleDocs, 'file');
 
   const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
@@ -271,10 +297,53 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             ))}
           </div>
         </div>
+
+        <div className="flex items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-secondary rounded-lg p-0.5 border border-border">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-card text-accent shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              title="Grid view"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-card text-accent shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              title="List view"
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Sorting */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-[10px] font-semibold gap-1.5 text-muted-foreground bg-secondary/50">
+                Sort by: <span className="text-foreground capitalize">{sortBy}</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuLabel className="text-[10px]">Sort Docs By</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSortBy('name')} className="text-xs flex items-center justify-between">
+                Name {sortBy === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('date')} className="text-xs flex items-center justify-between">
+                Date Modified {sortBy === 'date' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('size')} className="text-xs flex items-center justify-between">
+                Size {sortBy === 'size' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        {currentFolders.map((folder) => {
+        {sortedFolders.map((folder) => {
           const folderDocs = docs.filter((d) => d.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
           const isSelected = selectedFolders.has(folder.id);
@@ -325,9 +394,53 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         type="documents"
       />
 
-      <div className="space-y-1.5">
-        {visibleDocs.map((doc) => {
+      <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-2" : "space-y-1.5"}>
+        {sortedDocs.map((doc) => {
           const isSelected = selectedFiles.has(doc.id);
+
+          if (viewMode === 'grid') {
+            return (
+              <div
+                key={doc.id}
+                className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-colors cursor-pointer group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
+                onClick={() => {
+                  if (isSelectionMode) toggleSelection('file', doc.id);
+                  else window.open(doc.downloadUrl, '_blank');
+                }}
+              >
+                {isSelectionMode && (
+                  <div className="absolute top-2 right-2">
+                    <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} />
+                  </div>
+                )}
+                <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950/30' : 'bg-blue-50 dark:bg-blue-950/30'}`}>
+                  <FileText className={`h-6 w-6 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
+                </div>
+                <span className="text-[10px] font-semibold text-center leading-tight line-clamp-2 px-1 mt-1">
+                  {doc.file_name}
+                </span>
+                <span className="text-[9px] text-muted-foreground mt-0.5">
+                  {doc.file_size_mb} MB
+                </span>
+
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {!isSelectionMode && (
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); setShareItem(doc.file_name); }} className="rounded-full bg-card/80 p-1 backdrop-blur-sm shadow-sm border border-border">
+                        <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
+                      </button>
+                      {user.role === 'admin' && (
+                        <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full bg-card/80 p-1 backdrop-blur-sm shadow-sm border border-border">
+                          {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div key={doc.id}>
               <div
@@ -336,6 +449,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   if (isSelectionMode) toggleSelection('file', doc.id);
                 }}
               >
+                ...
                 {isSelectionMode && (
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} className="mr-1" />
                 )}

@@ -24,6 +24,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     const [submitting, setSubmitting] = useState(false);
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -68,6 +69,28 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderDocs = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
     const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible !== false) : currentFolderDocs;
+
+    const sortItems = (items: any[], type: 'folder' | 'file') => {
+        return [...items].sort((a: any, b: any) => {
+            if (sortBy === 'name') {
+                const nameA = type === 'folder' ? a.name : a.file_name;
+                const nameB = type === 'folder' ? b.name : b.file_name;
+                return (nameA || '').localeCompare(nameB || '');
+            }
+            if (sortBy === 'date') {
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            }
+            if (sortBy === 'size') {
+                if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
+                return (b.file_size_mb || 0) - (a.file_size_mb || 0);
+            }
+            return 0;
+        });
+    };
+
+    const sortedFolders = sortItems(currentFolders, 'folder');
+    const sortedDocs = sortItems(visibleDocs, 'file');
+
     const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
     const goBack = useCallback(() => {
@@ -318,6 +341,28 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                     >
                         <Feather name={viewMode === 'grid' ? 'list' : 'grid'} size={16} color={colors.text} />
                     </TouchableOpacity>
+
+                    {/* Sort Toggle */}
+                    <TouchableOpacity
+                        onPress={() => {
+                            const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
+                            setSortBy(next);
+                        }}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 8,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            backgroundColor: colors.surface,
+                            borderWidth: 1,
+                            borderColor: colors.border
+                        }}
+                    >
+                        <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
+                    </TouchableOpacity>
                 </View>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -380,8 +425,8 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                     </View>
                 )}
 
-                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 6 : 8, marginTop: currentFolders.length > 0 ? 12 : 0 }}>
-                    {visibleDocs.map((doc) => {
+                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 6 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                    {sortedDocs.map((doc) => {
                         const isSelected = selectedFiles.has(doc.id);
                         if (viewMode === 'grid') {
                             return (
@@ -499,7 +544,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                     })}
                 </View>
 
-                {visibleDocs.length === 0 && currentFolders.length > 0 && (
+                {sortedDocs.length === 0 && sortedFolders.length > 0 && (
                     <View style={{ marginTop: 30, alignItems: 'center' }}>
                         <Feather name="file-text" size={32} color={colors.border} />
                         <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No documents yet</Text>

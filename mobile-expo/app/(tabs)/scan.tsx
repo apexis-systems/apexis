@@ -249,7 +249,6 @@ export default function ScanScreen() {
                     onSaveSuccess={() => setCapturedImage(null)}
                 />
             )}
-        </View>
-        </SafeAreaView >
+        </SafeAreaView>
     );
 }

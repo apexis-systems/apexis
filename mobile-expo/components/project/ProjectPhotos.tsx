@@ -28,6 +28,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     const [submitting, setSubmitting] = useState(false);
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -85,6 +86,28 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     const visiblePhotos = user.role === 'client'
         ? currentFolderPhotos.filter((p) => p.client_visible !== false)
         : currentFolderPhotos;
+
+    const sortItems = (items: any[], type: 'folder' | 'file') => {
+        return [...items].sort((a: any, b: any) => {
+            if (sortBy === 'name') {
+                const nameA = type === 'folder' ? a.name : a.file_name;
+                const nameB = type === 'folder' ? b.name : b.file_name;
+                return (nameA || '').localeCompare(nameB || '');
+            }
+            if (sortBy === 'date') {
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            }
+            if (sortBy === 'size') {
+                if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
+                return (b.file_size_mb || 0) - (a.file_size_mb || 0);
+            }
+            return 0;
+        });
+    };
+
+    const sortedFolders = sortItems(currentFolders, 'folder');
+    const sortedPhotos = sortItems(visiblePhotos, 'file');
+
     const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
     const goBack = () => {
@@ -429,9 +452,31 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                             >
                                 <Feather name={viewMode === 'grid' ? 'list' : 'grid'} size={16} color={colors.text} />
                             </TouchableOpacity>
+
+                            {/* Sort Toggle */}
+                            <TouchableOpacity
+                                onPress={() => {
+                                    const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
+                                    setSortBy(next);
+                                }}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 6,
+                                    borderRadius: 8,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border
+                                }}
+                            >
+                                <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
+                            </TouchableOpacity>
                         </View>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                            {currentFolders.map((folder) => {
+                            {sortedFolders.map((folder) => {
                                 const count = photos.filter((p) => p.folder_id === folder.id).length;
                                 const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                                 const isSelected = selectedFolders.has(folder.id);
@@ -495,8 +540,8 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                     </View>
                 )}
 
-                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 6 : 8, marginTop: currentFolders.length > 0 ? 12 : 0 }}>
-                    {visiblePhotos.map((photo, index) => {
+                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 6 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                    {sortedPhotos.map((photo, index) => {
                         const isSelected = selectedFiles.has(photo.id);
                         if (viewMode === 'grid') {
                             return (
@@ -642,7 +687,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                     })}
                 </View>
 
-                {visiblePhotos.length === 0 && currentFolders.length > 0 && (
+                {sortedPhotos.length === 0 && sortedFolders.length > 0 && (
                     <View style={{ marginTop: 30, alignItems: 'center' }}>
                         <Feather name="camera" size={32} color={colors.border} />
                         <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No photos yet</Text>
