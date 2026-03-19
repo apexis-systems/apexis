@@ -6,6 +6,8 @@ import { Project, User, Folder } from '@/types';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useFocusEffect } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
@@ -168,13 +170,32 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
 
     const handleShare = async (doc: any) => {
         try {
-            await Share.share({
-                title: doc.file_name,
-                message: `${doc.file_name}\n${doc.downloadUrl}`,
-                url: doc.downloadUrl,   // iOS only
-            });
+            if (!doc.downloadUrl) return;
+
+            // For files, we download to cache then share the local URI
+            const ext = doc.file_name?.split('.').pop() || 'tmp';
+            const localUri = `${(FileSystem as any).cacheDirectory}${doc.file_name || `file_${Date.now()}.${ext}`}`;
+
+            Alert.alert("Preparing...", "Downloading file to share...");
+            const { uri } = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    mimeType: doc.file_type,
+                    dialogTitle: doc.file_name,
+                    UTI: doc.file_type // iOS specific
+                });
+            } else {
+                // Fallback to link sharing if system sharing is unavailable
+                await Share.share({
+                    title: doc.file_name,
+                    message: `${doc.file_name}\n${doc.downloadUrl}`,
+                    url: doc.downloadUrl,
+                });
+            }
         } catch (e) {
             console.error('Share error:', e);
+            Alert.alert("Error", "Failed to share file");
         }
     };
 

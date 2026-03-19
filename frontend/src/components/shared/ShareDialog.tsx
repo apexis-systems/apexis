@@ -9,10 +9,12 @@ interface ShareDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   itemName: string;
+  downloadUrl?: string;
+  fileType?: string;
 }
 
-const ShareDialog = ({ open, onOpenChange, itemName }: ShareDialogProps) => {
-  const shareUrl = `https://app.apexis.in/shared/${encodeURIComponent(itemName)}`;
+const ShareDialog = ({ open, onOpenChange, itemName, downloadUrl, fileType }: ShareDialogProps) => {
+  const shareUrl = downloadUrl || `https://app.apexis.in/shared/${encodeURIComponent(itemName)}`;
 
   const copyLink = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -41,10 +43,10 @@ const ShareDialog = ({ open, onOpenChange, itemName }: ShareDialogProps) => {
         </DialogHeader>
         <div className="space-y-2 py-2">
           <Button onClick={shareWhatsApp} variant="outline" className="w-full justify-start gap-3">
-            <MessageCircle className="h-4 w-4 text-green-500" /> WhatsApp
+            <MessageCircle className="h-4 w-4 text-green-500" /> WhatsApp Link
           </Button>
           <Button onClick={shareEmail} variant="outline" className="w-full justify-start gap-3">
-            <Mail className="h-4 w-4 text-accent" /> Email
+            <Mail className="h-4 w-4 text-accent" /> Email Link
           </Button>
           <Button onClick={copyLink} variant="outline" className="w-full justify-start gap-3">
             <Link2 className="h-4 w-4 text-muted-foreground" /> Copy Link

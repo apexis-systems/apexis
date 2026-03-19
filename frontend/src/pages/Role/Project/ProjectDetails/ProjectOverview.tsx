@@ -108,18 +108,18 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
           <div className="mt-1 text-sm font-semibold">{project.end_date ? new Date(project.end_date).toLocaleDateString() : '—'}</div>
         </div>
         <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex items-center gap-2 text-accent">
             <FileText className="h-4 w-4" />
             <span className="text-xs">Documents</span>
           </div>
-          <div className="mt-1 text-xl font-bold">{counting ? '...' : docsCount}</div>
+          <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : docsCount}</div>
         </div>
         <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex items-center gap-2 text-accent">
             <Camera className="h-4 w-4" />
             <span className="text-xs">Photos</span>
           </div>
-          <div className="mt-1 text-xl font-bold">{counting ? '...' : photosCount}</div>
+          <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : photosCount}</div>
         </div>
       </div>
 
@@ -171,8 +171,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
             <div className="space-y-2">
               {dailyReports.map((report) => (
                 <div key={report.id} className="flex items-center gap-3 rounded-xl bg-card border border-border p-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
+                    <FileText className="h-4 w-4 text-accent" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold truncate">Daily Report — {fmt(report.period_start)}</p>

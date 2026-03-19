@@ -20,12 +20,35 @@ export const getRoomMessages = async (roomId: string | number) => {
     }
 };
 
-export const sendChatMessage = async (data: { roomId: string | number, text: string, recipientId?: number }) => {
+export const sendChatMessage = async (data: {
+    roomId: string | number,
+    text?: string,
+    recipientId?: number,
+    type?: 'text' | 'image' | 'file',
+    file_url?: string,
+    file_name?: string,
+    file_type?: string,
+    file_size?: string
+}) => {
     try {
         const response = await PrivateAxios.post('/chats/send', data);
         return response.data;
     } catch (error: any) {
         console.error("sendChatMessage Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const uploadChatFile = async (file: File) => {
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await PrivateAxios.post('/chats/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error("uploadChatFile Error:", error?.response?.data || error.message);
         throw error;
     }
 };

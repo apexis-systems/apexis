@@ -33,7 +33,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   );
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
-  const [shareItem, setShareItem] = useState<string | null>(null);
+  const [shareItem, setShareItem] = useState<any | null>(null);
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
 
   // Selection state
@@ -256,7 +256,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     if (selectedFiles.size > 0) {
       const firstId = Array.from(selectedFiles)[0];
       const firstDoc = docs.find(d => d.id === firstId);
-      if (firstDoc) setShareItem(firstDoc.file_name);
+      if (firstDoc) setShareItem(firstDoc);
     } else {
       toast.info("Select at least one file to share");
     }
@@ -449,7 +449,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   {!isSelectionMode && (
                     <>
-                      <button onClick={(e) => { e.stopPropagation(); setShareItem(doc.file_name); }} className="rounded-full bg-card/80 p-1 backdrop-blur-sm shadow-sm border border-border">
+                      <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-full bg-card/80 p-1 backdrop-blur-sm shadow-sm border border-border">
                         <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
                       {user.role === 'admin' && (
@@ -507,7 +507,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 <div className="flex items-center gap-1">
                   {!isSelectionMode && (
                     <>
-                      <button onClick={(e) => { e.stopPropagation(); setShareItem(doc.file_name); }} className="rounded-md p-1 hover:bg-secondary">
+                      <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-md p-1 hover:bg-secondary">
                         <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                       <button
@@ -566,7 +566,13 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
       {
         shareItem && (
-          <ShareDialog open={!!shareItem} onOpenChange={() => setShareItem(null)} itemName={shareItem} />
+          <ShareDialog
+            open={!!shareItem}
+            onOpenChange={() => setShareItem(null)}
+            itemName={shareItem?.file_name || ''}
+            downloadUrl={shareItem?.downloadUrl}
+            fileType={shareItem?.file_type}
+          />
         )
       }
 

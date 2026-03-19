@@ -8,6 +8,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { getActivities } from '@/services/activityService';
 import { getOrganizations } from '@/services/organizationService';
+import { getOrgUsers } from '@/services/userService';
+import { getProjects } from '@/services/projectService';
 import { ActivityItem } from '@/types';
 
 const iconMap: Record<string, keyof typeof Feather.glyphMap> = {
@@ -26,14 +28,31 @@ const colorMap: Record<string, { bg: string; icon: string }> = {
     share: { bg: 'rgba(34,197,94,0.15)', icon: '#22c55e' },
 };
 
+const actionTypes = [
+    { label: 'All Actions', value: 'all' },
+    { label: 'Upload', value: 'upload' },
+    { label: 'Edit', value: 'edit' },
+    { label: 'Delete', value: 'delete' },
+    { label: 'Share', value: 'share' },
+    { label: 'Photo Upload', value: 'upload_photo' },
+];
+
 export default function ActivityScreen() {
     const { user } = useAuth();
     const { colors: themeColors } = useTheme();
     const { t } = useTranslation();
+
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [organizations, setOrganizations] = useState<any[]>([]);
+    const [usersList, setUsersList] = useState<any[]>([]);
+    const [projectsList, setProjectsList] = useState<any[]>([]);
+
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
-    const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
+    const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+    const [selectedType, setSelectedType] = useState<string | null>(null);
+
+    const [activeModal, setActiveModal] = useState<'org' | 'user' | 'project' | 'type' | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -42,12 +61,35 @@ export default function ActivityScreen() {
         }
     }, [user]);
 
+    // Fetch filters (users/projects)
+    useEffect(() => {
+        const fetchFilters = async () => {
+            try {
+                // Users
+                const u = await getOrgUsers();
+                setUsersList(u || []);
+                // Projects
+                const p = await getProjects(selectedOrgId || undefined);
+                setProjectsList(p.projects || []);
+            } catch (e) {
+                console.error('Filter fetch error', e);
+            }
+        };
+        fetchFilters();
+    }, [user, selectedOrgId]);
+
     useEffect(() => {
         const fetchFeed = async () => {
             if (!user) return;
             setLoading(true);
             try {
-                const data = await getActivities(selectedOrgId || undefined);
+                const filters = {
+                    organization_id: selectedOrgId || undefined,
+                    user_id: selectedUserId || undefined,
+                    project_id: selectedProjectId || undefined,
+                    type: selectedType || undefined,
+                };
+                const data = await getActivities(filters);
 
                 const formatted = data.map((act: any) => ({
                     ...act,
@@ -64,40 +106,72 @@ export default function ActivityScreen() {
             }
         };
         fetchFeed();
-    }, [user, selectedOrgId]);
+    }, [user, selectedOrgId, selectedUserId, selectedProjectId, selectedType]);
 
     if (!user) return null;
+
+    const FilterButton = ({ label, value, onPress, title }: { label: string; value: string | null; onPress: () => void; title: string }) => (
+        <TouchableOpacity
+            onPress={onPress}
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: value ? 'rgba(249,115,22,0.1)' : themeColors.surface,
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: value ? '#f97316' : themeColors.border,
+                marginRight: 6
+            }}
+        >
+            <Text style={{ fontSize: 10, fontWeight: '600', color: value ? '#f97316' : themeColors.text }}>
+                {label}: {title}
+            </Text>
+            <Feather name="chevron-down" size={10} color={value ? '#f97316' : themeColors.textMuted} />
+        </TouchableOpacity>
+    );
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }} edges={['top', 'left', 'right']}>
             <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 14 }}>
                 {/* Header */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <View>
-                        <Text style={{ fontSize: 17, fontWeight: '700', color: themeColors.text }}>{t('activity') || 'Recent Activity'}</Text>
-                        <Text style={{ fontSize: 11, color: themeColors.textMuted, marginTop: 2 }}>Updates from your projects</Text>
-                    </View>
-                    {user.role === 'superadmin' && organizations.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() => setIsOrgDropdownOpen(true)}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4,
-                                backgroundColor: themeColors.surface,
-                                paddingHorizontal: 10,
-                                paddingVertical: 5,
-                                borderRadius: 8,
-                                borderWidth: 1,
-                                borderColor: themeColors.border,
-                            }}
-                        >
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: themeColors.text }}>
-                                {selectedOrgId ? organizations.find(o => o.id === selectedOrgId)?.name : 'All Orgs'}
-                            </Text>
-                            <Feather name="chevron-down" size={12} color={themeColors.textMuted} />
-                        </TouchableOpacity>
-                    )}
+                <View style={{ marginBottom: 14 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: themeColors.text }}>{t('activity') || 'Recent Activity'}</Text>
+                    <Text style={{ fontSize: 11, color: themeColors.textMuted, marginTop: 2 }}>Updates from your projects</Text>
+                </View>
+
+                {/* Filters */}
+                <View style={{ marginBottom: 14 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        {user.role === 'superadmin' && (
+                            <FilterButton
+                                label="Org"
+                                value={selectedOrgId}
+                                title={selectedOrgId ? organizations.find(o => String(o.id) === selectedOrgId)?.name || '...' : 'All'}
+                                onPress={() => setActiveModal('org')}
+                            />
+                        )}
+                        <FilterButton
+                            label="Project"
+                            value={selectedProjectId}
+                            title={selectedProjectId ? projectsList.find(p => String(p.id) === selectedProjectId)?.name || '...' : 'All'}
+                            onPress={() => setActiveModal('project')}
+                        />
+                        <FilterButton
+                            label="User"
+                            value={selectedUserId}
+                            title={selectedUserId ? usersList.find(u => String(u.id) === selectedUserId)?.name || '...' : 'All'}
+                            onPress={() => setActiveModal('user')}
+                        />
+                        <FilterButton
+                            label="Action"
+                            value={selectedType}
+                            title={selectedType ? actionTypes.find(a => a.value === selectedType)?.label || '...' : 'All'}
+                            onPress={() => setActiveModal('type')}
+                        />
+                    </ScrollView>
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false}>
@@ -164,31 +238,85 @@ export default function ActivityScreen() {
                 </ScrollView>
             </View>
 
-            {/* Org Selection Modal for Superadmin */}
-            <Modal visible={isOrgDropdownOpen} animationType="fade" transparent>
+            {/* Filter Modal (Dropdown Style) */}
+            <Modal visible={activeModal !== null} animationType="fade" transparent>
                 <TouchableOpacity
                     activeOpacity={1}
-                    onPress={() => setIsOrgDropdownOpen(false)}
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+                    onPress={() => setActiveModal(null)}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.1)' }}
                 >
-                    <View style={{ backgroundColor: themeColors.surface, borderRadius: 20, width: '100%', maxWidth: 400, padding: 10, overflow: 'hidden' }}>
-                        <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
-                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: themeColors.text }}>Select Organization</Text>
+                    <View style={{
+                        position: 'absolute',
+                        top: 130, // Positioned below the filter row
+                        left: 14,
+                        right: 14,
+                        backgroundColor: themeColors.surface,
+                        borderRadius: 12,
+                        padding: 4,
+                        elevation: 8,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 8,
+                        borderWidth: 1,
+                        borderColor: themeColors.border,
+                    }}>
+                        <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: themeColors.text }}>
+                                Select {activeModal === 'org' ? 'Organization' : activeModal === 'user' ? 'User' : activeModal === 'project' ? 'Project' : 'Action'}
+                            </Text>
                         </View>
                         <ScrollView style={{ maxHeight: 400 }}>
                             <TouchableOpacity
-                                onPress={() => { setSelectedOrgId(null); setIsOrgDropdownOpen(false); }}
-                                style={{ padding: 15, backgroundColor: selectedOrgId === null ? themeColors.background : 'transparent' }}
+                                onPress={() => {
+                                    if (activeModal === 'org') { setSelectedOrgId(null); setSelectedUserId(null); setSelectedProjectId(null); }
+                                    else if (activeModal === 'user') setSelectedUserId(null);
+                                    else if (activeModal === 'project') setSelectedProjectId(null);
+                                    else if (activeModal === 'type') setSelectedType(null);
+                                    setActiveModal(null);
+                                }}
+                                style={{ padding: 15 }}
                             >
-                                <Text style={{ fontSize: 14, color: themeColors.text, fontWeight: selectedOrgId === null ? 'bold' : 'normal' }}>All Organizations</Text>
+                                <Text style={{ fontSize: 14, color: themeColors.text }}>All {activeModal === 'org' ? 'Organizations' : activeModal === 'user' ? 'Users' : activeModal === 'project' ? 'Projects' : 'Actions'}</Text>
                             </TouchableOpacity>
-                            {organizations.map((org) => (
+
+                            {activeModal === 'org' && organizations.map((org) => (
                                 <TouchableOpacity
                                     key={org.id}
-                                    onPress={() => { setSelectedOrgId(String(org.id)); setIsOrgDropdownOpen(false); }}
+                                    onPress={() => { setSelectedOrgId(String(org.id)); setSelectedUserId(null); setSelectedProjectId(null); setActiveModal(null); }}
                                     style={{ padding: 15, backgroundColor: selectedOrgId === String(org.id) ? themeColors.background : 'transparent' }}
                                 >
-                                    <Text style={{ fontSize: 14, color: themeColors.text, fontWeight: selectedOrgId === String(org.id) ? 'bold' : 'normal' }}>{org.name}</Text>
+                                    <Text style={{ fontSize: 14, color: themeColors.text }}>{org.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+
+                            {activeModal === 'project' && projectsList.map((p) => (
+                                <TouchableOpacity
+                                    key={p.id}
+                                    onPress={() => { setSelectedProjectId(String(p.id)); setActiveModal(null); }}
+                                    style={{ padding: 15, backgroundColor: selectedProjectId === String(p.id) ? themeColors.background : 'transparent' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: themeColors.text }}>{p.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+
+                            {activeModal === 'user' && usersList.map((u) => (
+                                <TouchableOpacity
+                                    key={u.id}
+                                    onPress={() => { setSelectedUserId(String(u.id)); setActiveModal(null); }}
+                                    style={{ padding: 15, backgroundColor: selectedUserId === String(u.id) ? themeColors.background : 'transparent' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: themeColors.text }}>{u.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+
+                            {activeModal === 'type' && actionTypes.filter(a => a.value !== 'all').map((a) => (
+                                <TouchableOpacity
+                                    key={a.value}
+                                    onPress={() => { setSelectedType(a.value); setActiveModal(null); }}
+                                    style={{ padding: 15, backgroundColor: selectedType === a.value ? themeColors.background : 'transparent' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: themeColors.text }}>{a.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>

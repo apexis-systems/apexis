@@ -1,7 +1,8 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share, Image, FlatList, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Image, FlatList, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
+import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -10,7 +11,7 @@ import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } fr
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 
@@ -213,13 +214,29 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         const photo = visiblePhotos[viewerIndex];
         if (!photo?.downloadUrl) return;
         try {
-            await Share.share({
-                title: photo.file_name || 'Site Photo',
-                message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
-                url: photo.downloadUrl, // iOS only
-            });
+            const ext = photo.file_name?.split('.').pop() || 'jpg';
+            const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
+
+            setDownloading(true);
+            const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    mimeType: photo.file_type || 'image/jpeg',
+                    dialogTitle: photo.file_name || 'Site Photo'
+                });
+            } else {
+                await RNShare.share({
+                    title: photo.file_name || 'Site Photo',
+                    message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
+                    url: photo.downloadUrl,
+                });
+            }
         } catch (e) {
             console.error('Share error:', e);
+            Alert.alert("Error", "Failed to share photo");
+        } finally {
+            setDownloading(false);
         }
     };
 
@@ -361,14 +378,32 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         if (selectedFiles.size > 0) {
             const firstId = Array.from(selectedFiles)[0];
             const firstPhoto = photos.find(p => p.id === firstId);
-            if (firstPhoto) {
+            if (firstPhoto && firstPhoto.downloadUrl) {
                 try {
-                    await Share.share({
-                        title: firstPhoto.file_name,
-                        message: `${firstPhoto.file_name}\n${firstPhoto.downloadUrl}`,
-                        url: firstPhoto.downloadUrl,
-                    });
-                } catch (e) { }
+                    const ext = firstPhoto.file_name?.split('.').pop() || 'jpg';
+                    const localUri = `${(FileSystem as any).cacheDirectory}${firstPhoto.file_name || `photo_${Date.now()}.${ext}`}`;
+
+                    setDownloading(true);
+                    const { uri } = await FileSystem.downloadAsync(firstPhoto.downloadUrl, localUri);
+
+                    if (await Sharing.isAvailableAsync()) {
+                        await Sharing.shareAsync(uri, {
+                            mimeType: firstPhoto.file_type || 'image/jpeg',
+                            dialogTitle: firstPhoto.file_name || 'Site Photo'
+                        });
+                    } else {
+                        await RNShare.share({
+                            title: firstPhoto.file_name,
+                            message: `${firstPhoto.file_name}\n${firstPhoto.downloadUrl}`,
+                            url: firstPhoto.downloadUrl,
+                        });
+                    }
+                } catch (e) {
+                    console.error('Bulk share error:', e);
+                    Alert.alert("Error", "Failed to share");
+                } finally {
+                    setDownloading(false);
+                }
             }
         } else {
             Alert.alert("Info", "Select at least one photo to share");
@@ -575,11 +610,18 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                     onPress={async (e) => {
                                                         e.stopPropagation();
                                                         try {
-                                                            await Share.share({
-                                                                title: photo.file_name || 'Site Photo',
-                                                                message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
-                                                                url: photo.downloadUrl,
-                                                            });
+                                                            const ext = photo.file_name?.split('.').pop() || 'jpg';
+                                                            const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
+                                                            const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
+                                                            if (await Sharing.isAvailableAsync()) {
+                                                                await Sharing.shareAsync(uri);
+                                                            } else {
+                                                                await RNShare.share({
+                                                                    title: photo.file_name || 'Site Photo',
+                                                                    message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
+                                                                    url: photo.downloadUrl,
+                                                                });
+                                                            }
                                                         } catch { }
                                                     }}
                                                     style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
@@ -651,11 +693,18 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                     onPress={async (e) => {
                                                         e.stopPropagation();
                                                         try {
-                                                            await Share.share({
-                                                                title: photo.file_name || 'Site Photo',
-                                                                message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
-                                                                url: photo.downloadUrl,
-                                                            });
+                                                            const ext = photo.file_name?.split('.').pop() || 'jpg';
+                                                            const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
+                                                            const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
+                                                            if (await Sharing.isAvailableAsync()) {
+                                                                await Sharing.shareAsync(uri);
+                                                            } else {
+                                                                await RNShare.share({
+                                                                    title: photo.file_name || 'Site Photo',
+                                                                    message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
+                                                                    url: photo.downloadUrl,
+                                                                });
+                                                            }
                                                         } catch { }
                                                     }}
                                                     style={{ padding: 6 }}

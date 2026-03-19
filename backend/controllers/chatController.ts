@@ -4,6 +4,8 @@ import { users, rooms, room_members, chat_messages, sequelize, notifications } f
 import { Op } from 'sequelize';
 import { getIO, isUserOnline } from '../socket.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
  * List all chat rooms for the current user
@@ -81,13 +83,35 @@ export const getRoomMessages = async (req: Request, res: Response) => {
             order: [['createdAt', 'ASC']]
         });
 
+        const s3Client = new S3Client({
+            region: process.env.AWS_REGION || "ap-south-2",
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+            }
+        });
+        const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
+
+        // Generate signed URLs for attachments
+        const serializedMessages = await Promise.all(messages.map(async (msg: any) => {
+            const data = msg.toJSON();
+            if (data.file_url) {
+                const command = new GetObjectCommand({
+                    Bucket: BUCKET_NAME,
+                    Key: data.file_url
+                });
+                data.downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+            }
+            return data;
+        }));
+
         // Mark as read
         await room_members.update(
             { last_read_at: new Date() },
             { where: { room_id: roomId, user_id: authUser.user_id } }
         );
 
-        res.status(200).json({ messages });
+        res.status(200).json({ messages: serializedMessages });
     } catch (error) {
         console.error('Get Messages Error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -100,18 +124,22 @@ export const getRoomMessages = async (req: Request, res: Response) => {
  */
 export const sendChatMessage = async (req: Request, res: Response) => {
     try {
-        const { roomId, text, recipientId } = req.body;
+        const { roomId, text, recipientId, type, file_url, file_name, file_type, file_size } = req.body;
         const authUser = (req as any).user;
 
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
-        if (!roomId || !text) return res.status(400).json({ error: 'Missing required fields' });
+        if (!roomId || (!text && !file_url)) return res.status(400).json({ error: 'Missing required fields' });
 
         // 1. Save message to DB
         const newMessage = await chat_messages.create({
             room_id: roomId,
             sender_id: authUser.user_id,
-            text,
-            type: 'text',
+            text: text || null,
+            type: type || 'text',
+            file_url: file_url || null,
+            file_name: file_name || null,
+            file_type: file_type || null,
+            file_size: file_size || null,
             seen: false
         });
 
@@ -129,11 +157,13 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             include: [{ model: users, attributes: ['id', 'fcm_token'] }]
         });
 
+        const notificationBody = text || (type === 'image' ? 'Sent an image' : type === 'file' ? 'Sent a file' : 'New message');
+
         for (const member of members) {
             await sendNotification({
                 userId: member.user_id,
                 title: authUser.name || 'New Message',
-                body: text,
+                body: notificationBody,
                 type: 'chat',
                 data: {
                     roomId: String(roomId),
@@ -142,13 +172,30 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             });
         }
 
+        const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
+        const messageJson = messageWithSender?.toJSON() as any;
+        if (messageJson.file_url) {
+            const s3Client = new S3Client({
+                region: process.env.AWS_REGION || "ap-south-2",
+                credentials: {
+                    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+                }
+            });
+            const command = new GetObjectCommand({
+                Bucket: BUCKET_NAME,
+                Key: messageJson.file_url
+            });
+            messageJson.downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        }
+
         // 3. Socket broadcast
         try {
             const io = getIO();
             const roomName = `room-${roomId}`;
             console.log(`[SOCKET] Broadcasting new-message to ${roomName}`);
             // To the room (for active chat windows)
-            io.to(roomName).emit('new-message', messageWithSender);
+            io.to(roomName).emit('new-message', messageJson);
 
             // Globally to each member (for list reordering/notifications)
             for (const member of members) {
@@ -156,7 +203,7 @@ export const sendChatMessage = async (req: Request, res: Response) => {
                 console.log(`[SOCKET] Broadcasting new-message-global to ${userRoom}`);
                 io.to(userRoom).emit('new-message-global', {
                     room_id: roomId,
-                    message: messageWithSender,
+                    message: messageJson,
                     sender_name: authUser.name
                 });
             }
@@ -164,7 +211,7 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             console.error('Socket broadcast error:', ioErr);
         }
 
-        res.status(200).json({ success: true, message: messageWithSender });
+        res.status(200).json({ success: true, message: messageJson });
     } catch (error) {
         console.error('Send Chat Message Error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -223,9 +270,58 @@ export const markRoomRead = async (req: Request, res: Response) => {
 };
 
 /**
- * Create a new chat room (Direct or Group)
- * POST /api/chats/create
+ * Upload a file for chat
+ * POST /api/chats/upload
  */
+export const uploadChatFile = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        if (!(req as any).file) {
+            return res.status(400).json({ error: "No file uploaded" });
+        }
+
+        const file = (req as any).file;
+        const file_name = file.originalname;
+        const file_type = file.mimetype;
+        const file_size = (file.size / 1024).toFixed(2) + " KB"; // Format size
+
+        const s3Client = new S3Client({
+            region: process.env.AWS_REGION || "ap-south-2",
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+            }
+        });
+
+        const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
+        const extMatch = file_name.match(/\.[0-9a-z]+$/i);
+        const extension = extMatch ? extMatch[0] : '';
+        const s3Key = `chats/${authUser.user_id}/${Date.now()}${extension}`;
+
+        const command = new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+            ContentType: file_type,
+            Body: file.buffer
+        });
+
+        await s3Client.send(command);
+
+        res.status(200).json({
+            success: true,
+            file_url: s3Key,
+            file_name,
+            file_type,
+            file_size
+        });
+    } catch (error) {
+        console.error("Upload Chat File Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const createRoom = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;

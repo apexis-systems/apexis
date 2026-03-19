@@ -377,7 +377,7 @@ export default function Dashboard() {
                         {/* Color bar */}
                         <div
                             className="h-2 w-12 rounded-full mb-4"
-                            style={{ backgroundColor: project.color || 'hsl(var(--primary))' }}
+                            style={{ backgroundColor: project.color || 'hsl(var(--accent))' }}
                         />
 
                         <h3 className="text-sm font-bold text-foreground group-hover:text-accent transition-colors">
@@ -428,11 +428,11 @@ export default function Dashboard() {
                         <div className="flex items-center w-full gap-4 mt-4 pt-4 border-t border-border">
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <FileText className="h-3.5 w-3.5" />
-                                <span className="font-medium text-foreground">{project.totalDocs || 0}</span> {t('documents').toLowerCase()}
+                                <span className="font-medium text-accent">{project.totalDocs || 0}</span> {t('documents').toLowerCase()}
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <Camera className="h-3.5 w-3.5" />
-                                <span className="font-medium text-foreground">{project.totalPhotos || 0}</span> {t('photos').toLowerCase()}
+                                <span className="font-medium text-accent">{project.totalPhotos || 0}</span> {t('photos').toLowerCase()}
                             </div>
                             <ArrowRight className="h-3.5 w-3.5 ml-auto text-muted-foreground group-hover:text-accent transition-colors" />
                         </div>

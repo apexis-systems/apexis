@@ -4,9 +4,10 @@ import { activities, users, projects } from '../models/index.ts';
 export const getActivities = async (req: Request | any, res: Response) => {
     try {
         const authUser = req.user;
-        const { organization_id } = req.query;
-
+        const { organization_id, user_id, type, project_id } = req.query;
+        let where: any = {};
         let projectWhere: any = {};
+
         if (authUser.role === 'superadmin') {
             if (organization_id) {
                 projectWhere.organization_id = organization_id;
@@ -15,8 +16,13 @@ export const getActivities = async (req: Request | any, res: Response) => {
             projectWhere.organization_id = authUser.organization_id;
         }
 
+        if (user_id) where.user_id = user_id;
+        if (type) where.type = type;
+        if (project_id) where.project_id = project_id;
+
         // Fetch activities only for projects within the determined organization(s)
         const feed = await activities.findAll({
+            where,
             limit: 50,
             order: [['createdAt', 'DESC']],
             include: [
