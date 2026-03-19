@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
@@ -18,7 +19,7 @@ const iconMap: Record<string, keyof typeof Feather.glyphMap> = {
 };
 
 const colorMap: Record<string, { bg: string; icon: string }> = {
-    upload: { bg: 'rgba(249,115,22,0.15)', icon: '#f97316' },
+    upload: { bg: 'rgba(249,115,22,0.15)', icon: '#f97415' },
     upload_photo: { bg: 'rgba(59,130,246,0.15)', icon: '#3b82f6' },
     edit: { bg: 'rgba(168,85,247,0.15)', icon: '#a855f7' },
     delete: { bg: 'rgba(239,68,68,0.15)', icon: '#ef4444' },

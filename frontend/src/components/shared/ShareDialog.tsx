@@ -28,7 +28,7 @@ const ShareDialog = ({ open, onOpenChange, itemName }: ShareDialogProps) => {
 
   const shareEmail = () => {
     const subject = encodeURIComponent(`Shared: ${itemName}`);
-    const body = encodeURIComponent(`Here is a shared file from Apexis:\n\n${itemName}\n${shareUrl}`);
+    const body = encodeURIComponent(`Here is a shared file from APEXIS:\n\n${itemName}\n${shareUrl}`);
     window.open(`mailto:?subject=${subject}&body=${body}`);
     onOpenChange(false);
   };

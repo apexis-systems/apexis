@@ -51,7 +51,7 @@ function InviteLandingContent() {
                 <Smartphone className="w-12 h-12 text-white" />
             </div>
 
-            <h1 className="text-2xl font-bold text-foreground mb-3">Welcome to Apexis</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-3 font-angelica uppercase tracking-wider">APEXIS</h1>
             <p className="text-muted-foreground max-w-sm mb-10">
                 We're opening the app for you to complete your account setup.
             </p>
@@ -60,7 +60,7 @@ function InviteLandingContent() {
                 {!attempted ? (
                     <div className="flex flex-col items-center gap-3 py-4">
                         <Loader2 className="h-8 w-8 animate-spin text-accent" />
-                        <span className="text-sm font-medium text-muted-foreground">Opening Apexis...</span>
+                        <span className="text-sm font-medium text-muted-foreground uppercase tracking-tighter">Opening <span className="font-angelica">APEXIS</span>...</span>
                     </div>
                 ) : (
                     <>
@@ -68,7 +68,7 @@ function InviteLandingContent() {
                             onClick={handleOpenApp}
                             className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-white font-bold"
                         >
-                            <ExternalLink className="w-4 h-4 mr-2" /> Open Apexis
+                            <ExternalLink className="w-4 h-4 mr-2" /> Open <span className="font-angelica uppercase tracking-tighter ml-1">APEXIS</span>
                         </Button>
 
                         <div className="relative py-4">
@@ -101,7 +101,7 @@ function InviteLandingContent() {
             </div>
 
             <footer className="mt-20 text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
-                Powered by Apexis.
+                Powered by <span className="font-angelica uppercase tracking-tighter">APEXIS</span>.
             </footer>
         </div>
     );

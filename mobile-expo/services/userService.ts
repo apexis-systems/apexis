@@ -12,6 +12,16 @@ export const updateUserProfilePic = async (formData: FormData) => {
     }
 };
 
+export const updateUserName = async (data: { name: string }) => {
+    try {
+        const response = await PrivateAxios.patch('/users/name', data);
+        return response.data;
+    } catch (error) {
+        console.error("updateUserName Error", error);
+        throw error;
+    }
+};
+
 export const getOrgUsers = async () => {
     try {
         const response = await PrivateAxios.get('/users');

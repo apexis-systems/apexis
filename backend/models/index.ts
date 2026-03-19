@@ -113,6 +113,14 @@ db.projects.hasMany(db.snags, { foreignKey: 'project_id' });
 db.snags.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
 db.snags.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
 
+// Project <-> RFI
+db.rfis.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.rfis, { foreignKey: 'project_id' });
+
+// RFI <-> User (assignee + creator)
+db.rfis.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
+db.rfis.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
+
 // Project <-> Manual
 db.manuals.belongsTo(db.projects, { foreignKey: 'project_id' });
 db.projects.hasMany(db.manuals, { foreignKey: 'project_id' });
@@ -168,6 +176,7 @@ export const files = db.files;
 export const comments = db.comments;
 export const reports = db.reports;
 export const snags = db.snags;
+export const rfis = db.rfis;
 export const manuals = db.manuals;
 export const activities = db.activities;
 export const rooms = db.rooms;

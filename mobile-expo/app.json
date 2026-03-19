@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Apexis",
+    "name": "APEXIS",
     "slug": "apexis",
     "version": "1.3.3",
     "orientation": "portrait",
@@ -14,10 +14,10 @@
       "buildNumber": "6",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Apexis needs access to your photo library to attach photos to snags and upload site images.",
-        "NSPhotoLibraryAddUsageDescription": "Apexis needs permission to save downloaded photos to your library.",
-        "NSCameraUsageDescription": "Apexis needs camera access to capture site photos.",
-        "NSMicrophoneUsageDescription": "Apexis needs microphone access for video capture."
+        "NSPhotoLibraryUsageDescription": "APEXIS needs access to your photo library to attach photos to snags and upload site images.",
+        "NSPhotoLibraryAddUsageDescription": "APEXIS needs permission to save downloaded photos to your library.",
+        "NSCameraUsageDescription": "APEXIS needs camera access to capture site photos.",
+        "NSMicrophoneUsageDescription": "APEXIS needs microphone access for video capture."
       }
     },
     "android": {
@@ -66,22 +66,22 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Apexis needs access to your photos to attach images to snags and upload site photos.",
-          "cameraPermission": "Apexis needs camera access to capture site photos."
+          "photosPermission": "APEXIS needs access to your photos to attach images to snags and upload site photos.",
+          "cameraPermission": "APEXIS needs camera access to capture site photos."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Apexis needs access to your photo library.",
-          "savePhotosPermission": "Apexis needs permission to save photos to your library.",
+          "photosPermission": "APEXIS needs access to your photo library.",
+          "savePhotosPermission": "APEXIS needs permission to save photos to your library.",
           "isAccessMediaLocationEnabled": true
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Apexis needs camera access to scan documents."
+          "cameraPermission": "APEXIS needs camera access to scan documents."
         }
       ]
     ],

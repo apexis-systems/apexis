@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Upload, Clock, User, Users, AlertTriangle, CreditCard, LogOut, Shield, MessageSquare, Settings } from 'lucide-react';
+import { Home, Clock, User, Users, AlertTriangle, CreditCard, Shield, MessageSquare, Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,7 +17,6 @@ const MainSidebar = () => {
 
   const navItems = [
     { icon: Home, label: t('dashboard'), path: `${basePath}/dashboard` },
-    ...(user?.role !== 'client' ? [{ icon: Upload, label: t('upload'), path: `${basePath}/upload` }] : []),
     { icon: Clock, label: t('activity'), path: `${basePath}/activity` },
     ...(user?.role !== 'superadmin' ? [{ icon: MessageSquare, label: 'Chats', path: `${basePath}/chats` }] : []),
     { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },
@@ -89,21 +88,7 @@ const MainSidebar = () => {
         </div>
       )} */}
 
-      {/* Logout Button */}
-      {logout && (
-        <div className="border-t border-border p-3">
-          <button
-            onClick={() => {
-              logout();
-              router.push('/'); // the middleware handles redirecting to login
-            }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-red-500 hover:bg-red-500/10 hover:text-red-600"
-          >
-            <LogOut className="h-4 w-4" />
-            {t('logout') || 'Logout'}
-          </button>
-        </div>
-      )}
+      {/* Logout Button removed as it exists in top header */}
     </aside>
   );
 };

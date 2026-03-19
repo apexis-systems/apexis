@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Modal,
-    View,
-    Text,
-    TouchableOpacity,
-    TextInput,
-    FlatList,
-    ActivityIndicator,
-    StyleSheet,
-    KeyboardAvoidingView,
-    Platform
+    Modal, View, TouchableOpacity, FlatList, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform
 } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getOrgUsers } from '@/services/userService';
@@ -100,7 +92,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                 onPress={() => toggleUser(item.id)}
                 style={[styles.userItem, { borderBottomColor: colors.border }]}
             >
-                <View style={[styles.avatar, { backgroundColor: '#f97316' }]}>
+                <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
                     <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -108,7 +100,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                     <Text style={[styles.userEmail, { color: colors.textMuted }]}>{item.email}</Text>
                 </View>
                 {isSelected && (
-                    <View style={[styles.checkbox, { backgroundColor: '#f97316' }]}>
+                    <View style={[styles.checkbox, { backgroundColor: colors.primary }]}>
                         <Feather name="check" size={12} color="#fff" />
                     </View>
                 )}
@@ -139,9 +131,9 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                         style={{ opacity: (submitting || selectedUsers.length === 0 || (type === 'group' && !groupName.trim())) ? 0.5 : 1 }}
                     >
                         {submitting ? (
-                            <ActivityIndicator size="small" color="#f97316" />
+                            <ActivityIndicator size="small" color={colors.primary} />
                         ) : (
-                            <Text style={[styles.createButtonText, { color: '#f97316' }]}>Create</Text>
+                            <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
                         )}
                     </TouchableOpacity>
                 </View>
@@ -150,16 +142,16 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                 <View style={[styles.typeSelector, { borderBottomColor: colors.border }]}>
                     <TouchableOpacity
                         onPress={() => { setType('direct'); setSelectedUsers([]); }}
-                        style={[styles.typeTab, type === 'direct' && { borderBottomColor: '#f97316', borderBottomWidth: 2 }]}
+                        style={[styles.typeTab, type === 'direct' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
                     >
-                        <Text style={[styles.typeTabText, { color: type === 'direct' ? '#f97316' : colors.textMuted }]}>Direct</Text>
+                        <Text style={[styles.typeTabText, { color: type === 'direct' ? colors.primary : colors.textMuted }]}>Direct</Text>
                     </TouchableOpacity>
                     {authUser?.role === 'admin' && (
                         <TouchableOpacity
                             onPress={() => { setType('group'); setSelectedUsers([]); }}
-                            style={[styles.typeTab, type === 'group' && { borderBottomColor: '#f97316', borderBottomWidth: 2 }]}
+                            style={[styles.typeTab, type === 'group' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
                         >
-                            <Text style={[styles.typeTabText, { color: type === 'group' ? '#f97316' : colors.textMuted }]}>Group</Text>
+                            <Text style={[styles.typeTabText, { color: type === 'group' ? colors.primary : colors.textMuted }]}>Group</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -213,7 +205,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                 {/* User List */}
                 {loading ? (
                     <View style={styles.centerContainer}>
-                        <ActivityIndicator size="large" color="#f97316" />
+                        <ActivityIndicator size="large" color={colors.primary} />
                     </View>
                 ) : (
                     <FlatList

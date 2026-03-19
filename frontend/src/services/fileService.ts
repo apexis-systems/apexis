@@ -44,6 +44,16 @@ export const toggleFileVisibility = async (fileId: string | number, client_visib
     }
 };
 
+export const toggleDoNotFollow = async (fileId: string | number, do_not_follow: boolean) => {
+    try {
+        const response = await PrivateAxios.patch(`/files/${fileId}/do-not-follow`, { do_not_follow });
+        return response.data;
+    } catch (error) {
+        console.error("toggleDoNotFollow Error", error);
+        throw error;
+    }
+};
+
 export const getSecureFileUrl = async (fileKey: string) => {
     try {
         const response = await PrivateAxios.post('/files/view', { fileKey }, {
@@ -56,7 +66,7 @@ export const getSecureFileUrl = async (fileKey: string) => {
     }
 };
 
-export const bulkUpdateFiles = async (data: { ids: (string | number)[], folder_id?: string | null, client_visible?: boolean }) => {
+export const bulkUpdateFiles = async (data: { ids: (string | number)[], folder_id?: string | null, client_visible?: boolean, do_not_follow?: boolean }) => {
     try {
         const response = await PrivateAxios.put('/files/bulk', data);
         return response.data;

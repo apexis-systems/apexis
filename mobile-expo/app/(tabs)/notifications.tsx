@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, FlatList, TouchableOpacity, StyleSheet, RefreshControl, BackHandler } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 
 interface Notification {
@@ -19,9 +21,22 @@ interface Notification {
 
 export default function NotificationsScreen() {
     const { colors } = useTheme();
+    const router = useRouter();
     const { socket, setUnreadNotificationCount } = useSocket();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                router.back();
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [])
+    );
 
     const fetchNotifications = async () => {
         try {

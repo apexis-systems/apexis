@@ -149,7 +149,7 @@ const Login = () => {
                         <Monitor className="h-6 w-6 text-foreground/80" />
                     </div>
                     <div className='flex flex-col items-center'>
-                        <h1 className="text-3xl font-bold tracking-tight text-foreground uppercase">apexis</h1>
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground uppercase font-angelica">APEXIS</h1>
                         <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground">
                             RECORD · REPORT · RELEASE
                         </p>
@@ -169,7 +169,7 @@ const Login = () => {
                                     <div className="space-y-8 flex-1">
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">1</div>
-                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Open the <span className="font-semibold text-foreground inline-flex items-center gap-1.5 bg-secondary px-2 py-0.5 rounded-md">Apexis</span> mobile app & log in</p>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Open the <span className="font-semibold text-foreground inline-flex items-center gap-1.5 bg-secondary px-2 py-0.5 rounded-md font-angelica uppercase tracking-wider">APEXIS</span> mobile app & log in</p>
                                         </div>
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">2</div>
@@ -235,7 +235,7 @@ const Login = () => {
                                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                                     <div className="bg-white p-1 rounded-full flex items-center justify-center" style={{ width: 54, height: 54 }}>
                                                         <div className="bg-[#111b21] w-full h-full rounded-full flex items-center justify-center border-2 border-white">
-                                                            <span className="text-2xl font-black text-white">A</span>
+                                                            <span className="text-2xl font-black text-white font-angelica">A</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -379,7 +379,7 @@ const Login = () => {
                 {/* Bottom Footnote matching the design */}
                 <div className="mt-10 flex flex-col items-center gap-4">
                     {/* <p className="text-[15px] text-muted-foreground flex items-center gap-1.5">
-                        Don&apos;t have an Apexis account? <button onClick={() => router.push('/signup')} className="text-accent font-medium hover:underline flex items-center gap-1">Get started <ChevronRight className="h-4 w-4 -ml-0.5" /></button>
+                        Don&apos;t have an <span className="font-angelica uppercase tracking-tight">APEXIS</span> account? <button onClick={() => router.push('/signup')} className="text-accent font-medium hover:underline flex items-center gap-1">Get started <ChevronRight className="h-4 w-4 -ml-0.5" /></button>
                     </p> */}
 
                     <div className="flex items-center gap-2 text-muted-foreground">

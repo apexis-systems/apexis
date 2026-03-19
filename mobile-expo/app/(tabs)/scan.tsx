@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useState, useRef, useCallback } from 'react';
+import { View, TouchableOpacity, ActivityIndicator, BackHandler } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -7,6 +8,7 @@ import { Paths, File as FSFile } from 'expo-file-system';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useRouter, useFocusEffect } from 'expo-router';
 import SaveScanModal from '@/components/scan/SaveScanModal';
 import DocumentScanProcessor, { DocumentScanProcessorRef } from '@/components/scan/DocumentScanProcessor';
 
@@ -19,6 +21,19 @@ export default function ScanScreen() {
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingStep, setProcessingStep] = useState<'capturing' | 'enhancing' | null>(null);
+    const router = useRouter();
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                router.back();
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [])
+    );
 
     const facing = 'back';
 
@@ -27,7 +42,7 @@ export default function ScanScreen() {
     if (!permission) {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-                <ActivityIndicator size="large" color="#f97316" />
+                <ActivityIndicator size="large" color={colors.primary} />
             </SafeAreaView>
         );
     }
@@ -46,7 +61,7 @@ export default function ScanScreen() {
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 8,
-                            backgroundColor: '#f97316',
+                            backgroundColor: colors.primary,
                             paddingHorizontal: 20,
                             paddingVertical: 12,
                             borderRadius: 10,
@@ -108,130 +123,132 @@ export default function ScanScreen() {
             {/* Hidden image processor — used for document enhancement */}
             <DocumentScanProcessor ref={processorRef} />
 
-            <View style={{ flex: 1 }}>
-
-                {/* Header Overlay */}
-                <View style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-                    paddingHorizontal: 20, paddingVertical: 16,
-                    backgroundColor: 'rgba(0,0,0,0.4)',
-                }}>
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#fff' }}>Scan Document</Text>
-                    <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>
-                        Line up your document and tap capture
-                    </Text>
-                </View>
-
-                {/* Camera View */}
-                <CameraView
-                    style={{ flex: 1 }}
-                    facing={facing}
-                    ref={cameraRef}
-                    autofocus="on"
-                >
-                    {/* Visual Guideline overlay */}
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                        <View style={{
-                            width: 250,
-                            height: 250,
-                            borderWidth: 2,
-                            borderColor: 'rgba(255,255,255,0.3)',
-                            borderRadius: 24,
-                            borderStyle: 'dashed',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                        }}>
-                            {/* Corner markers */}
-                            {[
-                                { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
-                                { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },
-                                { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 12 },
-                                { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 12 },
-                            ].map((pos, i) => (
-                                <View key={i} style={[{
-                                    position: 'absolute', width: 32, height: 32,
-                                    borderColor: colors.primary,
-                                }, pos]} />
-                            ))}
-                            
-                            {/* Subtle scan line indicator */}
-                            <View style={{ width: '80%', height: 2, backgroundColor: 'rgba(249,115,22,0.3)', borderRadius: 1 }} />
-                        </View>
-                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 24, fontWeight: '600' }}>Align document within frame</Text>
-                    </View>
-                </CameraView>
-
-                {/* Processing Overlay */}
-                {isProcessing && (
-                    <View style={{
-                        position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
-                        justifyContent: 'center', alignItems: 'center', zIndex: 20,
-                    }}>
-                        <ActivityIndicator size="large" color="#f97316" />
-                        <Text style={{ color: '#fff', marginTop: 12, fontSize: 14, fontWeight: '600' }}>
-                            {processingStep === 'capturing' ? 'Capturing...' : '✦ Enhancing document...'}
-                        </Text>
-                    </View>
-                )}
-
-                {/* Bottom Controls */}
-                <View style={{
-                    paddingBottom: 40,
-                    paddingTop: 20,
-                    backgroundColor: '#000',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                    gap: 40,
-                }}>
-
-                    {/* Flash toggle placeholder */}
-                    <View style={{ width: 44, height: 44 }} />
-
-                    {/* Shutter Button */}
-                    <TouchableOpacity
-                        onPress={takePicture}
-                        disabled={isProcessing}
-                        style={{
-                            width: 72,
-                            height: 72,
-                            borderRadius: 36,
-                            backgroundColor: 'transparent',
-                            borderWidth: 4,
-                            borderColor: isProcessing ? '#f97316' : '#fff',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <View style={{
-                            width: 56,
-                            height: 56,
-                            borderRadius: 28,
-                            backgroundColor: isProcessing ? '#f97316' : '#fff',
-                        }} />
+            {/* Header Overlay */}
+            <View style={{
+                position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+                paddingHorizontal: 20, paddingVertical: 16,
+                backgroundColor: 'rgba(0,0,0,0.4)',
+            }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <TouchableOpacity onPress={() => router.back()}>
+                        <Feather name="arrow-left" size={24} color="#fff" />
                     </TouchableOpacity>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#fff' }}>Scan Document</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2, marginLeft: 36 }}>
+                    Line up your document and tap capture
+                </Text>
+            </View>
 
-                    {/* B&W mode badge */}
+            {/* Camera View */}
+            <CameraView
+                style={{ flex: 1 }}
+                facing={facing}
+                ref={cameraRef}
+                autofocus="on"
+            >
+                {/* Visual Guideline overlay */}
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <View style={{
-                        backgroundColor: 'rgba(255,255,255,0.15)',
-                        borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+                        width: 250,
+                        height: 250,
+                        borderWidth: 2,
+                        borderColor: 'rgba(255,255,255,0.3)',
+                        borderRadius: 24,
+                        borderStyle: 'dashed',
+                        justifyContent: 'center',
                         alignItems: 'center',
                     }}>
-                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>B&W</Text>
-                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8 }}>SCAN</Text>
-                    </View>
+                        {/* Corner markers */}
+                        {[
+                            { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
+                            { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },
+                            { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 12 },
+                            { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 12 },
+                        ].map((pos, i) => (
+                            <View key={i} style={[{
+                                position: 'absolute', width: 32, height: 32,
+                                borderColor: colors.primary,
+                            }, pos]} />
+                        ))}
 
+                        {/* Subtle scan line indicator */}
+                        <View style={{ width: '80%', height: 2, backgroundColor: 'rgba(249,115,22,0.3)', borderRadius: 1 }} />
+                    </View>
+                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 24, fontWeight: '600' }}>Align document within frame</Text>
+                </View>
+            </CameraView>
+
+            {/* Processing Overlay */}
+            {isProcessing && (
+                <View style={{
+                    position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
+                    justifyContent: 'center', alignItems: 'center', zIndex: 20,
+                }}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={{ color: '#fff', marginTop: 12, fontSize: 14, fontWeight: '600' }}>
+                        {processingStep === 'capturing' ? 'Capturing...' : '✦ Enhancing document...'}
+                    </Text>
+                </View>
+            )}
+
+            {/* Bottom Controls */}
+            <View style={{
+                paddingBottom: 40,
+                paddingTop: 20,
+                backgroundColor: '#000',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 40,
+            }}>
+
+                {/* Flash toggle placeholder */}
+                <View style={{ width: 44, height: 44 }} />
+
+                {/* Shutter Button */}
+                <TouchableOpacity
+                    onPress={takePicture}
+                    disabled={isProcessing}
+                    style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 36,
+                        backgroundColor: 'transparent',
+                        borderWidth: 4,
+                        borderColor: isProcessing ? colors.primary : '#fff',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <View style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 28,
+                        backgroundColor: isProcessing ? colors.primary : '#fff',
+                    }} />
+                </TouchableOpacity>
+
+                {/* B&W mode badge */}
+                <View style={{
+                    backgroundColor: 'rgba(255,255,255,0.15)',
+                    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+                    alignItems: 'center',
+                }}>
+                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>B&W</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8 }}>SCAN</Text>
                 </View>
 
-                {/* Save flow modal */}
-                {capturedImage && (
-                    <SaveScanModal
-                        imageUri={capturedImage}
-                        onDiscard={handleDiscard}
-                        onSaveSuccess={() => setCapturedImage(null)}
-                    />
-                )}
             </View>
+
+            {/* Save flow modal */}
+            {capturedImage && (
+                <SaveScanModal
+                    imageUri={capturedImage}
+                    onDiscard={handleDiscard}
+                    onSaveSuccess={() => setCapturedImage(null)}
+                />
+            )}
         </SafeAreaView>
     );
 }

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -42,6 +43,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
 
+  // View state
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
+
   // Sync selectedFolder to URL so returnUrl always encodes correct folder
   const setSelectedFolder = (folderId: string | null) => {
     setRawSelectedFolder(folderId);
@@ -74,7 +79,28 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
   const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
 
-  const visiblePhotos = user.role === 'client' ? currentFolderPhotos.filter((p) => p.client_visible) : currentFolderPhotos;
+  const visiblePhotos = user.role === 'client' ? currentFolderPhotos.filter((p: any) => p.client_visible) : currentFolderPhotos;
+
+  const sortItems = (items: any[], type: 'folder' | 'file') => {
+    return [...items].sort((a: any, b: any) => {
+      if (sortBy === 'name') {
+        const nameA = type === 'folder' ? a.name : a.file_name;
+        const nameB = type === 'folder' ? b.name : b.file_name;
+        return (nameA || '').localeCompare(nameB || '');
+      }
+      if (sortBy === 'date') {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      if (sortBy === 'size') {
+        if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
+        return (b.file_size_mb || 0) - (a.file_size_mb || 0);
+      }
+      return 0;
+    });
+  };
+
+  const sortedFolders = sortItems(currentFolders, 'folder');
+  const sortedPhotos = sortItems(visiblePhotos, 'file');
 
   const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
@@ -269,10 +295,53 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             ))}
           </div>
         </div>
+
+        <div className="flex items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-secondary rounded-lg p-0.5 border border-border">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-card text-accent shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              title="Grid view"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-card text-accent shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              title="List view"
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Sorting */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-[10px] font-semibold gap-1.5 text-muted-foreground bg-secondary/50">
+                Sort by: <span className="text-foreground capitalize">{sortBy}</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuLabel className="text-[10px]">Sort Photos By</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSortBy('name')} className="text-xs flex items-center justify-between">
+                Name {sortBy === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('date')} className="text-xs flex items-center justify-between">
+                Date Modified {sortBy === 'date' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('size')} className="text-xs flex items-center justify-between">
+                Size {sortBy === 'size' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        {currentFolders.map((folder) => {
+        {sortedFolders.map((folder) => {
           const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
           const isSelected = selectedFolders.has(folder.id);
@@ -323,9 +392,62 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         type="photos"
       />
 
-      <div className="grid grid-cols-5 gap-0.5">
-        {visiblePhotos.map((photo) => {
+      <div className={viewMode === 'grid' ? "grid grid-cols-5 gap-0.5" : "space-y-1"}>
+        {sortedPhotos.map((photo) => {
           const isSelected = selectedFiles.has(photo.id);
+
+          if (viewMode === 'list') {
+            return (
+              <div
+                key={photo.id}
+                className={`flex items-center gap-3 rounded-lg border p-2 cursor-pointer transition-colors ${isSelected ? 'border-accent bg-accent/5' : 'border-border bg-card'}`}
+                onClick={() => {
+                  if (isSelectionMode) toggleSelection('file', photo.id);
+                }}
+              >
+                {isSelectionMode && (
+                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} className="mr-1" />
+                )}
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary overflow-hidden">
+                  <img src={photo.downloadUrl} alt={photo.file_name} className="w-full h-full object-cover" />
+                </div>
+                <div
+                  className="flex-1 min-w-0 text-left cursor-pointer hover:underline"
+                  onClick={(e) => {
+                    if (!isSelectionMode) {
+                      e.stopPropagation();
+                      window.open(photo.downloadUrl, '_blank');
+                    }
+                  }}
+                >
+                  <p className="text-[10px] font-semibold truncate">{photo.file_name}</p>
+                  <p className="text-[9px] text-muted-foreground">
+                    {photo.file_size_mb} MB • {new Date(photo.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  {!isSelectionMode && (
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); setShareItem(`Photo - ${photo.location || photo.file_name}`); }} className="rounded-md p-1 hover:bg-secondary">
+                        <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      {user.role === 'admin' && (
+                        <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title="Toggle client visibility">
+                          {photo.client_visible !== false ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+                        </button>
+                      )}
+                      {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
+                        <button onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }} className="rounded-md p-1 hover:bg-destructive/10">
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div
               key={photo.id}

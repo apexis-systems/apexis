@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, Image, ActivityIndicator, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, BackHandler } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,6 +19,18 @@ export default function CompanySettingsScreen() {
     const [logoUri, setLogoUri] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                router.push('/(tabs)/settings');
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [])
+    );
 
     useEffect(() => {
         if (user?.organization) {
@@ -107,7 +121,7 @@ export default function CompanySettingsScreen() {
                 <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: 8 }}>
                     Only administrators can access company settings.
                 </Text>
-                <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, padding: 12 }}>
+                <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={{ marginTop: 24, padding: 12 }}>
                     <Text style={{ color: colors.primary, fontWeight: '700' }}>Go Back</Text>
                 </TouchableOpacity>
             </SafeAreaView>
@@ -131,7 +145,7 @@ export default function CompanySettingsScreen() {
                     borderBottomColor: colors.border,
                     backgroundColor: colors.background
                 }}>
-                    <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+                    <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={{ padding: 4 }}>
                         <Feather name="arrow-left" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Company Settings</Text>

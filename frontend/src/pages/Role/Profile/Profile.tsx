@@ -7,8 +7,9 @@ import { UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { LogOut, Shield, User, Camera, Loader2, X, ArrowLeft } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { updateUserProfilePic } from '@/services/userService';
+import { updateUserProfilePic, updateUserName } from '@/services/userService';
 import { getSecureFileUrl } from '@/services/fileService';
+import { uploadOrganizationLogo, updateOrganization } from '@/services/organizationService';
 import { toast } from 'sonner';
 import { changePassword } from '@/services/authService';
 import ProfilePreviewModal from '@/components/shared/ProfilePreviewModal';
@@ -16,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
-import { KeyRound, CheckCircle2 } from 'lucide-react';
+import { KeyRound, CheckCircle2, Edit2, Check, Briefcase, Building } from 'lucide-react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,40 @@ const Profile = () => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [passwordLoading, setPasswordLoading] = useState(false);
+
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editNameValue, setEditNameValue] = useState('');
+    const [nameLoading, setNameLoading] = useState(false);
+
+    const [isCompanySettingsOpen, setIsCompanySettingsOpen] = useState(false);
+    const [compName, setCompName] = useState('');
+    const [compLoading, setCompLoading] = useState(false);
+    const [compLogoUrl, setCompLogoUrl] = useState<string | null>(null);
+    const [compLogoUploading, setCompLogoUploading] = useState(false);
+    const compLogoRef = useRef<HTMLInputElement>(null);
+
+    // Initial setups based on user
+    useEffect(() => {
+        if (user) {
+            setEditNameValue(user.name || '');
+            setCompName(user.organization?.name || '');
+        }
+    }, [user]);
+
+    useEffect(() => {
+        let currentUrl: string | null = null;
+        if (user?.organization?.logo) {
+            getSecureFileUrl(user.organization.logo).then(url => {
+                if (url) {
+                    setCompLogoUrl(url);
+                    currentUrl = url;
+                }
+            });
+        }
+        return () => {
+            if (currentUrl) URL.revokeObjectURL(currentUrl);
+        };
+    }, [user?.organization?.logo]);
 
     // Fetch secure URL for profile pic
     useEffect(() => {
@@ -69,6 +104,58 @@ const Profile = () => {
     const handleLogout = () => {
         logout();
         router.push('/');
+    };
+
+    const handleSaveName = async () => {
+        if (!editNameValue.trim() || editNameValue === user.name) {
+            setIsEditingName(false);
+            return;
+        }
+        setNameLoading(true);
+        try {
+            await updateUserName({ name: editNameValue });
+            setUser({ ...user, name: editNameValue.trim() });
+            toast.success("Name updated successfully");
+            setIsEditingName(false);
+        } catch (e) {
+            toast.error("Failed to update name");
+        } finally {
+            setNameLoading(false);
+        }
+    };
+
+    const handleSaveCompName = async () => {
+        if (!compName.trim()) return;
+        setCompLoading(true);
+        try {
+            await updateOrganization({ name: compName });
+            setUser({ ...user, organization: { ...user.organization, name: compName } });
+            toast.success("Company name updated");
+        } catch (e) {
+            toast.error("Failed to update company name");
+        } finally {
+            setCompLoading(false);
+        }
+    };
+
+    const handleCompLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setCompLogoUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('logo', file);
+            const res = await uploadOrganizationLogo(formData);
+            if (res.logo) {
+                setUser({ ...user, organization: { ...user.organization, logo: res.logo } });
+                toast.success("Company logo updated");
+            }
+        } catch (e) {
+            toast.error("Failed to upload company logo");
+        } finally {
+            setCompLogoUploading(false);
+            if (compLogoRef.current) compLogoRef.current.value = '';
+        }
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -205,7 +292,29 @@ const Profile = () => {
                         )}
                     </div>
                 </div>
-                <h1 className="text-xl font-bold text-foreground">{user.name}</h1>
+
+                {isEditingName ? (
+                    <div className="flex items-center gap-2 mb-1">
+                        <Input
+                            value={editNameValue}
+                            onChange={(e) => setEditNameValue(e.target.value)}
+                            className="h-8 text-center"
+                            autoFocus
+                        />
+                        <Button size="icon" variant="ghost" className="h-8 w-8 bg-green-500/10 text-green-600 hover:bg-green-500/20" onClick={handleSaveName} disabled={nameLoading}>
+                            {nameLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 bg-red-500/10 text-red-600 hover:bg-red-500/20" onClick={() => { setIsEditingName(false); setEditNameValue(user.name); }}>
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 group/name cursor-pointer" onClick={() => setIsEditingName(true)}>
+                        <h1 className="text-xl font-bold text-foreground">{user.name}</h1>
+                        <Edit2 className="h-4 w-4 text-muted-foreground " />
+                    </div>
+                )}
+
                 <p className="text-sm text-muted-foreground">{user.email}</p>
                 <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${roleBadgeColor[user.role as UserRole]}`}>
                     <Shield className="h-3 w-3" />
@@ -214,6 +323,71 @@ const Profile = () => {
             </div>
 
             <div className="space-y-4 mb-8">
+
+                {user.role === 'admin' && (
+                    <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
+                        <button
+                            onClick={() => setIsCompanySettingsOpen(!isCompanySettingsOpen)}
+                            className="w-full flex items-center justify-between p-4 hover:bg-secondary/20 transition-colors"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                                    <Briefcase className="h-5 w-5 text-primary" />
+                                </div>
+                                <span className="font-bold text-sm uppercase tracking-wide">Company Settings</span>
+                            </div>
+                            <span className={cn("transition-transform", isCompanySettingsOpen ? "rotate-90" : "")}>
+                                <ArrowLeft className="-rotate-90 h-4 w-4" />
+                            </span>
+                        </button>
+
+                        {isCompanySettingsOpen && (
+                            <div className="p-4 pt-0 border-t border-border/50">
+                                <div className="space-y-6 pt-4">
+                                    <div className="flex flex-col items-center">
+                                        <div
+                                            onClick={() => compLogoRef.current?.click()}
+                                            className="h-20 w-20 rounded-2xl border-2 border-dashed border-primary/50 flex items-center justify-center overflow-hidden cursor-pointer hover:bg-primary/5 transition-colors relative"
+                                        >
+                                            {compLogoUrl ? (
+                                                <img src={compLogoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+                                            ) : (
+                                                <Building className="h-8 w-8 text-primary/50" />
+                                            )}
+                                            {compLogoUploading && (
+                                                <div className="absolute inset-0 bg-background/50 flex items-center justify-center backdrop-blur-sm">
+                                                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold mt-2">Tap to change logo</p>
+                                        <input type="file" ref={compLogoRef} className="hidden" accept="image/*" onChange={handleCompLogoSelect} />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Company Name</Label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                value={compName}
+                                                onChange={(e) => setCompName(e.target.value)}
+                                                placeholder="Enter company name"
+                                                className="h-11 rounded-xl bg-secondary/50 border-0 flex-1"
+                                            />
+                                            <Button
+                                                onClick={handleSaveCompName}
+                                                disabled={compLoading || !compName.trim() || compName === user.organization?.name}
+                                                className="h-11 rounded-xl bg-primary text-primary-foreground font-bold px-6"
+                                            >
+                                                {compLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Change Password Toggle */}
                 <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
                     <button

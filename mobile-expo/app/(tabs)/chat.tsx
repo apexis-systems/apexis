@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, Platform, Image, RefreshControl, Animated } from 'react-native';
+import { View, FlatList, TouchableOpacity, Platform, Image, RefreshControl, Animated } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -41,7 +42,7 @@ export default function ChatListScreen() {
                     onPress={() => router.replace('/(tabs)')}
                     style={{
                         marginTop: 24,
-                        backgroundColor: '#f97316',
+                        backgroundColor: colors.primary,
                         paddingHorizontal: 20,
                         paddingVertical: 10,
                         borderRadius: 10
@@ -401,10 +402,10 @@ export default function ChatListScreen() {
                     width: 56,
                     height: 56,
                     borderRadius: 28,
-                    backgroundColor: '#f97316',
+                    backgroundColor: colors.primary,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    shadowColor: '#f97316',
+                    shadowColor: colors.primary,
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.3,
                     shadowRadius: 5,

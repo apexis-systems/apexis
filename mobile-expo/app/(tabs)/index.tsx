@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Platform, Image, KeyboardAvoidingView } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -19,6 +20,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadOrganizationLogo, fetchSecureLogo, getOrganizations } from '@/services/organizationService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 import MainHeader from '@/components/shared/MainHeader';
+import SecureAvatar from '@/components/shared/SecureAvatar';
+import { getSecureFileUrl } from '@/services/fileService';
 
 export default function DashboardScreen() {
   const { user } = useAuth();
@@ -45,6 +48,8 @@ export default function DashboardScreen() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
+  const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
+  const [profileUri, setProfileUri] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -79,6 +84,16 @@ export default function DashboardScreen() {
       setActiveProjectContext(null, null);
     }, [])
   );
+
+  useEffect(() => {
+    const fetchProfileUri = async () => {
+      if (user?.profile_pic) {
+        const uri = await getSecureFileUrl(user.profile_pic);
+        setProfileUri(uri);
+      }
+    };
+    fetchProfileUri();
+  }, [user?.profile_pic]);
 
   if (!user) return null;
 
@@ -166,12 +181,6 @@ export default function DashboardScreen() {
           ? t('dashboard.roles.contributor')
           : t('dashboard.roles.client');
 
-  const getTimeGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  };
 
   return (
     <>
@@ -217,13 +226,25 @@ export default function DashboardScreen() {
               )}
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 2 }}>
-                {`${((user as any).organization?.name || 'Apexis').charAt(0).toUpperCase() + ((user as any).organization?.name || 'Apexis').slice(1)}`}
+              <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 4 }}>
+                {`${((user as any).organization?.name || 'APEXIS').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXIS').slice(1)}`}
               </Text>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
-                {`Hi ${user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1)}, ${getTimeGreeting()} 👋`}
-              </Text>
-              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{roleSubtitle}</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TouchableOpacity onPress={() => setIsProfilePreviewOpen(true)}>
+                  <SecureAvatar
+                    fileKey={user.profile_pic}
+                    name={user.name}
+                    size={36}
+                    style={{ borderWidth: 1.5 }}
+                  />
+                </TouchableOpacity>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>
+                  {`Hi ${user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1)}`}
+                </Text>
+              </View>
+
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>{roleSubtitle}</Text>
             </View>
           </View>
 
@@ -295,7 +316,7 @@ export default function DashboardScreen() {
                     width: 58,
                     height: 58,
                     borderRadius: 16,
-                    backgroundColor: project.color || '#f97316',
+                    backgroundColor: project.color || colors.primary,
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
@@ -353,16 +374,16 @@ export default function DashboardScreen() {
                     justifyContent: 'center',
                     borderWidth: 2,
                     borderStyle: 'dashed',
-                    borderColor: '#f97316',
+                    borderColor: colors.primary,
                   }}
                 >
-                  <Feather name="plus" size={24} color="#f97316" />
+                  <Feather name="plus" size={24} color={colors.primary} />
                 </View>
                 <Text
                   style={{
                     fontSize: 10,
                     fontWeight: '500',
-                    color: '#f97316',
+                    color: colors.primary,
                     textAlign: 'center',
                     lineHeight: 13,
                   }}
@@ -496,6 +517,17 @@ export default function DashboardScreen() {
           setIsPreviewOpen(false);
           handleLogoUpload();
         }}
+      />
+
+      <LogoPreviewModal
+        visible={isProfilePreviewOpen}
+        onClose={() => setIsProfilePreviewOpen(false)}
+        logoSource={profileUri ? { uri: profileUri } : null}
+        canChange={false}
+        onChangePress={() => { }}
+        isCircular={true}
+        title="Profile Picture"
+        subtitle="This picture helps your team identify you on the platform."
       />
 
       {/* Org Selection Modal for Superadmin */}

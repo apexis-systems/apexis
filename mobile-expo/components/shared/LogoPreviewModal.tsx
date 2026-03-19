@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { Modal, View, TouchableOpacity, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Feather } from '@expo/vector-icons';
 
@@ -96,8 +97,8 @@ export default function LogoPreviewModal({
                                     justifyContent: 'center',
                                     zIndex: 10
                                 }}>
-                                    <ActivityIndicator size="large" color="#f97316" />
-                                    <Text style={{ marginTop: 10, fontSize: 13, fontWeight: '700', color: '#f97316' }}>Uploading...</Text>
+                                    <ActivityIndicator size="large" color={colors.primary} />
+                                    <Text style={{ marginTop: 10, fontSize: 13, fontWeight: '700', color: colors.primary }}>Uploading...</Text>
                                 </View>
                             )}
                         </View>
@@ -117,7 +118,7 @@ export default function LogoPreviewModal({
                                     width: '100%',
                                     height: 50,
                                     borderRadius: 14,
-                                    backgroundColor: '#f97316',
+                                    backgroundColor: colors.primary,
                                     opacity: uploading ? 0.7 : 1
                                 }}
                                 onPress={onChangePress}

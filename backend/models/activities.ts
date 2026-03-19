@@ -1,17 +1,38 @@
-import { DataTypes, Model } from 'sequelize';
+import type { Sequelize } from "sequelize";
+import { DataTypes } from "sequelize";
 
-export default (sequelize: any, dataTypes: typeof DataTypes) => {
-    class activities extends Model { }
-    activities.init({
-        id: { type: dataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-        project_id: { type: dataTypes.INTEGER, allowNull: true },
-        user_id: { type: dataTypes.INTEGER, allowNull: false },
-        type: { type: dataTypes.ENUM('upload', 'edit', 'delete', 'share', 'upload_photo'), allowNull: false },
-        description: { type: dataTypes.STRING, allowNull: false },
-    }, {
-        sequelize,
-        modelName: 'activities',
-        tableName: 'activities',
-    });
-    return activities;
+export default (sequelize: Sequelize) => {
+    const Activity = sequelize.define(
+        "activities",
+        {
+            id: {
+                type: DataTypes.INTEGER,
+                primaryKey: true,
+                allowNull: false,
+                autoIncrement: true,
+            },
+            project_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+            },
+            user_id: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+            },
+            type: {
+                type: DataTypes.ENUM("upload", "edit", "delete", "share", "upload_photo"),
+                allowNull: false,
+            },
+            description: {
+                type: DataTypes.STRING,
+                allowNull: false,
+            },
+        },
+        {
+            tableName: "activities",
+            timestamps: true,
+        }
+    );
+
+    return Activity;
 };

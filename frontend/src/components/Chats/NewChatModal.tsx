@@ -96,14 +96,14 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                 <div className="flex border-b">
                     <button
                         onClick={() => { setType('direct'); setSelectedUsers([]); }}
-                        className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'direct' ? 'text-[#f97316] border-b-2 border-[#f97316]' : 'text-muted-foreground hover:text-foreground'}`}
+                        className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'direct' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                         Direct Message
                     </button>
                     {authUser?.role === 'admin' && (
                         <button
                             onClick={() => { setType('group'); setSelectedUsers([]); }}
-                            className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'group' ? 'text-[#f97316] border-b-2 border-[#f97316]' : 'text-muted-foreground hover:text-foreground'}`}
+                            className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'group' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                             Group Chat
                         </button>
@@ -136,7 +136,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                 <div className="max-h-[300px] overflow-y-auto">
                     {loading ? (
                         <div className="flex items-center justify-center py-10">
-                            <Loader2 className="h-6 w-6 animate-spin text-[#f97316]" />
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
                         </div>
                     ) : filteredUsers.length === 0 ? (
                         <div className="py-10 text-center text-muted-foreground text-sm">
@@ -149,7 +149,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                                 onClick={() => toggleUser(u.id)}
                                 className="w-full flex items-center gap-3 px-6 py-3 hover:bg-secondary/40 transition-colors text-left"
                             >
-                                <div className="w-10 h-10 rounded-full bg-[#f97316] flex items-center justify-center shrink-0">
+                                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0">
                                     <span className="text-white font-bold">{u.name.charAt(0)}</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -157,7 +157,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                                     <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                                 </div>
                                 {selectedUsers.includes(u.id) && (
-                                    <div className="w-5 h-5 rounded-full bg-[#f97316] flex items-center justify-center shrink-0">
+                                    <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
                                         <Check className="h-3 w-3 text-white" />
                                     </div>
                                 )}
@@ -177,7 +177,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                         <Button
                             onClick={handleCreate}
                             disabled={submitting || selectedUsers.length === 0 || (type === 'group' && !groupName.trim())}
-                            className="bg-[#f97316] hover:bg-[#ea580c] text-white"
+                            className="bg-primary hover:bg-[#ea580c] text-white"
                         >
                             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Chat'}
                         </Button>

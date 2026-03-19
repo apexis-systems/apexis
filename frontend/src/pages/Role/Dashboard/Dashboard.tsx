@@ -377,7 +377,7 @@ export default function Dashboard() {
                         {/* Color bar */}
                         <div
                             className="h-2 w-12 rounded-full mb-4"
-                            style={{ backgroundColor: project.color || '#f97316' }}
+                            style={{ backgroundColor: project.color || 'hsl(var(--primary))' }}
                         />
 
                         <h3 className="text-sm font-bold text-foreground group-hover:text-accent transition-colors">

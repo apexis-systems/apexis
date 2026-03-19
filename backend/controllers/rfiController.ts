@@ -1,0 +1,270 @@
+import type { Request, Response } from 'express';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { rfis, users, activities, projects, project_members } from '../models/index.ts';
+import { sendNotification } from '../utils/notificationUtils.ts';
+import { Op } from 'sequelize';
+
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION || 'ap-south-2',
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    },
+});
+const BUCKET = process.env.S3_BUCKET_NAME || 'apexis-bucket';
+
+// Helper: generate presigned URLs for RFI photos
+const withPresignedUrls = async (rfi: any) => {
+    const json = rfi.toJSON ? rfi.toJSON() : { ...rfi };
+    if (json.photos && Array.isArray(json.photos)) {
+        try {
+            json.photoDownloadUrls = await Promise.all(
+                json.photos.map(async (key: string) => {
+                    const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+                    return await getSignedUrl(s3Client, cmd, { expiresIn: 3600 });
+                })
+            );
+        } catch { json.photoDownloadUrls = []; }
+    } else {
+        json.photoDownloadUrls = [];
+    }
+    return json;
+};
+
+// GET /rfis?project_id=X
+export const getRFIs = async (req: Request, res: Response) => {
+    try {
+        const { project_id } = req.query;
+        const authUser = (req as any).user;
+        if (!project_id) return res.status(400).json({ error: 'project_id is required' });
+
+        const where: any = { project_id: Number(project_id) };
+
+        // Access Control: Clients only see RFIs where is_client_visible is true
+        if (authUser.role === 'client') {
+            where.is_client_visible = true;
+        }
+
+        const data = await rfis.findAll({
+            where,
+            include: [
+                { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
+                { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },
+            ],
+            order: [['createdAt', 'DESC']],
+        });
+
+        const result = await Promise.all(data.map(withPresignedUrls));
+        res.json({ rfis: result });
+    } catch (err) {
+        console.error('getRFIs error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// POST /rfis
+export const createRFI = async (req: Request | any, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
+
+        const { project_id, title, description, assigned_to } = req.body;
+        if (!project_id || !title) return res.status(400).json({ error: 'project_id and title are required' });
+
+        // Photo Upload Logic
+        const uploadedPhotos: string[] = [];
+        if (req.files && Array.isArray(req.files)) {
+            for (const file of req.files) {
+                const ext = file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
+                const key = `projects/${project_id}/rfis/${Date.now()}_${Math.random().toString(36).substr(2, 5)}${ext}`;
+                await s3Client.send(new PutObjectCommand({
+                    Bucket: BUCKET,
+                    Key: key,
+                    ContentType: file.mimetype,
+                    Body: file.buffer,
+                }));
+                uploadedPhotos.push(key);
+            }
+        }
+
+        // Logic for client visibility
+        let is_client_visible = false;
+        let assigneeRole = null;
+
+        if (authUser.role === 'client') {
+            is_client_visible = true;
+        } else if (assigned_to) {
+            const assignee = await users.findByPk(assigned_to);
+            assigneeRole = assignee?.role;
+            if (assigneeRole === 'client') {
+                is_client_visible = true;
+            }
+        }
+
+        const rfi = await rfis.create({
+            project_id: Number(project_id),
+            title: title.trim(),
+            description: description?.trim() || null,
+            assigned_to: assigned_to ? Number(assigned_to) : null,
+            created_by: authUser.user_id,
+            status: 'open',
+            is_client_visible,
+            photos: uploadedPhotos,
+        });
+
+        await activities.create({
+            project_id: Number(project_id),
+            user_id: authUser.user_id,
+            type: 'edit',
+            description: `Created RFI "${title.trim()}"`
+        });
+
+        // Notification Logic
+        if (authUser.role === 'client') {
+            // Notify all Admins in org and Contributors in project
+            const admins = await users.findAll({
+                where: { organization_id: authUser.organization_id, role: 'admin' }
+            });
+            const projectContributors = await project_members.findAll({
+                where: { project_id: Number(project_id), role: 'contributor' },
+                include: [{ model: users, as: 'user', attributes: ['id'] }]
+            });
+
+            const notifyUserIds = new Set<number>();
+            admins.forEach((addr: any) => notifyUserIds.add(addr.id));
+            projectContributors.forEach((c: any) => {
+                const uid = c.user_id || c.user?.id || c.dataValues?.user?.id;
+                if (uid) notifyUserIds.add(uid);
+            });
+            notifyUserIds.delete(authUser.user_id);
+
+            for (const uid of notifyUserIds) {
+                await sendNotification({
+                    userId: uid,
+                    title: 'New RFI from Client',
+                    body: `${authUser.name} created a new RFI: ${title}`,
+                    type: 'rfi_created',
+                    data: { rfiId: String(rfi.id), projectId: String(project_id) }
+                });
+            }
+        } else {
+            // Admin/Contributor created it
+            if (assigned_to) {
+                await sendNotification({
+                    userId: Number(assigned_to),
+                    title: 'New RFI Assigned',
+                    body: `${authUser.name} assigned an RFI to you: ${title}`,
+                    type: 'rfi_assigned',
+                    data: { rfiId: String(rfi.id), projectId: String(project_id) }
+                });
+            }
+        }
+
+        const full = await rfis.findByPk((rfi as any).id, {
+            include: [
+                { model: users, as: 'assignee', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                { model: users, as: 'creator', attributes: ['id', 'name', 'role', 'profile_pic'] },
+            ],
+        });
+
+        res.status(201).json({ rfi: await withPresignedUrls(full!) });
+    } catch (err) {
+        console.error('createRFI error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// PATCH /rfis/:id/status
+export const updateRFIStatus = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { id } = req.params;
+        const { status } = req.body;
+        const valid = ['open', 'closed', 'overdue'];
+        if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+
+        const rfi = await rfis.findByPk(id);
+        if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+
+        (rfi as any).status = status;
+        await rfi.save();
+
+        if (authUser) {
+            await activities.create({
+                project_id: (rfi as any).project_id,
+                user_id: authUser.user_id,
+                type: 'edit',
+                description: `Updated status for RFI "${(rfi as any).title}" to ${status}`
+            });
+        }
+
+        res.json({ rfi });
+
+        // Notify creator and assignee if someone else changed it
+        const notifyIds = new Set<number>();
+        if (rfi.assigned_to && rfi.assigned_to !== authUser.user_id) notifyIds.add(rfi.assigned_to);
+        if (rfi.created_by && rfi.created_by !== authUser.user_id) notifyIds.add(rfi.created_by);
+
+        for (const uid of notifyIds) {
+            await sendNotification({
+                userId: uid,
+                title: 'RFI Status Updated',
+                body: `${authUser.name} updated RFI status to ${status}: ${rfi.title}`,
+                type: 'rfi_status_update',
+                data: { rfiId: String(rfi.id), projectId: String(rfi.project_id) }
+            });
+        }
+    } catch (err) {
+        console.error('updateRFIStatus error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// GET /rfis/:id
+export const getRFIById = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const authUser = (req as any).user;
+
+        const rfi = await rfis.findByPk(id, {
+            include: [
+                { model: users, as: 'assignee', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                { model: users, as: 'creator', attributes: ['id', 'name', 'role', 'profile_pic'] },
+            ],
+        });
+
+        if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+
+        // Access Control
+        if (authUser.role === 'client' && !(rfi as any).is_client_visible) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        res.json({ rfi: await withPresignedUrls(rfi) });
+    } catch (err) {
+        console.error('getRFIById error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// GET /rfis/assignees?project_id=X  — all users in the organization
+export const getRFIAssignees = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser || !authUser.organization_id) {
+            return res.status(400).json({ error: 'organization_id missing from token' });
+        }
+
+        const assignees = await users.findAll({
+            where: { organization_id: authUser.organization_id },
+            attributes: ['id', 'name', 'email', 'role', 'profile_pic'],
+            order: [['name', 'ASC']],
+        });
+
+        res.json({ assignees });
+    } catch (err) {
+        console.error('getRFIAssignees error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

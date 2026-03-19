@@ -1,11 +1,13 @@
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { Project, UserRole } from '@/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import EditProjectModal from './EditProjectModal';
 import { getSnags } from '@/services/snagService';
 
@@ -99,6 +101,21 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             .catch(() => { });
     }, [projectId]);
 
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (isEditModalOpen) {
+                    setIsEditModalOpen(false);
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [isEditModalOpen])
+    );
+
     const handleCopy = async (text: string, id: string) => {
         if (!text) return;
         await Clipboard.setStringAsync(text);
@@ -145,10 +162,55 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     ))}
                 </View>
 
+                {/* Project Access Codes */}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                    {[
+                        { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code' },
+                        { label: 'Client Code', value: (project as any).client_code, id: 'client_code' },
+                    ].map((item) => (
+                        <View
+                            key={item.id}
+                            style={{
+                                flex: 1,
+                                borderRadius: 16,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: 12,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.05,
+                                shadowRadius: 4,
+                                elevation: 1,
+                            }}
+                        >
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '700', marginBottom: 2, textTransform: 'uppercase' }}>{item.label}</Text>
+                                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{item.value || '—'}</Text>
+                            </View>
+                            {item.value ? (
+                                <TouchableOpacity
+                                    onPress={() => handleCopy(item.value!, item.id)}
+                                    style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                >
+                                    <Feather
+                                        name={copiedId === item.id ? "check" : "copy"}
+                                        size={14}
+                                        color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                    />
+                                </TouchableOpacity>
+                            ) : null}
+                        </View>
+                    ))}
+                </View>
+
                 {/* Quick Actions */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                     {[
-                        { id: 'reports', icon: 'file-text', label: 'Reports', color: '#f97316', sub: `${dailyReports.length + weeklyReports.length} total` },
+                        { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
                         { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
                         { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
                     ].map((action) => (
@@ -191,7 +253,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 6,
-                            backgroundColor: '#f97316',
+                            backgroundColor: colors.primary,
                             paddingHorizontal: 16,
                             paddingVertical: 10,
                             borderRadius: 12
@@ -212,13 +274,13 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         alignItems: 'center',
                         marginBottom: 20
                     }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#f97316', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                            Generated Via Apexis — Construction Communication Platform
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            Generated Via APEXIS — Construction Communication Platform
                         </Text>
                     </View>
 
                     {reportsLoading ? (
-                        <ActivityIndicator size="small" color="#f97316" style={{ marginVertical: 12 }} />
+                        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
                     ) : (
                         <>
                             {/* Daily Site Reports */}
@@ -280,7 +342,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                 }}
                                             >
                                                 <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(249,115,22,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Feather name="file-text" size={20} color="#f97316" />
+                                                    <Feather name="file-text" size={20} color={colors.primary} />
                                                 </View>
                                                 <View style={{ flex: 1 }}>
                                                     <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>

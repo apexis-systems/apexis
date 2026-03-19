@@ -77,17 +77,45 @@ export const createSnag = async (req: Request, res: Response) => {
                     const finalWidth = Math.min(originalWidth, 1280);
 
                     // Dynamically adjust font size to width
-                    const fontSize = Math.max(14, Math.min(36, Math.round(finalWidth * 0.035)));
+                    const fontSize = Math.max(12, Math.min(22, Math.round(finalWidth * 0.02)));
+                    const bandHeight = Math.round(fontSize * 4);
                     const svgWidth = finalWidth;
-                    const svgHeight = Math.round(fontSize * 2.5);
-                    const yPos = Math.round(fontSize * 1.5);
+                    const svgHeight = bandHeight;
 
-                    const svgOverlay = `<svg width="${svgWidth}" height="${svgHeight}"><style>.title { fill: #e98b06; font-size: ${fontSize}px; font-family: sans-serif; font-weight: bold; }</style><text x="15" y="${yPos}" class="title" stroke="black" stroke-width="${fontSize < 20 ? 0.3 : 0.6}">${timestamp}</text></svg>`;
+                    // Professional formatting
+                    const now = new Date();
+                    const dateStr = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+                    const timeStr = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase();
+
+                    const yPos1 = Math.round(fontSize * 1.5); // Primary line
+                    const yPos2 = Math.round(fontSize * 3.0); // Secondary line (reserved)
+
+                    const svgOverlay = `
+                        <svg width="${svgWidth}" height="${svgHeight}">
+                            <style>
+                                .label { fill: #ea8c0a; font-size: ${fontSize}px; font-family: sans-serif; font-weight: 900; letter-spacing: 0.5px; }
+                                .text { fill: #1a1a1a; font-size: ${fontSize}px; font-family: sans-serif; font-weight: 800; letter-spacing: 0.5px; }
+                                .sub { fill: #999; font-size: ${Math.round(fontSize * 0.7)}px; font-family: sans-serif; }
+                            </style>
+                            <text x="20" y="${yPos1}">
+                                <tspan class="label">BEFORE</tspan>
+                                <tspan class="text" dx="15">${dateStr}   |   ${timeStr}</tspan>
+                            </text>
+                            <text x="20" y="${yPos2}" class="sub"></text>
+                        </svg>
+                    `;
 
                     fileBuffer = await image
                         .resize({ width: 1280, withoutEnlargement: true })
-                        .composite([{ input: Buffer.from(svgOverlay), gravity: 'southwest' }])
-                        .jpeg({ quality: 60 })
+                        .extend({
+                            bottom: bandHeight,
+                            background: { r: 255, g: 255, b: 255, alpha: 1 }
+                        })
+                        .composite([{
+                            input: Buffer.from(svgOverlay),
+                            gravity: 'southwest'
+                        }])
+                        .jpeg({ quality: 85 })
                         .toBuffer();
                     ext = '.jpg';
                 } catch (e) {

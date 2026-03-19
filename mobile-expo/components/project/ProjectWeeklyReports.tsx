@@ -1,8 +1,10 @@
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, ScrollView, BackHandler } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getReports, triggerReport, type Report } from '@/services/reportService';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 
 interface Props {
     project: any;
@@ -30,6 +32,21 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
 
     useEffect(() => { if (project?.id) fetchReports(); }, [project?.id]);
 
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (expanded !== null) {
+                    setExpanded(null);
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [expanded])
+    );
+
     const handleGenerate = async () => {
         setGenerating(true);
         try {
@@ -48,7 +65,7 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
         return `${s} – ${e}`;
     };
 
-    if (loading) return <ActivityIndicator color="#f97316" style={{ marginTop: 30 }} />;
+    if (loading) return <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />;
 
     return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
@@ -56,7 +73,7 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                 <TouchableOpacity
                     onPress={handleGenerate}
                     disabled={generating}
-                    style={{ height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
+                    style={{ height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
                 >
                     {generating
                         ? <ActivityIndicator size="small" color="#fff" />
@@ -84,7 +101,7 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                                     Week of {formatRange(report.period_start, report.period_end)}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 3 }}>
-                                    <Text style={{ fontSize: 10, color: '#f97316' }}>📸 {report.photos_count} photos</Text>
+                                    <Text style={{ fontSize: 10, color: colors.primary }}>📸 {report.photos_count} photos</Text>
                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>📄 {report.docs_count} docs</Text>
                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>👁️ {report.releases_count} released</Text>
                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>💬 {report.comments_count}</Text>
@@ -121,7 +138,7 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                                     <View style={{ marginTop: 8 }}>
                                         <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginBottom: 4 }}>Released to Client</Text>
                                         {report.summary.released_files.map((name, i) => (
-                                            <Text key={i} style={{ fontSize: 10, color: '#f97316', marginBottom: 2 }}>• {name}</Text>
+                                            <Text key={i} style={{ fontSize: 10, color: colors.primary, marginBottom: 2 }}>• {name}</Text>
                                         ))}
                                     </View>
                                 )}

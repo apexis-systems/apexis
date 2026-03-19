@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
-    View, Text, TouchableOpacity, Modal, TextInput, ScrollView,
-    Image, ActivityIndicator, Alert, Platform,
+    View, TouchableOpacity, Modal, ScrollView, Image, ActivityIndicator, Alert, Platform, BackHandler
 } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -52,7 +52,18 @@ export default function ProjectSnagList({ project }: Props) {
                     .catch(e => console.error('fetchSnags error', e))
                     .finally(() => setLoading(false));
             }
-        }, [projectId])
+
+            const onBackPress = () => {
+                if (viewPhoto) {
+                    setViewPhoto(null);
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [projectId, viewPhoto])
     );
 
     // ── Status cycle ───────────────────────────────────────────────────────────
@@ -79,7 +90,7 @@ export default function ProjectSnagList({ project }: Props) {
             {user?.role !== 'client' && (
                 <TouchableOpacity
                     onPress={openAddSnag}
-                    style={{ height: 38, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
+                    style={{ height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
                 >
                     <Feather name="plus" size={15} color="#fff" />
                     <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Add Snag</Text>
@@ -88,7 +99,7 @@ export default function ProjectSnagList({ project }: Props) {
 
             {/* Snag list */}
             {loading ? (
-                <ActivityIndicator color="#f97316" style={{ marginTop: 30 }} />
+                <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
             ) : (
                 <View style={{ gap: 8 }}>
                     {snags.map((snag) => {

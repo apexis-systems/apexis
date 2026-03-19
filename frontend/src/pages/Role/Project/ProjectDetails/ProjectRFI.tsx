@@ -1,0 +1,358 @@
+"use client";
+
+import { useState, useEffect, useRef } from 'react';
+import { Project } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import {
+    X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2,
+    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import {
+    RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees
+} from '@/services/rfiService';
+import { getAssignees, Assignee } from '@/services/snagService';
+
+interface ProjectRFIProps {
+    project: Project;
+}
+
+const STATUS_CONFIG: Record<RFIStatus, { icon: any; color: string; bg: string; label: string }> = {
+    open: { icon: AlertCircle, color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'Open' },
+    closed: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-600/10', label: 'Closed' },
+    overdue: { icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Overdue' },
+};
+
+export default function ProjectRFI({ project }: ProjectRFIProps) {
+    const { user } = useAuth();
+    const { t } = useLanguage();
+
+    const [rfis, setRfis] = useState<RFI[]>([]);
+    const [assignees, setAssignees] = useState<Assignee[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState<'all' | RFIStatus>('all');
+
+    // Modals
+    const [showAdd, setShowAdd] = useState(false);
+    const [selectedRFI, setSelectedRFI] = useState<RFI | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+
+    // Form state
+    const [newTitle, setNewTitle] = useState('');
+    const [newDescription, setNewDescription] = useState('');
+    const [newAssignee, setNewAssignee] = useState('');
+    const [newPhotos, setNewPhotos] = useState<File[]>([]);
+    const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const load = async () => {
+        if (!project?.id) return;
+        setLoading(true);
+        try {
+            const [rfiData, assigneeData] = await Promise.all([
+                getRFIs(project.id as any),
+                getRFIAssignees(project.id as any),
+            ]);
+            setRfis(rfiData);
+            setAssignees(assigneeData);
+        } catch (e) {
+            toast.error('Failed to load RFIs');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { load(); }, [project?.id]);
+
+    const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        const validFiles = files.filter(f => f.type.startsWith('image/'));
+        if (validFiles.length !== files.length) toast.error('Some files were skipped (not images)');
+
+        setNewPhotos(prev => [...prev, ...validFiles]);
+
+        validFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = () => setPhotoPreviews(prev => [...prev, reader.result as string]);
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const removePhoto = (idx: number) => {
+        setNewPhotos(prev => prev.filter((_, i) => i !== idx));
+        setPhotoPreviews(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const addRFI = async () => {
+        if (!newTitle.trim()) { toast.error('Title is required'); return; }
+        setSubmitting(true);
+        try {
+            const form = new FormData();
+            form.append('project_id', String(project.id));
+            form.append('title', newTitle.trim());
+            form.append('description', newDescription.trim());
+            if (newAssignee) form.append('assigned_to', newAssignee);
+            newPhotos.forEach(photo => form.append('photos', photo));
+
+            await createRFI(form);
+            toast.success('RFI created successfully');
+            setShowAdd(false);
+            resetForm();
+            load();
+        } catch {
+            toast.error('Failed to create RFI');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const resetForm = () => {
+        setNewTitle('');
+        setNewDescription('');
+        setNewAssignee('');
+        setNewPhotos([]);
+        setPhotoPreviews([]);
+    };
+
+    const handleStatusUpdate = async (id: number, status: RFIStatus) => {
+        try {
+            await updateRFIStatus(id, status);
+            toast.success(`Status updated to ${status}`);
+            load();
+            if (selectedRFI?.id === id) {
+                setSelectedRFI({ ...selectedRFI, status });
+            }
+        } catch {
+            toast.error('Failed to update status');
+        }
+    };
+
+    const filteredRfis = rfis.filter(r => statusFilter === 'all' || r.status === statusFilter);
+
+    if (loading) return <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading...</div>;
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div className="flex gap-2">
+                    {['all', 'open', 'overdue', 'closed'].map((f) => (
+                        <Button
+                            key={f}
+                            variant={statusFilter === f ? 'default' : 'outline'}
+                            size="sm"
+                            className="text-xs h-8 rounded-full"
+                            onClick={() => setStatusFilter(f as any)}
+                        >
+                            {f.charAt(0).toUpperCase() + f.slice(1)}
+                        </Button>
+                    ))}
+                </div>
+                <Button onClick={() => setShowAdd(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 size-sm h-9">
+                    <Plus className="h-4 w-4 mr-2" /> New RFI
+                </Button>
+            </div>
+
+            <div className="grid gap-4">
+                {filteredRfis.map((rfi) => {
+                    const cfg = STATUS_CONFIG[rfi.status];
+                    const StatusIcon = cfg.icon;
+                    return (
+                        <div
+                            key={rfi.id}
+                            onClick={() => setSelectedRFI(rfi)}
+                            className="group flex flex-col gap-3 p-4 rounded-xl border border-border bg-card hover:border-accent/50 transition-all cursor-pointer"
+                        >
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start gap-4">
+                                    <div className={cn("mt-1 p-2 rounded-lg", cfg.bg)}>
+                                        <StatusIcon className={cn("h-4 w-4", cfg.color)} />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h3 className="font-semibold text-sm group-hover:text-accent transition-colors">{rfi.title}</h3>
+                                            <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", cfg.bg, cfg.color)}>
+                                                {cfg.label}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground line-clamp-2 max-w-2xl">{rfi.description}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-1">
+                                        <Clock className="h-3 w-3" /> {new Date(rfi.createdAt).toLocaleDateString()}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 pt-2 border-t border-border/50">
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center border border-border">
+                                        <span className="text-[10px] font-bold">{rfi.creator?.name?.charAt(0)}</span>
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground">by {rfi.creator?.name}</span>
+                                </div>
+                                {rfi.assignee && (
+                                    <div className="flex items-center gap-1.5">
+                                        <User className="h-3 w-3 text-accent" />
+                                        <span className="text-[10px] font-medium text-accent">Assigned to {rfi.assignee.name}</span>
+                                    </div>
+                                )}
+                                {rfi.photos && rfi.photos.length > 0 && (
+                                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                                        <Camera className="h-3 w-3" />
+                                        <span className="text-[10px]">{rfi.photos.length} attachments</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+
+                {filteredRfis.length === 0 && (
+                    <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl">
+                        <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground/30 mb-4" />
+                        <p className="text-sm text-muted-foreground font-medium">No Request for Information found</p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">Try changing your filters or create a new RFI</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Create Dialog */}
+            <Dialog open={showAdd} onOpenChange={setShowAdd}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>New Request for Information</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Title *</label>
+                            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Enter RFI title" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</label>
+                            <Textarea value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder="Provide more context..." className="min-h-[100px]" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Assign To</label>
+                            <Select value={newAssignee} onValueChange={setNewAssignee}>
+                                <SelectTrigger><SelectValue placeholder="Select assignee" /></SelectTrigger>
+                                <SelectContent>
+                                    {assignees.map(a => (
+                                        <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.role})</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Attachments</label>
+                            <div className="flex flex-wrap gap-2">
+                                {photoPreviews.map((src, idx) => (
+                                    <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border group">
+                                        <img src={src} alt="Preview" className="w-full h-full object-cover" />
+                                        <button onClick={() => removePhoto(idx)} className="absolute top-1 right-1 bg-destructive p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <X className="h-3 w-3 text-white" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-20 h-20 border-dashed border-2 rounded-lg"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <ImagePlus className="h-6 w-6 text-muted-foreground" />
+                                </Button>
+                            </div>
+                            <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
+                        <Button onClick={addRFI} disabled={submitting || !newTitle.trim()} className="bg-accent text-accent-foreground">
+                            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                            Create RFI
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Detail Dialog */}
+            <Dialog open={!!selectedRFI} onOpenChange={(open) => !open && setSelectedRFI(null)}>
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                    {selectedRFI && (
+                        <>
+                            <DialogHeader>
+                                <div className="flex items-center gap-3 mb-2">
+                                    <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", STATUS_CONFIG[selectedRFI.status].bg, STATUS_CONFIG[selectedRFI.status].color)}>
+                                        {STATUS_CONFIG[selectedRFI.status].label}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground">RFI #{selectedRFI.id}</span>
+                                </div>
+                                <DialogTitle className="text-xl leading-tight">{selectedRFI.title}</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-6 py-4">
+                                <div>
+                                    <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{selectedRFI.description}</p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-secondary/30 border border-border">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Created By</p>
+                                        <p className="text-xs font-semibold">{selectedRFI.creator?.name}</p>
+                                        <p className="text-[10px] text-muted-foreground">{new Date(selectedRFI.createdAt).toLocaleString()}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Assigned To</p>
+                                        <p className="text-xs font-semibold">{selectedRFI.assignee?.name || 'Unassigned'}</p>
+                                    </div>
+                                </div>
+
+                                {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
+                                    <div>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Attachments</p>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {selectedRFI.photoDownloadUrls.map((url, idx) => (
+                                                <a key={idx} href={url} target="_blank" rel="noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group">
+                                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <ZoomIn className="h-5 w-5 text-white" />
+                                                    </div>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {user?.role !== 'client' && (
+                                    <div className="pt-4 border-t border-border space-y-3">
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Update Status</p>
+                                        <div className="flex gap-2">
+                                            {(['open', 'closed', 'overdue'] as RFIStatus[]).map((s) => (
+                                                <Button
+                                                    key={s}
+                                                    variant={selectedRFI.status === s ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    className={cn("flex-1 text-[10px] h-8", selectedRFI.status === s && STATUS_CONFIG[s].bg && STATUS_CONFIG[s].color && "opacity-100")}
+                                                    onClick={() => handleStatusUpdate(selectedRFI.id, s)}
+                                                >
+                                                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}

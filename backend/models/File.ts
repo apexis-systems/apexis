@@ -44,6 +44,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            do_not_follow: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
         },
         {
             tableName: "files",

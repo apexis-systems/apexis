@@ -211,3 +211,20 @@ export const updateProfilePic = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const updateUserName = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { name } = req.body;
+
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (!name || !name.trim()) return res.status(400).json({ error: "Name is required" });
+
+        await users.update({ name: name.trim() }, { where: { id: authUser.user_id } });
+
+        res.status(200).json({ message: "Name updated successfully", name: name.trim() });
+    } catch (error) {
+        console.error("Update User Name Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

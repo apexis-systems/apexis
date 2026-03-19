@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-    View,
-    Text,
-    Modal,
-    TouchableOpacity,
-    TextInput,
-    StyleSheet,
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView
+    View, Modal, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView
 } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { updateProject } from '@/services/projectService';

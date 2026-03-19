@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Image, StyleSheet } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { getSecureFileUrl } from '@/services/fileService';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Props {
     fileKey?: string;
@@ -11,6 +13,7 @@ interface Props {
 }
 
 export default function SecureAvatar({ fileKey, name, size = 40, style }: Props) {
+    const { colors } = useTheme();
     const [imgUri, setImgUri] = useState<string | null>(null);
 
     useEffect(() => {
@@ -46,7 +49,7 @@ export default function SecureAvatar({ fileKey, name, size = 40, style }: Props)
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: '#f97316',
+            backgroundColor: colors.primary,
             alignItems: 'center',
             justifyContent: 'center'
         }, style]}>
