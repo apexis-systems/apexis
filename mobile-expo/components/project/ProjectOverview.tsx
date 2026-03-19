@@ -162,6 +162,51 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     ))}
                 </View>
 
+                {/* Project Access Codes */}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                    {[
+                        { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code' },
+                        { label: 'Client Code', value: (project as any).client_code, id: 'client_code' },
+                    ].map((item) => (
+                        <View
+                            key={item.id}
+                            style={{
+                                flex: 1,
+                                borderRadius: 16,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: 12,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.05,
+                                shadowRadius: 4,
+                                elevation: 1,
+                            }}
+                        >
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '700', marginBottom: 2, textTransform: 'uppercase' }}>{item.label}</Text>
+                                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{item.value || '—'}</Text>
+                            </View>
+                            {item.value ? (
+                                <TouchableOpacity
+                                    onPress={() => handleCopy(item.value!, item.id)}
+                                    style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                >
+                                    <Feather
+                                        name={copiedId === item.id ? "check" : "copy"}
+                                        size={14}
+                                        color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                    />
+                                </TouchableOpacity>
+                            ) : null}
+                        </View>
+                    ))}
+                </View>
+
                 {/* Quick Actions */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                     {[

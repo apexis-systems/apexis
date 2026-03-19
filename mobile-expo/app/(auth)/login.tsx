@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { 
-    View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native';
+import { useState, useEffect } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import {
+    View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image
+} from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -26,11 +28,84 @@ export default function LoginScreen() {
     const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState('');
 
     const { login } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
+
+    const STORAGE_KEYS = {
+        admin: 'remembered_admin',
+        contributor: 'remembered_contributor',
+        client: 'remembered_client'
+    };
+
+    // Load credentials on mount and role switch
+    useEffect(() => {
+        loadStoredCredentials();
+    }, [selectedRole]);
+
+    const loadStoredCredentials = async () => {
+        try {
+            const key = STORAGE_KEYS[selectedRole as keyof typeof STORAGE_KEYS];
+            if (!key) return;
+
+            const stored = await SecureStore.getItemAsync(key);
+            if (stored) {
+                const data = JSON.parse(stored);
+                if (selectedRole === 'admin') {
+                    setEmail(data.email || '');
+                    setPassword(data.password || '');
+                } else if (selectedRole === 'contributor') {
+                    setEmail(data.email || '');
+                    setProjectCode(data.code || '');
+                } else if (selectedRole === 'client') {
+                    setClientName(data.name || '');
+                    setProjectCode(data.code || '');
+                }
+                setRememberMe(true);
+            } else {
+                // Clear fields if no remembered account for this role
+                if (selectedRole === 'admin') {
+                    setEmail('');
+                    setPassword('');
+                } else if (selectedRole === 'contributor') {
+                    setEmail('');
+                    setProjectCode('');
+                } else if (selectedRole === 'client') {
+                    setClientName('');
+                    setProjectCode('');
+                }
+                setRememberMe(false);
+            }
+        } catch (e) {
+            console.error("Error loading credentials", e);
+        }
+    };
+
+    const saveStoredCredentials = async () => {
+        try {
+            const key = STORAGE_KEYS[selectedRole as keyof typeof STORAGE_KEYS];
+            if (!key) return;
+
+            if (rememberMe) {
+                let data = {};
+                if (selectedRole === 'admin') {
+                    data = { email, password };
+                } else if (selectedRole === 'contributor') {
+                    data = { email, code: projectCode };
+                } else if (selectedRole === 'client') {
+                    data = { name: clientName, code: projectCode };
+                }
+                await SecureStore.setItemAsync(key, JSON.stringify(data));
+            } else {
+                await SecureStore.deleteItemAsync(key);
+            }
+        } catch (e) {
+            console.error("Error saving credentials", e);
+        }
+    };
 
     const handleLogin = async () => {
         setIsLoading(true);
@@ -49,6 +124,7 @@ export default function LoginScreen() {
             }
 
             if (res?.token) {
+                await saveStoredCredentials();
                 const user = await login(res.token);
                 router.replace('/(tabs)');
             }
@@ -252,9 +328,6 @@ export default function LoginScreen() {
                                         fontSize: 15,
                                     }}
                                 />
-                                <TouchableOpacity style={{ marginTop: 4 }}>
-                                    <Text style={{ fontSize: 10, color: colors.primary }}>Forgot project code?</Text>
-                                </TouchableOpacity>
                             </View>
                         )}
                     </View>
@@ -263,7 +336,34 @@ export default function LoginScreen() {
                         <Text style={{ color: '#ef4444', textAlign: 'center', marginVertical: 12, fontSize: 13 }}>
                             {error}
                         </Text>
-                    ) : <View style={{ height: 24 }} />}
+                    ) : <View style={{ height: 12 }} />}
+
+                    {/* Remember Me Toggle */}
+                    <TouchableOpacity
+                        onPress={() => setRememberMe(!rememberMe)}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            marginBottom: 20,
+                            alignSelf: 'flex-start',
+                            paddingVertical: 4
+                        }}
+                    >
+                        <View style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 6,
+                            borderWidth: 2,
+                            borderColor: rememberMe ? colors.primary : colors.border,
+                            backgroundColor: rememberMe ? colors.primary : 'transparent',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 8
+                        }}>
+                            {rememberMe && <Ionicons name="checkmark" size={14} color="#fff" />}
+                        </View>
+                        <Text style={{ fontSize: 13, color: colors.text, fontWeight: '500' }}>Remember Me</Text>
+                    </TouchableOpacity>
 
                     {/* Sign In Button */}
                     <TouchableOpacity
