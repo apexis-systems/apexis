@@ -42,6 +42,16 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            phone_number: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                unique: true,
+            },
+            phone_verified: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
             fcm_token: {
                 type: DataTypes.STRING,
                 allowNull: true,

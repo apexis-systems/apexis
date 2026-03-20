@@ -51,3 +51,13 @@ export const updateUserName = async (data: { name: string }) => {
         throw error;
     }
 };
+
+export const getOnboardingLinks = async () => {
+    try {
+        const response = await PrivateAxios.get('/users/onboarding-links');
+        return response.data;
+    } catch (error) {
+        console.error("getOnboardingLinks Error", error);
+        throw error;
+    }
+};

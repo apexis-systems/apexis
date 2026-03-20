@@ -9,21 +9,19 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { loginAdmin, loginProject, loginSuperAdmin } from '@/services/authService';
+import { loginAdmin, loginProject } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
-    // { value: 'superadmin', label: 'Super Admin', desc: 'Full system control' },
-    { value: 'admin', label: 'Admin', desc: 'Full project control' },
-    { value: 'contributor', label: 'Contributor', desc: 'Upload & view assigned' },
-    { value: 'client', label: 'Client', desc: 'View shared files only' },
+    { value: 'admin', label: 'Admin', desc: 'Project Control' },
+    { value: 'contributor', label: 'Contributor', desc: 'Field Work' },
+    { value: 'client', label: 'Client', desc: 'View Only' },
 ];
 
 export default function LoginScreen() {
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [projectCode, setProjectCode] = useState('');
-    const [clientName, setClientName] = useState('');
 
     const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
     const [isLoading, setIsLoading] = useState(false);
@@ -36,12 +34,11 @@ export default function LoginScreen() {
     const { colors } = useTheme();
 
     const STORAGE_KEYS = {
-        admin: 'remembered_admin',
-        contributor: 'remembered_contributor',
-        client: 'remembered_client'
+        admin: 'remembered_admin_v2',
+        contributor: 'remembered_contributor_v2',
+        client: 'remembered_client_v2'
     };
 
-    // Load credentials on mount and role switch
     useEffect(() => {
         loadStoredCredentials();
     }, [selectedRole]);
@@ -49,34 +46,17 @@ export default function LoginScreen() {
     const loadStoredCredentials = async () => {
         try {
             const key = STORAGE_KEYS[selectedRole as keyof typeof STORAGE_KEYS];
-            if (!key) return;
-
             const stored = await SecureStore.getItemAsync(key);
             if (stored) {
                 const data = JSON.parse(stored);
-                if (selectedRole === 'admin') {
-                    setEmail(data.email || '');
-                    setPassword(data.password || '');
-                } else if (selectedRole === 'contributor') {
-                    setEmail(data.email || '');
-                    setProjectCode(data.code || '');
-                } else if (selectedRole === 'client') {
-                    setClientName(data.name || '');
-                    setProjectCode(data.code || '');
-                }
+                setIdentifier(data.identifier || '');
+                if (selectedRole === 'admin') setPassword(data.secret || '');
+                else setProjectCode(data.secret || '');
                 setRememberMe(true);
             } else {
-                // Clear fields if no remembered account for this role
-                if (selectedRole === 'admin') {
-                    setEmail('');
-                    setPassword('');
-                } else if (selectedRole === 'contributor') {
-                    setEmail('');
-                    setProjectCode('');
-                } else if (selectedRole === 'client') {
-                    setClientName('');
-                    setProjectCode('');
-                }
+                setIdentifier('');
+                setPassword('');
+                setProjectCode('');
                 setRememberMe(false);
             }
         } catch (e) {
@@ -87,17 +67,11 @@ export default function LoginScreen() {
     const saveStoredCredentials = async () => {
         try {
             const key = STORAGE_KEYS[selectedRole as keyof typeof STORAGE_KEYS];
-            if (!key) return;
-
             if (rememberMe) {
-                let data = {};
-                if (selectedRole === 'admin') {
-                    data = { email, password };
-                } else if (selectedRole === 'contributor') {
-                    data = { email, code: projectCode };
-                } else if (selectedRole === 'client') {
-                    data = { name: clientName, code: projectCode };
-                }
+                const data = {
+                    identifier,
+                    secret: selectedRole === 'admin' ? password : projectCode
+                };
                 await SecureStore.setItemAsync(key, JSON.stringify(data));
             } else {
                 await SecureStore.deleteItemAsync(key);
@@ -108,24 +82,28 @@ export default function LoginScreen() {
     };
 
     const handleLogin = async () => {
+        if (!identifier || (selectedRole === 'admin' ? !password : !projectCode)) {
+            setError(`Please enter ${selectedRole === 'admin' ? 'Email/Phone and Password' : 'Email/Phone and Project Code'}`);
+            return;
+        }
+
         setIsLoading(true);
         setError('');
 
+        const isEmail = identifier.includes('@');
+        const payload: any = {
+            [isEmail ? 'email' : 'phone']: identifier,
+            [selectedRole === 'admin' ? 'password' : 'code']: selectedRole === 'admin' ? password : projectCode
+        };
+
         try {
-            let res;
-            if (selectedRole === 'admin') {
-                res = await loginAdmin({ email, password });
-            } else if (selectedRole === 'superadmin') {
-                res = await loginSuperAdmin({ email, password });
-            } else if (selectedRole === 'contributor') {
-                res = await loginProject({ email, code: projectCode });
-            } else if (selectedRole === 'client') {
-                res = await loginProject({ name: clientName, code: projectCode });
-            }
+            const res = selectedRole === 'admin'
+                ? await loginAdmin(payload)
+                : await loginProject(payload);
 
             if (res?.token) {
                 await saveStoredCredentials();
-                const user = await login(res.token);
+                await login(res.token);
                 router.replace('/(tabs)');
             }
         } catch (err: any) {
@@ -137,266 +115,101 @@ export default function LoginScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
-            >
-                <ScrollView
-                    contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 }}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    {/* Logo + Branding */}
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 }} keyboardShouldPersistTaps="handled">
+
                     <View style={{ alignItems: 'center', marginBottom: 40 }}>
-                        <View
-                            style={{
-                                height: 128,
-                                width: 128,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginBottom: 16,
-                            }}
-                        >
-                            <Image
-                                source={require('../../assets/images/app-icon.png')}
-                                style={{ width: '100%', height: '100%' }}
-                                resizeMode="contain"
-                            />
-                        </View>
-                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary, letterSpacing: 1 }}>
-                            APEXIS
-                        </Text>
-                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>
-                            RECORD · REPORT · RELEASE
-                        </Text>
+                        <Image source={require('../../assets/images/app-icon.png')} style={{ width: 100, height: 100, marginBottom: 16 }} resizeMode="contain" />
+                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary }}>APEXIS</Text>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>RECORD · REPORT · RELEASE</Text>
                     </View>
 
-                    {/* Role Selector */}
                     <View style={{ marginBottom: 24 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 8 }}>
-                            Select your role
-                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 8 }}>Select Role</Text>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             {roles.map((role) => (
                                 <TouchableOpacity
                                     key={role.value}
-                                    onPress={() => {
-                                        setSelectedRole(role.value);
-                                        setError('');
-                                    }}
+                                    onPress={() => { setSelectedRole(role.value); setError(''); }}
                                     style={{
-                                        flex: 1,
-                                        borderRadius: 12,
-                                        borderWidth: 2,
+                                        flex: 1, borderRadius: 12, borderWidth: 2,
                                         borderColor: selectedRole === role.value ? colors.primary : colors.border,
-                                        backgroundColor: selectedRole === role.value ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                        padding: 10,
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        minHeight: 60,
+                                        backgroundColor: selectedRole === role.value ? (colors.primary + '11') : colors.surface,
+                                        padding: 10, alignItems: 'center', minHeight: 52, justifyContent: 'center'
                                     }}
                                 >
-                                    <Text
-                                        style={{
-                                            fontSize: 11,
-                                            fontWeight: '700',
-                                            color: selectedRole === role.value ? colors.primary : colors.text,
-                                            textAlign: 'center',
-                                        }}
-                                    >
-                                        {role.label}
-                                    </Text>
-                                    <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2, textAlign: 'center' }}>
-                                        {role.desc}
-                                    </Text>
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: selectedRole === role.value ? colors.primary : colors.text }}>{role.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
                     </View>
 
-                    {/* Dynamic Inputs Based on Role */}
                     <View style={{ gap: 16 }}>
-                        {selectedRole === 'client' ? (
-                            <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                    Your Name
-                                </Text>
-                                <TextInput
-                                    value={clientName}
-                                    onChangeText={setClientName}
-                                    placeholder="John Doe"
-                                    placeholderTextColor={colors.textMuted}
-                                    style={{
-                                        height: 48,
-                                        borderRadius: 12,
-                                        backgroundColor: colors.surface,
-                                        color: colors.text,
-                                        paddingHorizontal: 14,
-                                        fontSize: 15,
-                                    }}
-                                />
-                            </View>
-                        ) : (
-                            <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                    {selectedRole === 'contributor' ? 'Email or Phone' : 'Work Email'}
-                                </Text>
-                                <TextInput
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    placeholder={selectedRole === 'contributor' ? "email@example.com / +91..." : "you@company.com"}
-                                    placeholderTextColor={colors.textMuted}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                    style={{
-                                        height: 48,
-                                        borderRadius: 12,
-                                        backgroundColor: colors.surface,
-                                        color: colors.text,
-                                        paddingHorizontal: 14,
-                                        fontSize: 15,
-                                    }}
-                                />
-                            </View>
-                        )}
+                        <View>
+                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Email or Phone Number</Text>
+                            <TextInput
+                                value={identifier}
+                                onChangeText={setIdentifier}
+                                placeholder="you@example.com or +91..."
+                                placeholderTextColor={colors.textMuted}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }}
+                            />
+                        </View>
 
-                        {(selectedRole === 'admin' || selectedRole === 'superadmin') && (
+                        {selectedRole === 'admin' ? (
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                    Password
-                                </Text>
-                                <View style={{
-                                    height: 48,
-                                    borderRadius: 12,
-                                    backgroundColor: colors.surface,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    paddingHorizontal: 14,
-                                }}>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Password</Text>
+                                <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 }}>
                                     <TextInput
                                         value={password}
                                         onChangeText={setPassword}
                                         placeholder="••••••••"
                                         placeholderTextColor={colors.textMuted}
                                         secureTextEntry={!showPassword}
-                                        style={{
-                                            flex: 1,
-                                            color: colors.text,
-                                            fontSize: 15,
-                                            height: '100%',
-                                        }}
+                                        style={{ flex: 1, color: colors.text }}
                                     />
-                                    <TouchableOpacity
-                                        onPress={() => setShowPassword(!showPassword)}
-                                        style={{ padding: 4 }}
-                                    >
-                                        <Ionicons
-                                            name={showPassword ? "eye-off-outline" : "eye-outline"}
-                                            size={20}
-                                            color={colors.textMuted}
-                                        />
+                                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                                        <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
                                     </TouchableOpacity>
                                 </View>
-                                {/* Forgot Password - Functionality from snippet, UI from old code */}
-                                {(selectedRole === 'admin' || selectedRole === 'superadmin') && (
-                                    <TouchableOpacity
-                                        onPress={() => router.push('/(auth)/forgot-password')}
-                                        style={{ marginTop: 4 }}
-                                    >
-                                        <Text style={{ fontSize: 10, color: colors.primary }}>Forgot password?</Text>
-                                    </TouchableOpacity>
-                                )}
+                                <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={{ marginTop: 6 }}>
+                                    <Text style={{ fontSize: 11, color: colors.primary, marginTop: 4 }}>Forgot password?</Text>
+                                </TouchableOpacity>
                             </View>
-                        )}
-
-                        {(selectedRole === 'contributor' || selectedRole === 'client') && (
+                        ) : (
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                    Project Code
-                                </Text>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Project Code</Text>
                                 <TextInput
                                     value={projectCode}
                                     onChangeText={setProjectCode}
                                     placeholder="Enter project code"
                                     placeholderTextColor={colors.textMuted}
                                     autoCapitalize="characters"
-                                    style={{
-                                        height: 48,
-                                        borderRadius: 12,
-                                        backgroundColor: colors.surface,
-                                        color: colors.text,
-                                        paddingHorizontal: 14,
-                                        fontSize: 15,
-                                    }}
+                                    style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }}
                                 />
                             </View>
                         )}
                     </View>
 
-                    {error ? (
-                        <Text style={{ color: '#ef4444', textAlign: 'center', marginVertical: 12, fontSize: 13 }}>
-                            {error}
-                        </Text>
-                    ) : <View style={{ height: 12 }} />}
+                    {error ? <Text style={{ color: '#ef4444', textAlign: 'center', marginVertical: 12, fontSize: 13 }}>{error}</Text> : <View style={{ height: 12 }} />}
 
-                    {/* Remember Me Toggle */}
-                    <TouchableOpacity
-                        onPress={() => setRememberMe(!rememberMe)}
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            marginBottom: 20,
-                            alignSelf: 'flex-start',
-                            paddingVertical: 4
-                        }}
-                    >
-                        <View style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 6,
-                            borderWidth: 2,
-                            borderColor: rememberMe ? colors.primary : colors.border,
-                            backgroundColor: rememberMe ? colors.primary : 'transparent',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: 8
-                        }}>
-                            {rememberMe && <Ionicons name="checkmark" size={14} color="#fff" />}
-                        </View>
-                        <Text style={{ fontSize: 13, color: colors.text, fontWeight: '500' }}>Remember Me</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                        <TouchableOpacity onPress={() => setRememberMe(!rememberMe)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: rememberMe ? colors.primary : colors.border, backgroundColor: rememberMe ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                                {rememberMe && <Ionicons name="checkmark" size={12} color="#fff" />}
+                            </View>
+                            <Text style={{ fontSize: 13, color: colors.text }}>Remember Me</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity onPress={handleLogin} disabled={isLoading} style={{ height: 52, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 20, opacity: isLoading ? 0.7 : 1 }}>
+                        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>}
                     </TouchableOpacity>
 
-                    {/* Sign In Button */}
-                    <TouchableOpacity
-                        onPress={handleLogin}
-                        disabled={isLoading}
-                        style={{
-                            height: 52,
-                            borderRadius: 14,
-                            backgroundColor: colors.primary,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: 14,
-                            opacity: isLoading ? 0.7 : 1,
-                        }}
-                    >
-                        {isLoading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>
-                        )}
-                    </TouchableOpacity>
-
-                    {/* SSO */}
-                    {/* <TouchableOpacity style={{ alignItems: 'center', marginBottom: 20 }}>
-                        <Text style={{ fontSize: 13, color: colors.textMuted }}>Login with SSO</Text>
-                    </TouchableOpacity> */}
-
-                    {/* Sign Up */}
                     <TouchableOpacity onPress={() => router.push('/(auth)/signup')} style={{ alignItems: 'center' }}>
-                        <Text style={{ fontSize: 13, color: colors.textMuted }}>
-                            Don't have an account?{' '}
-                            <Text style={{ fontWeight: '600', color: colors.primary }}>Sign Up</Text>
-                        </Text>
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>Don't have an account? <Text style={{ fontWeight: '600', color: colors.primary }}>Sign Up</Text></Text>
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>

@@ -1,65 +1,30 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { users, organizations, projects, project_members, Sequelize } from "../models/index.ts";
+import { users, organizations, project_members, projects } from "../models/index.ts";
+import { Op } from "sequelize";
 import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
 
-const OTP_TTL = 300; // 5 minutes
-// ==========================
-// SUPERADMIN LOGIN
-// ==========================
-
-export const superadminLogin = async (req: Request, res: Response) => {
-    try {
-        const { email, password } = req.body;
-
-        const user = await users.findOne({ where: { email, role: "superadmin" } });
-        if (!user) {
-            return res.status(401).json({ error: "Invalid credentials" });
-        }
-
-        if (!user.email_verified) {
-            return res.status(401).json({ error: "Email not verified" });
-        }
-
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({ error: "Invalid credentials" });
-        }
-
-        const token = jwt.sign(
-            {
-                user_id: user.id,
-                role: user.role,
-                organization_id: user.organization_id
-            },
-            process.env.JWT_SECRET || "default_secret",
-            { expiresIn: "30d" }
-        );
-
-        res.status(200).json({ token });
-    } catch (error) {
-        console.error("SuperAdmin Login Error:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
-};
-
-// ==========================
-// ADMIN LOGIN
-// ==========================
-
 export const adminLogin = async (req: Request, res: Response) => {
     try {
-        const { email, password } = req.body;
+        const { email, phone, password } = req.body;
 
-        const user = await users.findOne({ where: { email, role: "admin" } });
-        if (!user) {
-            return res.status(401).json({ error: "Invalid credentials" });
+        if (!password) {
+            return res.status(400).json({ error: "Password is required" });
         }
 
-        if (!user.email_verified) {
-            return res.status(401).json({ error: "Email not verified" });
+        const user = await users.findOne({
+            where: {
+                [Op.or]: [
+                    email ? { email: email.toLowerCase() } : null,
+                    phone ? { phone_number: phone } : null
+                ].filter(Boolean) as any[]
+            }
+        });
+
+        if (!user || user.role !== "admin") {
+            return res.status(401).json({ error: "Invalid credentials" });
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -68,29 +33,21 @@ export const adminLogin = async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            {
-                user_id: user.id,
-                role: user.role,
-                organization_id: user.organization_id
-            },
+            { user_id: user.id, role: user.role, organization_id: user.organization_id },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
         );
 
-        res.status(200).json({ token });
+        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
     } catch (error) {
         console.error("Admin Login Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
 
-// ==========================
-// PROJECT LOGIN
-// ==========================
-
 export const projectLogin = async (req: Request, res: Response) => {
     try {
-        const { email, code, name } = req.body;
+        const { email, phone, code } = req.body;
 
         if (!code) {
             return res.status(400).json({ error: "Project code is required" });
@@ -98,146 +55,118 @@ export const projectLogin = async (req: Request, res: Response) => {
 
         // Try to find project by contributor_code OR client_code
         const project = await projects.findOne({
-            where: Sequelize.or(
-                { contributor_code: code },
-                { client_code: code }
-            )
+            where: {
+                [Op.or]: [
+                    { contributor_code: code },
+                    { client_code: code }
+                ]
+            }
         });
 
         if (!project) {
             return res.status(404).json({ error: "Invalid project code" });
         }
 
-        const isContributorLogin = project.contributor_code === code;
-        const isClientLogin = project.client_code === code;
-
-        let user;
-
-        if (isContributorLogin) {
-            if (!email) {
-                return res.status(400).json({ error: "Email is required for contributor login" });
-            }
-
-            const [foundOrCreatedUser] = await users.findOrCreate({
-                where: { email },
-                defaults: {
-                    name: name || email.split('@')[0],
-                    role: "contributor",
-                    email_verified: true,
-                    is_primary: false,
-                    organization_id: project.organization_id
-                }
-            });
-            user = foundOrCreatedUser;
-
-            await project_members.findOrCreate({
-                where: {
-                    project_id: project.id,
-                    user_id: user.id,
-                    role: "contributor"
-                }
-            });
-
-        } else if (isClientLogin) {
-            if (!name) {
-                return res.status(400).json({ error: "Name is required for client login" });
-            }
-
-            const [foundOrCreatedUser] = await users.findOrCreate({
-                where: { name, role: "client" },
-                defaults: {
-                    role: "client",
-                    email_verified: false,
-                    is_primary: false,
-                    organization_id: project.organization_id
-                }
-            });
-            user = foundOrCreatedUser;
-
-            await project_members.findOrCreate({
-                where: {
-                    project_id: project.id,
-                    user_id: user.id,
-                    role: "client"
-                }
-            });
+        if (!email && !phone) {
+            return res.status(400).json({ error: "Email or Phone number is required" });
         }
 
-        // Issue project-scoped JWT
+        // Only allow existing users who have onboarded
+        const user = await users.findOne({
+            where: {
+                organization_id: project.organization_id,
+                [Op.or]: [
+                    email ? { email: email.toLowerCase() } : null,
+                    phone ? { phone_number: phone } : null
+                ].filter(Boolean) as any[]
+            }
+        });
+
+        if (!user) {
+            return res.status(401).json({ error: "User not found. Please sign up using the onboarding link first." });
+        }
+
+        // Verify if user is already a member of this project
+        const membership = await project_members.findOne({
+            where: {
+                project_id: project.id,
+                user_id: user.id
+            }
+        });
+
+        if (!membership) {
+            return res.status(403).json({ error: "You are not assigned to this project." });
+        }
+
         const token = jwt.sign(
-            {
-                user_id: user.id,
-                role: user.role, // 'contributor' or 'client'
-                organization_id: user.organization_id,
-                project_id: project.id
-            },
+            { user_id: user.id, role: user.role, organization_id: user.organization_id },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
         );
 
-        res.status(200).json({ token, project_id: project.id, role: user.role });
+        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
     } catch (error) {
         console.error("Project Login Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
 
-// ==========================
-// GET CURRENT USER /me
-// ==========================
-
-export const me = async (req: Request, res: Response) => {
+export const superadminLogin = async (req: Request, res: Response) => {
     try {
-        const authUser = (req as any).user;
-        if (!authUser) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
-
-        const user = await users.findByPk(authUser.user_id, {
-            attributes: { exclude: ['password'] },
-            include: [{
-                model: organizations,
-                attributes: ['id', 'name', 'logo']
-            }]
-        });
+        const { email, password } = req.body;
+        const user = await users.findOne({ where: { email: email.toLowerCase(), role: "superadmin" } });
 
         if (!user) {
-            return res.status(404).json({ error: "User not found" });
+            return res.status(401).json({ error: "Invalid credentials" });
         }
 
-        res.status(200).json({ user });
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: "Invalid credentials" });
+        }
+
+        const token = jwt.sign(
+            { user_id: user.id, role: "superadmin" },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "24h" }
+        );
+
+        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, role: "superadmin" } });
     } catch (error) {
-        console.error("Me Route Error:", error);
+        console.error("Superadmin Login Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
 
-// ==========================
-// SUPERADMIN INVITATION ONBOARDING
-// ==========================
+export const me = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const user = await users.findByPk(authUser.user_id, {
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'organization_id', 'profile_pic']
+        });
+
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        const organization = user.organization_id ? await organizations.findByPk(user.organization_id) : null;
+
+        res.status(200).json({
+            user,
+            organization
+        });
+    } catch (error) {
+        console.error("Me Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
 
 export const verifyInvitation = async (req: Request, res: Response) => {
     try {
         const { token } = req.query;
+        if (!token) return res.status(400).json({ error: "Token is required" });
 
-        if (!token) {
-            return res.status(400).json({ error: "Token is required" });
-        }
-
-        const decoded = jwt.verify(token as string, process.env.JWT_SECRET || "default_secret") as any;
-
-        const user = await users.findByPk(decoded.user_id);
-        if (!user || user.email !== decoded.email) {
-            return res.status(404).json({ error: "Invalid invitation" });
-        }
-
-        if (user.email_verified) {
-            return res.status(400).json({ error: "Invitation already completed" });
-        }
-
-        res.status(200).json({ email: user.email });
+        const decoded: any = jwt.verify(token as string, process.env.JWT_SECRET || "default_secret");
+        res.status(200).json({ email: decoded.email, role: decoded.role || 'admin' });
     } catch (error) {
-        console.error("Verify Invitation Error:", error);
         res.status(400).json({ error: "Invalid or expired token" });
     }
 };
@@ -245,75 +174,103 @@ export const verifyInvitation = async (req: Request, res: Response) => {
 export const completeOnboarding = async (req: Request, res: Response) => {
     try {
         const { token, name, password } = req.body;
+        const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
 
-        if (!token || !name || !password) {
-            return res.status(400).json({ error: "All fields are required" });
-        }
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_secret") as any;
-
-        const user = await users.findByPk(decoded.user_id);
-        if (!user || user.email !== decoded.email) {
-            return res.status(404).json({ error: "Invalid invitation" });
-        }
-
-        if (user.email_verified) {
-            return res.status(400).json({ error: "Invitation already completed" });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        await user.update({
+        const updateData: any = {
             name,
-            password: hashedPassword,
             email_verified: true
-        });
+        };
 
-        res.status(200).json({ message: "Account setup successful! You can now log in." });
+        if (password) {
+            updateData.password = await bcrypt.hash(password, 10);
+        }
+
+        await users.update(updateData, { where: { id: decoded.user_id } });
+
+        res.status(200).json({ message: "Account setup complete" });
     } catch (error) {
-        console.error("Complete Onboarding Error:", error);
         res.status(400).json({ error: "Invalid or expired token" });
     }
 };
 
-// ==========================
-// PASSWORD MANAGEMENT
-// ==========================
+export const verifyOnboardingToken = async (req: Request, res: Response) => {
+    try {
+        const { token } = req.query;
+        if (!token) return res.status(400).json({ error: "Token is required" });
+
+        const decoded: any = jwt.verify(token as string, process.env.JWT_SECRET || "default_secret");
+        if (decoded.type !== "public_onboarding") throw new Error("Invalid token type");
+
+        res.status(200).json({ role: decoded.role, organization_id: decoded.organization_id });
+    } catch (error) {
+        res.status(400).json({ error: "Invalid or expired token" });
+    }
+};
+
+export const completePublicSignup = async (req: Request, res: Response) => {
+    try {
+        const { token, name, email, phone, project_code } = req.body;
+        const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
+
+        if (decoded.type !== "public_onboarding") throw new Error("Invalid token type");
+
+        if (!email && !phone) return res.status(400).json({ error: "Email or Phone is required" });
+        if (!project_code) return res.status(400).json({ error: "Project code is required" });
+
+        // Find project by code
+        const project = await projects.findOne({
+            where: {
+                organization_id: decoded.organization_id,
+                [Op.or]: [
+                    { contributor_code: project_code },
+                    { client_code: project_code }
+                ]
+            }
+        });
+
+        if (!project) return res.status(404).json({ error: "Invalid project code" });
+
+        // Create user
+        const newUser = await users.create({
+            organization_id: decoded.organization_id,
+            name,
+            email: email?.toLowerCase() || null,
+            phone_number: phone || null,
+            role: decoded.role,
+            email_verified: !!email,
+            phone_verified: !!phone,
+            is_primary: false
+        });
+
+        // Add to project
+        await project_members.create({
+            project_id: project.id,
+            user_id: newUser.id,
+            role: decoded.role
+        });
+
+        res.status(201).json({ message: "Signup complete" });
+    } catch (error) {
+        console.error("Public Signup Error:", error);
+        res.status(400).json({ error: "Invalid or expired token" });
+    }
+};
 
 export const forgotPasswordRequestOtp = async (req: Request, res: Response) => {
     try {
-        const { email, role } = req.body; // role: 'superadmin' or 'admin'
+        const { email, role } = req.body;
+        const user = await users.findOne({ where: { email: email.toLowerCase(), role } });
 
-        if (!email || !role) {
-            return res.status(400).json({ error: "Email and role are required" });
-        }
-
-        const user = await users.findOne({ where: { email, role } });
-        if (!user) {
-            return res.status(404).json({ error: "User not found with this role" });
-        }
+        if (!user) return res.status(404).json({ error: "User not found" });
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        console.log(`Forgot Password OTP for ${email}:`, otp);
         const otpHash = await bcrypt.hash(otp, 10);
 
-        const redisKey = `otp:forgot-password:${email}`;
-        await redis.set(
-            redisKey,
-            JSON.stringify({ otp_hash: otpHash, role }),
-            "EX",
-            OTP_TTL
-        );
-
-        await sendEmail(
-            email,
-            "Password Reset Verification Code",
-            `Your OTP for password reset is: ${otp}\n\nIt is valid for 5 minutes.`
-        );
+        await redis.set(`otp:forgot:${email}`, otpHash, "EX", 600);
+        await sendEmail(email, "Password Reset OTP", `Your OTP for password reset is: ${otp}`);
 
         res.status(200).json({ message: "OTP sent to email" });
     } catch (error) {
-        console.error("Forgot Password Request OTP Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -321,30 +278,18 @@ export const forgotPasswordRequestOtp = async (req: Request, res: Response) => {
 export const forgotPasswordVerifyOtp = async (req: Request, res: Response) => {
     try {
         const { email, otp } = req.body;
-        const redisKey = `otp:forgot-password:${email}`;
+        const normalizedEmail = email.toLowerCase();
+        const savedOtpHash = await redis.get(`otp:forgot:${normalizedEmail}`);
 
-        const redisDataStr = await redis.get(redisKey);
-        if (!redisDataStr) {
-            return res.status(400).json({ error: "OTP expired or invalid" });
+        if (!savedOtpHash || !(await bcrypt.compare(otp, savedOtpHash))) {
+            return res.status(400).json({ error: "Invalid or expired OTP" });
         }
 
-        const { otp_hash, role } = JSON.parse(redisDataStr);
+        const resetToken = jwt.sign({ email: normalizedEmail }, process.env.JWT_SECRET || "default_secret", { expiresIn: "15m" });
+        await redis.del(`otp:forgot:${normalizedEmail}`);
 
-        const isOtpValid = await bcrypt.compare(otp, otp_hash);
-        if (!isOtpValid) {
-            return res.status(400).json({ error: "Invalid OTP" });
-        }
-
-        // Issue a short-lived reset token
-        const resetToken = jwt.sign(
-            { email, role, type: "password_reset" },
-            process.env.JWT_SECRET || "default_secret",
-            { expiresIn: "10m" }
-        );
-
-        res.status(200).json({ resetToken, message: "OTP verified" });
+        res.status(200).json({ resetToken });
     } catch (error) {
-        console.error("Forgot Password Verify OTP Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -352,30 +297,13 @@ export const forgotPasswordVerifyOtp = async (req: Request, res: Response) => {
 export const resetPassword = async (req: Request, res: Response) => {
     try {
         const { resetToken, newPassword } = req.body;
+        const decoded: any = jwt.verify(resetToken, process.env.JWT_SECRET || "default_secret");
 
-        if (!resetToken || !newPassword) {
-            return res.status(400).json({ error: "Reset token and new password are required" });
-        }
-
-        const decoded = jwt.verify(resetToken, process.env.JWT_SECRET || "default_secret") as any;
-        if (decoded.type !== "password_reset") {
-            return res.status(400).json({ error: "Invalid token type" });
-        }
-
-        const user = await users.findOne({ where: { email: decoded.email, role: decoded.role } });
-        if (!user) {
-            return res.status(404).json({ error: "User not found" });
-        }
-
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await user.update({ password: hashedPassword });
-
-        // Clear OTP from redis
-        await redis.del(`otp:forgot-password:${decoded.email}`);
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        await users.update({ password: passwordHash }, { where: { email: decoded.email } });
 
         res.status(200).json({ message: "Password reset successful" });
     } catch (error) {
-        console.error("Reset Password Error:", error);
         res.status(400).json({ error: "Invalid or expired reset token" });
     }
 };
@@ -385,26 +313,17 @@ export const changePassword = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         const { currentPassword, newPassword } = req.body;
 
-        if (!currentPassword || !newPassword) {
-            return res.status(400).json({ error: "Current and new password are required" });
-        }
-
         const user = await users.findByPk(authUser.user_id);
-        if (!user) {
-            return res.status(404).json({ error: "User not found" });
-        }
+        if (!user) return res.status(404).json({ error: "User not found" });
 
-        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
-        if (!isPasswordValid) {
-            return res.status(400).json({ error: "Current password is incorrect" });
-        }
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) return res.status(400).json({ error: "Incorrect current password" });
 
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await user.update({ password: hashedPassword });
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        await users.update({ password: passwordHash }, { where: { id: user.id } });
 
         res.status(200).json({ message: "Password updated successfully" });
     } catch (error) {
-        console.error("Change Password Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

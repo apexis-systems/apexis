@@ -23,71 +23,54 @@ export const inviteUser = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "ProjectId is required for contributor/client invitations" });
         }
 
-        // Logic for Admin role (Full user creation + Deep Link)
-        if (role === 'admin') {
-            const existingUser = await users.findOne({ where: { email } });
-            if (existingUser) {
-                return res.status(400).json({ error: "User already exists with this email" });
-            }
+        // Unified Invitation Logic for all roles
+        const existingUser = await users.findOne({ where: { email } });
+        if (existingUser) {
+            return res.status(400).json({ error: "User already exists with this email" });
+        }
 
-            const newUser = await users.create({
-                organization_id: authUser.organization_id,
-                name: "Pending",
-                email,
-                role,
-                is_primary: false,
-                email_verified: false,
+        const newUser = await users.create({
+            organization_id: authUser.organization_id,
+            name: "Pending",
+            email,
+            role,
+            is_primary: false,
+            email_verified: false,
+        });
+
+        // For Project Roles, pre-associate with the project
+        if ((role === 'contributor' || role === 'client') && actualProjectId) {
+            const { project_members: ProjectMember } = await import("../models/index.ts");
+            await ProjectMember.create({
+                project_id: actualProjectId,
+                user_id: newUser.id,
+                role: role
             });
-
-            // Generate invitation token
-            const token = jwt.sign(
-                { user_id: newUser.id, email: newUser.email, organization_id: authUser.organization_id },
-                process.env.JWT_SECRET || "default_secret",
-                { expiresIn: "48h" }
-            );
-
-            // Smart Link to Web Landing Page (which redirects to app)
-            const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/invite?token=${token}`;
-
-            await sendEmail(
-                email,
-                "Invitation to join Apexis as Admin",
-                `<h1>Welcome to Apexis</h1>
-                 <p>You have been invited as an Admin for your organization.</p>
-                 <p>Please click the link below to set up your account in the Apexis mobile app:</p>
-                 <a href="${inviteUrl}" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Set Up Account</a>
-                 <p>If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>`,
-                true
-            );
-
-            return res.status(201).json({ message: "Admin invited successfully", user: newUser });
         }
 
-        // Logic for Contributor/Client role (Project Code only)
-        if (role === 'contributor' || role === 'client') {
-            const project = await projects.findOne({ where: { id: actualProjectId, organization_id: authUser.organization_id } });
-            if (!project) {
-                return res.status(404).json({ error: "Project not found" });
-            }
+        // Generate invitation token
+        const token = jwt.sign(
+            { user_id: newUser.id, email: newUser.email, organization_id: authUser.organization_id },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "48h" }
+        );
 
-            const code = role === 'contributor' ? project.contributor_code : project.client_code;
-            const roleName = role.charAt(0).toUpperCase() + role.slice(1);
+        // Smart Link to Web Landing Page (which redirects to app)
+        const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/invite?token=${token}`;
+        const roleName = role.charAt(0).toUpperCase() + role.slice(1);
 
-            await sendEmail(
-                email,
-                `Apexis: Invitation to join ${project.name}`,
-                `<h1>Project Invitation</h1>
-                 <p>You have been invited to join the project <strong>${project.name}</strong> as a ${roleName}.</p>
-                 <p>Please use the following access code to join the project in the Apexis mobile app:</p>
-                 <div style="font-size: 24px; font-weight: bold; padding: 20px; background: #f4f4f4; text-align: center; border-radius: 8px; margin: 20px 0;">
-                    ${code}
-                 </div>
-                 <p>Open the Apexis app and enter this code to get started.</p>`,
-                true
-            );
+        await sendEmail(
+            email,
+            `Invitation to join Apexis as ${roleName}`,
+            `<h1>Welcome to Apexis</h1>
+             <p>You have been invited as a <strong>${roleName}</strong> for your organization.</p>
+             <p>Please click the link below to set up your account in the Apexis mobile app:</p>
+             <a href="${inviteUrl}" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Set Up Account</a>
+             <p>If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>`,
+            true
+        );
 
-            return res.status(200).json({ message: `${roleName} invitation sent with project code` });
-        }
+        return res.status(201).json({ message: `${roleName} invited successfully`, user: newUser });
 
     } catch (error) {
         console.error("Invite User Error:", error);
@@ -225,6 +208,36 @@ export const updateUserName = async (req: Request, res: Response) => {
         res.status(200).json({ message: "Name updated successfully", name: name.trim() });
     } catch (error) {
         console.error("Update User Name Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getOnboardingLinks = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can get onboarding links" });
+        }
+
+        const orgId = authUser.organization_id;
+
+        const contributorToken = jwt.sign(
+            { organization_id: orgId, role: "contributor", type: "public_onboarding" },
+            process.env.JWT_SECRET || "default_secret"
+        );
+        const clientToken = jwt.sign(
+            { organization_id: orgId, role: "client", type: "public_onboarding" },
+            process.env.JWT_SECRET || "default_secret"
+        );
+
+        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+        res.status(200).json({
+            contributor_link: `${baseUrl}/auth/onboarding?token=${contributorToken}`,
+            client_link: `${baseUrl}/auth/onboarding?token=${clientToken}`
+        });
+    } catch (error) {
+        console.error("Get Onboarding Links Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
