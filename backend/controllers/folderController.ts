@@ -1,13 +1,14 @@
 import type { Request, Response } from "express";
 import { folders, project_members, activities, users as UsersModel } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
+import { Op } from "sequelize";
 
 export const createFolder = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { project_id, name, parent_id } = req.body;
+        const { project_id, name, parent_id, folder_type } = req.body;
 
         // Restriction: Only "admin" and "contributor" can create folders.
         if (authUser.role !== "admin" && authUser.role !== "contributor") {
@@ -30,6 +31,7 @@ export const createFolder = async (req: Request, res: Response) => {
             client_visible: true,
             parent_id: parent_id || null,
             created_by: authUser.user_id,
+            folder_type: folder_type || null,
         });
 
         await activities.create({
@@ -51,15 +53,24 @@ export const createFolder = async (req: Request, res: Response) => {
 
 export const getFolders = async (req: Request, res: Response) => {
     try {
-        const { projectId } = req.query;
+        const { projectId, folder_type } = req.query;
 
         if (!projectId) {
             return res.status(400).json({ error: "Project ID is required" });
         }
 
         const authUser = (req as any).user;
+
+        const where: any = { project_id: projectId };
+        if (folder_type) {
+            where[Op.or] = [
+                { folder_type: folder_type },
+                { folder_type: null }
+            ];
+        }
+
         const projectFolders = await folders.findAll({
-            where: { project_id: projectId },
+            where,
             order: [['createdAt', 'ASC']]
         });
 

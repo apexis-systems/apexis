@@ -151,7 +151,10 @@ export default function ProjectWorkspaceScreen() {
                         {visibleTabs.map((tab) => (
                             <TouchableOpacity
                                 key={tab.key}
-                                onPress={() => setActiveTab(tab.key)}
+                                onPress={() => {
+                                    setActiveTab(tab.key);
+                                    router.setParams({ folderId: '' });
+                                }}
                                 style={{
                                     flex: 1,
                                     borderRadius: 10,

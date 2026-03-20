@@ -32,6 +32,10 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            folder_type: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
         },
         {
             tableName: "folders",

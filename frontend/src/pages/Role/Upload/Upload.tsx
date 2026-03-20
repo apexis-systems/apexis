@@ -86,18 +86,20 @@ function UploadInner() {
         const fetchFolders = async () => {
             if (!selectedProject) { setAllFolders([]); return; }
             try {
-                const data = await getFolders(selectedProject);
+                const typeMap: any = { photos: 'photo', documents: 'document' };
+                const data = await getFolders(selectedProject, uploadType ? typeMap[uploadType] : undefined);
                 const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
                 setAllFolders(rawFolders);
             } catch (err) { console.error("Failed to load folders", err); }
         };
         if (selectedProject) fetchFolders();
-    }, [selectedProject]);
+    }, [selectedProject, uploadType]);
 
     const importFolders = async () => {
         if (!selectedProject) return;
         try {
-            const data = await getFolders(selectedProject);
+            const typeMap: any = { photos: 'photo', documents: 'document' };
+            const data = await getFolders(selectedProject, uploadType ? typeMap[uploadType] : undefined);
             const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
             setAllFolders(rawFolders);
         } catch (err) { console.error("Failed to reload folders", err); }
@@ -156,7 +158,13 @@ function UploadInner() {
     const handleCreateFolder = async (name: string) => {
         if (!selectedProject) return;
         try {
-            const res = await createFolder({ project_id: selectedProject, name, parent_id: folderBrowseId });
+            const typeMap: any = { photos: 'photo', documents: 'document' };
+            const res = await createFolder({
+                project_id: selectedProject,
+                name,
+                parent_id: folderBrowseId,
+                folder_type: uploadType ? typeMap[uploadType] : null
+            });
             toast.success(`Folder "${name}" created`);
             await importFolders();
             if (res.folder) {

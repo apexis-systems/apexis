@@ -55,7 +55,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         useCallback(() => {
             if (!project?.id) return;
             if (folders.length === 0 && photos.length === 0) setLoading(true);
-            getProjectFiles(project.id)
+            getProjectFiles(project.id, 'photo')
                 .then((data) => {
                     if (data.folderData) setFolders(data.folderData);
                     if (data.fileData) {
@@ -71,9 +71,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     );
 
     useEffect(() => {
-        if (initialFolderId !== undefined) {
-            setSelectedFolder(initialFolderId || null);
-        }
+        setSelectedFolder(initialFolderId || null);
     }, [initialFolderId]);
 
     useEffect(() => {
@@ -308,7 +306,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         if (!newFolderName.trim() || !project?.id) return;
         setSubmitting(true);
         try {
-            const data = await createFolder({ project_id: project.id, name: newFolderName.trim(), parent_id: selectedFolder, type: 'photos' });
+            const data = await createFolder({ project_id: project.id, name: newFolderName.trim(), parent_id: selectedFolder, folder_type: 'photo' });
             if (data.folder) {
                 setFolders([...folders, data.folder]);
                 setSelectedFolder(String(data.folder.id));
@@ -361,7 +359,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
             await Promise.all(promises);
             Alert.alert("Success", "Visibility updated");
             // Refresh
-            getProjectFiles(project.id)
+            getProjectFiles(project.id, 'photo')
                 .then((data) => {
                     if (data.folderData) setFolders(data.folderData);
                     if (data.fileData) {
@@ -825,7 +823,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                 item={movingItem}
                 selectedItems={{ folders: Array.from(selectedFolders), files: Array.from(selectedFiles) }}
                 onMoveComplete={() => {
-                    getProjectFiles(project.id)
+                    getProjectFiles(project.id, 'photo')
                         .then((data) => {
                             if (data.folderData) setFolders(data.folderData);
                             if (data.fileData) {
@@ -834,6 +832,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                         });
                     clearSelection();
                 }}
+                type="photo"
             />
 
             {/* ── Full-screen viewer modal (inlined) ── */}

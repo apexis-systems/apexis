@@ -14,6 +14,7 @@ interface MoveToFolderDialogProps {
     item?: { type: 'file' | 'folder', id: string | number } | null;
     selectedItems?: { folders: (string | number)[], files: (string | number)[] };
     onMoveComplete: () => void;
+    type?: 'photo' | 'document';
 }
 
 export default function MobileMoveToFolderDialog({
@@ -22,7 +23,8 @@ export default function MobileMoveToFolderDialog({
     project,
     item,
     selectedItems,
-    onMoveComplete
+    onMoveComplete,
+    type
 }: MoveToFolderDialogProps) {
     const { colors } = useTheme();
     const [folders, setFolders] = useState<any[]>([]);
@@ -37,7 +39,7 @@ export default function MobileMoveToFolderDialog({
 
     const fetchFolders = async () => {
         try {
-            const data = await getFolders(project.id, 'all'); // Fetch all to show tree
+            const data = await getFolders(project.id, type); // Fetch filtered to show tree
             if (data.folderData) setFolders(data.folderData);
             else if (Array.isArray(data)) setFolders(data);
         } catch (e) {
