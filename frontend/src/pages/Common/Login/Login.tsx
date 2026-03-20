@@ -200,7 +200,7 @@ const Login = () => {
                                             Log in with password <ChevronRight className="h-4 w-4 -ml-0.5" />
                                         </button>
                                     </div> */}
-                                </div>
+                                </div>. 
 
                                 {/* Right Side: QR Code Area */}
                                 <div className="w-full md:w-[420px] bg-secondary/20 p-8 sm:p-14 flex flex-col items-center justify-center relative">
