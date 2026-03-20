@@ -62,9 +62,17 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     }
   }, [project?.id]);
 
+  // Sync state from URL for tab switching / back navigation
+  useEffect(() => {
+    const folderId = searchParams?.get('folder') || null;
+    if (folderId !== selectedFolder) {
+      setRawSelectedFolder(folderId);
+    }
+  }, [searchParams]);
+
   const importFolders = async () => {
     try {
-      const json = await getFiles(project.id);
+      const json = await getFiles(project.id, 'document');
       if (json.folderData) {
         setFolders(json.folderData);
       }
@@ -174,7 +182,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
   const handleCreateFolder = async (name: string) => {
     try {
-      const res = await createFolder({ project_id: project.id, name, parent_id: selectedFolder });
+      const res = await createFolder({ project_id: project.id, name, parent_id: selectedFolder, folder_type: 'document' });
       toast.success(`Folder "${name}" created`);
       await importFolders(); // Refetch
       if (res.folder) {
@@ -663,6 +671,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           importFolders();
           clearSelection();
         }}
+        type="document"
       />
     </div>
   );

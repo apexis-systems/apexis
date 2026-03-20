@@ -195,6 +195,7 @@ export const listFiles = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
         const { projectId } = req.params;
+        const { folder_type } = req.query;
 
         // Verify access if contributor or client
         if (authUser.role === "contributor" || authUser.role === "client") {
@@ -205,8 +206,16 @@ export const listFiles = async (req: Request, res: Response) => {
         }
 
         // Get all folders for this project
+        const folderWhere: any = { project_id: projectId };
+        if (folder_type) {
+            folderWhere[Op.or] = [
+                { folder_type: folder_type },
+                { folder_type: null }
+            ];
+        }
+
         const folderData = await folders.findAll({
-            where: { project_id: projectId },
+            where: folderWhere,
         });
 
         const folderIds = folderData.map((f: any) => f.id);
