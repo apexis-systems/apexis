@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { inviteUser, getOrgUsers, deleteUser, updatePushToken, updateProfilePic, updateUserName } from "../controllers/userController.ts";
+import { inviteUser, getOrgUsers, deleteUser, updatePushToken, updateProfilePic, updateUserName, getOnboardingLinks } from "../controllers/userController.ts";
 import { verifyToken, isAdmin } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -8,6 +8,7 @@ const router = Router();
 router.use(verifyToken);
 
 router.post("/invite", isAdmin, inviteUser);
+router.get("/onboarding-links", isAdmin, getOnboardingLinks);
 router.get("/", getOrgUsers);
 router.delete("/:id", isAdmin, deleteUser);
 

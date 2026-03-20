@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Users, Mail, Trash2, Loader2, UserPlus, Clock, ShieldCheck, Briefcase, AlertCircle } from 'lucide-react';
-import { getOrgUsers, inviteUser, deleteUser } from '@/services/userService';
+import { Users, Mail, Trash2, Loader2, UserPlus, Clock, ShieldCheck, Briefcase, AlertCircle, Link, Copy, Check } from 'lucide-react';
+import { getOrgUsers, inviteUser, deleteUser, getOnboardingLinks } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -24,6 +24,8 @@ const UserManagementPage = () => {
     const [inviteRole, setInviteRole] = useState('contributor');
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [inviting, setInviting] = useState(false);
+    const [onboardingLinks, setOnboardingLinks] = useState<{ contributor_link: string, client_link: string } | null>(null);
+    const [copied, setCopied] = useState<string | null>(null);
 
     const [deleteUserObj, setDeleteUserObj] = useState<any>(null);
     const [deleting, setDeleting] = useState(false);
@@ -64,10 +66,20 @@ const UserManagementPage = () => {
         }
     };
 
+    const fetchOnboardingLinks = async () => {
+        try {
+            const data = await getOnboardingLinks();
+            setOnboardingLinks(data);
+        } catch (error) {
+            console.error("fetchOnboardingLinks error", error);
+        }
+    };
+
     useEffect(() => {
         if (user && (user.role === 'admin' || user.role === 'superadmin')) {
             fetchUsers();
             fetchProjects();
+            fetchOnboardingLinks();
         }
     }, [user]);
 
@@ -127,6 +139,14 @@ const UserManagementPage = () => {
         } finally {
             setDeleting(false);
         }
+    };
+
+    const copyToClipboard = (text: string, type: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopied(type);
+        toast.success(`${type} link copied to clipboard`);
+        setTimeout(() => setCopied(null), 2000);
     };
 
     const isProjectRole = inviteRole === 'contributor' || inviteRole === 'client';
@@ -221,6 +241,55 @@ const UserManagementPage = () => {
                     )}
                 </div>
             )}
+
+            {/* Public Onboarding Links Section */}
+            <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-6 scale-95 origin-top">
+                <div className="p-6 rounded-2xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-accent/10 rounded-lg">
+                                <Link className="h-5 w-5 text-accent" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-foreground">Contributor Onboarding</h3>
+                                <p className="text-[10px] text-muted-foreground">General link for all contributors</p>
+                            </div>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-lg text-[10px]"
+                            onClick={() => onboardingLinks && copyToClipboard(onboardingLinks.contributor_link, 'Contributor')}
+                        >
+                            {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                            {copied === 'Contributor' ? "Copied" : "Copy Link"}
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="p-6 rounded-2xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-accent/10 rounded-lg">
+                                <Link className="h-5 w-5 text-accent" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-foreground">Client Onboarding</h3>
+                                <p className="text-[10px] text-muted-foreground">General link for all clients</p>
+                            </div>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-lg text-[10px]"
+                            onClick={() => onboardingLinks && copyToClipboard(onboardingLinks.client_link, 'Client')}
+                        >
+                            {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                            {copied === 'Client' ? "Copied" : "Copy Link"}
+                        </Button>
+                    </div>
+                </div>
+            </div>
 
             {loading ? (
                 <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>

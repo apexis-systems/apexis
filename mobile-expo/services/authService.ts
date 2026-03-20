@@ -35,12 +35,33 @@ export const verifyInvitation = async (token: string) => {
     }
 };
 
-export const completeOnboarding = async (data: { token: string, name: string, password: string }) => {
+export const completeOnboarding = async (data: { token: string, name: string, password?: string }) => {
     try {
         const response = await PublicAxios.post('/auth/complete-onboarding', data);
         return response.data;
     } catch (error: any) {
         console.error("completeOnboarding Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+// Public Onboarding
+export const verifyOnboardingToken = async (token: string) => {
+    try {
+        const response = await PublicAxios.get(`/auth/verify-onboarding-token?token=${token}`);
+        return response.data;
+    } catch (error: any) {
+        console.error("verifyOnboardingToken Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const completePublicSignup = async (data: any) => {
+    try {
+        const response = await PublicAxios.post('/auth/complete-public-signup', data);
+        return response.data;
+    } catch (error: any) {
+        console.error("completePublicSignup Error:", error?.response?.data || error.message);
         throw error;
     }
 };

@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import redis from "../config/redis.ts";
 import { users, organizations, plans } from "../models/index.ts";
+import { Op } from "sequelize";
 import { sendEmail } from "../utils/email.ts";
 
 const OTP_TTL = 300; // 5 minutes
@@ -104,11 +105,23 @@ export const superadminVerifyOtp = async (req: Request, res: Response) => {
 
 export const adminRequestOtp = async (req: Request, res: Response) => {
     try {
-        const { name, email, password, organization_name } = req.body;
+        const { name, email, phone, password, organization_name, verification_method } = req.body;
 
-        const existingUser = await users.findOne({ where: { email } });
+        if (!email && !phone) {
+            return res.status(400).json({ error: "Email or Phone is required" });
+        }
+
+        const existingUser = await users.findOne({
+            where: {
+                [Op.or]: [
+                    email ? { email: email.toLowerCase() } : null,
+                    phone ? { phone_number: phone } : null
+                ].filter(Boolean) as any[]
+            }
+        });
+
         if (existingUser) {
-            return res.status(400).json({ error: "Email already registered" });
+            return res.status(400).json({ error: "Email or Phone already registered" });
         }
 
         const passwordHash = await bcrypt.hash(password, 10);
@@ -117,12 +130,15 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
         console.log("OTP", otp);
         const otpHash = await bcrypt.hash(otp, 10);
 
-        const redisKey = `otp:signup:admin:${email}`;
+        const identifier = (verification_method === 'phone' && phone) ? phone : (email || phone);
+        const redisKey = `otp:signup:admin:${identifier}`;
         await redis.set(
             redisKey,
             JSON.stringify({
                 otp_hash: otpHash,
                 name,
+                email: email || null,
+                phone: phone || null,
                 password_hash: passwordHash,
                 organization_name
             }),
@@ -130,13 +146,22 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
             OTP_TTL
         );
 
-        await sendEmail(
-            email,
-            "Your Admin Verification Code",
-            `Hello ${name},\n\nWelcome to ${organization_name}! Your OTP for registration is: ${otp}\n\nIt is valid for 5 minutes.`
-        );
+        const method = verification_method || (phone ? 'phone' : 'email');
 
-        res.status(200).json({ message: "OTP sent to email" });
+        if (method === 'phone' && phone) {
+            const { sendOTP } = await import("../utils/sms.ts");
+            await sendOTP(phone, otp);
+        } else if (method === 'email' && email) {
+            await sendEmail(
+                email,
+                "Your Admin Verification Code",
+                `Hello ${name},\n\nWelcome to ${organization_name}! Your OTP for registration is: ${otp}\n\nIt is valid for 5 minutes.`
+            );
+        } else {
+            return res.status(400).json({ error: "Selected verification method is unavailable" });
+        }
+
+        res.status(200).json({ message: "OTP sent successfully" });
     } catch (error) {
         console.error("Admin Request OTP Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -145,15 +170,16 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
 
 export const adminVerifyOtp = async (req: Request, res: Response) => {
     try {
-        const { email, otp } = req.body;
-        const redisKey = `otp:signup:admin:${email}`;
+        const { email, phone, otp, verification_method } = req.body;
+        const identifier = (verification_method === 'phone' && phone) ? phone : (email || phone);
+        const redisKey = `otp:signup:admin:${identifier}`;
 
         const redisDataStr = await redis.get(redisKey);
         if (!redisDataStr) {
             return res.status(400).json({ error: "OTP expired or invalid" });
         }
 
-        const { otp_hash, name, password_hash, organization_name } = JSON.parse(redisDataStr);
+        const { otp_hash, name, email: savedEmail, phone: savedPhone, password_hash, organization_name } = JSON.parse(redisDataStr);
 
         const isOtpValid = await bcrypt.compare(otp, otp_hash);
         if (!isOtpValid) {
@@ -194,11 +220,13 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
         const newUser = await users.create({
             organization_id: organization.id,
             name,
-            email,
+            email: email ? email.toLowerCase() : null,
+            phone_number: phone || null,
             password: password_hash,
             role: "admin",
             is_primary: isPrimary,
-            email_verified: true,
+            email_verified: !!email,
+            phone_verified: !!phone,
         });
 
         await redis.del(redisKey);
