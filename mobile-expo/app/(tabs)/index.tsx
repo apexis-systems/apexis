@@ -274,6 +274,33 @@ export default function DashboardScreen() {
             ))}
           </View>
 
+          {/* Admin Analytics shortcut — admin / superadmin only */}
+          {(user.role === 'admin' || user.role === 'superadmin') && (
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/analytics')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                backgroundColor: 'rgba(249,116,22,0.08)',
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: 'rgba(249,116,22,0.25)',
+                padding: 14,
+                marginBottom: 18,
+              }}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(249,116,22,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="bar-chart-2" size={18} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Admin Analytics</Text>
+                <Text style={{ fontSize: 10, color: colors.textMuted }}>Company-wide project intelligence</Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+
           {/* Section label with Org Filter for Superadmin */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textMuted }}>

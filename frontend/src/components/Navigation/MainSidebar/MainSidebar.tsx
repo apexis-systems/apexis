@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Clock, User, Users, AlertTriangle, CreditCard, Shield, MessageSquare, Settings } from 'lucide-react';
+import { Home, BarChart2, Clock, User, Users, AlertTriangle, CreditCard, Shield, MessageSquare, Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,6 +17,9 @@ const MainSidebar = () => {
 
   const navItems = [
     { icon: Home, label: t('dashboard'), path: `${basePath}/dashboard` },
+    ...((user?.role === 'admin' || user?.role === 'superadmin') ? [
+      { icon: BarChart2, label: 'Analytics', path: `${basePath}/analytics` }
+    ] : []),
     { icon: Clock, label: t('activity'), path: `${basePath}/activity` },
     ...(user?.role !== 'superadmin' ? [{ icon: MessageSquare, label: 'Chats', path: `${basePath}/chats` }] : []),
     { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },

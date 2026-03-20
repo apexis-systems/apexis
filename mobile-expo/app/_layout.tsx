@@ -1,4 +1,5 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
@@ -96,8 +97,10 @@ function ThemedLayout() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <ThemedLayout />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <ThemedLayout />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

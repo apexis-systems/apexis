@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
@@ -13,6 +13,9 @@ import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } f
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
+import { WebView } from 'react-native-webview';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectDocuments({ project, user, initialFolderId }: { project: any, user: any, initialFolderId?: string }) {
     const { colors } = useTheme();
@@ -34,6 +37,11 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     const [selectedFiles, setSelectedFiles] = useState<Set<string | number>>(new Set());
     const [showMoveDialog, setShowMoveDialog] = useState(false);
     const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
+
+    // PDF Viewer state
+    const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
+    const [pdfViewerName, setPdfViewerName] = useState('');
+    const [pdfLoading, setPdfLoading] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
@@ -166,6 +174,19 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                 }
             },
         ]);
+    };
+
+    // Open doc: PDF → in-app viewer, everything else → external browser
+    const openDoc = (doc: any) => {
+        const isPdf = doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf');
+        if (isPdf && doc.downloadUrl) {
+            // Use Google Docs viewer for reliable cross-platform PDF rendering
+            const viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.downloadUrl)}`;
+            setPdfViewerName(doc.file_name || 'Document');
+            setPdfViewerUrl(viewerUrl);
+        } else {
+            WebBrowser.openBrowserAsync(doc.downloadUrl);
+        }
     };
 
     const handleShare = async (doc: any) => {
@@ -481,7 +502,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                     key={doc.id}
                                     onPress={() => {
                                         if (isSelectionMode) toggleSelection('file', doc.id);
-                                        else WebBrowser.openBrowserAsync(doc.downloadUrl);
+                                        else openDoc(doc);
                                     }}
                                     onLongPress={() => handleLongPress('file', doc.id)}
                                     style={{
@@ -554,7 +575,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                     key={doc.id}
                                     onPress={() => {
                                         if (isSelectionMode) toggleSelection('file', doc.id);
-                                        else WebBrowser.openBrowserAsync(doc.downloadUrl);
+                                        else openDoc(doc);
                                     }}
                                     onLongPress={() => handleLongPress('file', doc.id)}
                                     style={{
@@ -634,6 +655,77 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                     </View>
                 )}
             </ScrollView>
+
+            {/* ── PDF Viewer Modal ── */}
+            <Modal
+                visible={!!pdfViewerUrl}
+                transparent={false}
+                animationType="slide"
+                statusBarTranslucent
+                onRequestClose={() => setPdfViewerUrl(null)}
+            >
+                <StatusBar hidden />
+                <View style={{ flex: 1, backgroundColor: '#111' }}>
+                    {/* Header */}
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 16,
+                        paddingTop: Platform.OS === 'android' ? 40 : 52,
+                        paddingBottom: 12,
+                        backgroundColor: '#1a1a1a',
+                        borderBottomWidth: 1,
+                        borderBottomColor: 'rgba(255,255,255,0.08)',
+                    }}>
+                        <TouchableOpacity
+                            onPress={() => setPdfViewerUrl(null)}
+                            style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
+                        >
+                            <Feather name="x" size={20} color="#fff" />
+                        </TouchableOpacity>
+                        <Text numberOfLines={1} style={{ flex: 1, color: '#fff', fontSize: 13, fontWeight: '600', marginHorizontal: 12 }}>
+                            {pdfViewerName}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    const doc = docs.find(d => d.file_name === pdfViewerName);
+                                    if (doc) handleShare(doc);
+                                }}
+                                style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
+                            >
+                                <Feather name="share-2" size={18} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* WebView PDF */}
+                    {pdfViewerUrl && (
+                        <WebView
+                            key={pdfViewerUrl}
+                            source={{ uri: pdfViewerUrl }}
+                            style={{ flex: 1, backgroundColor: '#111' }}
+                            startInLoadingState
+                            scalesPageToFit
+                            allowsInlineMediaPlayback
+                            javaScriptEnabled
+                            domStorageEnabled
+                            onLoadStart={() => setPdfLoading(true)}
+                            onLoadEnd={() => setPdfLoading(false)}
+                            renderLoading={() => (
+                                <View style={{
+                                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                    justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
+                                }}>
+                                    <ActivityIndicator size="large" color={colors.primary} />
+                                    <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>Loading PDF…</Text>
+                                </View>
+                            )}
+                        />
+                    )}
+                </View>
+            </Modal>
 
             {/* New Folder Modal */}
             <Modal visible={showCreateFolder} transparent animationType="fade">

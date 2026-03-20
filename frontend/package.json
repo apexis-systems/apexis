@@ -27,6 +27,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-image-crop": "^11.0.10",
+    "recharts": "^3.8.0",
     "select": "^1.1.2",
     "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",

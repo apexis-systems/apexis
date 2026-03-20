@@ -14,6 +14,93 @@ import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+
+// ── Pinch-to-zoom image component ────────────────────────────────────────────
+function ZoomableImage({ uri, width, height }: { uri: string; width: number; height: number }) {
+    const scale = useSharedValue(1);
+    const savedScale = useSharedValue(1);
+    const translateX = useSharedValue(0);
+    const translateY = useSharedValue(0);
+    const savedTranslateX = useSharedValue(0);
+    const savedTranslateY = useSharedValue(0);
+    const focalX = useSharedValue(0);
+    const focalY = useSharedValue(0);
+
+    const resetZoom = () => {
+        scale.value = withSpring(1, { damping: 20, stiffness: 200 });
+        translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
+        translateY.value = withSpring(0, { damping: 20, stiffness: 200 });
+        savedScale.value = 1;
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+    };
+
+    const pinchGesture = Gesture.Pinch()
+        .onStart((e) => {
+            focalX.value = e.focalX;
+            focalY.value = e.focalY;
+        })
+        .onUpdate((e) => {
+            const newScale = Math.max(1, Math.min(savedScale.value * e.scale, 6));
+            scale.value = newScale;
+
+            // Translate so the focal point stays fixed while zooming
+            if (savedScale.value > 1 || e.scale > 1) {
+                translateX.value = savedTranslateX.value + (e.focalX - width / 2) * (1 - e.scale);
+                translateY.value = savedTranslateY.value + (e.focalY - height / 2) * (1 - e.scale);
+            }
+        })
+        .onEnd(() => {
+            savedScale.value = scale.value;
+            savedTranslateX.value = translateX.value;
+            savedTranslateY.value = translateY.value;
+            if (scale.value <= 1.05) {
+                runOnJS(resetZoom)();
+            }
+        });
+
+    const doubleTap = Gesture.Tap()
+        .numberOfTaps(2)
+        .onEnd(() => {
+            runOnJS(resetZoom)();
+        });
+
+    const panGesture = Gesture.Pan()
+        .minPointers(2)
+        .onUpdate((e) => {
+            translateX.value = savedTranslateX.value + e.translationX;
+            translateY.value = savedTranslateY.value + e.translationY;
+        })
+        .onEnd(() => {
+            savedTranslateX.value = translateX.value;
+            savedTranslateY.value = translateY.value;
+        });
+
+    const composed = Gesture.Simultaneous(pinchGesture, panGesture);
+    const all = Gesture.Race(doubleTap, composed);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [
+            { translateX: translateX.value },
+            { translateY: translateY.value },
+            { scale: scale.value },
+        ],
+    }));
+
+    return (
+        <GestureDetector gesture={all}>
+            <Animated.View style={[{ width, height, justifyContent: 'center', alignItems: 'center' }, animatedStyle]}>
+                <Image
+                    source={{ uri }}
+                    style={{ width, height }}
+                    resizeMode="contain"
+                />
+            </Animated.View>
+        </GestureDetector>
+    );
+}
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -885,11 +972,11 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                             if (idx !== viewerIndex) setViewerIndex(idx);
                         }}
                         renderItem={({ item }) => (
-                            <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center' }}>
-                                <Image
-                                    source={{ uri: item.downloadUrl }}
-                                    style={{ width: SCREEN_W, height: SCREEN_H }}
-                                    resizeMode="contain"
+                            <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                                <ZoomableImage
+                                    uri={item.downloadUrl}
+                                    width={SCREEN_W}
+                                    height={SCREEN_H}
                                 />
                             </View>
                         )}
