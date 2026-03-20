@@ -14,9 +14,11 @@ export const uploadFile = async (formData: FormData) => {
     }
 };
 
-export const getFiles = async (projectId: string | number) => {
+export const getFiles = async (projectId: string | number, folder_type?: string) => {
     try {
-        const response = await PrivateAxios.get(`/files/${projectId}`);
+        let url = `/files/${projectId}`;
+        if (folder_type) url += `?folder_type=${folder_type}`;
+        const response = await PrivateAxios.get(url);
         return response.data;
     } catch (error) {
         console.error("getFiles Error", error);

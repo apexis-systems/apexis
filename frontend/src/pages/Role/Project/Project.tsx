@@ -40,6 +40,7 @@ export default function Project({ id }: ProjectProps) {
         setActiveTab(tab);
         const url = new URL(window.location.href);
         url.searchParams.set('tab', tab);
+        url.searchParams.delete('folder'); // Clear folder when switching tabs
         window.history.replaceState(null, '', url.toString());
     };
 

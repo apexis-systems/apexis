@@ -37,14 +37,18 @@ export const createProject = async (req: Request, res: Response) => {
         });
 
         // Create default folders
-        const defaultFolders = ["Drawings", "Photos"];
+        const defaultFolders = [
+            { name: "Drawings", type: "document" },
+            { name: "Photos", type: "photo" }
+        ];
         await Promise.all(
-            defaultFolders.map((folderName) =>
+            defaultFolders.map((f) =>
                 folders.create({
                     project_id: newProject.id,
-                    name: folderName,
+                    name: f.name,
                     created_by: authUser.user_id,
                     client_visible: true,
+                    folder_type: f.type,
                 })
             )
         );

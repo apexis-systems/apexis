@@ -49,7 +49,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                 if (!project?.id) return;
                 if (folders.length === 0 && docs.length === 0) setLoading(true);
                 try {
-                    const data = await getProjectFiles(project.id);
+                    const data = await getProjectFiles(project.id, 'document');
                     if (data.folderData) setFolders(data.folderData);
                     if (data.fileData) {
                         setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
@@ -65,9 +65,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     );
 
     useEffect(() => {
-        if (initialFolderId !== undefined) {
-            setSelectedFolder(initialFolderId || null);
-        }
+        setSelectedFolder(initialFolderId || null);
     }, [initialFolderId]);
 
     useEffect(() => {
@@ -228,7 +226,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                 project_id: project.id,
                 name: newFolderName.trim(),
                 parent_id: selectedFolder,
-                type: 'documents'
+                folder_type: 'document'
             });
             if (data.folder) {
                 setFolders([...folders, data.folder]);
@@ -294,7 +292,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
             await Promise.all(promises);
             Alert.alert("Success", "Visibility updated");
             // Refresh
-            const data = await getProjectFiles(project.id);
+            const data = await getProjectFiles(project.id, 'document');
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
             clearSelection();
@@ -821,11 +819,12 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                 item={movingItem}
                 selectedItems={{ folders: Array.from(selectedFolders), files: Array.from(selectedFiles) }}
                 onMoveComplete={async () => {
-                    const data = await getProjectFiles(project.id);
+                    const data = await getProjectFiles(project.id, 'document');
                     if (data.folderData) setFolders(data.folderData);
                     if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
                     clearSelection();
                 }}
+                type="document"
             />
         </View>
     );

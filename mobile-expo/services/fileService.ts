@@ -39,9 +39,11 @@ export const uploadFileWithProgress = async (
     }
 };
 
-export const getProjectFiles = async (projectId: string | number) => {
+export const getProjectFiles = async (projectId: string | number, folder_type?: string) => {
     try {
-        const response = await PrivateAxios.get(`/files/${projectId}`);
+        let url = `/files/${projectId}`;
+        if (folder_type) url += `?folder_type=${folder_type}`;
+        const response = await PrivateAxios.get(url);
         return response.data;
     } catch (error) {
         console.error("getProjectFiles Error", error);

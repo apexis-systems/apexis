@@ -15,6 +15,7 @@ interface MoveToFolderDialogProps {
     item?: { type: 'file' | 'folder', id: string | number } | null;
     selectedItems?: { folders: (string | number)[], files: (string | number)[] };
     onMoveComplete: () => void;
+    type?: 'photo' | 'document';
 }
 
 const MoveToFolderDialog = ({
@@ -23,7 +24,8 @@ const MoveToFolderDialog = ({
     project,
     item,
     selectedItems,
-    onMoveComplete
+    onMoveComplete,
+    type
 }: MoveToFolderDialogProps) => {
     const [folders, setFolders] = useState<any[]>([]);
     const [targetFolder, setTargetFolder] = useState<string | null>(null);
@@ -37,7 +39,7 @@ const MoveToFolderDialog = ({
 
     const fetchFolders = async () => {
         try {
-            const data = await getFolders(project.id);
+            const data = await getFolders(project.id, type);
             setFolders(data);
         } catch (e) {
             toast.error("Failed to load folders");
