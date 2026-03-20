@@ -7,6 +7,11 @@ export interface User {
     role: UserRole;
     active?: boolean;
     profile_pic?: string;
+    organization?: {
+        id: string;
+        name: string;
+        logo: string;
+    };
 }
 
 export interface Project {

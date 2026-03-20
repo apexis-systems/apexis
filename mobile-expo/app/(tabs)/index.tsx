@@ -24,7 +24,7 @@ import SecureAvatar from '@/components/shared/SecureAvatar';
 import { getSecureFileUrl } from '@/services/fileService';
 
 export default function DashboardScreen() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { isDark, toggleTheme, colors } = useTheme();
   const { unreadNotificationCount } = useSocket();
   const { t } = useTranslation();
@@ -163,8 +163,13 @@ export default function DashboardScreen() {
       } as any);
 
       const res = await uploadOrganizationLogo(formData);
-
       setLocalLogoKey(res.logo);
+
+      // Update AuthContext so it reflects globally immediately
+      if (user) {
+        const updatedOrg = { ...(user as any).organization, logo: res.logo };
+        updateUser({ organization: updatedOrg } as any);
+      }
     } catch (e: any) {
       console.error("Logo upload error:", e);
     } finally {

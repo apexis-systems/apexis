@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             const res = await getMe();
             if (res?.user) {
-                setUser(res.user);
+                setUser({ ...res.user, organization: res.organization });
             }
         } catch (e) {
             console.error("Failed to fetch user context", e);
@@ -106,8 +106,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const res = await getMe();
             if (res?.user) {
-                setUser(res.user);
-                return res.user as User;
+                setUser({ ...res.user, organization: res.organization });
+                return { ...res.user, organization: res.organization } as User;
             }
         } catch (e) {
             console.error("Failed to login", e);
