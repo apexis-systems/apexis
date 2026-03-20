@@ -52,6 +52,8 @@ export const mockProjects: Project[] = [
         totalPhotos: 156,
         assignedTo: ['u2'],
         sharedWith: ['u3'],
+        contributor_code: 'JUB-CONT-01',
+        client_code: 'JUB-CLNT-01',
     },
     {
         id: 'p2',
@@ -64,6 +66,8 @@ export const mockProjects: Project[] = [
         totalPhotos: 89,
         assignedTo: ['u2'],
         sharedWith: ['u3'],
+        contributor_code: 'BAN-CONT-01',
+        client_code: 'BAN-CLNT-01',
     },
     {
         id: 'p3',
@@ -76,6 +80,8 @@ export const mockProjects: Project[] = [
         totalPhotos: 34,
         assignedTo: [],
         sharedWith: [],
+        contributor_code: 'RED-CONT-01',
+        client_code: 'RED-CLNT-01',
     },
     {
         id: 'p4',
@@ -88,6 +94,8 @@ export const mockProjects: Project[] = [
         totalPhotos: 210,
         assignedTo: [],
         sharedWith: [],
+        contributor_code: 'GAC-CONT-01',
+        client_code: 'GAC-CLNT-01',
     },
 ];
 
@@ -105,27 +113,27 @@ export const mockFolders: Folder[] = [
 ];
 
 export const mockDocuments: ProjectDocument[] = [
-    { id: 'd1', projectId: 'p1', folderId: 'f1', name: 'Foundation Plan v3.pdf', type: 'pdf', uploadDate: '2025-08-12', uploader: 'Rajesh Kumar', uploaderId: 'u1', version: 3, clientVisible: true, size: '2.4 MB' },
-    { id: 'd2', projectId: 'p1', folderId: 'f1', name: 'Structural Drawing.dwg', type: 'dwg', uploadDate: '2025-09-05', uploader: 'Priya Sharma', uploaderId: 'u2', version: 1, clientVisible: false, size: '8.1 MB' },
-    { id: 'd3', projectId: 'p1', folderId: 'f2', name: 'Electrical Layout.pdf', type: 'pdf', uploadDate: '2025-10-18', uploader: 'Rajesh Kumar', uploaderId: 'u1', version: 2, clientVisible: true, size: '1.7 MB' },
-    { id: 'd4', projectId: 'p1', folderId: 'f2', name: 'Plumbing Plan.dwg', type: 'dwg', uploadDate: '2025-11-02', uploader: 'Priya Sharma', uploaderId: 'u2', version: 1, clientVisible: false, size: '5.3 MB' },
-    { id: 'd5', projectId: 'p2', folderId: 'f4', name: 'Site Plan.pdf', type: 'pdf', uploadDate: '2025-07-20', uploader: 'Rajesh Kumar', uploaderId: 'u1', version: 2, clientVisible: true, size: '3.2 MB' },
-    { id: 'd6', projectId: 'p2', folderId: 'f5', name: 'Floor Plan Ground.dwg', type: 'dwg', uploadDate: '2025-08-15', uploader: 'Rajesh Kumar', uploaderId: 'u1', version: 1, clientVisible: true, size: '6.7 MB' },
+    { id: 'd1', project_id: 'p1', folder_id: 'f1', file_name: 'Foundation Plan v3.pdf', file_type: 'pdf', createdAt: '2025-08-12', created_by: 'u1', downloadUrl: '', client_visible: true, file_size_mb: 2.4 },
+    { id: 'd2', project_id: 'p1', folder_id: 'f1', file_name: 'Structural Drawing.dwg', file_type: 'dwg', createdAt: '2025-09-05', created_by: 'u2', downloadUrl: '', client_visible: false, file_size_mb: 8.1 },
+    { id: 'd3', project_id: 'p1', folder_id: 'f2', file_name: 'Electrical Layout.pdf', file_type: 'pdf', createdAt: '2025-10-18', created_by: 'u1', downloadUrl: '', client_visible: true, file_size_mb: 1.7 },
+    { id: 'd4', project_id: 'p1', folder_id: 'f2', file_name: 'Plumbing Plan.dwg', file_type: 'dwg', createdAt: '2025-11-02', created_by: 'u2', downloadUrl: '', client_visible: false, file_size_mb: 5.3 },
+    { id: 'd5', project_id: 'p2', folder_id: 'f4', file_name: 'Site Plan.pdf', file_type: 'pdf', createdAt: '2025-07-20', created_by: 'u1', downloadUrl: '', client_visible: true, file_size_mb: 3.2 },
+    { id: 'd6', project_id: 'p2', folder_id: 'f5', file_name: 'Floor Plan Ground.dwg', file_type: 'dwg', createdAt: '2025-08-15', created_by: 'u1', downloadUrl: '', client_visible: true, file_size_mb: 6.7 },
 ];
 
 export const mockPhotos: ProjectPhoto[] = [
-    { id: 'ph1', projectId: 'p1', folderId: 'f6', url: '', date: '2025-11-20', location: 'Block A - Ground Floor', tags: ['foundation', 'concrete'], uploader: 'Priya Sharma', uploaderId: 'u2', clientVisible: true },
-    { id: 'ph2', projectId: 'p1', folderId: 'f6', url: '', date: '2025-11-18', location: 'Block A - Basement', tags: ['excavation'], uploader: 'Rajesh Kumar', uploaderId: 'u1', clientVisible: true },
-    { id: 'ph3', projectId: 'p1', folderId: 'f7', url: '', date: '2025-11-15', location: 'Block B - Foundation', tags: ['rebar', 'formwork'], uploader: 'Priya Sharma', uploaderId: 'u2', clientVisible: false },
-    { id: 'ph4', projectId: 'p1', folderId: 'f8', url: '', date: '2025-11-10', location: 'Site Entry', tags: ['safety', 'equipment'], uploader: 'Rajesh Kumar', uploaderId: 'u1', clientVisible: true },
-    { id: 'ph5', projectId: 'p2', folderId: 'f9', url: '', date: '2025-10-25', location: 'Main Gate', tags: ['entrance', 'landscaping'], uploader: 'Priya Sharma', uploaderId: 'u2', clientVisible: true },
-    { id: 'ph6', projectId: 'p2', folderId: 'f10', url: '', date: '2025-10-20', location: 'Pool Area', tags: ['excavation', 'drainage'], uploader: 'Rajesh Kumar', uploaderId: 'u1', clientVisible: false },
-    { id: 'ph7', projectId: 'p1', folderId: 'f6', url: '', date: '2025-11-19', location: 'Block A - Level 1', tags: ['concrete'], uploader: 'Priya Sharma', uploaderId: 'u2', clientVisible: true },
-    { id: 'ph8', projectId: 'p1', folderId: 'f6', url: '', date: '2025-11-17', location: 'Block A - Level 2', tags: ['formwork'], uploader: 'Rajesh Kumar', uploaderId: 'u1', clientVisible: true },
-    { id: 'ph9', projectId: 'p1', folderId: 'f7', url: '', date: '2025-11-16', location: 'Block B - Level 1', tags: ['rebar'], uploader: 'Priya Sharma', uploaderId: 'u2', clientVisible: true },
-    { id: 'ph10', projectId: 'p1', folderId: 'f7', url: '', date: '2025-11-14', location: 'Block C - Foundation', tags: ['excavation'], uploader: 'Rajesh Kumar', uploaderId: 'u1', clientVisible: true },
-    { id: 'ph11', projectId: 'p1', folderId: 'f8', url: '', date: '2025-11-13', location: 'Main Entry', tags: ['safety'], uploader: 'Priya Sharma', uploaderId: 'u2', clientVisible: true },
-    { id: 'ph12', projectId: 'p1', folderId: 'f8', url: '', date: '2025-11-12', location: 'Equipment Area', tags: ['equipment'], uploader: 'Rajesh Kumar', uploaderId: 'u1', clientVisible: false },
+    { id: 'ph1', project_id: 'p1', folder_id: 'f6', downloadUrl: '', createdAt: '2025-11-20', location: 'Block A - Ground Floor', tags: ['foundation', 'concrete'], created_by: 'u2', client_visible: true, file_name: 'photo1.jpg', file_type: 'jpg', file_size_mb: 1.2 },
+    { id: 'ph2', project_id: 'p1', folder_id: 'f6', downloadUrl: '', createdAt: '2025-11-18', location: 'Block A - Basement', tags: ['excavation'], created_by: 'u1', client_visible: true, file_name: 'photo2.jpg', file_type: 'jpg', file_size_mb: 1.1 },
+    { id: 'ph3', project_id: 'p1', folder_id: 'f7', downloadUrl: '', createdAt: '2025-11-15', location: 'Block B - Foundation', tags: ['rebar', 'formwork'], created_by: 'u2', client_visible: false, file_name: 'photo3.jpg', file_type: 'jpg', file_size_mb: 1.3 },
+    { id: 'ph4', project_id: 'p1', folder_id: 'f8', downloadUrl: '', createdAt: '2025-11-10', location: 'Site Entry', tags: ['safety', 'equipment'], created_by: 'u1', client_visible: true, file_name: 'photo4.jpg', file_type: 'jpg', file_size_mb: 1.4 },
+    { id: 'ph5', project_id: 'p2', folder_id: 'f9', downloadUrl: '', createdAt: '2025-10-25', location: 'Main Gate', tags: ['entrance', 'landscaping'], created_by: 'u2', client_visible: true, file_name: 'photo5.jpg', file_type: 'jpg', file_size_mb: 1.5 },
+    { id: 'ph6', project_id: 'p2', folder_id: 'f10', downloadUrl: '', createdAt: '2025-10-20', location: 'Pool Area', tags: ['excavation', 'drainage'], created_by: 'u1', client_visible: false, file_name: 'photo6.jpg', file_type: 'jpg', file_size_mb: 1.6 },
+    { id: 'ph7', project_id: 'p1', folder_id: 'f6', downloadUrl: '', createdAt: '2025-11-19', location: 'Block A - Level 1', tags: ['concrete'], created_by: 'u2', client_visible: true, file_name: 'photo7.jpg', file_type: 'jpg', file_size_mb: 1.2 },
+    { id: 'ph8', project_id: 'p1', folder_id: 'f6', downloadUrl: '', createdAt: '2025-11-17', location: 'Block A - Level 2', tags: ['formwork'], created_by: 'u1', client_visible: true, file_name: 'photo8.jpg', file_type: 'jpg', file_size_mb: 1.1 },
+    { id: 'ph9', project_id: 'p1', folder_id: 'f7', downloadUrl: '', createdAt: '2025-11-16', location: 'Block B - Level 1', tags: ['rebar'], created_by: 'u2', client_visible: true, file_name: 'photo9.jpg', file_type: 'jpg', file_size_mb: 1.3 },
+    { id: 'ph10', project_id: 'p1', folder_id: 'f7', downloadUrl: '', createdAt: '2025-11-14', location: 'Block C - Foundation', tags: ['excavation'], created_by: 'u1', client_visible: true, file_name: 'photo10.jpg', file_type: 'jpg', file_size_mb: 1.4 },
+    { id: 'ph11', project_id: 'p1', folder_id: 'f8', downloadUrl: '', createdAt: '2025-11-13', location: 'Main Entry', tags: ['safety'], created_by: 'u2', client_visible: true, file_name: 'photo11.jpg', file_type: 'jpg', file_size_mb: 1.5 },
+    { id: 'ph12', project_id: 'p1', folder_id: 'f8', downloadUrl: '', createdAt: '2025-11-12', location: 'Equipment Area', tags: ['equipment'], created_by: 'u1', client_visible: false, file_name: 'photo12.jpg', file_type: 'jpg', file_size_mb: 1.6 },
 ];
 
 export const mockReports: Report[] = [
@@ -141,7 +149,7 @@ export const mockActivities: ActivityItem[] = [
     { id: 'a1', type: 'upload', description: 'Foundation Plan v3.pdf uploaded', projectName: 'Jubilee Hills Residence', timestamp: '2 hours ago' },
     { id: 'a2', type: 'edit', description: 'Structural Drawing.dwg updated', projectName: 'Jubilee Hills Residence', timestamp: '5 hours ago' },
     { id: 'a3', type: 'share', description: 'Site photos shared with client', projectName: 'Banjara Hills Villa', timestamp: '1 day ago' },
-    { id: 'a4', type: 'upload', description: '12 new site photos added', projectName: 'Jubilee Hills Residence', timestamp: '1 day ago' },
+    { id: 'a4', type: 'upload_photo', description: '12 new site photos added', projectName: 'Jubilee Hills Residence', timestamp: '1 day ago' },
     { id: 'a5', type: 'delete', description: 'Old draft removed', projectName: 'Red Hills Commercial', timestamp: '2 days ago' },
 ];
 
@@ -152,13 +160,13 @@ export const mockComments: Comment[] = [
 ];
 
 export const mockSnags: SnagItem[] = [
-    { id: 's1', projectId: 'p1', title: 'Fix waterproofing in basement', description: 'Water seepage visible on east wall of basement level 2', photoUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&h=300&fit=crop', assignedTo: 'u2', assignedToName: 'Priya Sharma', status: 'amber', comments: ['Waiting for material delivery'], createdAt: '2025-11-18' },
-    { id: 's2', projectId: 'p1', title: 'Repaint entrance lobby', description: 'Paint peeling near the ceiling corners', assignedTo: 'u2', assignedToName: 'Priya Sharma', status: 'green', comments: ['Completed on Nov 19'], createdAt: '2025-11-15' },
-    { id: 's3', projectId: 'p2', title: 'Replace cracked tile in bathroom', assignedTo: 'u2', assignedToName: 'Priya Sharma', status: 'red', comments: ['No further action needed'], createdAt: '2025-10-20' },
+    { id: 's1', projectId: 'p1', title: 'Fix waterproofing in basement', description: 'Water seepage visible on east wall of basement level 2', photoUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&h=300&fit=crop', assignedTo: 'u2', assignedToName: 'Priya Sharma', status: 'amber', comments: ['Waiting for material delivery'], createdAt: '2025-11-18', created_by: 'u1' },
+    { id: 's2', projectId: 'p1', title: 'Repaint entrance lobby', description: 'Paint peeling near the ceiling corners', assignedTo: 'u2', assignedToName: 'Priya Sharma', status: 'green', comments: ['Completed on Nov 19'], createdAt: '2025-11-15', created_by: 'u1' },
+    { id: 's3', projectId: 'p2', title: 'Replace cracked tile in bathroom', assignedTo: 'u2', assignedToName: 'Priya Sharma', status: 'red', comments: ['No further action needed'], createdAt: '2025-10-20', created_by: 'u1' },
 ];
 
 export const mockManuals: ManualSOP[] = [
-    { id: 'm1', projectId: 'p1', name: 'Ergonomic Standards v2.pdf', type: 'pdf', uploadDate: '2025-09-01', uploader: 'Rajesh Kumar', uploaderId: 'u1', size: '1.2 MB' },
-    { id: 'm2', projectId: 'p1', name: 'Finishing Details SOP.pdf', type: 'pdf', uploadDate: '2025-10-15', uploader: 'Rajesh Kumar', uploaderId: 'u1', size: '3.4 MB' },
-    { id: 'm3', projectId: 'p2', name: 'Company Safety Protocol.pdf', type: 'pdf', uploadDate: '2025-08-20', uploader: 'Rajesh Kumar', uploaderId: 'u1', size: '2.1 MB' },
+    { id: 'm1', projectId: 'p1', name: 'Ergonomic Standards v2.pdf', type: 'pdf', uploadDate: '2025-09-01', uploader: 'Rajesh Kumar', uploaded_by: 'u1', size: '1.2 MB' },
+    { id: 'm2', projectId: 'p1', name: 'Finishing Details SOP.pdf', type: 'pdf', uploadDate: '2025-10-15', uploader: 'Rajesh Kumar', uploaded_by: 'u1', size: '3.4 MB' },
+    { id: 'm3', projectId: 'p2', name: 'Company Safety Protocol.pdf', type: 'pdf', uploadDate: '2025-08-20', uploader: 'Rajesh Kumar', uploaded_by: 'u1', size: '2.1 MB' },
 ];
