@@ -1,8 +1,10 @@
 "use client";
 
+import { useState, useEffect } from 'react';
 import {
     TrendingUp, Clock, AlertTriangle, Users, Activity, Upload,
     CheckCircle2, MessageSquare, FileText, Shield, BarChart2,
+    Loader2
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -10,70 +12,7 @@ import {
     BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-
-// ── Mock data (mirrored from mockup) ─────────────────────────────────────────
-const projectHealthData = [
-    { id: 'p1', name: 'Jubilee Hills Residence', status: 'on-track', progress: 68, pulseScore: 92, tasksTotal: 120, tasksCompleted: 82, tasksPending: 30, tasksOverdue: 8, messagesThisWeek: 47, riskLevel: 'low', architect: 'Priya Sharma' },
-    { id: 'p2', name: 'Banjara Hills Villa', status: 'delayed', progress: 42, pulseScore: 58, tasksTotal: 95, tasksCompleted: 40, tasksPending: 35, tasksOverdue: 20, messagesThisWeek: 12, riskLevel: 'high', architect: 'Kavitha Nair' },
-    { id: 'p3', name: 'Red Hills Commercial', status: 'at-risk', progress: 25, pulseScore: 74, tasksTotal: 60, tasksCompleted: 15, tasksPending: 32, tasksOverdue: 13, messagesThisWeek: 23, riskLevel: 'medium', architect: 'Ravi Kumar' },
-    { id: 'p4', name: 'Gachibowli Office Tower', status: 'on-track', progress: 85, pulseScore: 88, tasksTotal: 200, tasksCompleted: 170, tasksPending: 22, tasksOverdue: 8, messagesThisWeek: 38, riskLevel: 'low', architect: 'Priya Sharma' },
-    { id: 'p5', name: 'Madhapur Tech Park', status: 'completed', progress: 100, pulseScore: 96, tasksTotal: 180, tasksCompleted: 180, tasksPending: 0, tasksOverdue: 0, messagesThisWeek: 3, riskLevel: 'low', architect: 'Kavitha Nair' },
-];
-
-const teamMembers = [
-    { id: 't1', name: 'Priya Sharma', role: 'Architect', tasksCompleted: 45, avgResponseTime: '2.1 hrs', filesUploaded: 34, messagesSent: 156 },
-    { id: 't2', name: 'Amit Patel', role: 'Site Engineer', tasksCompleted: 38, avgResponseTime: '3.5 hrs', filesUploaded: 28, messagesSent: 210 },
-    { id: 't3', name: 'Suresh Reddy', role: 'Contractor', tasksCompleted: 27, avgResponseTime: '6.2 hrs', filesUploaded: 12, messagesSent: 89 },
-    { id: 't4', name: 'Kavitha Nair', role: 'Interior Designer', tasksCompleted: 22, avgResponseTime: '1.8 hrs', filesUploaded: 19, messagesSent: 134 },
-    { id: 't5', name: 'Ravi Kumar', role: 'Structural Engineer', tasksCompleted: 31, avgResponseTime: '4.0 hrs', filesUploaded: 22, messagesSent: 98 },
-];
-
-const taskCompletionWeekly = [
-    { week: 'W1', completed: 18, created: 25 },
-    { week: 'W2', completed: 22, created: 20 },
-    { week: 'W3', completed: 15, created: 28 },
-    { week: 'W4', completed: 30, created: 22 },
-    { week: 'W5', completed: 25, created: 18 },
-    { week: 'W6', completed: 28, created: 24 },
-    { week: 'W7', completed: 32, created: 19 },
-    { week: 'W8', completed: 20, created: 26 },
-];
-
-const communicationData = [
-    { project: 'Jubilee Hills', messages: 47, avgReplyHrs: 2.1 },
-    { project: 'Banjara Hills', messages: 12, avgReplyHrs: 8.4 },
-    { project: 'Red Hills', messages: 23, avgReplyHrs: 5.2 },
-    { project: 'Gachibowli', messages: 38, avgReplyHrs: 3.0 },
-];
-
-const activityFeed = [
-    { id: 'af1', type: 'upload', description: 'Foundation Plan v3.pdf uploaded', project: 'Jubilee Hills Residence', user: 'Priya Sharma', time: '10 min ago' },
-    { id: 'af2', type: 'task', description: 'Electrical wiring inspection completed', project: 'Gachibowli Office Tower', user: 'Amit Patel', time: '25 min ago' },
-    { id: 'af3', type: 'comment', description: 'Contractor commented on excavation progress', project: 'Red Hills Commercial', user: 'Suresh Reddy', time: '1 hr ago' },
-    { id: 'af4', type: 'revision', description: 'Drawing revision submitted for approval', project: 'Banjara Hills Villa', user: 'Kavitha Nair', time: '2 hrs ago' },
-    { id: 'af5', type: 'approval', description: 'BOQ approved by consultant', project: 'Jubilee Hills Residence', user: 'Rajesh Kumar', time: '3 hrs ago' },
-    { id: 'af6', type: 'upload', description: '12 new site photos added', project: 'Gachibowli Office Tower', user: 'Amit Patel', time: '4 hrs ago' },
-];
-
-const pendingApprovals = [
-    { id: 'ap1', title: 'Structural Drawing Rev.4', project: 'Banjara Hills Villa', requestedBy: 'Priya Sharma', daysWaiting: 5 },
-    { id: 'ap2', title: 'BOQ Update — Electrical', project: 'Banjara Hills Villa', requestedBy: 'Amit Patel', daysWaiting: 3 },
-    { id: 'ap3', title: 'Variation Order #12', project: 'Red Hills Commercial', requestedBy: 'Suresh Reddy', daysWaiting: 7 },
-    { id: 'ap4', title: 'Interior Layout Plan', project: 'Banjara Hills Villa', requestedBy: 'Kavitha Nair', daysWaiting: 2 },
-    { id: 'ap5', title: 'Foundation Photos — Batch 3', project: 'Red Hills Commercial', requestedBy: 'Amit Patel', daysWaiting: 1 },
-    { id: 'ap6', title: 'HVAC Duct Layout', project: 'Gachibowli Office Tower', requestedBy: 'Ravi Kumar', daysWaiting: 4 },
-    { id: 'ap7', title: 'Landscape Plan Rev.2', project: 'Banjara Hills Villa', requestedBy: 'Priya Sharma', daysWaiting: 6 },
-];
-
-const appUsageData = {
-    dailyActiveUsers: 18, weeklyActiveUsers: 24, totalUsers: 32, engagementPercent: 75,
-    mostActiveProject: 'Jubilee Hills Residence', leastActiveProject: 'Red Hills Commercial',
-};
-
-const fileUploadTimeline = [
-    { day: 'Mon', uploads: 8 }, { day: 'Tue', uploads: 12 }, { day: 'Wed', uploads: 5 },
-    { day: 'Thu', uploads: 15 }, { day: 'Fri', uploads: 10 }, { day: 'Sat', uploads: 3 }, { day: 'Sun', uploads: 1 },
-];
+import { getAnalyticsOverview } from '@/services/analyticsService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const CHART_COLORS = { onTrack: '#22c55e', delayed: '#ef4444', atRisk: '#f59e0b', completed: '#3b82f6' };
@@ -102,6 +41,22 @@ const activityIcons: Record<string, React.ElementType> = {
 export default function AdminAnalytics() {
     const { user } = useAuth();
     const router = useRouter();
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<any>(null);
+
+    useEffect(() => {
+        const fetchAnalytics = async () => {
+            try {
+                const results = await getAnalyticsOverview();
+                setData(results);
+            } catch (err) {
+                console.error("Failed to fetch analytics:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        if (user) fetchAnalytics();
+    }, [user]);
 
     // Access guard
     if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
@@ -119,18 +74,19 @@ export default function AdminAnalytics() {
         );
     }
 
-    // Aggregated stats
-    const active = projectHealthData.filter(p => p.status !== 'completed');
-    const pendingTasks = projectHealthData.reduce((s, p) => s + p.tasksPending, 0);
-    const overdueTasks = projectHealthData.reduce((s, p) => s + p.tasksOverdue, 0);
-    const delayed = projectHealthData.filter(p => p.status === 'delayed').length;
+    if (loading || !data) {
+        return (
+            <div className="flex items-center justify-center h-[60vh]">
+                <Loader2 className="h-8 w-8 animate-spin text-accent" />
+            </div>
+        );
+    }
 
-    const statusCounts = [
-        { name: 'On Track', value: projectHealthData.filter(p => p.status === 'on-track').length, color: CHART_COLORS.onTrack },
-        { name: 'Delayed', value: projectHealthData.filter(p => p.status === 'delayed').length, color: CHART_COLORS.delayed },
-        { name: 'At Risk', value: projectHealthData.filter(p => p.status === 'at-risk').length, color: CHART_COLORS.atRisk },
-        { name: 'Completed', value: projectHealthData.filter(p => p.status === 'completed').length, color: CHART_COLORS.completed },
-    ];
+    const {
+        quickStats, projectStatus, projectPulse, teamLeaderboard,
+        activityFeed, fileUploadTimeline, appUsage, communication,
+        pendingApprovals, taskCompletion
+    } = data;
 
     const tooltipStyle = {
         fontSize: 11, borderRadius: 8,
@@ -162,11 +118,11 @@ export default function AdminAnalytics() {
             {/* ── Quick Stats Row ────────────────────────────────────── */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {[
-                    { label: 'Active Projects', value: active.length, icon: TrendingUp, accent: true },
-                    { label: 'Tasks Pending', value: pendingTasks, icon: Clock, accent: false },
-                    { label: 'Tasks Overdue', value: overdueTasks, icon: AlertTriangle, accent: false },
-                    { label: 'Delayed Projects', value: delayed, icon: AlertTriangle, accent: false },
-                    { label: 'Team Activity', value: `${appUsageData.engagementPercent}%`, icon: Users, accent: false },
+                    { label: 'Active Projects', value: quickStats.activeProjects, icon: TrendingUp, accent: true },
+                    { label: 'Tasks Pending', value: quickStats.pendingTasks, icon: Clock, accent: false },
+                    { label: 'Tasks Overdue', value: quickStats.overdueTasks, icon: AlertTriangle, accent: false },
+                    { label: 'Delayed Projects', value: quickStats.delayedProjects, icon: AlertTriangle, accent: false },
+                    { label: 'Team Activity', value: `${quickStats.engagementPercent}%`, icon: Users, accent: false },
                 ].map((s, i) => (
                     <div key={i} className={`rounded-xl bg-card border p-4 flex flex-col gap-1 ${s.accent ? 'border-accent/30' : 'border-border'}`}>
                         <div className="flex items-center gap-2 text-muted-foreground">
@@ -188,8 +144,8 @@ export default function AdminAnalytics() {
                     </h3>
                     <ResponsiveContainer width="100%" height={200}>
                         <PieChart>
-                            <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
-                                {statusCounts.map((entry, i) => (
+                            <Pie data={projectStatus} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+                                {projectStatus.map((entry: any, i: number) => (
                                     <Cell key={i} fill={entry.color} />
                                 ))}
                             </Pie>
@@ -205,7 +161,7 @@ export default function AdminAnalytics() {
                         <BarChart2 className="h-3.5 w-3.5 text-accent" /> Task Completion Trend
                     </h3>
                     <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={taskCompletionWeekly} barGap={2}>
+                        <BarChart data={taskCompletion} barGap={2}>
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                             <XAxis dataKey="week" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
                             <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
@@ -222,7 +178,7 @@ export default function AdminAnalytics() {
                         <MessageSquare className="h-3.5 w-3.5 text-accent" /> Communication Activity
                     </h3>
                     <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={communicationData} layout="vertical">
+                        <BarChart data={communication} layout="vertical">
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                             <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
                             <YAxis dataKey="project" type="category" tick={{ fontSize: 9 }} width={80} stroke="hsl(var(--muted-foreground))" />
@@ -252,7 +208,7 @@ export default function AdminAnalytics() {
                             </tr>
                         </thead>
                         <tbody>
-                            {projectHealthData.map(p => (
+                            {projectPulse.map((p: any) => (
                                 <tr key={p.id} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
                                     <td className="py-2.5">
                                         <span className="font-medium text-foreground block">{p.name}</span>
@@ -271,14 +227,14 @@ export default function AdminAnalytics() {
                                         </div>
                                         <span className="text-[9px] text-muted-foreground">{p.progress}%</span>
                                     </td>
-                                    <td className="text-center text-foreground">{p.tasksCompleted}/{p.tasksTotal}</td>
+                                    <td className="text-center text-foreground">{p.tasksDone}/{p.tasksTotal}</td>
                                     <td className="text-center">
-                                        <span className={p.tasksOverdue > 10 ? 'text-red-500 font-semibold' : 'text-foreground'}>
-                                            {p.tasksOverdue}
+                                        <span className={p.overdue > 10 ? 'text-red-500 font-semibold' : 'text-foreground'}>
+                                            {p.overdue}
                                         </span>
                                     </td>
-                                    <td className="text-center text-foreground">{p.messagesThisWeek}</td>
-                                    <td className="text-center">{riskBadge(p.riskLevel)}</td>
+                                    <td className="text-center text-foreground">{p.messages}</td>
+                                    <td className="text-center">{riskBadge(p.risk)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -295,7 +251,7 @@ export default function AdminAnalytics() {
                         <Users className="h-3.5 w-3.5 text-accent" /> Team Leaderboard
                     </h3>
                     <div className="space-y-2.5">
-                        {teamMembers.map((m, i) => (
+                        {teamLeaderboard.map((m: any, i: number) => (
                             <div key={m.id} className="flex items-center gap-3">
                                 <span className={`flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold ${i < 3 ? 'bg-accent/15 text-accent' : 'bg-secondary text-muted-foreground'}`}>
                                     {i + 1}
@@ -319,7 +275,7 @@ export default function AdminAnalytics() {
                         <Activity className="h-3.5 w-3.5 text-accent" /> Live Activity
                     </h3>
                     <div className="space-y-1">
-                        {activityFeed.map(a => {
+                        {activityFeed.map((a: any) => {
                             const Icon = activityIcons[a.type] || Activity;
                             return (
                                 <div key={a.id} className="flex items-start gap-2.5 py-1.5 border-b border-border/40 last:border-0">
@@ -343,7 +299,7 @@ export default function AdminAnalytics() {
                         </span>
                     </h3>
                     <div className="space-y-1">
-                        {pendingApprovals.map(ap => (
+                        {pendingApprovals.map((ap: any) => (
                             <div key={ap.id} className="flex items-start gap-2.5 py-1.5 border-b border-border/40 last:border-0">
                                 <FileText className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
                                 <div className="flex-1 min-w-0">
@@ -391,10 +347,10 @@ export default function AdminAnalytics() {
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
                         {[
-                            { label: 'Daily Active', value: appUsageData.dailyActiveUsers },
-                            { label: 'Weekly Active', value: appUsageData.weeklyActiveUsers },
-                            { label: 'Total Users', value: appUsageData.totalUsers },
-                            { label: 'Engagement', value: `${appUsageData.engagementPercent}%` },
+                            { label: 'Daily Active', value: appUsage.dailyActive },
+                            { label: 'Weekly Active', value: appUsage.weeklyActive },
+                            { label: 'Total Users', value: appUsage.total },
+                            { label: 'Engagement', value: `${appUsage.engagement}%` },
                         ].map((s, i) => (
                             <div key={i} className="rounded-lg bg-secondary/50 p-3 text-center">
                                 <div className="text-lg font-bold text-foreground">{s.value}</div>
@@ -404,10 +360,10 @@ export default function AdminAnalytics() {
                     </div>
                     <div className="mt-3 space-y-1">
                         <p className="text-[10px] text-muted-foreground">
-                            Most Active: <span className="text-foreground font-medium">{appUsageData.mostActiveProject}</span>
+                            Most Active: <span className="text-foreground font-medium">{appUsage.mostActive}</span>
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                            Least Active: <span className="text-foreground font-medium">{appUsageData.leastActiveProject}</span>
+                            Least Active: <span className="text-foreground font-medium">{appUsage.leastActive}</span>
                         </p>
                     </div>
                 </div>

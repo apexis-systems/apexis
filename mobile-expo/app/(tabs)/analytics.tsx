@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    View, ScrollView, TouchableOpacity, Dimensions,
+    View, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator,
 } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,69 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import Svg, { Rect, Circle, Path, G, Line, Text as SvgText, Polyline } from 'react-native-svg';
-
-// ── Mock data (same as web mockup) ───────────────────────────────────────────
-const projectHealthData = [
-    { id: 'p1', name: 'Jubilee Hills Residence', status: 'on-track', progress: 68, pulseScore: 92, tasksTotal: 120, tasksCompleted: 82, tasksPending: 30, tasksOverdue: 8, messagesThisWeek: 47, riskLevel: 'low', architect: 'Priya Sharma' },
-    { id: 'p2', name: 'Banjara Hills Villa', status: 'delayed', progress: 42, pulseScore: 58, tasksTotal: 95, tasksCompleted: 40, tasksPending: 35, tasksOverdue: 20, messagesThisWeek: 12, riskLevel: 'high', architect: 'Kavitha Nair' },
-    { id: 'p3', name: 'Red Hills Commercial', status: 'at-risk', progress: 25, pulseScore: 74, tasksTotal: 60, tasksCompleted: 15, tasksPending: 32, tasksOverdue: 13, messagesThisWeek: 23, riskLevel: 'medium', architect: 'Ravi Kumar' },
-    { id: 'p4', name: 'Gachibowli Office Tower', status: 'on-track', progress: 85, pulseScore: 88, tasksTotal: 200, tasksCompleted: 170, tasksPending: 22, tasksOverdue: 8, messagesThisWeek: 38, riskLevel: 'low', architect: 'Priya Sharma' },
-    { id: 'p5', name: 'Madhapur Tech Park', status: 'completed', progress: 100, pulseScore: 96, tasksTotal: 180, tasksCompleted: 180, tasksPending: 0, tasksOverdue: 0, messagesThisWeek: 3, riskLevel: 'low', architect: 'Kavitha Nair' },
-] as const;
-
-const teamMembers = [
-    { id: 't1', name: 'Priya Sharma', role: 'Architect', tasksCompleted: 45, avgResponseTime: '2.1 hrs' },
-    { id: 't2', name: 'Amit Patel', role: 'Site Engineer', tasksCompleted: 38, avgResponseTime: '3.5 hrs' },
-    { id: 't3', name: 'Suresh Reddy', role: 'Contractor', tasksCompleted: 27, avgResponseTime: '6.2 hrs' },
-    { id: 't4', name: 'Kavitha Nair', role: 'Interior Designer', tasksCompleted: 22, avgResponseTime: '1.8 hrs' },
-    { id: 't5', name: 'Ravi Kumar', role: 'Structural Engineer', tasksCompleted: 31, avgResponseTime: '4.0 hrs' },
-];
-
-const taskCompletionWeekly = [
-    { week: 'W1', completed: 18, created: 25 },
-    { week: 'W2', completed: 22, created: 20 },
-    { week: 'W3', completed: 15, created: 28 },
-    { week: 'W4', completed: 30, created: 22 },
-    { week: 'W5', completed: 25, created: 18 },
-    { week: 'W6', completed: 28, created: 24 },
-    { week: 'W7', completed: 32, created: 19 },
-    { week: 'W8', completed: 20, created: 26 },
-];
-
-const fileUploadTimeline = [
-    { day: 'Mon', uploads: 8 },
-    { day: 'Tue', uploads: 12 },
-    { day: 'Wed', uploads: 5 },
-    { day: 'Thu', uploads: 15 },
-    { day: 'Fri', uploads: 10 },
-    { day: 'Sat', uploads: 3 },
-    { day: 'Sun', uploads: 1 },
-];
-
-const communicationData = [
-    { project: 'Jubilee', messages: 47 },
-    { project: 'Banjara', messages: 12 },
-    { project: 'Red Hills', messages: 23 },
-    { project: 'Gachibowli', messages: 38 },
-];
-
-const activityFeed = [
-    { id: 'af1', type: 'upload', description: 'Foundation Plan v3.pdf uploaded', project: 'Jubilee Hills', user: 'Priya Sharma', time: '10 min ago' },
-    { id: 'af2', type: 'task', description: 'Electrical wiring inspection completed', project: 'Gachibowli', user: 'Amit Patel', time: '25 min ago' },
-    { id: 'af3', type: 'comment', description: 'Contractor commented on excavation', project: 'Red Hills', user: 'Suresh Reddy', time: '1 hr ago' },
-    { id: 'af4', type: 'revision', description: 'Drawing revision submitted for approval', project: 'Banjara Hills', user: 'Kavitha Nair', time: '2 hrs ago' },
-    { id: 'af5', type: 'approval', description: 'BOQ approved by consultant', project: 'Jubilee Hills', user: 'Rajesh Kumar', time: '3 hrs ago' },
-];
-
-const pendingApprovals = [
-    { id: 'ap1', title: 'Structural Drawing Rev.4', project: 'Banjara Hills Villa', requestedBy: 'Priya Sharma', daysWaiting: 5 },
-    { id: 'ap2', title: 'BOQ Update — Electrical', project: 'Banjara Hills Villa', requestedBy: 'Amit Patel', daysWaiting: 3 },
-    { id: 'ap3', title: 'Variation Order #12', project: 'Red Hills Commercial', requestedBy: 'Suresh Reddy', daysWaiting: 7 },
-    { id: 'ap4', title: 'Interior Layout Plan', project: 'Banjara Hills Villa', requestedBy: 'Kavitha Nair', daysWaiting: 2 },
-    { id: 'ap5', title: 'Foundation Photos — Batch 3', project: 'Red Hills', requestedBy: 'Amit Patel', daysWaiting: 1 },
-];
-
-const appUsageData = { dailyActiveUsers: 18, weeklyActiveUsers: 24, totalUsers: 32, engagementPercent: 75, mostActiveProject: 'Jubilee Hills Residence', leastActiveProject: 'Red Hills Commercial' };
+import { getAnalyticsOverview } from '@/services/analyticsService';
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 const CHART_COLORS = { onTrack: '#22c55e', delayed: '#ef4444', atRisk: '#f59e0b', completed: '#3b82f6' };
@@ -238,6 +176,22 @@ export default function AdminAnalyticsScreen() {
     const { user } = useAuth();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'team'>('overview');
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<any>(null);
+
+    useEffect(() => {
+        const fetchAnalytics = async () => {
+            try {
+                const results = await getAnalyticsOverview();
+                setData(results);
+            } catch (err) {
+                console.error("Mobile Analytics Fetch Error:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        if (user) fetchAnalytics();
+    }, [user]);
 
     // Access guard
     if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
@@ -249,25 +203,32 @@ export default function AdminAnalyticsScreen() {
         );
     }
 
-    // Aggregated stats
-    const active = projectHealthData.filter(p => p.status !== 'completed');
-    const pendingTasks = projectHealthData.reduce((s, p) => s + p.tasksPending, 0);
-    const overdueTasks = projectHealthData.reduce((s, p) => s + p.tasksOverdue, 0);
-    const delayed = projectHealthData.filter(p => p.status === 'delayed').length;
+    if (loading || !data) {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={colors.primary} />
+            </SafeAreaView>
+        );
+    }
 
-    const statusCounts = [
-        { label: 'On Track', value: projectHealthData.filter(p => p.status === 'on-track').length, color: CHART_COLORS.onTrack },
-        { label: 'Delayed', value: projectHealthData.filter(p => p.status === 'delayed').length, color: CHART_COLORS.delayed },
-        { label: 'At Risk', value: projectHealthData.filter(p => p.status === 'at-risk').length, color: CHART_COLORS.atRisk },
-        { label: 'Done', value: projectHealthData.filter(p => p.status === 'completed').length, color: CHART_COLORS.completed },
-    ];
+    const {
+        quickStats, projectStatus, projectPulse, teamLeaderboard,
+        activityFeed, fileUploadTimeline, appUsage, communication,
+        pendingApprovals, taskCompletion
+    } = data;
 
     const STAT_CARDS = [
-        { label: 'Active Projects', value: active.length, icon: 'trending-up', accent: true },
-        { label: 'Pending Tasks', value: pendingTasks, icon: 'clock', accent: false },
-        { label: 'Overdue Tasks', value: overdueTasks, icon: 'alert-triangle', accent: false },
-        { label: 'Delayed', value: delayed, icon: 'alert-circle', accent: false },
+        { label: 'Active Projects', value: quickStats.activeProjects, icon: 'trending-up', accent: true },
+        { label: 'Pending Tasks', value: quickStats.pendingTasks, icon: 'clock', accent: false },
+        { label: 'Overdue Tasks', value: quickStats.overdueTasks, icon: 'alert-triangle', accent: false },
+        { label: 'Delayed', value: quickStats.delayedProjects, icon: 'alert-circle', accent: false },
     ];
+
+    const donutSlices = projectStatus.map((s: any) => ({
+        value: s.value,
+        color: s.color,
+        label: s.name
+    }));
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
@@ -317,12 +278,13 @@ export default function AdminAnalyticsScreen() {
                 {/* ── OVERVIEW TAB ───────────────────────────────── */}
                 {activeTab === 'overview' && (
                     <>
-                        {/* Quick Stats */}
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                        {/* Quick Stats: 2x2 Grid */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 8 }}>
                             {STAT_CARDS.map((s, i) => (
                                 <View key={i} style={{
-                                    width: '48.8%', backgroundColor: colors.surface, borderRadius: 14,
+                                    width: '48.5%', backgroundColor: colors.surface, borderRadius: 14,
                                     borderWidth: 1, borderColor: colors.border, padding: 14,
+                                    marginBottom: 10,
                                     ...(s.accent ? { borderColor: colors.primary } : {}),
                                 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -339,10 +301,10 @@ export default function AdminAnalyticsScreen() {
                             <SectionTitle icon="users" title="App Usage" />
                             <View style={{ flexDirection: 'row', gap: 8 }}>
                                 {[
-                                    { label: 'Daily Active', value: appUsageData.dailyActiveUsers },
-                                    { label: 'Weekly Active', value: appUsageData.weeklyActiveUsers },
-                                    { label: 'Total Users', value: appUsageData.totalUsers },
-                                    { label: 'Engagement', value: `${appUsageData.engagementPercent}%` },
+                                    { label: 'Daily Active', value: appUsage.dailyActive },
+                                    { label: 'Weekly Active', value: appUsage.weeklyActive },
+                                    { label: 'Total Users', value: appUsage.total },
+                                    { label: 'Engagement', value: `${appUsage.engagement}%` },
                                 ].map((s, i) => (
                                     <View key={i} style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 10, alignItems: 'center' }}>
                                         <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{s.value}</Text>
@@ -351,8 +313,8 @@ export default function AdminAnalyticsScreen() {
                                 ))}
                             </View>
                             <View style={{ marginTop: 10, gap: 3 }}>
-                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Most Active: <Text style={{ color: colors.text, fontWeight: '600' }}>{appUsageData.mostActiveProject}</Text></Text>
-                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Least Active: <Text style={{ color: colors.text, fontWeight: '600' }}>{appUsageData.leastActiveProject}</Text></Text>
+                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Most Active: <Text style={{ color: colors.text, fontWeight: '600' }}>{appUsage.mostActive}</Text></Text>
+                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Least Active: <Text style={{ color: colors.text, fontWeight: '600' }}>{appUsage.leastActive}</Text></Text>
                             </View>
                         </Card>
 
@@ -360,12 +322,12 @@ export default function AdminAnalyticsScreen() {
                         <Card>
                             <SectionTitle icon="pie-chart" title="Project Status" />
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
-                                <DonutChart slices={statusCounts} size={120} />
+                                <DonutChart slices={donutSlices} size={120} />
                                 <View style={{ flex: 1, gap: 8 }}>
-                                    {statusCounts.map((s, i) => (
+                                    {projectStatus.map((s: any, i: number) => (
                                         <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: s.color }} />
-                                            <Text style={{ flex: 1, fontSize: 11, color: colors.text }}>{s.label}</Text>
+                                            <Text style={{ flex: 1, fontSize: 11, color: colors.text }}>{s.name}</Text>
                                             <Text style={{ fontSize: 13, fontWeight: '700', color: s.color }}>{s.value}</Text>
                                         </View>
                                     ))}
@@ -386,7 +348,7 @@ export default function AdminAnalyticsScreen() {
                                     <Text style={{ fontSize: 9, color: colors.textMuted }}>Created</Text>
                                 </View>
                             </View>
-                            <BarChartSVG data={taskCompletionWeekly} colors={colors} />
+                            <BarChartSVG data={taskCompletion} colors={colors} />
                         </Card>
 
                         {/* File Uploads Line Chart */}
@@ -398,7 +360,7 @@ export default function AdminAnalyticsScreen() {
                         {/* Communication Activity */}
                         <Card>
                             <SectionTitle icon="message-circle" title="Communication Activity" />
-                            {communicationData.map((c, i) => (
+                            {communication.map((c: any, i: number) => (
                                 <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                                     <Text style={{ fontSize: 10, color: colors.textMuted, width: 66 }} numberOfLines={1}>{c.project}</Text>
                                     <View style={{ flex: 1, height: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: 5, overflow: 'hidden' }}>
@@ -412,7 +374,7 @@ export default function AdminAnalyticsScreen() {
                         {/* Live Activity Feed */}
                         <Card>
                             <SectionTitle icon="activity" title="Live Activity" />
-                            {activityFeed.map((a, i) => (
+                            {activityFeed.map((a: any, i: number) => (
                                 <View key={a.id} style={{
                                     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
                                     paddingVertical: 10, borderBottomWidth: i < activityFeed.length - 1 ? 1 : 0,
@@ -432,7 +394,7 @@ export default function AdminAnalyticsScreen() {
                         {/* Pending Approvals */}
                         <Card>
                             <SectionTitle icon="clock" title="Pending Approvals" badge={pendingApprovals.length} />
-                            {pendingApprovals.map((ap, i) => (
+                            {pendingApprovals.map((ap: any, i: number) => (
                                 <View key={ap.id} style={{
                                     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
                                     paddingVertical: 10, borderBottomWidth: i < pendingApprovals.length - 1 ? 1 : 0,
@@ -459,7 +421,7 @@ export default function AdminAnalyticsScreen() {
                 {activeTab === 'projects' && (
                     <>
                         <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>Project Pulse Scores</Text>
-                        {projectHealthData.map((p, i) => (
+                        {projectPulse.map((p: any, i: number) => (
                             <Card key={p.id} style={{ marginBottom: 10 }}>
                                 {/* Project name + status badge */}
                                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -467,15 +429,15 @@ export default function AdminAnalyticsScreen() {
                                         <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }} numberOfLines={1}>{p.name}</Text>
                                         <Text style={{ fontSize: 10, color: colors.textMuted }}>{p.architect}</Text>
                                     </View>
-                                    <View style={{ backgroundColor: riskBg(p.riskLevel), borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 8 }}>
-                                        <Text style={{ fontSize: 9, fontWeight: '700', color: riskColor(p.riskLevel), textTransform: 'uppercase' }}>{p.riskLevel} risk</Text>
+                                    <View style={{ backgroundColor: riskBg(p.risk), borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 8 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '700', color: riskColor(p.risk), textTransform: 'uppercase' }}>{p.risk} risk</Text>
                                     </View>
                                 </View>
 
                                 {/* Progress bar */}
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                                     <View style={{ flex: 1, height: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', borderRadius: 3, overflow: 'hidden' }}>
-                                        <View style={{ width: `${p.progress}%`, height: '100%', backgroundColor: statusColor(p.status), borderRadius: 3 }} />
+                                        <View style={{ width: `${p.progress}%`, height: '100%', backgroundColor: statusColor(p.progress > 80 ? 'on-track' : p.progress > 40 ? 'at-risk' : 'delayed'), borderRadius: 3 }} />
                                     </View>
                                     <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>{p.progress}%</Text>
                                 </View>
@@ -490,17 +452,17 @@ export default function AdminAnalyticsScreen() {
                                     </View>
                                     {/* Tasks */}
                                     <View style={{ flex: 1, alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
-                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{p.tasksCompleted}<Text style={{ fontSize: 12, color: colors.textMuted }}>/{p.tasksTotal}</Text></Text>
+                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{p.tasksDone}<Text style={{ fontSize: 12, color: colors.textMuted }}>/{p.tasksTotal}</Text></Text>
                                         <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1 }}>Tasks Done</Text>
                                     </View>
                                     {/* Overdue */}
-                                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: p.tasksOverdue > 10 ? 'rgba(239,68,68,0.08)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
-                                        <Text style={{ fontSize: 18, fontWeight: '800', color: p.tasksOverdue > 10 ? '#ef4444' : colors.text }}>{p.tasksOverdue}</Text>
+                                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: p.overdue > 10 ? 'rgba(239,68,68,0.08)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
+                                        <Text style={{ fontSize: 18, fontWeight: '800', color: p.overdue > 10 ? '#ef4444' : colors.text }}>{p.overdue}</Text>
                                         <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1 }}>Overdue</Text>
                                     </View>
                                     {/* Messages */}
                                     <View style={{ flex: 1, alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
-                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{p.messagesThisWeek}</Text>
+                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{p.messages}</Text>
                                         <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1, textAlign: 'center' }}>Msgs/wk</Text>
                                     </View>
                                 </View>
@@ -514,11 +476,11 @@ export default function AdminAnalyticsScreen() {
                     <>
                         <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>Team Leaderboard</Text>
                         <Card>
-                            {teamMembers.map((m, i) => (
+                            {teamLeaderboard.map((m: any, i: number) => (
                                 <View key={m.id} style={{
                                     flexDirection: 'row', alignItems: 'center', gap: 12,
                                     paddingVertical: 12,
-                                    borderBottomWidth: i < teamMembers.length - 1 ? 1 : 0,
+                                    borderBottomWidth: i < teamLeaderboard.length - 1 ? 1 : 0,
                                     borderBottomColor: colors.border,
                                 }}>
                                     {/* Rank */}
@@ -549,7 +511,7 @@ export default function AdminAnalyticsScreen() {
                         {/* Response time chart */}
                         <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>Response Times</Text>
                         <Card>
-                            {teamMembers.map((m, i) => {
+                            {teamLeaderboard.map((m: any, i: number) => {
                                 const hours = parseFloat(m.avgResponseTime);
                                 const maxHours = 8;
                                 return (

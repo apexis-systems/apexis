@@ -44,7 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             const res = await getMe();
             if (res?.user) {
-                setUser(res.user);
+                setUser({ ...res.user, organization: res.organization });
             }
         } catch (e: any) {
             if (e?.response?.status !== 401) {
@@ -65,8 +65,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const res = await getMe();
             if (res?.user) {
-                setUser(res.user);
-                return res.user as User;
+                const fullUser = { ...res.user, organization: res.organization };
+                setUser(fullUser);
+                return fullUser as User;
             }
         } catch (e) {
             console.error("Failed to login", e);
