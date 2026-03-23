@@ -1,4 +1,6 @@
-import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking, Share } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { Text } from '@/components/ui/AppText';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
@@ -72,6 +74,34 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [exportTimerMs, setExportTimerMs] = useState(0);
     const [isCountingDown, setIsCountingDown] = useState(false);
     const [latestExport, setLatestExport] = useState<{ url: string, date: string } | null>(null);
+    const handleShareFile = async (url: string) => {
+        try {
+            if (!url) return;
+
+            const fileName = `Final_Handover_Report_${new Date().getTime()}.pdf`;
+            const localUri = `${(FileSystem as any).cacheDirectory}${fileName}`;
+
+            Alert.alert("Preparing...", "Downloading report to share...");
+            const { uri } = await FileSystem.downloadAsync(url, localUri);
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Final Handover Report',
+                    UTI: 'com.adobe.pdf'
+                });
+            } else {
+                await Share.share({
+                    title: 'Final Handover Report',
+                    message: `Final Handover Report\n${url}`,
+                    url: url,
+                });
+            }
+        } catch (e) {
+            console.error('Share error:', e);
+            Alert.alert("Error", "Failed to share report");
+        }
+    };
 
     // Initial Export Status Fetch
     useEffect(() => {
@@ -500,21 +530,34 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         ) : (
                             <View style={{ gap: 12 }}>
                                 {latestExport && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ecfdf5', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#a7f3d0' }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <Feather name="check-circle" size={16} color="#059669" />
-                                            <View>
-                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>Report Ready</Text>
-                                                <Text style={{ fontSize: 10, color: '#059669' }}>Generated {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                                    <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+                                            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(16, 185, 129, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Feather name="check" size={16} color="#10b981" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 }}>Report Ready</Text>
+                                                <Text style={{ fontSize: 11, color: colors.textMuted }}>Generated {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
                                             </View>
                                         </View>
-                                        <TouchableOpacity
-                                            onPress={() => Linking.openURL(latestExport.url)}
-                                            style={{ backgroundColor: '#059669', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                                        >
-                                            <Feather name="download" size={12} color="#fff" />
-                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>Download</Text>
-                                        </TouchableOpacity>
+                                        
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <TouchableOpacity
+                                                onPress={() => handleShareFile(latestExport.url)}
+                                                style={{ flex: 1, backgroundColor: colors.background, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                            >
+                                                <Feather name="share" size={14} color={colors.text} />
+                                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>Share</Text>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                onPress={() => Linking.openURL(latestExport.url)}
+                                                style={{ flex: 1, backgroundColor: '#10b981', paddingVertical: 10, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                            >
+                                                <Feather name="download" size={14} color="#fff" />
+                                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Download</Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
                                 )}
                                 <TouchableOpacity
