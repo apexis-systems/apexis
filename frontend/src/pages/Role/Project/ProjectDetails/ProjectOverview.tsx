@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil } from 'lucide-react';
+import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { exportHandoverPackage, getLatestExport } from '@/services/projectService';
+import { useSocket } from '@/contexts/SocketContext';
 import { getReports, Report } from '@/services/reportService';
 import { getFiles } from '@/services/fileService';
 import EditProjectModal from "@/components/Project/EditProjectModal";
@@ -26,6 +28,103 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
   const [counting, setCounting] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Export state
+  const { socket } = useSocket();
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatusText, setExportStatusText] = useState('');
+  const [exportTimerMs, setExportTimerMs] = useState(0);
+  const [isCountingDown, setIsCountingDown] = useState(false);
+  const [latestExport, setLatestExport] = useState<{ url: string, date: string } | null>(null);
+
+  // Load latest export
+  useEffect(() => {
+    if (userRole !== 'admin' || !project?.id) return;
+    getLatestExport(project.id)
+      .then(data => {
+        if (data.downloadUrl) {
+          setLatestExport({ url: data.downloadUrl, date: data.last_export_date });
+        }
+        if (data.activeExport) {
+          setIsExporting(true);
+          setExportStatusText(data.activeExport.statusText);
+          if (data.activeExport.etaMs !== undefined) {
+             setIsCountingDown(true);
+             setExportTimerMs(data.activeExport.etaMs);
+          } else {
+             setIsCountingDown(false);
+             setExportTimerMs(Date.now() - data.activeExport.startTime);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [project?.id, userRole]);
+
+  // Socket listener for export progress
+  useEffect(() => {
+    if (!socket || userRole !== 'admin') return;
+
+    let timerInterval: NodeJS.Timeout;
+
+    const handleExportStatus = (data: any) => {
+      if (data.projectId !== project?.id) return;
+      
+      if (!isExporting && data.statusType === 'progress') {
+        setIsExporting(true);
+        setExportTimerMs(0);
+        setIsCountingDown(false);
+      }
+
+      setExportStatusText(data.status);
+
+      if (data.etaMs !== undefined) {
+         setIsCountingDown(true);
+         setExportTimerMs(data.etaMs);
+      }
+
+      if (data.statusType === 'success') {
+        setIsExporting(false);
+        setLatestExport({ url: data.presignedUrl, date: new Date().toISOString() });
+        toast.success(`Export completed in ${Math.round(data.totalTimeMs / 1000)}s!`);
+      } else if (data.statusType === 'failed') {
+        setIsExporting(false);
+        toast.error('Export failed: ' + data.status);
+      }
+    };
+
+    socket.on('export-status', handleExportStatus);
+
+    if (isExporting) {
+       timerInterval = setInterval(() => {
+         setExportTimerMs(prev => isCountingDown ? Math.max(0, prev - 1000) : prev + 1000);
+       }, 1000);
+    }
+
+    return () => {
+      socket.off('export-status', handleExportStatus);
+      if (timerInterval) clearInterval(timerInterval);
+    };
+  }, [socket, isExporting, isCountingDown, project?.id, userRole]);
+
+  const handleStartExport = async () => {
+    try {
+      if (!project?.id) return;
+      setIsExporting(true);
+      setExportStatusText('Starting export process...');
+      setExportTimerMs(0);
+      setIsCountingDown(false);
+      await exportHandoverPackage(project.id);
+    } catch (e: any) {
+      toast.error('Failed to trigger export');
+      setIsExporting(false);
+    }
+  };
+
+  const formatElapsed = (ms: number) => {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    return `${m.toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     if (!project?.id) return;
@@ -215,9 +314,59 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
 
       {/* Handover */}
       {userRole === 'admin' && (
-        <Button variant="outline" className="w-full h-11 rounded-xl border-dashed text-sm">
-          <Download className="h-4 w-4 mr-2" /> Export Final Handover Package
-        </Button>
+        <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground">Final Handover Report</h3>
+          </div>
+          
+          {isExporting ? (
+            <div className="flex flex-col items-center justify-center py-6 gap-3 bg-secondary/30 rounded-lg border border-border/50">
+              <Loader2 className="h-6 w-6 animate-spin text-accent" />
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-sm font-semibold animate-pulse">{exportStatusText || 'Exporting...'}</p>
+                {isCountingDown && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono bg-background px-2 py-0.5 rounded-md border border-border">
+                    <Clock className="h-3 w-3" />
+                    {formatElapsed(exportTimerMs)} left
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              {latestExport && (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Report Ready</span>
+                      <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80">
+                        Generated {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => window.open(latestExport.url, '_blank')}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1" /> Download
+                  </Button>
+                </div>
+              )}
+              
+              <Button 
+                variant="outline" 
+                className="w-full h-11 rounded-xl border-dashed text-sm"
+                onClick={handleStartExport}
+              >
+                <PlayCircle className="h-4 w-4 mr-2" /> 
+                {latestExport ? 'Generate New Report' : 'Export Final Handover Report'}
+              </Button>
+            </>
+          )}
+        </div>
       )}
 
       {userRole === 'admin' && (

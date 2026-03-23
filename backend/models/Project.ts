@@ -45,6 +45,14 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: false,
             },
+            last_export_url: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
+            last_export_date: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
         },
         {
             tableName: "projects",

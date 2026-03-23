@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
@@ -10,6 +10,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import EditProjectModal from './EditProjectModal';
 import { getSnags } from '@/services/snagService';
+import { useSocket } from '@/contexts/SocketContext';
+import { exportHandoverPackage, getLatestExport } from '@/services/projectService';
 
 interface Props {
     project: Project;
@@ -62,6 +64,102 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [reportsLoading, setReportsLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+    // Export State
+    const { socket } = useSocket();
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportStatusText, setExportStatusText] = useState('');
+    const [exportTimerMs, setExportTimerMs] = useState(0);
+    const [isCountingDown, setIsCountingDown] = useState(false);
+    const [latestExport, setLatestExport] = useState<{ url: string, date: string } | null>(null);
+
+    // Initial Export Status Fetch
+    useEffect(() => {
+        if (userRole !== 'admin' || !projectId) return;
+        getLatestExport(projectId)
+            .then(data => {
+                if (data.downloadUrl) {
+                    setLatestExport({ url: data.downloadUrl, date: data.last_export_date });
+                }
+                if (data.activeExport) {
+                    setIsExporting(true);
+                    setExportStatusText(data.activeExport.statusText);
+                    if (data.activeExport.etaMs !== undefined) {
+                        setIsCountingDown(true);
+                        setExportTimerMs(data.activeExport.etaMs);
+                    } else {
+                        setIsCountingDown(false);
+                        setExportTimerMs(Date.now() - data.activeExport.startTime);
+                    }
+                }
+            }).catch(() => {});
+    }, [projectId, userRole]);
+
+    // Socket Listener
+    useEffect(() => {
+        if (!socket || userRole !== 'admin') return;
+
+        let timerInterval: ReturnType<typeof setInterval>;
+
+        const handleExportStatus = (data: any) => {
+            if (data.projectId !== projectId) return;
+            
+            if (!isExporting && data.statusType === 'progress') {
+                setIsExporting(true);
+                setExportTimerMs(0);
+                setIsCountingDown(false);
+            }
+
+            setExportStatusText(data.status);
+
+            if (data.etaMs !== undefined) {
+               setIsCountingDown(true);
+               setExportTimerMs(data.etaMs);
+            }
+
+            if (data.statusType === 'success') {
+                setIsExporting(false);
+                setLatestExport({ url: data.presignedUrl, date: new Date().toISOString() });
+                Alert.alert("Success", `Export completed in ${Math.round(data.totalTimeMs / 1000)}s!`);
+            } else if (data.statusType === 'failed') {
+                setIsExporting(false);
+                Alert.alert("Error", 'Export failed: ' + data.status);
+            }
+        };
+
+        socket.on('export-status', handleExportStatus);
+
+        if (isExporting) {
+            timerInterval = setInterval(() => {
+                setExportTimerMs(prev => isCountingDown ? Math.max(0, prev - 1000) : prev + 1000);
+            }, 1000);
+        }
+
+        return () => {
+            socket.off('export-status', handleExportStatus);
+            if (timerInterval) clearInterval(timerInterval);
+        };
+    }, [socket, isExporting, isCountingDown, projectId, userRole]);
+
+    const handleStartExport = async () => {
+        try {
+            if (!projectId) return;
+            setIsExporting(true);
+            setExportStatusText('Starting export process...');
+            setExportTimerMs(0);
+            setIsCountingDown(false);
+            await exportHandoverPackage(projectId);
+        } catch (e: any) {
+            Alert.alert("Error", 'Failed to trigger export');
+            setIsExporting(false);
+        }
+    };
+
+    const formatElapsed = (ms: number) => {
+        const s = Math.floor(ms / 1000);
+        const m = Math.floor(s / 60);
+        return `${m.toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+    };
 
     useEffect(() => {
         if (!projectId) return;
@@ -373,25 +471,76 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
                 {/* Handover - admin only */}
                 {userRole === 'admin' && (
-                    <TouchableOpacity
-                        style={{
-                            width: '100%',
-                            height: 48,
-                            borderRadius: 16,
-                            borderWidth: 1,
-                            borderColor: colors.primary,
-                            borderStyle: 'dashed',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 8,
-                            backgroundColor: colors.background,
-                            marginBottom: 20
-                        }}
-                    >
-                        <Feather name="download" size={16} color={colors.text} />
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Export Final Handover Package</Text>
-                    </TouchableOpacity>
+                    <View style={{
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface,
+                        padding: 16,
+                        marginBottom: 20,
+                        gap: 16
+                    }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Final Handover Report</Text>
+
+                        {isExporting ? (
+                            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 24, gap: 12, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                <ActivityIndicator size="large" color={colors.primary} />
+                                <View style={{ alignItems: 'center', gap: 4 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{exportStatusText || 'Exporting...'}</Text>
+                                    {isCountingDown && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}>
+                                            <Feather name="clock" size={12} color={colors.textMuted} />
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                                {formatElapsed(exportTimerMs)} left
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        ) : (
+                            <View style={{ gap: 12 }}>
+                                {latestExport && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ecfdf5', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#a7f3d0' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Feather name="check-circle" size={16} color="#059669" />
+                                            <View>
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>Report Ready</Text>
+                                                <Text style={{ fontSize: 10, color: '#059669' }}>Generated {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                                            </View>
+                                        </View>
+                                        <TouchableOpacity
+                                            onPress={() => Linking.openURL(latestExport.url)}
+                                            style={{ backgroundColor: '#059669', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                        >
+                                            <Feather name="download" size={12} color="#fff" />
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>Download</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                                <TouchableOpacity
+                                    onPress={handleStartExport}
+                                    style={{
+                                        width: '100%',
+                                        height: 48,
+                                        borderRadius: 12,
+                                        borderWidth: 1,
+                                        borderColor: colors.primary,
+                                        borderStyle: 'dashed',
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: 8,
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Feather name={latestExport ? "refresh-cw" : "play-circle"} size={16} color={colors.text} />
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
+                                        {latestExport ? 'Generate New Report' : 'Export Final Handover Report'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
                 )}
 
                 {userRole === 'admin' && (

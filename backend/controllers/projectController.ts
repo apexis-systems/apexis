@@ -1,5 +1,17 @@
 import type { Request, Response } from "express";
 import crypto from "crypto";
+import { startExportProcess, activeExports } from "../services/exportService.ts";
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION || "ap-south-2",
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+    }
+});
+const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
 import { projects, users, folders, files, organizations, project_members, Sequelize } from "../models/index.ts";
 import { Op, fn, col, literal } from "sequelize";
 
@@ -204,6 +216,65 @@ export const updateProject = async (req: Request, res: Response) => {
         res.status(200).json({ message: "Project updated successfully", project });
     } catch (error) {
         console.error("Update Project Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const exportHandoverPackage = async (req: Request, res: Response) => {
+    try {
+        const { id: projectId } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can export projects" });
+        }
+
+        const project = await projects.findOne({ where: { id: projectId, organization_id: authUser.organization_id } });
+
+        if (!project) {
+            return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        // Trigger the background service
+        startExportProcess(project.id, authUser.user_id, authUser.organization_id);
+
+        res.status(202).json({ message: "Export started. You will be notified via websocket." });
+    } catch (error) {
+        console.error("Export Project Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getLatestExport = async (req: Request, res: Response) => {
+    try {
+        const { id: projectId } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can export projects" });
+        }
+
+        const project = await projects.findOne({ where: { id: projectId, organization_id: authUser.organization_id } });
+
+        const activeExport = activeExports.get(Number(projectId));
+
+        let downloadUrl = null;
+        if (project.last_export_url) {
+            const getCmd = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: project.last_export_url });
+            downloadUrl = await getSignedUrl(s3Client, getCmd, { expiresIn: 7 * 24 * 3600 }); // 7 days
+        }
+
+        if (!downloadUrl && !activeExport) {
+            return res.status(404).json({ error: "No export found for this project" });
+        }
+
+        res.status(200).json({ 
+            downloadUrl, 
+            last_export_date: project.last_export_date,
+            activeExport 
+        });
+    } catch (error) {
+        console.error("Get Latest Export Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
