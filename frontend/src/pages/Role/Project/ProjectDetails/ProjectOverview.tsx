@@ -161,6 +161,24 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
     toast.success('Copied to clipboard');
   };
 
+  const handleShareLink = async (role: 'contributor' | 'client', code: string) => {
+    const deepUrl = `${window.location.origin}/auth/login-redirect?role=${role}&code=${code}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
+          text: `Click the link to access the project on Apexis.`,
+          url: deepUrl,
+        });
+      } catch (err) {
+        // Fallback or user canceled
+        console.log("Share failed or canceled", err);
+      }
+    } else {
+      handleCopy(deepUrl, `${role}-link`);
+    }
+  };
+
   return (
     <div className="mt-4 space-y-4">
       {/* Project Description */}
@@ -231,24 +249,44 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Contributor Code</span>
               <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
                 <span className="font-mono text-sm font-bold">{project.contributor_code}</span>
-                <button
-                  onClick={() => handleCopy(project.contributor_code, 'contributor')}
-                  className="p-1.5 hover:bg-secondary rounded-md transition-colors"
-                >
-                  {copiedId === 'contributor' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleCopy(project.contributor_code, 'contributor')}
+                    className="p-1.5 hover:bg-secondary rounded-md transition-colors"
+                    title="Copy Code"
+                  >
+                    {copiedId === 'contributor' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                  <button
+                    onClick={() => handleShareLink('contributor', project.contributor_code)}
+                    className="p-1.5 hover:bg-secondary rounded-md transition-colors text-accent"
+                    title="Share Access Link"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Client Code</span>
               <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
                 <span className="font-mono text-sm font-bold">{project.client_code}</span>
-                <button
-                  onClick={() => handleCopy(project.client_code, 'client')}
-                  className="p-1.5 hover:bg-secondary rounded-md transition-colors"
-                >
-                  {copiedId === 'client' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleCopy(project.client_code, 'client')}
+                    className="p-1.5 hover:bg-secondary rounded-md transition-colors"
+                    title="Copy Code"
+                  >
+                    {copiedId === 'client' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                  <button
+                    onClick={() => handleShareLink('client', project.client_code)}
+                    className="p-1.5 hover:bg-secondary rounded-md transition-colors text-accent"
+                    title="Share Access Link"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

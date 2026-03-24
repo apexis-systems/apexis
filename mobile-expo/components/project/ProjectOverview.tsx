@@ -31,26 +31,6 @@ const getWeekNumber = (dateStr: string): number => {
     return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
 };
 
-const fmtDate = (d: any): string => {
-    if (!d) return '—';
-    try {
-        return new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-    } catch { return String(d); }
-};
-
-const fmtReportDate = (dateStr: string): string => {
-    try {
-        return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
-    } catch { return dateStr; }
-};
-
-const reportTitle = (r: Report): string => {
-    if (r.type === 'daily') {
-        return `Daily Site Report — ${fmtReportDate(r.period_start)}`;
-    }
-    const wk = getWeekNumber(r.period_start);
-    return `Weekly Progress — Week ${wk}`;
-};
 
 export default function ProjectOverview({ project, userRole, onUpdate, onActionPress }: Props) {
     const { colors } = useTheme();
@@ -100,6 +80,20 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         } catch (e) {
             console.error('Share error:', e);
             Alert.alert("Error", "Failed to share report");
+        }
+    };
+
+    const handleShareLink = async (role: string, code: string) => {
+        try {
+            // Generates a universal web link which routes to the mobile deep-link on the device
+            const shareUrl = `https://apexis-web.vercel.app/auth/login-redirect?role=${role}&code=${code}`;
+            await Share.share({
+                title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
+                message: `You've been invited to access a project on Apexis!\nClick the link below to securely login to your project:\n\n${shareUrl}`,
+            });
+        } catch (e) {
+            console.error('Share error:', e);
+            Alert.alert("Error", "Failed to share link");
         }
     };
 
@@ -189,6 +183,16 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         const s = Math.floor(ms / 1000);
         const m = Math.floor(s / 60);
         return `${m.toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+    };
+
+    /**
+     * Helper to format dates correctly for Indian locale
+     */
+    const fmtDate = (d: any): string => {
+        if (!d) return '—';
+        try {
+            return new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+        } catch { return String(d); }
     };
 
     useEffect(() => {
@@ -305,9 +309,6 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 borderWidth: 1,
                                 borderColor: colors.border,
                                 padding: 12,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
                                 shadowColor: '#000',
                                 shadowOffset: { width: 0, height: 2 },
                                 shadowOpacity: 0.05,
@@ -315,22 +316,34 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 elevation: 1,
                             }}
                         >
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '700', marginBottom: 2, textTransform: 'uppercase' }}>{item.label}</Text>
-                                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{item.value || '—'}</Text>
+                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
+                                {item.label}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
+                                    {item.value || '—'}
+                                </Text>
+                                {item.value ? (
+                                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                                        <TouchableOpacity
+                                            onPress={() => handleCopy(item.value!, item.id)}
+                                            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                        >
+                                            <Feather
+                                                name={copiedId === item.id ? "check" : "copy"}
+                                                size={14}
+                                                color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                            />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => handleShareLink(item.id === 'cont_code' ? 'contributor' : 'client', item.value!)}
+                                            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                        >
+                                            <Feather name="share-2" size={14} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : null}
                             </View>
-                            {item.value ? (
-                                <TouchableOpacity
-                                    onPress={() => handleCopy(item.value!, item.id)}
-                                    style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
-                                >
-                                    <Feather
-                                        name={copiedId === item.id ? "check" : "copy"}
-                                        size={14}
-                                        color={copiedId === item.id ? "#22c55e" : colors.textMuted}
-                                    />
-                                </TouchableOpacity>
-                            ) : null}
                         </View>
                     ))}
                 </View>
@@ -373,131 +386,6 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 </View>
 
 
-                {/* Reports Section */}
-                <View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
-                        <TouchableOpacity style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            backgroundColor: colors.primary,
-                            paddingHorizontal: 16,
-                            paddingVertical: 10,
-                            borderRadius: 12
-                        }}>
-                            <Feather name="upload" size={14} color="#fff" />
-                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Upload Report</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Branded Bar */}
-                    <View style={{
-                        backgroundColor: '#fff7ed',
-                        paddingVertical: 10,
-                        paddingHorizontal: 16,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: '#fed7aa',
-                        alignItems: 'center',
-                        marginBottom: 20
-                    }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                            Generated Via APEXIS — Construction Communication Platform
-                        </Text>
-                    </View>
-
-                    {reportsLoading ? (
-                        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
-                    ) : (
-                        <>
-                            {/* Daily Site Reports */}
-                            {dailyReports.length > 0 && (
-                                <View style={{ marginBottom: 20 }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Daily Site Reports</Text>
-                                    <View style={{ gap: 10 }}>
-                                        {dailyReports.slice(0, 3).map((report) => (
-                                            <View
-                                                key={report.id}
-                                                style={{
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    gap: 14,
-                                                    borderRadius: 16,
-                                                    backgroundColor: colors.surface,
-                                                    borderWidth: 1,
-                                                    borderColor: colors.border,
-                                                    padding: 16,
-                                                }}
-                                            >
-                                                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Feather name="file-text" size={20} color={colors.textMuted} />
-                                                </View>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
-                                                        {reportTitle(report)}
-                                                    </Text>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                                                        <Feather name="clock" size={12} color={colors.textMuted} />
-                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                                                            {report.period_start} · Priya Sharma
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                            </View>
-                                        ))}
-                                    </View>
-                                </View>
-                            )}
-
-                            {/* Weekly Progress Reports */}
-                            {weeklyReports.length > 0 && (
-                                <View>
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Weekly Progress Reports</Text>
-                                    <View style={{ gap: 10 }}>
-                                        {weeklyReports.slice(0, 3).map((report) => (
-                                            <View
-                                                key={report.id}
-                                                style={{
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    gap: 14,
-                                                    borderRadius: 16,
-                                                    backgroundColor: colors.surface,
-                                                    borderWidth: 1,
-                                                    borderColor: colors.border,
-                                                    padding: 16,
-                                                }}
-                                            >
-                                                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(249,115,22,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Feather name="file-text" size={20} color={colors.primary} />
-                                                </View>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
-                                                        {reportTitle(report)}
-                                                    </Text>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                                                        <Feather name="clock" size={12} color={colors.textMuted} />
-                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                                                            {report.period_start} – Rajesh Kumar
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                            </View>
-                                        ))}
-                                    </View>
-                                </View>
-                            )}
-
-                            {!reportsLoading && dailyReports.length === 0 && weeklyReports.length === 0 && (
-                                <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
-                                    <Feather name="file-text" size={32} color={colors.border} />
-                                    <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 10 }}>No reports available for this project.</Text>
-                                </View>
-                            )}
-                        </>
-                    )}
-                </View>
 
                 {/* Handover - admin only */}
                 {userRole === 'admin' && (

@@ -2,48 +2,44 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Smartphone, Download, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { Smartphone, Download, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-function InviteLandingContent() {
+const RedirectContent = () => {
     const searchParams = useSearchParams();
-    const token = searchParams?.get('token');
+    const router = useRouter();
+    const role = searchParams?.get('role');
+    const code = searchParams?.get('code');
     const [attempted, setAttempted] = useState(false);
 
     useEffect(() => {
-        if (token && !attempted) {
-            // Try to open the app automatically
-            const appUrl = `apexis://signup?token=${token}`;
-            window.location.href = appUrl;
+        if (!role || !code) return;
 
-            // Mark as attempted after a short delay
+        if (!attempted) {
+            const deepLink = `apexis://login?role=${role}&code=${code}`;
+            window.location.href = deepLink;
+
             const timer = setTimeout(() => {
                 setAttempted(true);
             }, 2000);
 
             return () => clearTimeout(timer);
         }
-    }, [token, attempted]);
+    }, [role, code, attempted]);
 
     const handleOpenApp = () => {
-        if (token) {
-            window.location.href = `apexis://signup?token=${token}`;
+        if (role && code) {
+            window.location.href = `apexis://login?role=${role}&code=${code}`;
         }
     };
 
-    if (!token) {
+    if (!role || !code) {
         return (
-            <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-                 <div className="w-20 h-20 bg-destructive/10 rounded-3xl flex items-center justify-center mb-8 animate-in fade-in zoom-in duration-500">
-                    <AlertCircle className="w-10 h-10 text-destructive" />
+            <div className="min-h-screen bg-background flex items-center justify-center p-6 text-center">
+                <div className="max-w-md">
+                    <h1 className="text-xl font-bold text-foreground mb-2 uppercase font-angelica">Access Link Error</h1>
+                    <p className="text-muted-foreground text-sm">This access link is missing required parameters. Please contact your administrator.</p>
                 </div>
-                <div className="max-w-md space-y-4">
-                    <h1 className="text-xl font-bold text-foreground mb-2 uppercase font-angelica">Invalid Invitation</h1>
-                    <p className="text-muted-foreground text-sm">The invitation link you followed appears to be invalid or expired. Please request a new link from your administrator.</p>
-                </div>
-                <footer className="mt-20 text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
-                    Powered by <span className="font-angelica uppercase tracking-tighter">APEXIS</span>.
-                </footer>
             </div>
         );
     }
@@ -57,14 +53,14 @@ function InviteLandingContent() {
 
             <h1 className="text-2xl font-bold text-foreground mb-3 font-angelica uppercase tracking-wider">APEXIS</h1>
             <p className="text-muted-foreground max-w-sm mb-10 text-sm">
-                We're opening the app for you to complete your account setup.
+                We're opening the app for you to access your project.
             </p>
 
             <div className="space-y-4 w-full max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
                 {!attempted ? (
                     <div className="flex flex-col items-center gap-3 py-4">
                         <Loader2 className="h-8 w-8 animate-spin text-accent" />
-                        <span className="text-sm font-medium text-muted-foreground uppercase tracking-tighter">Opening <span className="font-angelica">APEXIS</span>...</span>
+                        <span className="text-sm font-medium text-muted-foreground uppercase tracking-tighter">Connecting to <span className="font-angelica">APEXIS</span>...</span>
                     </div>
                 ) : (
                     <>
@@ -109,16 +105,16 @@ function InviteLandingContent() {
             </footer>
         </div>
     );
-}
+};
 
-export default function InviteLandingPage() {
+export default function LoginRedirect() {
     return (
         <Suspense fallback={
             <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
                 <Loader2 className="h-10 w-10 animate-spin text-accent" />
             </div>
         }>
-            <InviteLandingContent />
+            <RedirectContent />
         </Suspense>
     );
 }

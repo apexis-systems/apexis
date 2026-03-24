@@ -78,6 +78,9 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
     try {
         emitStatus('Starting export...');
 
+        const targetProject = await projects.findByPk(projectId);
+        const projectName = targetProject?.name || 'Project';
+
         const allFolders = await folders.findAll({ where: { project_id: projectId } });
         const allFiles = await files.findAll({ where: { project_id: projectId } });
 
@@ -85,15 +88,15 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
         allFolders.forEach((f: any) => folderMap.set(f.id, f));
 
         const getFolderPath = (folderId: number | null): string => {
-            if (!folderId) return '/root';
+            if (!folderId) return `/${projectName}`;
             const f = folderMap.get(folderId);
-            if (!f) return '/root';
+            if (!f) return `/${projectName}`;
             return getFolderPath(f.parent_id) + '/' + f.name;
         };
 
         const imageFiles: any[] = [];
         const pdfFiles: any[] = [];
-        const docCountsByFolder = new Map<string, number>();
+        const countsByFolder = new Map<string, { photos: number, docs: number }>();
         let totalDocs = 0;
 
         for (const file of allFiles) {
@@ -101,10 +104,16 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
             // clean up repeated slashes
             folderPath = folderPath.replace(/\/+/g, '/');
 
+            if (!countsByFolder.has(folderPath)) {
+                countsByFolder.set(folderPath, { photos: 0, docs: 0 });
+            }
+            const folderCounts = countsByFolder.get(folderPath)!;
+
             if (file.file_type.startsWith('image/')) {
                 imageFiles.push({ file, folderPath });
+                folderCounts.photos++;
             } else {
-                docCountsByFolder.set(folderPath, (docCountsByFolder.get(folderPath) || 0) + 1);
+                folderCounts.docs++;
                 totalDocs++;
                 
                 if (file.file_type === 'application/pdf' || file.file_name.toLowerCase().endsWith('.pdf')) {
@@ -220,32 +229,67 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
             const stream = fs.createWriteStream(docsPdfPath);
             doc.pipe(stream);
 
-            doc.fontSize(20).text('Document Summary', { align: 'center' });
+            doc.fontSize(20).text(`${projectName} - Export Summary`, { align: 'center' });
+            doc.moveDown();
             doc.moveDown();
 
+            doc.fontSize(14).text(`Total Site Photos: ${totalPhotos}`);
             doc.fontSize(14).text(`Total Documents: ${totalDocs}`);
             doc.moveDown();
 
-            if (docCountsByFolder.size > 0) {
-                // simple table
-                doc.fontSize(12).fillColor('gray');
-                doc.text('Folder Path', 50, doc.y, { continued: true });
-                doc.text('Count', 450, doc.y);
-                doc.moveDown();
-                doc.fillColor('black');
+            if (countsByFolder.size > 0) {
+                const sortedFolders = Array.from(countsByFolder.keys()).sort();
 
-                // Draw horizontal line
-                doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-                doc.moveDown(0.5);
+                // Table 1: Document Folder Statistics
+                const docFolders = sortedFolders.filter(f => countsByFolder.get(f)!.docs > 0);
+                if (docFolders.length > 0) {
+                    doc.fontSize(14).fillColor('#ea8c0a').text('Document Folder Statistics', 50);
+                    doc.moveDown(0.5);
+                    doc.fontSize(12).fillColor('gray');
+                    doc.text('Folder Path', 50, doc.y);
+                    doc.text('Count', 480, doc.y - 12); // match header Y
+                    doc.moveDown(0.5);
+                    doc.fillColor('black');
+                    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+                    doc.moveDown(0.5);
 
-                for (const [folder, count] of docCountsByFolder.entries()) {
-                    doc.text(folder, 50, doc.y, { width: 380, continued: false });
-                    doc.moveUp();
-                    doc.text(count.toString(), 450, doc.y);
+                    for (const folder of docFolders) {
+                        const counts = countsByFolder.get(folder)!;
+                        const folderY = doc.y;
+                        doc.fontSize(10).text(folder, 50, folderY, { width: 400 });
+                        const nextLineY = doc.y;
+                        doc.text(counts.docs.toString(), 480, folderY);
+                        doc.y = Math.max(nextLineY, folderY + 15);
+                        doc.moveDown(0.5);
+                    }
                     doc.moveDown();
                 }
+
+                // Table 2: Site Photo Folder Statistics
+                const photoFolders = sortedFolders.filter(f => countsByFolder.get(f)!.photos > 0);
+                if (photoFolders.length > 0) {
+                    doc.fontSize(14).fillColor('#ea8c0a').text('Site Photo Folder Statistics', 50);
+                    doc.moveDown(0.5);
+                    doc.fontSize(12).fillColor('gray');
+                    doc.text('Folder Path', 50, doc.y);
+                    doc.text('Count', 480, doc.y - 12); // match header Y
+                    doc.moveDown(0.5);
+                    doc.fillColor('black');
+                    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+                    doc.moveDown(0.5);
+
+                    for (const folder of photoFolders) {
+                        const counts = countsByFolder.get(folder)!;
+                        const folderY = doc.y;
+                        doc.fontSize(10).text(folder, 50, folderY, { width: 400 });
+                        const nextLineY = doc.y;
+                        doc.text(counts.photos.toString(), 480, folderY);
+                        doc.y = Math.max(nextLineY, folderY + 15);
+                        doc.moveDown(0.5);
+                    }
+                }
             } else {
-                doc.text('No documents found in this project.');
+                doc.text('No files found in this project.');
             }
 
             doc.end();
@@ -329,11 +373,10 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
         }
 
         // Save URL string and generate temporary presigned for local use
-        const project = await projects.findByPk(projectId);
-        if (project) {
-            project.last_export_url = s3Key;
-            project.last_export_date = new Date();
-            await project.save();
+        if (targetProject) {
+            targetProject.last_export_url = s3Key;
+            targetProject.last_export_date = new Date();
+            await targetProject.save();
         }
 
         const getCmd = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key });

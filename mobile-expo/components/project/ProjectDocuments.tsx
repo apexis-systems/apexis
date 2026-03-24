@@ -432,7 +432,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                 </View>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {currentFolders.map((folder) => {
+                    {sortedFolders.map((folder) => {
                         const count = docs.filter((d) => d.folder_id === folder.id).length;
                         const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                         const isSelected = selectedFolders.has(folder.id);

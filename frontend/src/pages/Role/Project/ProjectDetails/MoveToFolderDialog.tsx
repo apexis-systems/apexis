@@ -116,7 +116,7 @@ const MoveToFolderDialog = ({
                         className={`w-full flex items-center gap-2 p-2 rounded-md transition-colors text-xs ${targetFolder === null ? 'bg-accent text-accent-foreground' : 'hover:bg-secondary'}`}
                     >
                         <FolderIcon className="h-3.5 w-3.5" />
-                        <span>Root Folder</span>
+                        <span>{project?.name || 'Project'}</span>
                     </button>
                     {renderFolderTree(null)}
                 </div>
