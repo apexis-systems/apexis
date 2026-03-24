@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createProject, getProjects, getProjectById, updateProject } from "../controllers/projectController.ts";
+import { createProject, getProjects, getProjectById, updateProject, exportHandoverPackage, getLatestExport } from "../controllers/projectController.ts";
 import { verifyToken, isAdmin } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -11,5 +11,7 @@ router.post("/", isAdmin, createProject);
 router.get("/", getProjects);
 router.get("/:id", getProjectById);
 router.patch("/:id", isAdmin, updateProject);
+router.post("/:id/export-handover", isAdmin, exportHandoverPackage);
+router.get("/:id/export-handover", isAdmin, getLatestExport);
 
 export default router;

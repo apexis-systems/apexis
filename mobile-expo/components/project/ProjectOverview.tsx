@@ -1,4 +1,6 @@
-import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking, Share } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { Text } from '@/components/ui/AppText';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
@@ -10,6 +12,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import EditProjectModal from './EditProjectModal';
 import { getSnags } from '@/services/snagService';
+import { useSocket } from '@/contexts/SocketContext';
+import { exportHandoverPackage, getLatestExport } from '@/services/projectService';
 
 interface Props {
     project: Project;
@@ -27,26 +31,6 @@ const getWeekNumber = (dateStr: string): number => {
     return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
 };
 
-const fmtDate = (d: any): string => {
-    if (!d) return '—';
-    try {
-        return new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-    } catch { return String(d); }
-};
-
-const fmtReportDate = (dateStr: string): string => {
-    try {
-        return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
-    } catch { return dateStr; }
-};
-
-const reportTitle = (r: Report): string => {
-    if (r.type === 'daily') {
-        return `Daily Site Report — ${fmtReportDate(r.period_start)}`;
-    }
-    const wk = getWeekNumber(r.period_start);
-    return `Weekly Progress — Week ${wk}`;
-};
 
 export default function ProjectOverview({ project, userRole, onUpdate, onActionPress }: Props) {
     const { colors } = useTheme();
@@ -62,6 +46,154 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [reportsLoading, setReportsLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+    // Export State
+    const { socket } = useSocket();
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportStatusText, setExportStatusText] = useState('');
+    const [exportTimerMs, setExportTimerMs] = useState(0);
+    const [isCountingDown, setIsCountingDown] = useState(false);
+    const [latestExport, setLatestExport] = useState<{ url: string, date: string } | null>(null);
+    const handleShareFile = async (url: string) => {
+        try {
+            if (!url) return;
+
+            const fileName = `Final_Handover_Report_${new Date().getTime()}.pdf`;
+            const localUri = `${(FileSystem as any).cacheDirectory}${fileName}`;
+
+            Alert.alert("Preparing...", "Downloading report to share...");
+            const { uri } = await FileSystem.downloadAsync(url, localUri);
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Final Handover Report',
+                    UTI: 'com.adobe.pdf'
+                });
+            } else {
+                await Share.share({
+                    title: 'Final Handover Report',
+                    message: `Final Handover Report\n${url}`,
+                    url: url,
+                });
+            }
+        } catch (e) {
+            console.error('Share error:', e);
+            Alert.alert("Error", "Failed to share report");
+        }
+    };
+
+    const handleShareLink = async (role: string, code: string) => {
+        try {
+            // Generates a universal web link which routes to the mobile deep-link on the device
+            const shareUrl = `https://apexis-web.vercel.app/auth/login-redirect?role=${role}&code=${code}`;
+            await Share.share({
+                title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
+                message: `You've been invited to access a project on Apexis!\nClick the link below to securely login to your project:\n\n${shareUrl}`,
+            });
+        } catch (e) {
+            console.error('Share error:', e);
+            Alert.alert("Error", "Failed to share link");
+        }
+    };
+
+    // Initial Export Status Fetch
+    useEffect(() => {
+        if (userRole !== 'admin' || !projectId) return;
+        getLatestExport(projectId)
+            .then(data => {
+                if (data.downloadUrl) {
+                    setLatestExport({ url: data.downloadUrl, date: data.last_export_date });
+                }
+                if (data.activeExport) {
+                    setIsExporting(true);
+                    setExportStatusText(data.activeExport.statusText);
+                    if (data.activeExport.etaMs !== undefined) {
+                        setIsCountingDown(true);
+                        setExportTimerMs(data.activeExport.etaMs);
+                    } else {
+                        setIsCountingDown(false);
+                        setExportTimerMs(Date.now() - data.activeExport.startTime);
+                    }
+                }
+            }).catch(() => {});
+    }, [projectId, userRole]);
+
+    // Socket Listener
+    useEffect(() => {
+        if (!socket || userRole !== 'admin') return;
+
+        let timerInterval: ReturnType<typeof setInterval>;
+
+        const handleExportStatus = (data: any) => {
+            if (data.projectId !== projectId) return;
+            
+            if (!isExporting && data.statusType === 'progress') {
+                setIsExporting(true);
+                setExportTimerMs(0);
+                setIsCountingDown(false);
+            }
+
+            setExportStatusText(data.status);
+
+            if (data.etaMs !== undefined) {
+               setIsCountingDown(true);
+               setExportTimerMs(data.etaMs);
+            }
+
+            if (data.statusType === 'success') {
+                setIsExporting(false);
+                setLatestExport({ url: data.presignedUrl, date: new Date().toISOString() });
+                Alert.alert("Success", `Export completed in ${Math.round(data.totalTimeMs / 1000)}s!`);
+            } else if (data.statusType === 'failed') {
+                setIsExporting(false);
+                Alert.alert("Error", 'Export failed: ' + data.status);
+            }
+        };
+
+        socket.on('export-status', handleExportStatus);
+
+        if (isExporting) {
+            timerInterval = setInterval(() => {
+                setExportTimerMs(prev => isCountingDown ? Math.max(0, prev - 1000) : prev + 1000);
+            }, 1000);
+        }
+
+        return () => {
+            socket.off('export-status', handleExportStatus);
+            if (timerInterval) clearInterval(timerInterval);
+        };
+    }, [socket, isExporting, isCountingDown, projectId, userRole]);
+
+    const handleStartExport = async () => {
+        try {
+            if (!projectId) return;
+            setIsExporting(true);
+            setExportStatusText('Starting export process...');
+            setExportTimerMs(0);
+            setIsCountingDown(false);
+            await exportHandoverPackage(projectId);
+        } catch (e: any) {
+            Alert.alert("Error", 'Failed to trigger export');
+            setIsExporting(false);
+        }
+    };
+
+    const formatElapsed = (ms: number) => {
+        const s = Math.floor(ms / 1000);
+        const m = Math.floor(s / 60);
+        return `${m.toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+    };
+
+    /**
+     * Helper to format dates correctly for Indian locale
+     */
+    const fmtDate = (d: any): string => {
+        if (!d) return '—';
+        try {
+            return new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+        } catch { return String(d); }
+    };
 
     useEffect(() => {
         if (!projectId) return;
@@ -177,9 +309,6 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 borderWidth: 1,
                                 borderColor: colors.border,
                                 padding: 12,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
                                 shadowColor: '#000',
                                 shadowOffset: { width: 0, height: 2 },
                                 shadowOpacity: 0.05,
@@ -187,22 +316,34 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 elevation: 1,
                             }}
                         >
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '700', marginBottom: 2, textTransform: 'uppercase' }}>{item.label}</Text>
-                                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{item.value || '—'}</Text>
+                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
+                                {item.label}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
+                                    {item.value || '—'}
+                                </Text>
+                                {item.value ? (
+                                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                                        <TouchableOpacity
+                                            onPress={() => handleCopy(item.value!, item.id)}
+                                            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                        >
+                                            <Feather
+                                                name={copiedId === item.id ? "check" : "copy"}
+                                                size={14}
+                                                color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                            />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => handleShareLink(item.id === 'cont_code' ? 'contributor' : 'client', item.value!)}
+                                            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                        >
+                                            <Feather name="share-2" size={14} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : null}
                             </View>
-                            {item.value ? (
-                                <TouchableOpacity
-                                    onPress={() => handleCopy(item.value!, item.id)}
-                                    style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
-                                >
-                                    <Feather
-                                        name={copiedId === item.id ? "check" : "copy"}
-                                        size={14}
-                                        color={copiedId === item.id ? "#22c55e" : colors.textMuted}
-                                    />
-                                </TouchableOpacity>
-                            ) : null}
                         </View>
                     ))}
                 </View>
@@ -245,153 +386,92 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 </View>
 
 
-                {/* Reports Section */}
-                <View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
-                        <TouchableOpacity style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            backgroundColor: colors.primary,
-                            paddingHorizontal: 16,
-                            paddingVertical: 10,
-                            borderRadius: 12
-                        }}>
-                            <Feather name="upload" size={14} color="#fff" />
-                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Upload Report</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Branded Bar */}
-                    <View style={{
-                        backgroundColor: '#fff7ed',
-                        paddingVertical: 10,
-                        paddingHorizontal: 16,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: '#fed7aa',
-                        alignItems: 'center',
-                        marginBottom: 20
-                    }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                            Generated Via APEXIS — Construction Communication Platform
-                        </Text>
-                    </View>
-
-                    {reportsLoading ? (
-                        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
-                    ) : (
-                        <>
-                            {/* Daily Site Reports */}
-                            {dailyReports.length > 0 && (
-                                <View style={{ marginBottom: 20 }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Daily Site Reports</Text>
-                                    <View style={{ gap: 10 }}>
-                                        {dailyReports.slice(0, 3).map((report) => (
-                                            <View
-                                                key={report.id}
-                                                style={{
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    gap: 14,
-                                                    borderRadius: 16,
-                                                    backgroundColor: colors.surface,
-                                                    borderWidth: 1,
-                                                    borderColor: colors.border,
-                                                    padding: 16,
-                                                }}
-                                            >
-                                                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Feather name="file-text" size={20} color={colors.textMuted} />
-                                                </View>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
-                                                        {reportTitle(report)}
-                                                    </Text>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                                                        <Feather name="clock" size={12} color={colors.textMuted} />
-                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                                                            {report.period_start} · Priya Sharma
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                            </View>
-                                        ))}
-                                    </View>
-                                </View>
-                            )}
-
-                            {/* Weekly Progress Reports */}
-                            {weeklyReports.length > 0 && (
-                                <View>
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Weekly Progress Reports</Text>
-                                    <View style={{ gap: 10 }}>
-                                        {weeklyReports.slice(0, 3).map((report) => (
-                                            <View
-                                                key={report.id}
-                                                style={{
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    gap: 14,
-                                                    borderRadius: 16,
-                                                    backgroundColor: colors.surface,
-                                                    borderWidth: 1,
-                                                    borderColor: colors.border,
-                                                    padding: 16,
-                                                }}
-                                            >
-                                                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(249,115,22,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Feather name="file-text" size={20} color={colors.primary} />
-                                                </View>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
-                                                        {reportTitle(report)}
-                                                    </Text>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                                                        <Feather name="clock" size={12} color={colors.textMuted} />
-                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                                                            {report.period_start} – Rajesh Kumar
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                            </View>
-                                        ))}
-                                    </View>
-                                </View>
-                            )}
-
-                            {!reportsLoading && dailyReports.length === 0 && weeklyReports.length === 0 && (
-                                <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
-                                    <Feather name="file-text" size={32} color={colors.border} />
-                                    <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 10 }}>No reports available for this project.</Text>
-                                </View>
-                            )}
-                        </>
-                    )}
-                </View>
 
                 {/* Handover - admin only */}
                 {userRole === 'admin' && (
-                    <TouchableOpacity
-                        style={{
-                            width: '100%',
-                            height: 48,
-                            borderRadius: 16,
-                            borderWidth: 1,
-                            borderColor: colors.primary,
-                            borderStyle: 'dashed',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 8,
-                            backgroundColor: colors.background,
-                            marginBottom: 20
-                        }}
-                    >
-                        <Feather name="download" size={16} color={colors.text} />
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Export Final Handover Package</Text>
-                    </TouchableOpacity>
+                    <View style={{
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface,
+                        padding: 16,
+                        marginBottom: 20,
+                        gap: 16
+                    }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Final Handover Report</Text>
+
+                        {isExporting ? (
+                            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 24, gap: 12, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                <ActivityIndicator size="large" color={colors.primary} />
+                                <View style={{ alignItems: 'center', gap: 4 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{exportStatusText || 'Exporting...'}</Text>
+                                    {isCountingDown && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}>
+                                            <Feather name="clock" size={12} color={colors.textMuted} />
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                                {formatElapsed(exportTimerMs)} left
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        ) : (
+                            <View style={{ gap: 12 }}>
+                                {latestExport && (
+                                    <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+                                            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(16, 185, 129, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Feather name="check" size={16} color="#10b981" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 }}>Report Ready</Text>
+                                                <Text style={{ fontSize: 11, color: colors.textMuted }}>Generated {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                                            </View>
+                                        </View>
+                                        
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <TouchableOpacity
+                                                onPress={() => handleShareFile(latestExport.url)}
+                                                style={{ flex: 1, backgroundColor: colors.background, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                            >
+                                                <Feather name="share" size={14} color={colors.text} />
+                                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>Share</Text>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                onPress={() => Linking.openURL(latestExport.url)}
+                                                style={{ flex: 1, backgroundColor: '#10b981', paddingVertical: 10, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                            >
+                                                <Feather name="download" size={14} color="#fff" />
+                                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Download</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                )}
+                                <TouchableOpacity
+                                    onPress={handleStartExport}
+                                    style={{
+                                        width: '100%',
+                                        height: 48,
+                                        borderRadius: 12,
+                                        borderWidth: 1,
+                                        borderColor: colors.primary,
+                                        borderStyle: 'dashed',
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: 8,
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Feather name={latestExport ? "refresh-cw" : "play-circle"} size={16} color={colors.text} />
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
+                                        {latestExport ? 'Generate New Report' : 'Export Final Handover Report'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
                 )}
 
                 {userRole === 'admin' && (

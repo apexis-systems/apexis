@@ -11,6 +11,7 @@ import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loginAdmin, loginProject } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useLocalSearchParams } from 'expo-router';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
     { value: 'admin', label: 'Admin', desc: 'Project Control' },
@@ -32,12 +33,24 @@ export default function LoginScreen() {
     const { login } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
+    const params = useLocalSearchParams<{ role?: string; code?: string }>();
 
     const STORAGE_KEYS = {
         admin: 'remembered_admin_v2',
         contributor: 'remembered_contributor_v2',
         client: 'remembered_client_v2'
     };
+
+    useEffect(() => {
+        if (params.code) {
+            setProjectCode(params.code);
+            if (params.role === 'contributor' || params.role === 'client') {
+                setSelectedRole(params.role as UserRole);
+            } else {
+                setSelectedRole('contributor');
+            }
+        }
+    }, [params.code, params.role]);
 
     useEffect(() => {
         loadStoredCredentials();
@@ -104,7 +117,11 @@ export default function LoginScreen() {
             if (res?.token) {
                 await saveStoredCredentials();
                 await login(res.token);
-                router.replace('/(tabs)');
+                if (res.isPendingName) {
+                    router.replace('/(auth)/setup-name');
+                } else {
+                    router.replace('/(tabs)');
+                }
             }
         } catch (err: any) {
             setError(err.response?.data?.error || "Login failed. Please check your credentials.");

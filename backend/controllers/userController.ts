@@ -56,16 +56,24 @@ export const inviteUser = async (req: Request, res: Response) => {
         );
 
         // Smart Link to Web Landing Page (which redirects to app)
-        const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/invite?token=${token}`;
+        let inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/invite?token=${token}`;
         const roleName = role.charAt(0).toUpperCase() + role.slice(1);
+
+        if ((role === 'contributor' || role === 'client') && actualProjectId) {
+            const project = await projects.findOne({ where: { id: actualProjectId } });
+            if (project) {
+                const code = role === 'contributor' ? project.contributor_code : project.client_code;
+                inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/login-redirect?role=${role}&code=${code}`;
+            }
+        }
 
         await sendEmail(
             email,
             `Invitation to join Apexis as ${roleName}`,
             `<h1>Welcome to Apexis</h1>
              <p>You have been invited as a <strong>${roleName}</strong> for your organization.</p>
-             <p>Please click the link below to set up your account in the Apexis mobile app:</p>
-             <a href="${inviteUrl}" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Set Up Account</a>
+             <p>Please click the link below to securely login to your project in the Apexis mobile app:</p>
+             <a href="${inviteUrl}" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Login to Project</a>
              <p>If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>`,
             true
         );

@@ -359,7 +359,7 @@ function UploadInner() {
                         <p className="text-sm font-semibold">{isPhotos ? '3.' : '2.'} Project &amp; Folder</p>
                         {selectedProject && (
                             <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full">
-                                {displayProjectName}{selectedFolderData ? ` › ${selectedFolderData.name}` : ' › Root'}
+                                {displayProjectName}{selectedFolderData ? ` › ${selectedFolderData.name}` : ''}
                             </span>
                         )}
                     </div>
@@ -424,7 +424,7 @@ function UploadInner() {
                                                 onClick={() => setFolderBrowseId(null)}
                                                 className={`font-medium ${!folderBrowseId ? 'text-accent' : 'text-muted-foreground hover:underline'}`}
                                             >
-                                                {displayProjectName || 'Project root'}
+                                                {displayProjectName || 'Project'}
                                             </button>
                                             {browseBreadcrumbs.map((b) => (
                                                 <span key={b.id} className="flex items-center gap-1">
@@ -449,7 +449,7 @@ function UploadInner() {
                                                     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary flex-shrink-0">
                                                         <Folder className="h-3.5 w-3.5 text-accent" />
                                                     </div>
-                                                    <p className="text-xs font-medium">Root Level</p>
+                                                    <p className="text-xs font-medium">{displayProjectName}</p>
                                                 </button>
                                             )}
                                             {/* Folder list */}
@@ -479,7 +479,7 @@ function UploadInner() {
                                                 );
                                             })}
                                             {allFolders.length === 0 && (
-                                                <p className="text-xs text-muted-foreground text-center py-3">No folders yet. Files go to root.</p>
+                                                <p className="text-xs text-muted-foreground text-center py-3">No folders yet. Please create a folder to upload.</p>
                                             )}
                                         </div>
 
@@ -497,10 +497,10 @@ function UploadInner() {
                                 {/* Current selection pill (when collapsed) */}
                                 {!folderOpen && (
                                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <Folder className="h-3 w-3" />
+                                        <Folder className="h-3.5 w-3.5 text-accent" />
                                         {selectedFolderData
                                             ? <span className="font-medium text-foreground">{selectedFolderPath.map(f => f.name).join(' › ')}</span>
-                                            : <span>Root level</span>
+                                            : <span className="text-red-500 font-medium">Please select a folder</span>
                                         }
                                     </div>
                                 )}
@@ -532,10 +532,10 @@ function UploadInner() {
             {/* ── Upload button ── */}
             <Button
                 onClick={handleUpload}
-                disabled={files.length === 0 || !selectedProject || isUploading}
+                disabled={files.length === 0 || !selectedProject || !selectedFolder || isUploading}
                 className="w-full h-11 rounded-xl bg-accent text-accent-foreground hover:bg-accent/90 font-semibold disabled:opacity-50"
             >
-                {isUploading ? 'Uploading...' : `Upload ${files.length > 0 ? files.length + ' file(s)' : 'Files'}`}
+                {isUploading ? 'Uploading...' : !selectedFolder ? 'Select a folder' : `Upload ${files.length > 0 ? files.length + ' file(s)' : 'Files'}`}
             </Button>
 
             <CreateFolderDialog

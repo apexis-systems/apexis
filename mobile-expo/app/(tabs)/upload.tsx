@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-    View, TouchableOpacity, ScrollView, Alert, Animated, Image, Modal, BackHandler, ActivityIndicator
+    View, TouchableOpacity, ScrollView, Alert, Animated, Image, Modal, BackHandler, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { useRouter, useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
@@ -163,7 +163,7 @@ export default function UploadScreen() {
     // Role check - moved here to satisfy Rules of Hooks
     if (!user || user.role === 'client') {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+            <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 12, color: colors.textMuted }}>Upload is not available for your role.</Text>
             </SafeAreaView>
         );
@@ -250,7 +250,7 @@ export default function UploadScreen() {
             const photo = await cameraRef.current.takePictureAsync({
                 quality: 0.9,
                 base64: false,
-                exif: false,
+                exif: true,
             });
 
             if (!photo?.uri) return;
@@ -279,7 +279,7 @@ export default function UploadScreen() {
         }
         setIsProcessing(true);
         try {
-            const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, base64: false, exif: false });
+            const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, base64: false, exif: true });
             if (!photo?.uri) return;
 
             let finalUri = photo.uri;
@@ -501,19 +501,19 @@ export default function UploadScreen() {
                         {/* PREVIEW ROW ABOVE BUTTONS */}
                         {fileQueue.length > 0 && (
                             <View style={{ paddingBottom: 20, paddingHorizontal: 20 }}>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingTop: 8, paddingRight: 12 }}>
                                     {fileQueue.map((item, idx) => (
                                         <View key={idx} style={{ position: 'relative' }}>
                                             <Image source={{ uri: item.asset.uri }} style={{ width: 56, height: 56, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }} />
                                             <TouchableOpacity
                                                 onPress={() => setFileQueue(prev => prev.filter((_, i) => i !== idx))}
                                                 style={{
-                                                    position: 'absolute', top: -6, right: -6,
-                                                    backgroundColor: '#ef4444', width: 22, height: 22, borderRadius: 11,
+                                                    position: 'absolute', top: -8, right: -8, zIndex: 10, elevation: 4,
+                                                    backgroundColor: '#ef4444', width: 24, height: 24, borderRadius: 12,
                                                     alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#000'
                                                 }}
                                             >
-                                                <Feather name="x" size={12} color="#fff" />
+                                                <Feather name="x" size={14} color="#fff" />
                                             </TouchableOpacity>
                                         </View>
                                     ))}
@@ -570,15 +570,16 @@ export default function UploadScreen() {
     // 2. Selection & Review Flow (Unified Step 2)
     if (mode === 'selection') {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                     <TouchableOpacity onPress={() => setMode('capture')}>
                         <Feather name="arrow-left" size={20} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Destination & Details</Text>
                 </View>
 
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
                     {/* Selected Items Summary */}
                     <View style={{ marginBottom: 24 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -646,13 +647,13 @@ export default function UploadScreen() {
 
                                 {/* Breadcrumbs */}
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', gap: 8, paddingBottom: 4 }}>
-                                    <TouchableOpacity onPress={() => setFolderBrowseId(null)}>
-                                        <Text style={{ fontSize: 14, fontWeight: '700', color: !folderBrowseId ? colors.primary : colors.textMuted }}>Root</Text>
+                                    <TouchableOpacity onPress={() => { setFolderBrowseId(null); setSelectedFolder(null); }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: !folderBrowseId ? colors.primary : colors.textMuted }}>{projects.find(p => p.id === selectedProject)?.name}</Text>
                                     </TouchableOpacity>
                                     {browseBreadcrumbs.map((b) => (
                                         <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                             <Feather name="chevron-right" size={12} color={colors.textMuted} />
-                                            <TouchableOpacity onPress={() => setFolderBrowseId(b.id)}>
+                                            <TouchableOpacity onPress={() => { setFolderBrowseId(b.id); setSelectedFolder(b.id); }}>
                                                 <Text style={{ fontSize: 14, fontWeight: '700', color: b.id === folderBrowseId ? colors.primary : colors.textMuted }}>{b.name}</Text>
                                             </TouchableOpacity>
                                         </View>
@@ -661,35 +662,30 @@ export default function UploadScreen() {
 
                                 {/* Folders Grid */}
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                                    {/* Select CURRENT folder as destination */}
-                                    <TouchableOpacity
-                                        onPress={() => setSelectedFolder(folderBrowseId || 'root')}
-                                        style={{
-                                            width: '31%', aspectRatio: 1, borderRadius: 16,
-                                            backgroundColor: selectedFolder === (folderBrowseId || 'root') ? colors.primary + '15' : colors.surface,
-                                            borderWidth: 2, borderColor: selectedFolder === (folderBrowseId || 'root') ? colors.primary : colors.border,
-                                            alignItems: 'center', justifyContent: 'center', padding: 10
-                                        }}
-                                    >
-                                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: selectedFolder === (folderBrowseId || 'root') ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
-                                            <Feather name="check" size={24} color="#fff" />
-                                        </View>
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center' }}>Select This</Text>
-                                    </TouchableOpacity>
-
                                     {getFolderChildren(folderBrowseId).map((f) => (
                                         <TouchableOpacity
                                             key={f.id}
-                                            onPress={() => setFolderBrowseId(String(f.id))}
+                                            onPress={() => { setFolderBrowseId(String(f.id)); setSelectedFolder(String(f.id)); }}
                                             style={{
-                                                width: '31%', aspectRatio: 1, borderRadius: 16, backgroundColor: colors.surface,
+                                                width: '30%', aspectRatio: 1, borderRadius: 16, backgroundColor: colors.surface,
                                                 borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', padding: 10
                                             }}
                                         >
                                             <Feather name="folder" size={32} color={colors.primary} />
-                                            <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: colors.text, marginTop: 8, textAlign: 'center' }}>{f.name}</Text>
+                                            <Text numberOfLines={2} style={{ fontSize: 11, fontWeight: '700', color: colors.text, marginTop: 8, textAlign: 'center' }}>{f.name}</Text>
                                         </TouchableOpacity>
                                     ))}
+
+                                    {getFolderChildren(folderBrowseId).length === 0 && (
+                                        <View style={{ flex: 1, alignItems: 'center', paddingVertical: 20 }}>
+                                            <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>No subfolders.</Text>
+                                            {selectedFolder ? (
+                                                <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+                                                    Files will be uploaded to {browseBreadcrumbs[browseBreadcrumbs.length - 1]?.name}.
+                                                </Text>
+                                            ) : null}
+                                        </View>
+                                    )}
                                 </View>
                             </View>
 
@@ -723,17 +719,18 @@ export default function UploadScreen() {
                     )}
                 </ScrollView>
 
-                {/* Fixed Upload Button */}
-                {selectedProject && selectedFolder && (
-                    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
-                        <TouchableOpacity
-                            onPress={handleUpload}
-                            style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }}
-                        >
-                            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>Confirm & Upload {fileQueue.length} Files</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
+                    {/* Docked Upload Button */}
+                    {selectedProject && selectedFolder && (
+                        <View style={{ padding: 16, paddingBottom: insets.bottom > 0 ? insets.bottom + 22 : 38, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
+                            <TouchableOpacity
+                                onPress={handleUpload}
+                                style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>Confirm & Upload {fileQueue.length} Files</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </KeyboardAvoidingView>
 
                 <Modal visible={showCreateFolder} transparent animationType="fade">
                     <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>

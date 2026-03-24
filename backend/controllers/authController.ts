@@ -71,8 +71,7 @@ export const projectLogin = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Email or Phone number is required" });
         }
 
-        // Only allow existing users who have onboarded
-        const user = await users.findOne({
+        let user = await users.findOne({
             where: {
                 organization_id: project.organization_id,
                 [Op.or]: [
@@ -82,8 +81,22 @@ export const projectLogin = async (req: Request, res: Response) => {
             }
         });
 
+        const roleForCode = project.contributor_code === code ? 'contributor' : 'client';
+        let isNewUser = false;
+
         if (!user) {
-            return res.status(401).json({ error: "User not found. Please sign up using the onboarding link first." });
+            // Auto-create user because they have valid project code and no signup is required
+            user = await users.create({
+                organization_id: project.organization_id,
+                name: "Pending",
+                email: email ? email.toLowerCase() : null,
+                phone_number: phone || null,
+                role: roleForCode,
+                email_verified: !!email,
+                phone_verified: !!phone,
+                is_primary: false
+            });
+            isNewUser = true;
         }
 
         // Verify if user is already a member of this project
@@ -95,7 +108,12 @@ export const projectLogin = async (req: Request, res: Response) => {
         });
 
         if (!membership) {
-            return res.status(403).json({ error: "You are not assigned to this project." });
+            // Auto-add them to the project since they possess the valid project code
+            await project_members.create({
+                project_id: project.id,
+                user_id: user.id,
+                role: roleForCode
+            });
         }
 
         const token = jwt.sign(
@@ -104,7 +122,11 @@ export const projectLogin = async (req: Request, res: Response) => {
             { expiresIn: "30d" }
         );
 
-        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+        res.status(200).json({ 
+            token, 
+            user: { id: user.id, name: user.name, email: user.email, role: user.role },
+            isPendingName: user.name === "Pending" || !user.name || user.name.trim() === ""
+        });
     } catch (error) {
         console.error("Project Login Error:", error);
         res.status(500).json({ error: "Internal server error" });

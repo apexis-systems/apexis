@@ -7,13 +7,14 @@ import {
     Briefcase, AlertCircle, Link, Copy, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getOrgUsers, inviteUser, getOnboardingLinks } from '@/services/userService';
+import { getOrgUsers, inviteUser, getOnboardingLinks, deleteUser } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
 
 const UserManagement = () => {
@@ -27,8 +28,11 @@ const UserManagement = () => {
     const [inviteRole, setInviteRole] = useState<UserRole>('contributor');
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [inviting, setInviting] = useState(false);
-    const [onboardingLinks, setOnboardingLinks] = useState<{ contributor_link: string, client_link: string } | null>(null);
+    const [selectedProjectIdForLinks, setSelectedProjectIdForLinks] = useState<string>('');
     const [copied, setCopied] = useState<string | null>(null);
+
+    const [deleteUserObj, setDeleteUserObj] = useState<any>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -52,19 +56,9 @@ const UserManagement = () => {
         }
     };
 
-    const fetchOnboardingLinks = async () => {
-        try {
-            const data = await getOnboardingLinks();
-            setOnboardingLinks(data);
-        } catch (error) {
-            console.error("fetchOnboardingLinks error", error);
-        }
-    };
-
     useEffect(() => {
         fetchUsers();
         fetchProjects();
-        fetchOnboardingLinks();
     }, []);
 
     if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
@@ -119,9 +113,19 @@ const UserManagement = () => {
         toast.success(`Role updated to ${role}`);
     };
 
-    const removeUser = (id: string | number) => {
-        setUsers(prev => prev.filter(u => u.id !== id));
-        toast.success('User removed from organization');
+    const handleDelete = async () => {
+        if (!deleteUserObj) return;
+        setDeleting(true);
+        try {
+            await deleteUser(deleteUserObj.id);
+            toast.success("User removed successfully");
+            setDeleteUserObj(null);
+            fetchUsers();
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || "Failed to remove user");
+        } finally {
+            setDeleting(false);
+        }
     };
 
     const copyToClipboard = (text: string, type: string) => {
@@ -219,53 +223,94 @@ const UserManagement = () => {
                 </div>
             )}
 
-            {/* Public Onboarding Links Section */}
-            <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="p-6 rounded-2xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-accent/10 rounded-lg">
-                                <Link className="h-5 w-5 text-accent" />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-bold text-foreground">Contributor Onboarding</h3>
-                                <p className="text-[10px] text-muted-foreground">General link for all contributors</p>
-                            </div>
-                        </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 rounded-lg text-[10px]"
-                            onClick={() => onboardingLinks && copyToClipboard(onboardingLinks.contributor_link, 'Contributor')}
-                        >
-                            {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
-                            {copied === 'Contributor' ? "Copied" : "Copy Link"}
-                        </Button>
+            {/* Public Access Links Section */}
+            <div className="mb-8 p-6 rounded-2xl border border-border bg-card shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+                    <div>
+                        <h2 className="text-lg font-bold text-foreground">Project Access Links</h2>
+                        <p className="text-xs text-muted-foreground mt-1">Generate direct login links for internal contributors and external clients.</p>
+                    </div>
+                    <div className="w-full md:w-64">
+                        <Select value={selectedProjectIdForLinks} onValueChange={setSelectedProjectIdForLinks}>
+                            <SelectTrigger className="mt-1 w-full bg-secondary outline-none border-none shadow-none rounded-xl h-10">
+                                <SelectValue placeholder="Select a Project" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px]">
+                                {projects.map((proj: any) => (
+                                    <SelectItem key={`link-${proj.id}`} value={String(proj.id)}>
+                                        <div className="flex items-center gap-2">
+                                            {proj.name}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
-                <div className="p-6 rounded-2xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-accent/10 rounded-lg">
-                                <Link className="h-5 w-5 text-accent" />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-bold text-foreground">Client Onboarding</h3>
-                                <p className="text-[10px] text-muted-foreground">General link for all clients</p>
+                {selectedProjectIdForLinks && projects.find(p => String(p.id) === selectedProjectIdForLinks) ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="p-5 rounded-xl border border-border bg-background">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-accent/10 rounded-lg">
+                                        <Link className="h-4 w-4 text-accent" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-foreground">Contributor Access</h3>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Role: Contributor</p>
+                                    </div>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 rounded-lg text-xs"
+                                    onClick={() => {
+                                        const p = projects.find(it => String(it.id) === selectedProjectIdForLinks);
+                                        const deepUrl = `${window.location.origin}/auth/login-redirect?role=contributor&code=${p.contributor_code}`;
+                                        copyToClipboard(deepUrl, 'Contributor');
+                                    }}
+                                >
+                                    {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                                    {copied === 'Contributor' ? "Copied" : "Copy Link"}
+                                </Button>
                             </div>
                         </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 rounded-lg text-[10px]"
-                            onClick={() => onboardingLinks && copyToClipboard(onboardingLinks.client_link, 'Client')}
-                        >
-                            {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
-                            {copied === 'Client' ? "Copied" : "Copy Link"}
-                        </Button>
+
+                        <div className="p-5 rounded-xl border border-border bg-background">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-accent/10 rounded-lg">
+                                        <Link className="h-4 w-4 text-accent" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-foreground">Client Access</h3>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Role: Client</p>
+                                    </div>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 rounded-lg text-xs"
+                                    onClick={() => {
+                                        const p = projects.find(it => String(it.id) === selectedProjectIdForLinks);
+                                        const deepUrl = `${window.location.origin}/auth/login-redirect?role=client&code=${p.client_code}`;
+                                        copyToClipboard(deepUrl, 'Client');
+                                    }}
+                                >
+                                    {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                                    {copied === 'Client' ? "Copied" : "Copy Link"}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center p-8 bg-secondary/30 rounded-xl border border-dashed border-border text-center">
+                        <Briefcase className="h-8 w-8 text-muted-foreground opacity-30 mb-2" />
+                        <p className="text-sm font-bold text-foreground">No Project Selected</p>
+                        <p className="text-xs text-muted-foreground mt-1 max-w-sm">Please select a project from the dropdown above to generate direct access links for contributors and clients.</p>
+                    </div>
+                )}
             </div>
 
             {loading ? (
@@ -317,7 +362,7 @@ const UserManagement = () => {
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         {!u.is_primary && u.id !== user.id && (
-                                            <button onClick={() => removeUser(u.id)} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
+                                            <button onClick={() => setDeleteUserObj(u)} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </button>
                                         )}
@@ -334,6 +379,29 @@ const UserManagement = () => {
                     )}
                 </div>
             )}
+
+            {/* Delete Confirmation */}
+            <Dialog open={!!deleteUserObj} onOpenChange={(open) => !open && setDeleteUserObj(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Remove User?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to remove <span className="font-bold text-foreground">{deleteUserObj?.email}</span>? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="ghost" onClick={() => setDeleteUserObj(null)} disabled={deleting}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className="rounded-xl px-6"
+                        >
+                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove User"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

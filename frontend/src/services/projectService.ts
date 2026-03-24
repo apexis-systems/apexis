@@ -40,3 +40,23 @@ export const updateProject = async (id: string, data: any) => {
         throw error;
     }
 };
+
+export const exportHandoverPackage = async (id: string | number) => {
+    try {
+        const response = await PrivateAxios.post(`/projects/${id}/export-handover`);
+        return response.data;
+    } catch (error) {
+        console.error("exportHandoverPackage Error", error);
+        throw error;
+    }
+};
+
+export const getLatestExport = async (id: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/projects/${id}/export-handover`);
+        return response.data;
+    } catch (error) {
+        console.error("getLatestExport Error", error);
+        throw error;
+    }
+};
