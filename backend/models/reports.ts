@@ -55,6 +55,13 @@ export default (sequelize: Sequelize) => {
         {
             tableName: "reports",
             timestamps: true,
+            indexes: [
+                {
+                    unique: true,
+                    fields: ['project_id', 'type', 'period_start', 'period_end'],
+                    name: 'reports_project_type_period_unique'
+                }
+            ]
         }
     );
 

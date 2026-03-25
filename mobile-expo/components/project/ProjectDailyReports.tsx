@@ -47,6 +47,31 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
         }, [expanded])
     );
 
+    const StatusBadge = ({ status }: { status: string }) => {
+        const s = status?.toLowerCase();
+        let bgColor = 'rgba(0,0,0,0.05)';
+        let textColor = colors.textMuted;
+        let text = s;
+        if (['open', 'amber', 'pending'].includes(s)) {
+            bgColor = 'rgba(245,158,11,0.1)';
+            textColor = '#d97706';
+            text = 'OPEN';
+        } else if (['closed', 'green', 'resolved'].includes(s)) {
+            bgColor = 'rgba(16,185,129,0.1)';
+            textColor = '#059669';
+            text = 'RESOLVED';
+        } else if (['overdue', 'red', 'critical'].includes(s)) {
+            bgColor = 'rgba(239,68,68,0.1)';
+            textColor = '#dc2626';
+            text = s === 'overdue' ? 'OVERDUE' : 'OPEN';
+        }
+        return (
+            <View style={{ backgroundColor: bgColor, paddingHorizontal: 4, borderRadius: 2 }}>
+                <Text style={{ fontSize: 7, fontWeight: '700', color: textColor }}>{text.toUpperCase()}</Text>
+            </View>
+        );
+    };
+
     const handleGenerate = async () => {
         setGenerating(true);
         try {
@@ -101,8 +126,6 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
                                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 3 }}>
                                     <Text style={{ fontSize: 10, color: colors.primary }}>📸 {report.photos_count} photos</Text>
                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>📄 {report.docs_count} docs</Text>
-                                    <Text style={{ fontSize: 10, color: colors.textMuted }}>👁️ {report.releases_count} released</Text>
-                                    <Text style={{ fontSize: 10, color: colors.textMuted }}>💬 {report.comments_count}</Text>
                                 </View>
                             </View>
                             <Feather name={expanded === report.id ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
@@ -111,44 +134,83 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
                         {/* Expanded detail */}
                         {expanded === report.id && report.summary && (
                             <View style={{ paddingHorizontal: 12, paddingBottom: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
-                                {report.summary.by_folder?.length === 0 && report.summary.by_user?.length === 0 && report.summary.released_files?.length === 0 ? (
-                                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 10, textAlign: 'center' }}>
-                                        No uploads or releases recorded today.{'\n'}Comments: {report.comments_count}
-                                    </Text>
-                                ) : (
                                     <>
-                                        {report.summary.by_folder?.length > 0 && (
-                                            <View style={{ marginTop: 8 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginBottom: 4 }}>By Folder</Text>
-                                                {report.summary.by_folder.map((f, i) => (
-                                                    <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{f.name}</Text>
-                                                        <Text style={{ fontSize: 10, color: colors.text }}>📸 {f.photos}  📄 {f.docs}</Text>
-                                                    </View>
+                                        {!report.summary.document_titles?.length && !report.summary.photo_summary?.length && !report.summary.rfis?.length && !report.summary.snags?.length && (
+                                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 10, textAlign: 'center', fontStyle: 'italic' }}>
+                                                No detail records for this period
+                                            </Text>
+                                        )}
+                                        {report.summary.document_titles?.length > 0 && (
+                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📄 Documents Uploaded</Text>
+                                                {report.summary.document_titles.map((title, i) => (
+                                                    <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>• {title}</Text>
                                                 ))}
                                             </View>
                                         )}
-                                        {report.summary.by_user?.length > 0 && (
-                                            <View style={{ marginTop: 8 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginBottom: 4 }}>By Member</Text>
-                                                {report.summary.by_user.map((u, i) => (
-                                                    <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>👤 {u.name}</Text>
-                                                        <Text style={{ fontSize: 10, color: colors.text }}>{u.uploads} uploads</Text>
-                                                    </View>
+
+                                        {report.summary.photo_summary?.length > 0 ? (
+                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📸 Photos Uploaded</Text>
+                                                {report.summary.photo_summary.map((ps, i) => (
+                                                    <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>
+                                                        • <Text style={{ fontWeight: '600' }}>{ps.count} photos</Text> by {ps.user} in {ps.folder}
+                                                    </Text>
+                                                ))}
+                                            </View>
+                                        ) : report.summary.photo_details && report.summary.photo_details.length > 0 && (
+                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📸 Photos Uploaded (Legacy)</Text>
+                                                {(() => {
+                                                    const grouped: Record<string, any> = {};
+                                                    report.summary.photo_details?.forEach((p: any) => {
+                                                        const key = `${p.uploaded_by}_${p.folder}`;
+                                                        if (!grouped[key]) grouped[key] = { count: 0, user: p.uploaded_by, folder: p.folder };
+                                                        grouped[key].count++;
+                                                    });
+                                                    return Object.values(grouped).map((ps: any, i) => (
+                                                        <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>
+                                                            • <Text style={{ fontWeight: '600' }}>{ps.count} photos</Text> by {ps.user} in {ps.folder}
+                                                        </Text>
+                                                    ));
+                                                })()}
+                                            </View>
+                                        )}
+
+                                        {report.summary.released_files && report.summary.released_files.length > 0 && (
+                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginBottom: 4 }}>👁️ Released to Client (Legacy)</Text>
+                                                {report.summary.released_files.map((name: string, i: number) => (
+                                                    <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>• {name}</Text>
                                                 ))}
                                             </View>
                                         )}
-                                        {report.summary.released_files?.length > 0 && (
-                                            <View style={{ marginTop: 8 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginBottom: 4 }}>Released to Client</Text>
-                                                {report.summary.released_files.map((name, i) => (
-                                                    <Text key={i} style={{ fontSize: 10, color: colors.primary, marginBottom: 2 }}>• {name}</Text>
-                                                ))}
-                                            </View>
-                                        )}
+
+                                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                                            {report.summary.rfis?.length > 0 && (
+                                                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>RFIs</Text>
+                                                    {report.summary.rfis.map((rfi, i) => (
+                                                        <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                                                            <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted, flex: 1, marginRight: 4 }}>{rfi.title}</Text>
+                                                            <StatusBadge status={rfi.status} />
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            )}
+                                            {report.summary.snags?.length > 0 && (
+                                                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>Snags</Text>
+                                                    {report.summary.snags.map((snag, i) => (
+                                                        <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                                                            <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted, flex: 1, marginRight: 4 }}>{snag.title}</Text>
+                                                            <StatusBadge status={snag.status} />
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            )}
+                                        </View>
                                     </>
-                                )}
                             </View>
                         )}
                     </TouchableOpacity>

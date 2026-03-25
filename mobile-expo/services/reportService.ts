@@ -11,9 +11,12 @@ export interface Report {
     releases_count: number;
     comments_count: number;
     summary: {
-        by_folder: { name: string; photos: number; docs: number }[];
-        by_user: { name: string; uploads: number }[];
-        released_files: string[];
+        document_titles: string[];
+        photo_summary: { count: number; user: string; folder: string }[];
+        rfis: { title: string; status: string }[];
+        snags: { title: string; status: string }[];
+        photo_details?: { name: string; folder: string; uploaded_by: string }[];
+        released_files?: string[];
     } | null;
     createdAt: string;
 }
