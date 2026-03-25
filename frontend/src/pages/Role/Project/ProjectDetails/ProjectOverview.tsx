@@ -15,9 +15,10 @@ interface ProjectOverviewProps {
   project: Project;
   userRole: UserRole;
   onProjectUpdate?: (updated: Project) => void;
+  onTabChange?: (tab: 'documents' | 'photos') => void;
 }
 
-const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverviewProps) => {
+const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: ProjectOverviewProps) => {
   if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">Loading project overview...</div>;
 
   const [reports, setReports] = useState<Report[]>([]);
@@ -224,15 +225,21 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
           </div>
           <div className="mt-1 text-sm font-semibold">{project.end_date ? new Date(project.end_date).toLocaleDateString() : '—'}</div>
         </div>
-        <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center gap-2 text-accent">
+        <div 
+          className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
+          onClick={() => onTabChange?.('documents')}
+        >
+          <div className="flex items-center gap-2 text-accent group-hover:text-accent/80 transition-colors">
             <FileText className="h-4 w-4" />
             <span className="text-xs">Documents</span>
           </div>
           <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : docsCount}</div>
         </div>
-        <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center gap-2 text-accent">
+        <div 
+          className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
+          onClick={() => onTabChange?.('photos')}
+        >
+          <div className="flex items-center gap-2 text-accent group-hover:text-accent/80 transition-colors">
             <Camera className="h-4 w-4" />
             <span className="text-xs">Photos</span>
           </div>

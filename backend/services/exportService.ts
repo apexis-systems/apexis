@@ -7,6 +7,7 @@ import db from '../models/index.ts';
 import PDFDocument from 'pdfkit';
 import { PDFDocument as PDFLibDocument, PDFName, PDFArray } from 'pdf-lib';
 import os from 'os';
+import { sendNotification } from '../utils/notificationUtils.ts';
 
 export const activeExports = new Map<number, { startTime: number, statusText: string, etaMs?: number }>();
 
@@ -389,6 +390,22 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
             s3Key,
             totalTimeMs
         });
+
+        // Send push notification to the user
+        try {
+            await sendNotification({
+                userId,
+                title: 'Project Export Ready',
+                body: `The final handover package for project "${targetProject?.name || 'Unknown'}" is ready for download.`,
+                type: 'export_completed',
+                data: {
+                    projectId,
+                    exportUrl: presignedUrl
+                }
+            });
+        } catch (notifErr) {
+            console.error("Failed to send export completion notification:", notifErr);
+        }
 
     } catch (error: any) {
         console.error("Export Service Error:", error);

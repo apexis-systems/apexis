@@ -100,6 +100,14 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     // Initial Export Status Fetch
     useEffect(() => {
         if (userRole !== 'admin' || !projectId) return;
+
+        // Reset export state when project changes to prevent leakage
+        setIsExporting(false);
+        setExportStatusText('');
+        setExportTimerMs(0);
+        setIsCountingDown(false);
+        setLatestExport(null);
+
         getLatestExport(projectId)
             .then(data => {
                 if (data.downloadUrl) {
@@ -263,35 +271,41 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     {[
                         { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate) },
                         { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate) },
-                        { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount) },
-                        { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount) },
-                    ].map((item) => (
-                        <View
-                            key={item.label}
-                            style={{
-                                flex: 1,
-                                minWidth: '45%',
-                                borderRadius: 16,
-                                backgroundColor: colors.surface,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                padding: 16,
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.05,
-                                shadowRadius: 4,
-                                elevation: 1,
-                            }}
-                        >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Feather name={item.icon as any} size={12} color={colors.textMuted} />
+                        { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount), id: 'documents' },
+                        { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount), id: 'photos' },
+                    ].map((item) => {
+                        const isClickable = item.id === 'documents' || item.id === 'photos';
+                        const Container = isClickable ? TouchableOpacity : View;
+                        return (
+                            <Container
+                                key={item.label}
+                                onPress={isClickable ? () => onActionPress?.(item.id!) : undefined}
+                                activeOpacity={0.7}
+                                style={{
+                                    flex: 1,
+                                    minWidth: '45%',
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 16,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 4,
+                                    elevation: 1,
+                                }}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name={item.icon as any} size={12} color={item.id ? colors.primary : colors.textMuted} />
+                                    </View>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '500' }}>{item.label}</Text>
                                 </View>
-                                <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '500' }}>{item.label}</Text>
-                            </View>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{item.value}</Text>
-                        </View>
-                    ))}
+                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{item.value}</Text>
+                            </Container>
+                        );
+                    })}
                 </View>
 
                 {/* Project Access Codes */}

@@ -123,6 +123,7 @@ export default function Project({ id }: ProjectProps) {
                         project={project}
                         userRole={user.role}
                         onProjectUpdate={(updated) => setProject(updated)}
+                        onTabChange={setTab as any}
                     />
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} />}
