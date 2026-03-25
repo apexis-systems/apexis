@@ -150,10 +150,13 @@ export const createSnag = async (req: Request, res: Response) => {
 
         // Notify assignee
         if (assigned_to) {
+            const sender = await users.findByPk(authUser.user_id);
+            const senderName = sender?.name || 'Someone';
+
             await sendNotification({
                 userId: Number(assigned_to),
                 title: 'New Snag Assigned',
-                body: `${authUser.name} assigned a new snag to you: ${title}`,
+                body: `${senderName} assigned a new snag to you: ${title}`,
                 type: 'snag_assigned',
                 data: { snagId: String(snag.id), projectId: String(project_id) }
             });
@@ -225,14 +228,26 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
         if (snag.assigned_to && snag.assigned_to !== authUser.user_id) notifyIds.add(snag.assigned_to);
         if (snag.created_by && snag.created_by !== authUser.user_id) notifyIds.add(snag.created_by);
 
-        for (const uid of notifyIds) {
-            await sendNotification({
-                userId: uid,
-                title: 'Snag Status Updated',
-                body: `${authUser.name} updated status to ${status} for snag: ${snag.title}`,
-                type: 'snag_status_update',
-                data: { snagId: String(snag.id), projectId: String(snag.project_id) }
-            });
+        if (notifyIds.size > 0) {
+            const sender = await users.findByPk(authUser.user_id);
+            const senderName = sender?.name || 'Someone';
+            
+            const statusLabels: Record<string, string> = {
+                amber: 'Waiting for Clearance',
+                green: 'Completed',
+                red: 'No Action Required'
+            };
+            const friendlyStatus = statusLabels[status] || status;
+
+            for (const uid of notifyIds) {
+                await sendNotification({
+                    userId: uid,
+                    title: 'Snag Status Updated',
+                    body: `${senderName} updated status to ${friendlyStatus} for snag: ${snag.title}`,
+                    type: 'snag_status_update',
+                    data: { snagId: String(snag.id), projectId: String(snag.project_id) }
+                });
+            }
         }
     } catch (err) {
         console.error('updateSnagStatus error:', err);

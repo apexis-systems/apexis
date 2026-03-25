@@ -1,5 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+
 import { Platform } from 'react-native';
 import { PrivateAxios } from '../helpers/PrivateAxios';
 
@@ -9,6 +11,12 @@ export const registerForPushNotificationsAsync = async () => {
             console.log('Must use physical device for Push Notifications');
             return null;
         }
+
+        if (Constants.appOwnership === 'expo') {
+            console.warn('Push Notifications (FCM/APNS) are not supported in Expo Go for SDK 53+. Please use a Development Build.');
+            return null;
+        }
+
 
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;

@@ -7,6 +7,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from 'sharp';
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { users as UsersModel } from "../models/index.ts";
+import { PDFDocument } from 'pdf-lib';
+
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION || "ap-south-2",
@@ -481,3 +483,134 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
     }
 };
 
+
+export const uploadScans = async (req: Request | any, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { project_id, folder_id, mode, file_name, location, tags } = req.body;
+        const scanFiles = req.files as Express.Multer.File[];
+
+        if (!scanFiles || !Array.isArray(scanFiles) || scanFiles.length === 0) {
+            return res.status(400).json({ error: "No scan files uploaded" });
+        }
+
+        // Access check
+        if (authUser.role === "contributor") {
+            const access = await checkProjectAccess(authUser.user_id, project_id);
+            if (!access || access.role !== "contributor") {
+                return res.status(403).json({ error: "Forbidden: Not a contributor to this project" });
+            }
+        }
+
+        const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
+        const folderPath = validFolderId ? validFolderId.toString() : 'root';
+        const isSeparate = mode === 'separate';
+        
+        const createdFiles = [];
+
+        if (isSeparate) {
+            // mode === 'separate' -> each scan becomes its own PDF
+            for (let i = 0; i < scanFiles.length; i++) {
+                const file = scanFiles[i];
+                const pdfDoc = await PDFDocument.create();
+                const imageBuffer = file.buffer;
+                let image;
+                if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+                    image = await pdfDoc.embedJpg(imageBuffer);
+                } else if (file.mimetype === 'image/png') {
+                    image = await pdfDoc.embedPng(imageBuffer);
+                } else {
+                    try { image = await pdfDoc.embedJpg(imageBuffer); } catch (e) { continue; }
+                }
+
+                if (image) {
+                    const page = pdfDoc.addPage([image.width, image.height]);
+                    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+                }
+
+                const pdfBytes = await pdfDoc.save();
+                const timeSuffix = Date.now() + i;
+                const s3Key = `projects/${project_id}/folders/${folderPath}/${timeSuffix}.pdf`;
+                const individualFileName = `${file_name || 'Scan'}_${i + 1}.pdf`;
+
+                await s3Client.send(new PutObjectCommand({
+                    Bucket: BUCKET_NAME,
+                    Key: s3Key,
+                    ContentType: 'application/pdf',
+                    Body: pdfBytes
+                }));
+
+                const newFile = await files.create({
+                    folder_id: validFolderId,
+                    project_id: parseInt(project_id, 10),
+                    file_url: s3Key,
+                    file_name: individualFileName,
+                    client_visible: true,
+                    file_type: 'application/pdf',
+                    file_size_mb: Math.max(1, Math.round(pdfBytes.length / (1024 * 1024))),
+                    created_by: authUser.user_id,
+                    location: location || null,
+                    tags: tags || null,
+                });
+
+                createdFiles.push(newFile);
+            }
+        } else {
+            // mode === 'single' or empty -> merge all into one PDF
+            const pdfDoc = await PDFDocument.create();
+            for (const file of scanFiles) {
+                const imageBuffer = file.buffer;
+                let image;
+                if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+                    image = await pdfDoc.embedJpg(imageBuffer);
+                } else if (file.mimetype === 'image/png') {
+                    image = await pdfDoc.embedPng(imageBuffer);
+                } else {
+                    try { image = await pdfDoc.embedJpg(imageBuffer); } catch (e) { continue; }
+                }
+
+                if (image) {
+                    const page = pdfDoc.addPage([image.width, image.height]);
+                    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+                }
+            }
+
+            const pdfBytes = await pdfDoc.save();
+            const finalFileName = (file_name || `Scan_${Date.now()}`) + ".pdf";
+            const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}.pdf`;
+
+            await s3Client.send(new PutObjectCommand({
+                Bucket: BUCKET_NAME,
+                Key: s3Key,
+                ContentType: 'application/pdf',
+                Body: pdfBytes
+            }));
+
+            const newFile = await files.create({
+                folder_id: validFolderId,
+                project_id: parseInt(project_id, 10),
+                file_url: s3Key,
+                file_name: finalFileName,
+                client_visible: true,
+                file_type: 'application/pdf',
+                file_size_mb: Math.max(1, Math.round(pdfBytes.length / (1024 * 1024))),
+                created_by: authUser.user_id,
+                location: location || null,
+                tags: tags || null,
+            });
+
+            createdFiles.push(newFile);
+        }
+
+        res.status(200).json({
+            message: isSeparate ? "Scans uploaded as separate PDFs" : "Scans merged and uploaded successfully",
+            files: createdFiles,
+            file: isSeparate ? createdFiles[0] : createdFiles[0] // Backward compatibility if needed
+        });
+    } catch (error) {
+        console.error("Upload Scans Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

@@ -139,11 +139,14 @@ export const createRFI = async (req: Request | any, res: Response) => {
             });
             notifyUserIds.delete(authUser.user_id);
 
+            const sender = await users.findByPk(authUser.user_id);
+            const senderName = sender?.name || 'Someone';
+
             for (const uid of notifyUserIds) {
                 await sendNotification({
                     userId: uid,
                     title: 'New RFI from Client',
-                    body: `${authUser.name} created a new RFI: ${title}`,
+                    body: `${senderName} created a new RFI: ${title}`,
                     type: 'rfi_created',
                     data: { rfiId: String(rfi.id), projectId: String(project_id) }
                 });
@@ -151,10 +154,13 @@ export const createRFI = async (req: Request | any, res: Response) => {
         } else {
             // Admin/Contributor created it
             if (assigned_to) {
+                const sender = await users.findByPk(authUser.user_id);
+                const senderName = sender?.name || 'Someone';
+
                 await sendNotification({
                     userId: Number(assigned_to),
                     title: 'New RFI Assigned',
-                    body: `${authUser.name} assigned an RFI to you: ${title}`,
+                    body: `${senderName} assigned an RFI to you: ${title}`,
                     type: 'rfi_assigned',
                     data: { rfiId: String(rfi.id), projectId: String(project_id) }
                 });
@@ -206,14 +212,26 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         if (rfi.assigned_to && rfi.assigned_to !== authUser.user_id) notifyIds.add(rfi.assigned_to);
         if (rfi.created_by && rfi.created_by !== authUser.user_id) notifyIds.add(rfi.created_by);
 
-        for (const uid of notifyIds) {
-            await sendNotification({
-                userId: uid,
-                title: 'RFI Status Updated',
-                body: `${authUser.name} updated RFI status to ${status}: ${rfi.title}`,
-                type: 'rfi_status_update',
-                data: { rfiId: String(rfi.id), projectId: String(rfi.project_id) }
-            });
+        if (notifyIds.size > 0) {
+            const sender = await users.findByPk(authUser.user_id);
+            const senderName = sender?.name || 'Someone';
+            
+            const statusLabels: Record<string, string> = {
+                open: 'Open',
+                closed: 'Closed',
+                overdue: 'Overdue'
+            };
+            const friendlyStatus = statusLabels[status] || status;
+
+            for (const uid of notifyIds) {
+                await sendNotification({
+                    userId: uid,
+                    title: 'RFI Status Updated',
+                    body: `${senderName} updated RFI status to ${friendlyStatus}: ${rfi.title}`,
+                    type: 'rfi_status_update',
+                    data: { rfiId: String(rfi.id), projectId: String(rfi.project_id) }
+                });
+            }
         }
     } catch (err) {
         console.error('updateRFIStatus error:', err);

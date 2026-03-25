@@ -47,15 +47,24 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
     const s = status?.toLowerCase();
     let colorClass = "bg-muted text-muted-foreground";
     let text = s;
-    if (['open', 'amber', 'pending'].includes(s)) {
+    if (s === 'amber') {
+      colorClass = "bg-amber-100 text-amber-700";
+      text = 'Waiting for Clearance';
+    } else if (s === 'open' || s === 'pending') {
       colorClass = "bg-amber-100 text-amber-700";
       text = 'OPEN';
-    } else if (['closed', 'green', 'resolved'].includes(s)) {
+    } else if (s === 'green' || s === 'completed') {
+      colorClass = "bg-emerald-100 text-emerald-700";
+      text = 'Completed';
+    } else if (s === 'resolved' || s === 'closed') {
       colorClass = "bg-emerald-100 text-emerald-700";
       text = 'RESOLVED';
-    } else if (['overdue', 'red', 'critical'].includes(s)) {
+    } else if (s === 'red') {
       colorClass = "bg-red-100 text-red-700";
-      text = s === 'overdue' ? 'OVERDUE' : 'OPEN';
+      text = 'No Action Required';
+    } else if (s === 'overdue' || s === 'critical') {
+      colorClass = "bg-red-100 text-red-700";
+      text = 'OVERDUE';
     }
     return <span className={`px-1.5 py-0.5 rounded-[2px] text-[7px] font-bold uppercase tracking-wider ${colorClass}`}>{text}</span>;
   };

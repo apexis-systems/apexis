@@ -52,19 +52,33 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
         let bgColor = 'rgba(0,0,0,0.05)';
         let textColor = colors.textMuted;
         let text = s;
-        if (['open', 'amber', 'pending'].includes(s)) {
+
+        if (s === 'amber') {
+            bgColor = 'rgba(245,158,11,0.1)';
+            textColor = '#d97706';
+            text = 'Waiting for Clearance';
+        } else if (s === 'open' || s === 'pending') {
             bgColor = 'rgba(245,158,11,0.1)';
             textColor = '#d97706';
             text = 'OPEN';
-        } else if (['closed', 'green', 'resolved'].includes(s)) {
+        } else if (s === 'green' || s === 'completed') {
+            bgColor = 'rgba(16,185,129,0.1)';
+            textColor = '#059669';
+            text = 'Completed';
+        } else if (s === 'resolved' || s === 'closed') {
             bgColor = 'rgba(16,185,129,0.1)';
             textColor = '#059669';
             text = 'RESOLVED';
-        } else if (['overdue', 'red', 'critical'].includes(s)) {
+        } else if (s === 'red') {
             bgColor = 'rgba(239,68,68,0.1)';
             textColor = '#dc2626';
-            text = s === 'overdue' ? 'OVERDUE' : 'OPEN';
+            text = 'No Action Required';
+        } else if (s === 'overdue' || s === 'critical') {
+            bgColor = 'rgba(239,68,68,0.1)';
+            textColor = '#dc2626';
+            text = 'OVERDUE';
         }
+
         return (
             <View style={{ backgroundColor: bgColor, paddingHorizontal: 4, borderRadius: 2 }}>
                 <Text style={{ fontSize: 7, fontWeight: '700', color: textColor }}>{text.toUpperCase()}</Text>

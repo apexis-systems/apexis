@@ -30,6 +30,8 @@ export default function ProjectRFI({ project, user }: Props) {
   const [rfis, setRfis] = useState<RFI[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'overdue'>('all');
+  const [creatorFilter, setCreatorFilter] = useState<string>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
 
   // Modals
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -43,6 +45,10 @@ export default function ProjectRFI({ project, user }: Props) {
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  // Filter Modals
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [activeFilterType, setActiveFilterType] = useState<'status' | 'creator' | 'assignee' | null>(null);
 
   const projectId = Number(project.id);
 
@@ -154,7 +160,13 @@ export default function ProjectRFI({ project, user }: Props) {
     }
   };
 
-  const filteredRfis = rfis.filter(r => statusFilter === 'all' || r.status === statusFilter);
+  const filteredRfis = rfis.filter(r => {
+    const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
+    const matchesCreator = creatorFilter === 'all' || String(r.created_by) === creatorFilter;
+    const matchesAssignee = assigneeFilter === 'all' || 
+                           (assigneeFilter === 'null' ? !r.assigned_to : String(r.assigned_to) === assigneeFilter);
+    return matchesStatus && matchesCreator && matchesAssignee;
+  });
 
   const renderRFI = ({ item }: { item: RFI }) => {
     const config = statusConfig[item.status] || statusConfig.open;
@@ -230,25 +242,49 @@ export default function ProjectRFI({ project, user }: Props) {
         <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>New RFI</Text>
       </TouchableOpacity>
 
+      {/* Dropdown Filters */}
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-        {['all', 'open', 'overdue', 'closed'].map(f => (
-          <TouchableOpacity
-            key={f}
-            onPress={() => setStatusFilter(f as any)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 20,
-              backgroundColor: statusFilter === f ? colors.primary : colors.surface,
-              borderWidth: 1,
-              borderColor: statusFilter === f ? colors.primary : colors.border
-            }}
-          >
-            <Text style={{ fontSize: 10, fontWeight: '700', color: statusFilter === f ? '#fff' : colors.textMuted }}>
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          onPress={() => { setActiveFilterType('status'); setFilterModalVisible(true); }}
+          style={{
+            flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+            backgroundColor: statusFilter !== 'all' ? colors.primary + '10' : colors.surface
+          }}
+        >
+          <Text style={{ fontSize: 10, fontWeight: '700', color: statusFilter !== 'all' ? colors.primary : colors.textMuted }}>
+            {statusFilter === 'all' ? 'STATUS' : statusFilter.toUpperCase()}
+          </Text>
+          <Feather name="chevron-down" size={12} color={statusFilter !== 'all' ? colors.primary : colors.textMuted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => { setActiveFilterType('creator'); setFilterModalVisible(true); }}
+          style={{
+            flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+            backgroundColor: creatorFilter !== 'all' ? colors.primary + '10' : colors.surface
+          }}
+        >
+          <Text style={{ fontSize: 10, fontWeight: '700', color: creatorFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
+            {creatorFilter === 'all' ? 'CREATOR' : (rfis.find(r => String(r.created_by) === creatorFilter)?.creator?.name || 'CREATOR').toUpperCase()}
+          </Text>
+          <Feather name="chevron-down" size={12} color={creatorFilter !== 'all' ? colors.primary : colors.textMuted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => { setActiveFilterType('assignee'); setFilterModalVisible(true); }}
+          style={{
+            flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+            backgroundColor: assigneeFilter !== 'all' ? colors.primary + '10' : colors.surface
+          }}
+        >
+          <Text style={{ fontSize: 10, fontWeight: '700', color: assigneeFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
+            {assigneeFilter === 'all' ? 'ASSIGNEE' : (assigneeFilter === 'null' ? 'UNASSIGNED' : (rfis.find(r => String(r.assigned_to) === assigneeFilter)?.assignee?.name || 'ASSIGNEE').toUpperCase())}
+          </Text>
+          <Feather name="chevron-down" size={12} color={assigneeFilter !== 'all' ? colors.primary : colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -458,11 +494,11 @@ export default function ProjectRFI({ project, user }: Props) {
                 <View>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                    {selectedImages.map((uri, idx) => (
+                    {selectedImages.map((uri: string, idx: number) => (
                       <View key={idx}>
                         <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 10 }} />
                         <TouchableOpacity
-                          onPress={() => setSelectedImages(selectedImages.filter((_, i) => i !== idx))}
+                          onPress={() => setSelectedImages(selectedImages.filter((_: string, i: number) => i !== idx))}
                           style={{ position: 'absolute', top: -5, right: -5, backgroundColor: 'red', borderRadius: 10, padding: 2 }}
                         >
                           <Feather name="x" size={12} color="#fff" />
@@ -512,6 +548,82 @@ export default function ProjectRFI({ project, user }: Props) {
             </ScrollView>
           </View>
         </View>
+      </Modal>
+      {/* Filter Options Modal */}
+      <Modal visible={filterModalVisible} animationType="fade" transparent>
+        <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}
+          onPress={() => setFilterModalVisible(false)}
+        >
+          <View style={{ backgroundColor: colors.background, borderRadius: 16, padding: 16, maxHeight: '60%' }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text, marginBottom: 16, textAlign: 'center' }}>
+              SELECT {activeFilterType?.toUpperCase()}
+            </Text>
+            <ScrollView>
+              {activeFilterType === 'status' && ['all', 'open', 'overdue', 'closed'].map(item => (
+                <TouchableOpacity
+                  key={item}
+                  onPress={() => { setStatusFilter(item as any); setFilterModalVisible(false); }}
+                  style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
+                >
+                  <Text style={{ color: statusFilter === item ? colors.primary : colors.text, fontWeight: statusFilter === item ? '700' : '400' }}>
+                    {item.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              {activeFilterType === 'creator' && (
+                <>
+                  <TouchableOpacity
+                    onPress={() => { setCreatorFilter('all'); setFilterModalVisible(false); }}
+                    style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
+                  >
+                    <Text style={{ color: creatorFilter === 'all' ? colors.primary : colors.text, fontWeight: creatorFilter === 'all' ? '700' : '400' }}>ALL CREATORS</Text>
+                  </TouchableOpacity>
+                  {Array.from(new Set(rfis.map(r => r.creator?.id))).filter(Boolean).map(id => {
+                    const name = rfis.find(r => r.creator?.id === id)?.creator?.name;
+                    return (
+                      <TouchableOpacity
+                        key={id}
+                        onPress={() => { setCreatorFilter(String(id)); setFilterModalVisible(false); }}
+                        style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
+                      >
+                        <Text style={{ color: creatorFilter === String(id) ? colors.primary : colors.text, fontWeight: creatorFilter === String(id) ? '700' : '400' }}>{name?.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              )}
+              {activeFilterType === 'assignee' && (
+                <>
+                  <TouchableOpacity
+                    onPress={() => { setAssigneeFilter('all'); setFilterModalVisible(false); }}
+                    style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
+                  >
+                    <Text style={{ color: assigneeFilter === 'all' ? colors.primary : colors.text, fontWeight: assigneeFilter === 'all' ? '700' : '400' }}>ALL ASSIGNEES</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { setAssigneeFilter('null'); setFilterModalVisible(false); }}
+                    style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
+                  >
+                    <Text style={{ color: assigneeFilter === 'null' ? colors.primary : colors.text, fontWeight: assigneeFilter === 'null' ? '700' : '400' }}>UNASSIGNED</Text>
+                  </TouchableOpacity>
+                  {Array.from(new Set(rfis.map(r => r.assignee?.id))).filter(Boolean).map(id => {
+                    const name = rfis.find(r => r.assignee?.id === id)?.assignee?.name;
+                    return (
+                      <TouchableOpacity
+                        key={id}
+                        onPress={() => { setAssigneeFilter(String(id)); setFilterModalVisible(false); }}
+                        style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
+                      >
+                        <Text style={{ color: assigneeFilter === String(id) ? colors.primary : colors.text, fontWeight: assigneeFilter === String(id) ? '700' : '400' }}>{name?.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
