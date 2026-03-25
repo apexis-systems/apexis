@@ -412,3 +412,87 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
         emitStatus(`Export failed: ${error.message}`, 'failed');
     }
 };
+
+export const generateSingleReportPDF = async (reportId: number): Promise<Buffer> => {
+    const report = await db.reports.findByPk(reportId);
+    if (!report) throw new Error("Report not found");
+
+    const project = await db.projects.findByPk(report.project_id);
+    const projectName = project?.name || 'Project';
+
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const chunks: any[] = [];
+    
+    return new Promise((resolve, reject) => {
+        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        // Header
+        doc.fillColor('#ea8c0a').fontSize(24).text('APEXIS', { align: 'right' });
+        doc.fillColor('#000000').fontSize(20).text(`${report.type.toUpperCase()} REPORT`, { align: 'left' });
+        doc.fontSize(12).text(`${projectName}`, { align: 'left' });
+        doc.fontSize(10).fillColor('gray').text(`Period: ${new Date(report.period_start).toLocaleDateString()} - ${new Date(report.period_end).toLocaleDateString()}`, { align: 'left' });
+        doc.moveDown(2);
+
+        // Summary Stats
+        doc.fillColor('#000000').fontSize(14).text('Executive Summary', { underline: true });
+        doc.moveDown(0.5);
+        doc.fontSize(11).text(`• Site Photos Captured: ${report.photos_count}`);
+        doc.fontSize(11).text(`• Documents Uploaded: ${report.docs_count}`);
+        doc.fontSize(11).text(`• Comments Made: ${report.comments_count}`);
+        doc.moveDown(1.5);
+
+        const summary = report.summary || {};
+
+        // Documents Details
+        if (summary.document_titles && summary.document_titles.length > 0) {
+            doc.fontSize(14).fillColor('#ea8c0a').text('Documents Uploaded');
+            doc.moveDown(0.5);
+            summary.document_titles.forEach((title: string) => {
+                doc.fontSize(10).fillColor('#333').text(`• ${title}`);
+            });
+            doc.moveDown(1.5);
+        }
+
+        // Photo Summary
+        if (summary.photo_summary && summary.photo_summary.length > 0) {
+            doc.fontSize(14).fillColor('#ea8c0a').text('Photo Capture Summary');
+            doc.moveDown(0.5);
+            summary.photo_summary.forEach((ps: any) => {
+                doc.fontSize(10).fillColor('#333').text(`• ${ps.count} photos by ${ps.user} in folder: ${ps.folder}`);
+            });
+            doc.moveDown(1.5);
+        }
+
+        // RFIs
+        if (summary.rfis && summary.rfis.length > 0) {
+            doc.fontSize(14).fillColor('#ea8c0a').text('Requests for Information (RFIs)');
+            doc.moveDown(0.5);
+            summary.rfis.forEach((rfi: any) => {
+                doc.fontSize(10).fillColor('#333').text(`• [${rfi.status.toUpperCase()}] ${rfi.title}`);
+            });
+            doc.moveDown(1.5);
+        }
+
+        // Snags
+        if (summary.snags && summary.snags.length > 0) {
+            doc.fontSize(14).fillColor('#ea8c0a').text('Snag List Updates');
+            doc.moveDown(0.5);
+            summary.snags.forEach((snag: any) => {
+                doc.fontSize(10).fillColor('#333').text(`• [${snag.status.toUpperCase()}] ${snag.title}`);
+            });
+            doc.moveDown(1.5);
+        }
+
+        // Footer
+        const pageCount = doc.bufferedPageRange().count;
+        for (let i = 0; i < pageCount; i++) {
+            doc.switchToPage(i);
+            doc.fontSize(8).fillColor('gray').text(`Generated via Apexis Construction Management Platform | Page ${i + 1} of ${pageCount}`, 50, 780, { align: 'center' });
+        }
+
+        doc.end();
+    });
+};
+

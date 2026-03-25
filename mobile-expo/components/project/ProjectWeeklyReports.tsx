@@ -2,9 +2,14 @@ import { View, TouchableOpacity, ActivityIndicator, ScrollView, BackHandler } fr
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getReports, triggerReport, type Report } from '@/services/reportService';
+import { getReports, triggerReport, getReportShareUrl, type Report } from '@/services/reportService';
 import { useEffect, useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
+
+import * as SecureStore from 'expo-secure-store';
+
 
 interface Props {
     project: any;
@@ -17,6 +22,8 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
     const [loading, setLoading] = useState(true);
     const [expanded, setExpanded] = useState<number | null>(null);
     const [generating, setGenerating] = useState(false);
+    const [sharingId, setSharingId] = useState<number | null>(null);
+
 
     const fetchReports = async () => {
         try {
@@ -98,7 +105,35 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
         }
     };
 
+    const handleShare = async (report: Report) => {
+        setSharingId(report.id);
+        try {
+            const token = await SecureStore.getItemAsync('token');
+            const url = await getReportShareUrl(report.id);
+            const fileUri = `${FileSystem.documentDirectory}report_${report.id}.pdf`;
+            
+            const { uri } = await FileSystem.downloadAsync(
+                url,
+                fileUri,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri);
+            }
+        } catch (e) {
+            console.error('handleShare error:', e);
+        } finally {
+            setSharingId(null);
+        }
+    };
+
     const fmt = (d: string) => {
+
         const date = new Date(d);
         return `${date.getDate()} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
     };
@@ -136,7 +171,7 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                             onPress={() => setExpanded(expanded === report.id ? null : report.id)}
                             style={{ padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
                         >
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text }}>
                                     Weekly Report — {fmt(report.period_start)} to {fmt(report.period_end)}
                                 </Text>
@@ -145,8 +180,24 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>📄 {report.docs_count} docs</Text>
                                 </View>
                             </View>
+                            
+                            {(report.photos_count > 0 || report.docs_count > 0 || (report.summary?.rfis?.length || 0) > 0 || (report.summary?.snags?.length || 0) > 0) && (
+                                <TouchableOpacity 
+                                    onPress={(e) => { e.stopPropagation(); handleShare(report); }}
+                                    disabled={sharingId === report.id}
+                                    style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}
+                                >
+                                    {sharingId === report.id 
+                                        ? <ActivityIndicator size="small" color={colors.primary} />
+                                        : <Feather name="share-2" size={14} color={colors.primary} />
+                                    }
+                                </TouchableOpacity>
+                            )}
+                            
                             <Feather name={expanded === report.id ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
                         </TouchableOpacity>
+
+
 
                         {/* Expanded detail */}
                         {expanded === report.id && report.summary && (

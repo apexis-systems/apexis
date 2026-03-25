@@ -18,28 +18,54 @@ export interface RFI {
 }
 
 export const getRFIs = async (projectId: number): Promise<RFI[]> => {
-    const res = await PrivateAxios.get(`/rfis?project_id=${projectId}`);
-    return res.data.rfis;
+    try {
+        const res = await PrivateAxios.get(`/rfis?project_id=${projectId}`);
+        return res.data.rfis || [];
+    } catch (error) {
+        console.error("getRFIs Error", error);
+        throw error;
+    }
 };
 
 export const getRFIAssignees = async (projectId: number): Promise<any[]> => {
-    const res = await PrivateAxios.get(`/rfis/assignees?project_id=${projectId}`);
-    return res.data.assignees;
+    try {
+        const res = await PrivateAxios.get(`/rfis/assignees?project_id=${projectId}`);
+        return res.data.assignees || [];
+    } catch (error) {
+        console.error("getRFIAssignees Error", error);
+        throw error;
+    }
 };
 
 export const createRFI = async (formData: FormData): Promise<RFI> => {
-    const res = await PrivateAxios.post('/rfis', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return res.data.rfi;
+    try {
+        const res = await PrivateAxios.post('/rfis', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data.rfi;
+    } catch (error) {
+        console.error("createRFI Error", error);
+        throw error;
+    }
 };
 
 export const updateRFIStatus = async (id: number, status: string): Promise<RFI> => {
-    const res = await PrivateAxios.patch(`/rfis/${id}/status`, { status });
-    return res.data.rfi;
+    try {
+        const res = await PrivateAxios.patch(`/rfis/${id}/status`, { status });
+        return res.data.rfi;
+    } catch (error) {
+        console.error("updateRFIStatus Error", error);
+        throw error;
+    }
 };
 
 export const getRFIById = async (id: number): Promise<RFI> => {
-    const res = await PrivateAxios.get(`/rfis/${id}`);
-    return res.data.rfi;
+    try {
+        const res = await PrivateAxios.get(`/rfis/${id}`);
+        return res.data.rfi;
+    } catch (error) {
+        console.error("getRFIById Error", error);
+        throw error;
+    }
 };
+

@@ -25,26 +25,52 @@ export interface Assignee {
 }
 
 export const getSnags = async (projectId: number | string): Promise<Snag[]> => {
-    const res = await PrivateAxios.get('/snags', { params: { project_id: projectId } });
-    return res.data.snags;
+    try {
+        const res = await PrivateAxios.get('/snags', { params: { project_id: projectId } });
+        return res.data.snags || [];
+    } catch (error) {
+        console.error("getSnags Error", error);
+        throw error;
+    }
 };
 
 export const getAssignees = async (projectId: number | string): Promise<Assignee[]> => {
-    const res = await PrivateAxios.get('/snags/assignees', { params: { project_id: projectId } });
-    return res.data.assignees;
+    try {
+        const res = await PrivateAxios.get('/snags/assignees', { params: { project_id: projectId } });
+        return res.data.assignees || [];
+    } catch (error) {
+        console.error("getAssignees Error", error);
+        throw error;
+    }
 };
 
 export const createSnag = async (data: FormData): Promise<Snag> => {
-    const res = await PrivateAxios.post('/snags', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return res.data.snag;
+    try {
+        const res = await PrivateAxios.post('/snags', data, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data.snag;
+    } catch (error) {
+        console.error("createSnag Error", error);
+        throw error;
+    }
 };
 
 export const updateSnagStatus = async (id: number, status: SnagStatus): Promise<void> => {
-    await PrivateAxios.patch(`/snags/${id}/status`, { status });
+    try {
+        await PrivateAxios.patch(`/snags/${id}/status`, { status });
+    } catch (error) {
+        console.error("updateSnagStatus Error", error);
+        throw error;
+    }
 };
 
 export const deleteSnagApi = async (id: number): Promise<void> => {
-    await PrivateAxios.delete(`/snags/${id}`);
+    try {
+        await PrivateAxios.delete(`/snags/${id}`);
+    } catch (error) {
+        console.error("deleteSnagApi Error", error);
+        throw error;
+    }
 };
+

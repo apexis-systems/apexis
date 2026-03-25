@@ -1,8 +1,24 @@
 import type { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import { reports, files, comments, folders, users, projects, rfis, snags } from '../models/index.ts';
+import { generateSingleReportPDF } from '../services/exportService.ts';
 
 // ── Public API ─────────────────────────────────────────────────────────────
+
+export const shareReport = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const pdfBuffer = await generateSingleReportPDF(Number(id));
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=report_${id}.pdf`);
+        res.send(pdfBuffer);
+    } catch (error: any) {
+        console.error('shareReport error:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+
 
 export const getReports = async (req: Request, res: Response) => {
     try {

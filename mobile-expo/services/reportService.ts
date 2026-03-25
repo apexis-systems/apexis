@@ -22,16 +22,45 @@ export interface Report {
 }
 
 export const getReports = async (projectId: string | number, type?: 'daily' | 'weekly'): Promise<Report[]> => {
-    const res = await PrivateAxios.get('/reports', { params: { project_id: projectId, type } });
-    return res.data.reports;
+    try {
+        const res = await PrivateAxios.get('/reports', { params: { project_id: projectId, type } });
+        return res.data.reports || [];
+    } catch (error) {
+        console.error("getReports Error", error);
+        throw error;
+    }
 };
 
 export const getReportById = async (id: string | number): Promise<Report> => {
-    const res = await PrivateAxios.get(`/reports/${id}`);
-    return res.data.report;
+    try {
+        const res = await PrivateAxios.get(`/reports/${id}`);
+        return res.data.report;
+    } catch (error) {
+        console.error("getReportById Error", error);
+        throw error;
+    }
 };
 
 export const triggerReport = async (projectId: string | number, type: 'daily' | 'weekly' = 'daily') => {
-    const res = await PrivateAxios.get('/reports/generate-now', { params: { project_id: projectId, type } });
-    return res.data;
+    try {
+        const res = await PrivateAxios.get('/reports/generate-now', { params: { project_id: projectId, type } });
+        return res.data;
+    } catch (error) {
+        console.error("triggerReport Error", error);
+        throw error;
+    }
 };
+
+export const getReportShareUrl = async (id: number): Promise<string> => {
+    try {
+        const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
+        return `${API_URL}/reports/${id}/share`;
+    } catch (error) {
+        console.error("getReportShareUrl Error", error);
+        throw error;
+    }
+};
+
+
+
+

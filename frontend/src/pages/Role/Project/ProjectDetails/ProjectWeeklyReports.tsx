@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { FileText, Calendar, Loader2, Image, TrendingUp, ChevronDown, ChevronUp, FileCheck } from 'lucide-react';
-import { getReports, Report, triggerReport } from '@/services/reportService';
+import { FileText, Calendar, Loader2, Image, TrendingUp, ChevronDown, ChevronUp, FileCheck, Download } from 'lucide-react';
+
+import { getReports, Report, triggerReport, downloadReport } from '@/services/reportService';
+
 
 interface Props { project: Project; userRole: UserRole; }
 
@@ -13,6 +15,8 @@ const ProjectWeeklyReports = ({ project, userRole }: Props) => {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
 
   const fetchReports = () => {
     if (!project?.id) return;
@@ -39,7 +43,19 @@ const ProjectWeeklyReports = ({ project, userRole }: Props) => {
     }
   };
 
+  const handleDownload = async (r: Report) => {
+    setDownloadingId(r.id);
+    try {
+      await downloadReport(r.id, `Weekly_Report_${fmt(r.period_start).replace(/ /g, '_')}_to_${fmt(r.period_end).replace(/ /g, '_')}.pdf`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-accent" /></div>;
 
@@ -96,7 +112,21 @@ const ProjectWeeklyReports = ({ project, userRole }: Props) => {
                   <p className="text-[11px] font-semibold">
                     Weekly Report — {fmt(r.period_start)} to {fmt(r.period_end)}
                   </p>
-                  {expandedId === r.id ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                  <div className="flex items-center gap-2">
+                    {(r.photos_count > 0 || r.docs_count > 0 || (r.summary?.rfis?.length || 0) > 0 || (r.summary?.snags?.length || 0) > 0) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDownload(r); }}
+                        disabled={downloadingId === r.id}
+                        className="p-1.5 rounded-md hover:bg-accent/10 text-accent transition-colors disabled:opacity-50"
+                        title="Download PDF"
+                      >
+                        {downloadingId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+
+                      </button>
+                    )}
+                    {expandedId === r.id ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                  </div>
+
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-[9px] text-muted-foreground flex-wrap">
                   <span className="flex items-center gap-1"><Image className="h-2.5 w-2.5" />{r.photos_count} photos</span>

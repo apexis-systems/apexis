@@ -25,15 +25,45 @@ export const getReports = async (
     projectId: number | string,
     type?: 'daily' | 'weekly'
 ): Promise<Report[]> => {
-    const res = await PrivateAxios.get('/reports', {
-        params: { project_id: projectId, ...(type ? { type } : {}) },
-    });
-    return res.data.reports || [];
+    try {
+        const res = await PrivateAxios.get('/reports', {
+            params: { project_id: projectId, ...(type ? { type } : {}) },
+        });
+        return res.data.reports || [];
+    } catch (error) {
+        console.error("getReports Error", error);
+        throw error;
+    }
 };
 
 export const triggerReport = async (projectId: string | number, type: 'daily' | 'weekly' = 'daily') => {
-    const res = await PrivateAxios.get('/reports/generate-now', {
-        params: { project_id: projectId, type },
-    });
-    return res.data;
+    try {
+        const res = await PrivateAxios.get('/reports/generate-now', {
+            params: { project_id: projectId, type },
+        });
+        return res.data;
+    } catch (error) {
+        console.error("triggerReport Error", error);
+        throw error;
+    }
 };
+
+export const downloadReport = async (id: number, fileName?: string) => {
+    try {
+        const res = await PrivateAxios.get(`/reports/${id}/share`, {
+            responseType: 'blob'
+        });
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName || `report_${id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (error) {
+        console.error("downloadReport Error", error);
+        throw error;
+    }
+};
+
+
