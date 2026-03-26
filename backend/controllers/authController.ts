@@ -33,10 +33,11 @@ export const adminLogin = async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            { user_id: user.id, role: user.role, organization_id: user.organization_id },
+            { user_id: user.id, name: user.name, role: user.role, organization_id: user.organization_id },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
         );
+
 
         res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
     } catch (error) {
@@ -117,10 +118,11 @@ export const projectLogin = async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            { user_id: user.id, role: user.role, organization_id: user.organization_id },
+            { user_id: user.id, name: user.name, role: user.role, organization_id: user.organization_id },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
         );
+
 
         res.status(200).json({ 
             token, 
@@ -148,10 +150,11 @@ export const superadminLogin = async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            { user_id: user.id, role: "superadmin" },
+            { user_id: user.id, name: user.name, role: "superadmin" },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "24h" }
         );
+
 
         res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, role: "superadmin" } });
     } catch (error) {

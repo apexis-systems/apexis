@@ -88,6 +88,8 @@ export default function UploadScreen() {
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [creatingFolder, setCreatingFolder] = useState(false);
+    const [isLoadingFolders, setIsLoadingFolders] = useState(false);
+
     // State: Environment warnings
     const [hasWarnedScanner, setHasWarnedScanner] = useState(false);
     // State: Camera doc mode
@@ -130,19 +132,18 @@ export default function UploadScreen() {
                 }
             } else {
                 // Priority 2: Nav Bar click while inside a project
-                const { projectId, folderId } = getActiveProjectContext();
+                const { projectId, folderId, type } = getActiveProjectContext();
                 if (projectId) {
                     setSelectedProject(projectId);
-                    if (folderId) {
-                        setSelectedFolder(folderId);
-                        // If both are present, we probably want to go to capture or review
-                        setMode('capture');
-                        if (params.type === 'documents') setIsDocMode(true);
-                    } else {
-
-                        setMode('capture');
+                    setSelectedFolder(folderId); // This ensures it's set even if null (root)
+                    if (type === 'document') {
+                        setIsDocMode(true);
+                    } else if (type === 'photo') {
+                        setIsDocMode(false);
                     }
+                    setMode('capture');
                 }
+
             }
         }, [params.projectId, params.folderId])
     );
@@ -164,13 +165,16 @@ export default function UploadScreen() {
 
     const fetchFolders = async () => {
         if (!selectedProject) { setFolders([]); return; }
+        setIsLoadingFolders(true);
         getFolders(selectedProject, isDocMode ? 'document' : 'photo')
             .then((data) => {
                 const rawFolders = Array.isArray(data) ? data : (data.folders ?? []);
                 setFolders(rawFolders);
             })
-            .catch((e) => console.error('fetchFolders', e));
+            .catch((e) => console.error('fetchFolders', e))
+            .finally(() => setIsLoadingFolders(false));
     };
+
 
     useEffect(() => {
         fetchFolders();
@@ -390,6 +394,8 @@ export default function UploadScreen() {
                 formData.append('file_name', `Scan_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
                 if (photoLocation) formData.append('location', photoLocation);
                 if (photoTags) formData.append('tags', photoTags);
+                formData.append('is_doc_mode', String(isDocMode));
+
 
                 itemsToUpload.forEach((item, idx) => {
 
@@ -404,15 +410,16 @@ export default function UploadScreen() {
                     headers: { 'Content-Type': 'multipart/form-data' },
                     onUploadProgress: (progressEvent) => {
                         const total = progressEvent.total || 1;
-                        const p = (progressEvent.loaded / total) * 100;
+                        const p = Math.min(Math.round((progressEvent.loaded / total) * 100), 100);
                         setFileQueue(prev => prev.map(it => ({ ...it, progress: p, status: p === 100 ? 'done' : 'uploading' })));
                     }
+
                 });
 
                 if (res.data.success) {
                     setFileQueue(prev => prev.map(it => ({ ...it, status: 'done', progress: 100 })));
                     setMode('done');
-                    createActivity({ project_id: selectedProject, type: 'uploaded', description: `Uploaded ${itemsToUpload.length} documents` });
+                    await createActivity({ project_id: selectedProject!, type: 'upload', description: `Uploaded ${itemsToUpload.length} documents` });
 
                 }
             } else {
@@ -449,7 +456,8 @@ export default function UploadScreen() {
                     );
                 }
                 setMode('done');
-                createActivity({ project_id: selectedProject, type: 'uploaded', description: `Uploaded ${itemsToUpload.length} photos` });
+                await createActivity({ project_id: selectedProject!, type: 'upload', description: `Uploaded ${itemsToUpload.length} photos` });
+
 
             }
 
@@ -664,21 +672,39 @@ export default function UploadScreen() {
         return (
             <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
                 <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                    <TouchableOpacity onPress={() => setMode('capture')}>
+                <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    paddingHorizontal: 20, 
+                    paddingVertical: 16, 
+                    backgroundColor: colors.background,
+                    borderBottomWidth: 1, 
+                    borderBottomColor: colors.border 
+                }}>
+                    <TouchableOpacity 
+                        onPress={() => setMode('capture')}
+                        style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
+                    >
                         <Feather name="arrow-left" size={20} color={colors.text} />
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
-                        {isDocMode ? 'Select Doc Destination' : 'Select Photo Destination'}
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>
+                        {isDocMode ? 'Review & Upload' : 'Photo Destination'}
                     </Text>
+                    <View style={{ width: 40 }} /> 
                 </View>
+
 
                 <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
                     {mode === 'selection' && (
-                        <View style={{ marginBottom: 24 }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Selected {isDocMode ? 'Docs' : 'Photos'} ({fileQueue.length})</Text>
+                        <View style={{ marginBottom: 28 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>Selected {isDocMode ? 'Documents' : 'Photos'}</Text>
+                                <View style={{ backgroundColor: colors.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>{fileQueue.length}</Text>
+                                </View>
                             </View>
+
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                                 {fileQueue.map((item, idx) => (
                                     <View key={idx}>
@@ -689,7 +715,8 @@ export default function UploadScreen() {
                         </View>
                     )}
 
-                    {isDocMode && mode === 'selection' && (
+                    {isDocMode && mode === 'selection' && fileQueue.length > 1 && (
+
                         <View style={{ marginBottom: 24, backgroundColor: colors.surface, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
                             <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 12, textTransform: 'uppercase' }}>Scan Grouping</Text>
                             <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -711,8 +738,14 @@ export default function UploadScreen() {
 
 
                     {!selectedProject ? (
-                        <View style={{ gap: 16 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Choose Project</Text>
+                        <View style={{ gap: 20 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Feather name="briefcase" size={16} color={colors.primary} />
+                                </View>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>Select Project</Text>
+                            </View>
+
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                                 {projects.map((p: any) => (
                                     <TouchableOpacity
@@ -725,14 +758,18 @@ export default function UploadScreen() {
                                         style={{ width: '22%', alignItems: 'center', gap: 8 }}
                                     >
                                         <View style={{
-                                            width: 60, height: 60, borderRadius: 16,
+                                            width: 64, height: 64, borderRadius: 20,
                                             backgroundColor: p.color || colors.primary,
                                             alignItems: 'center', justifyContent: 'center',
-                                            elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3
+                                            shadowColor: p.color || colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6,
+                                            elevation: 4,
+                                            borderWidth: 2,
+                                            borderColor: 'rgba(255,255,255,0.2)'
                                         }}>
-                                            <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>{p.name.charAt(0).toUpperCase()}</Text>
+                                            <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800' }}>{p.name.charAt(0).toUpperCase()}</Text>
                                         </View>
-                                        <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: colors.text, textAlign: 'center' }}>{p.name}</Text>
+                                        <Text numberOfLines={2} style={{ fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center' }}>{p.name}</Text>
+
                                     </TouchableOpacity>
                                 ))}
                             </View>
@@ -740,16 +777,38 @@ export default function UploadScreen() {
                     ) : (
                         <View style={{ gap: 24 }}>
                             {mode === 'selection' && (
-                                <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <View style={{ gap: 4 }}>
-                                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>Project</Text>
-                                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{projects.find(p => p.id === selectedProject)?.name}</Text>
+                                <View style={{ 
+                                    backgroundColor: colors.surface, 
+                                    padding: 18, 
+                                    borderRadius: 20, 
+                                    borderWidth: 1, 
+                                    borderColor: colors.border, 
+                                    flexDirection: 'row', 
+                                    justifyContent: 'space-between', 
+                                    alignItems: 'center',
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 5,
+                                    elevation: 2
+                                }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                                        <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="briefcase" size={20} color={colors.primary} />
+                                        </View>
+                                        <View style={{ gap: 2 }}>
+                                            <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Target Project</Text>
+                                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
+                                                {projects.find(p => String(p.id) === String(selectedProject))?.name}
+                                            </Text>
+                                        </View>
                                     </View>
-                                    <TouchableOpacity onPress={() => setSelectedProject(null)} style={{ padding: 8, backgroundColor: colors.primary + '15', borderRadius: 8 }}>
-                                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Change</Text>
+                                    <TouchableOpacity onPress={() => setSelectedProject(null)} style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.primary + '10', borderRadius: 10 }}>
+                                        <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '800' }}>Change</Text>
                                     </TouchableOpacity>
                                 </View>
                             )}
+
 
                             <View style={{ gap: 16 }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -762,44 +821,65 @@ export default function UploadScreen() {
                                     </TouchableOpacity>
                                 </View>
 
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', gap: 8, paddingBottom: 4 }}>
-                                    <TouchableOpacity onPress={() => { setFolderBrowseId(null); setSelectedFolder('root'); }}>
-                                        <Text style={{ fontSize: 14, fontWeight: '700', color: !folderBrowseId ? colors.primary : colors.textMuted }}>{projects.find((p: any) => p.id === selectedProject)?.name}</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', gap: 8, paddingBottom: 8 }}>
+                                    <TouchableOpacity 
+                                        onPress={() => { setFolderBrowseId(null); setSelectedFolder('root'); }}
+                                        style={{ height: 32, paddingHorizontal: 12, borderRadius: 10, backgroundColor: !folderBrowseId ? colors.primary : colors.surface, borderWidth: 1, borderColor: !folderBrowseId ? colors.primary : colors.border, justifyContent: 'center' }}
+                                    >
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: !folderBrowseId ? '#fff' : colors.textMuted }}>{projects.find((p: any) => String(p.id) === String(selectedProject))?.name}</Text>
                                     </TouchableOpacity>
                                     {browseBreadcrumbs.map((b: any) => (
                                         <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <Feather name="chevron-right" size={12} color={colors.textMuted} />
-                                            <TouchableOpacity onPress={() => { setFolderBrowseId(b.id); setSelectedFolder(b.id); }}>
-                                                <Text style={{ fontSize: 14, fontWeight: '700', color: b.id === folderBrowseId ? colors.primary : colors.textMuted }}>{b.name}</Text>
+                                            <Feather name="chevron-right" size={14} color={colors.textMuted} />
+                                            <TouchableOpacity 
+                                                onPress={() => { setFolderBrowseId(b.id); setSelectedFolder(b.id); }}
+                                                style={{ height: 32, paddingHorizontal: 12, borderRadius: 10, backgroundColor: b.id === folderBrowseId ? colors.primary : colors.surface, borderWidth: 1, borderColor: b.id === folderBrowseId ? colors.primary : colors.border, justifyContent: 'center' }}
+                                            >
+                                                <Text style={{ fontSize: 12, fontWeight: '800', color: b.id === folderBrowseId ? '#fff' : colors.textMuted }}>{b.name}</Text>
                                             </TouchableOpacity>
                                         </View>
                                     ))}
                                 </ScrollView>
 
+
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                                    {getFolderChildren(folderBrowseId).map((f: any) => (
-                                        <TouchableOpacity
-                                            key={f.id}
-                                            onPress={() => {
-                                                const targetId = String(f.id);
-                                                setFolderBrowseId(targetId);
-                                                setSelectedFolder(targetId);
-                                            }}
-                                            style={{
-                                                width: '30%', aspectRatio: 1, borderRadius: 16, backgroundColor: colors.surface,
-                                                borderWidth: 1, borderColor: selectedFolder === String(f.id) ? colors.primary : colors.border,
-                                                alignItems: 'center', justifyContent: 'center', padding: 10
-                                            }}
-                                        >
-                                            <Feather name="folder" size={32} color={colors.primary} />
-                                            <Text numberOfLines={2} style={{ fontSize: 11, fontWeight: '700', color: colors.text, marginTop: 8, textAlign: 'center' }}>{f.name}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                    {getFolderChildren(folderBrowseId).length === 0 && (
-                                        <View style={{ flex: 1, alignItems: 'center', paddingVertical: 20 }}>
-                                            <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>No subfolders here.</Text>
+                                    {isLoadingFolders ? (
+                                        <View style={{ flex: 1, paddingVertical: 40, alignItems: 'center' }}>
+                                            <ActivityIndicator size="large" color={colors.primary} />
+                                            <Text style={{ marginTop: 12, color: colors.textMuted }}>Fetching folders...</Text>
                                         </View>
+                                    ) : (
+                                        <>
+                                            {getFolderChildren(folderBrowseId).map((f: any) => (
+                                                <TouchableOpacity
+                                                    key={f.id}
+                                                    onPress={() => {
+                                                        const targetId = String(f.id);
+                                                        setFolderBrowseId(targetId);
+                                                        setSelectedFolder(targetId);
+                                                    }}
+                                                    style={{
+                                                        width: '30%', aspectRatio: 0.9, borderRadius: 20, backgroundColor: String(selectedFolder) === String(f.id) ? colors.primary + '10' : colors.surface,
+                                                        borderWidth: 2, borderColor: String(selectedFolder) === String(f.id) ? colors.primary : colors.border,
+                                                        alignItems: 'center', justifyContent: 'center', padding: 10,
+                                                        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
+                                                    }}
+                                                >
+                                                    <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: String(selectedFolder) === String(f.id) ? colors.primary : colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+                                                        <Feather name="folder" size={24} color={String(selectedFolder) === String(f.id) ? '#fff' : colors.primary} />
+                                                    </View>
+                                                    <Text numberOfLines={2} style={{ fontSize: 12, fontWeight: '800', color: colors.text, textAlign: 'center' }}>{f.name}</Text>
+                                                </TouchableOpacity>
+
+                                            ))}
+                                            {getFolderChildren(folderBrowseId).length === 0 && (
+                                                <View style={{ flex: 1, alignItems: 'center', paddingVertical: 20 }}>
+                                                    <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>No subfolders here.</Text>
+                                                </View>
+                                            )}
+                                        </>
                                     )}
+
                                 </View>
                             </View>
 
@@ -833,15 +913,46 @@ export default function UploadScreen() {
                 </ScrollView>
 
                 {mode === 'selection' && selectedProject && selectedFolder && (
-                    <View style={{ padding: 16, paddingBottom: insets.bottom > 0 ? insets.bottom + 22 : 38, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <View style={{ 
+                        padding: 20, 
+                        paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 30, 
+                        backgroundColor: colors.background, 
+                        borderTopWidth: 1, 
+                        borderColor: colors.border,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: -10 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 10,
+                        elevation: 20
+                    }}>
                         <TouchableOpacity
                             onPress={handleUpload}
-                            style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }}
+                            activeOpacity={0.8}
+                            style={{ 
+                                height: 58, 
+                                borderRadius: 20, 
+                                backgroundColor: colors.primary, 
+                                flexDirection: 'row',
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                gap: 12,
+                                shadowColor: colors.primary, 
+                                shadowOffset: { width: 0, height: 8 }, 
+                                shadowOpacity: 0.4, 
+                                shadowRadius: 12,
+                                elevation: 8
+                            }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Confirm Upload</Text>
+                            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                <Feather name="upload-cloud" size={18} color="#fff" />
+                            </View>
+                            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.5 }}>
+                                {`Confirm & Upload ${fileQueue.length} ${isDocMode ? 'Doc' : 'Photo'}${fileQueue.length > 1 ? 's' : ''}`}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 )}
+
                 </KeyboardAvoidingView>
 
                 <Modal visible={showCreateFolder} transparent animationType="fade">

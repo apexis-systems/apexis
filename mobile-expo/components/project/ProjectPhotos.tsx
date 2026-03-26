@@ -163,9 +163,10 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
 
     useEffect(() => {
         if (project?.id) {
-            setActiveProjectContext(project.id, selectedFolder);
+            setActiveProjectContext(project.id, selectedFolder, 'photo');
         }
     }, [project?.id, selectedFolder]);
+
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));

@@ -70,9 +70,10 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
 
     useEffect(() => {
         if (project?.id) {
-            setActiveProjectContext(project.id, selectedFolder);
+            setActiveProjectContext(project.id, selectedFolder, 'document');
         }
     }, [project?.id, selectedFolder]);
+
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderDocs = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
