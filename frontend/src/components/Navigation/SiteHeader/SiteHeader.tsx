@@ -59,7 +59,8 @@ const SiteHeader = () => {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
               <img src="/app-icon.png" alt="APEXIS" className="h-full w-full object-cover" />
             </div>
-            <span className="text-base font-bold text-foreground font-angelica tracking-wider">APEXIS</span>
+            <span className="text-base font-bold text-accent font-angelica tracking-wider">APEXIS</span>
+
           </button>
 
           <div className="flex items-center gap-2">

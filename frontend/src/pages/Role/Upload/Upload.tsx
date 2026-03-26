@@ -385,7 +385,8 @@ function UploadInner() {
                                     >
                                         <div
                                             className={`h-12 w-12 rounded-xl flex items-center justify-center shadow-sm border-2 transition-all ${String(selectedProject) === String(project.id) ? 'border-accent scale-105' : 'border-transparent group-hover:border-accent/50'}`}
-                                            style={{ backgroundColor: project.color || 'hsl(var(--primary))' }}
+                                            style={{ backgroundColor: project.color || 'hsl(var(--accent))' }}
+
                                         >
                                             <span className="text-white text-base font-bold">{project.name.charAt(0)}</span>
                                         </div>
