@@ -3,7 +3,8 @@ import { PrivateAxios } from "@/helpers/PrivateAxios";
 export interface Report {
     id: number;
     project_id: number;
-    type: 'daily' | 'weekly';
+    type: 'daily' | 'weekly' | 'monthly';
+
     period_start: string;
     period_end: string;
     photos_count: number;
@@ -23,7 +24,8 @@ export interface Report {
 
 export const getReports = async (
     projectId: number | string,
-    type?: 'daily' | 'weekly'
+    type?: 'daily' | 'weekly' | 'monthly'
+
 ): Promise<Report[]> => {
     try {
         const res = await PrivateAxios.get('/reports', {
@@ -36,7 +38,8 @@ export const getReports = async (
     }
 };
 
-export const triggerReport = async (projectId: string | number, type: 'daily' | 'weekly' = 'daily') => {
+export const triggerReport = async (projectId: string | number, type: 'daily' | 'weekly' | 'monthly' = 'daily') => {
+
     try {
         const res = await PrivateAxios.get('/reports/generate-now', {
             params: { project_id: projectId, type },

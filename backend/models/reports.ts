@@ -16,9 +16,10 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
             },
             type: {
-                type: DataTypes.ENUM("daily", "weekly"),
+                type: DataTypes.ENUM("daily", "weekly", "monthly"),
                 allowNull: false,
             },
+
             period_start: {
                 type: DataTypes.DATEONLY,
                 allowNull: false,

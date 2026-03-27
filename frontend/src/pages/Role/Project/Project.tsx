@@ -8,15 +8,19 @@ import { getProjectById } from '@/services/projectService';
 import ProjectOverview from '@/pages/Role/Project/ProjectDetails/ProjectOverview';
 import ProjectDocuments from '@/pages/Role/Project/ProjectDetails/ProjectDocuments';
 import ProjectPhotos from '@/pages/Role/Project/ProjectDetails/ProjectPhotos';
-import ProjectDailyReports from '@/pages/Role/Project/ProjectDetails/ProjectDailyReports';
-import ProjectWeeklyReports from '@/pages/Role/Project/ProjectDetails/ProjectWeeklyReports';
+import ProjectReports from '@/pages/Role/Project/ProjectDetails/ProjectReports';
+
 import ProjectSnagList from '@/pages/Role/Project/ProjectDetails/ProjectSnagList';
+
 import ProjectManuals from '@/pages/Role/Project/ProjectDetails/ProjectManuals';
 import ProjectRFI from '@/pages/Role/Project/ProjectDetails/ProjectRFI';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle, Calendar } from 'lucide-react';
 
-type TabKey = 'overview' | 'documents' | 'photos' | 'daily' | 'weekly' | 'snags' | 'manuals' | 'rfi';
+
+type TabKey = 'overview' | 'documents' | 'photos' | 'reports' | 'snags' | 'manuals' | 'rfi';
+
+
 
 interface ProjectProps {
     id: string;
@@ -34,6 +38,7 @@ export default function Project({ id }: ProjectProps) {
     const searchParams = useSearchParams();
     const urlTab = searchParams?.get('tab') as TabKey | null;
     const [activeTab, setActiveTab] = useState<TabKey>(urlTab || (isClient ? 'documents' : 'overview'));
+
 
     // When tab changes, update the URL so back navigation restores it
     const setTab = (tab: TabKey) => {
@@ -80,9 +85,10 @@ export default function Project({ id }: ProjectProps) {
         { key: 'overview' as TabKey, label: t('project_overview'), icon: LayoutDashboard, adminOnly: true },
         { key: 'documents' as TabKey, label: t('documents'), icon: FileText },
         { key: 'photos' as TabKey, label: t('photos'), icon: Camera },
-        { key: 'daily' as TabKey, label: t('daily_reports'), icon: ClipboardList, adminOnly: true },
-        { key: 'weekly' as TabKey, label: t('weekly_reports'), icon: BarChart3, adminOnly: true },
+        { key: 'reports' as TabKey, label: 'Reports', icon: ClipboardList, adminOnly: true },
+
         { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle, adminOnly: true },
+
         { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle },
         { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen, adminOnly: true },
     ];
@@ -128,9 +134,10 @@ export default function Project({ id }: ProjectProps) {
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} />}
-                {activeTab === 'daily' && !isClient && <ProjectDailyReports project={project} userRole={user.role} />}
-                {activeTab === 'weekly' && !isClient && <ProjectWeeklyReports project={project} userRole={user.role} />}
+                {activeTab === 'reports' && !isClient && <ProjectReports project={project} userRole={user.role} />}
+
                 {activeTab === 'snags' && <ProjectSnagList project={project} />}
+
                 {activeTab === 'rfi' && <ProjectRFI project={project} />}
                 {activeTab === 'manuals' && <ProjectManuals project={project} />}
             </div>

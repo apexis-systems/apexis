@@ -59,7 +59,8 @@ export const triggerReport = async (req: Request, res: Response) => {
         const { project_id, type = 'daily' } = req.query;
         if (!project_id) return res.status(400).json({ error: 'project_id is required' });
 
-        const report = await generateReport(Number(project_id), type as 'daily' | 'weekly');
+        const report = await generateReport(Number(project_id), type as 'daily' | 'weekly' | 'monthly');
+
         res.json({ message: 'Report generated', report });
     } catch (error) {
         console.error('triggerReport error:', error);
@@ -69,7 +70,8 @@ export const triggerReport = async (req: Request, res: Response) => {
 
 // ── Core generation logic (called by cron + trigger) ───────────────────────
 
-export const generateReport = async (projectId: number, type: 'daily' | 'weekly', skipIfExists: boolean = false) => {
+export const generateReport = async (projectId: number, type: 'daily' | 'weekly' | 'monthly', skipIfExists: boolean = false) => {
+
     // IST = UTC+5:30. Shift now into IST so calendar day boundaries align with India time.
     const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
     const nowUTC = new Date();
@@ -82,14 +84,20 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
     if (type === 'daily') {
         periodStartIST = new Date(nowIST);
         periodStartIST.setHours(0, 0, 0, 0);
-    } else {
+    } else if (type === 'weekly') {
         // Start from Monday of the current ISO week (in IST)
         periodStartIST = new Date(nowIST);
         const day = periodStartIST.getDay();
         const diff = day === 0 ? 6 : day - 1;
         periodStartIST.setDate(periodStartIST.getDate() - diff);
         periodStartIST.setHours(0, 0, 0, 0);
+    } else {
+        // Monthly: Start from 1st of the current month
+        periodStartIST = new Date(nowIST);
+        periodStartIST.setDate(1);
+        periodStartIST.setHours(0, 0, 0, 0);
     }
+
 
     // Convert IST boundaries back to UTC for DB queries
     const periodStart = new Date(periodStartIST.getTime() - IST_OFFSET_MS);
@@ -240,7 +248,8 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
 
 // ── Generate for ALL active projects (called by cron) ─────────────────────
 
-export const generateAllReports = async (type: 'daily' | 'weekly') => {
+export const generateAllReports = async (type: 'daily' | 'weekly' | 'monthly') => {
+
     try {
         const allProjects = await projects.findAll({ attributes: ['id'] });
         for (const p of allProjects) {

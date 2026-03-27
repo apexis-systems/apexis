@@ -14,7 +14,9 @@ import ProjectPhotos from '@/components/project/ProjectPhotos';
 import ProjectRFI from '@/components/project/ProjectRFI';
 import ProjectDailyReports from '@/components/project/ProjectDailyReports';
 import ProjectWeeklyReports from '@/components/project/ProjectWeeklyReports';
+import ProjectMonthlyReports from '@/components/project/ProjectMonthlyReports';
 import ProjectSnagList from '@/components/project/ProjectSnagList';
+
 import ProjectManuals from '@/components/project/ProjectManuals';
 import MainHeader from '@/components/shared/MainHeader';
 
@@ -32,7 +34,8 @@ export default function ProjectWorkspaceScreen() {
     const [loading, setLoading] = useState(true);
 
     const [activeTab, setActiveTab] = useState<Tab>('overview');
-    const [reportType, setReportType] = useState<'daily' | 'weekly'>('daily');
+    const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
     const [searchQuery, setSearchQuery] = useState('');
 
     const panResponder = PanResponder.create({
@@ -224,13 +227,23 @@ export default function ProjectWorkspaceScreen() {
                                 >
                                     <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
                                 </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setReportType('monthly')}
+                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'monthly' ? colors.surface : 'transparent' }}
+                                >
+                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'monthly' ? colors.text : colors.textMuted }}>Monthly</Text>
+                                </TouchableOpacity>
                             </View>
+
                         </View>
                         {reportType === 'daily' ? (
                             <ProjectDailyReports project={project} userRole={user.role} />
-                        ) : (
+                        ) : reportType === 'weekly' ? (
                             <ProjectWeeklyReports project={project} userRole={user.role} />
+                        ) : (
+                            <ProjectMonthlyReports project={project} userRole={user.role} />
                         )}
+
                     </View>
                 )}
                 {activeTab === 'snags' && (

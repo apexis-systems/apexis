@@ -420,13 +420,17 @@ export const generateSingleReportPDF = async (reportId: number): Promise<Buffer>
     const project = await db.projects.findByPk(report.project_id);
     const projectName = project?.name || 'Project';
 
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
     const chunks: any[] = [];
     
     return new Promise((resolve, reject) => {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
+
+        // Content starts on the automatically created first page
+
+
 
         // Header
         doc.fillColor('#ea8c0a').fontSize(24).text('APEXIS', { align: 'right' });
