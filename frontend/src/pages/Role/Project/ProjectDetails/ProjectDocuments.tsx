@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil } from 'lucide-react';
+
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -10,9 +11,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
-import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
+import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder } from '@/services/folderService';
 import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
 import MoveToFolderDialog from './MoveToFolderDialog';
+import EditFolderDialog from './EditFolderDialog';
+
 import { Checkbox } from '@/components/ui/Checkbox';
 
 interface ProjectDocumentsProps {
@@ -42,6 +45,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [selectedFiles, setSelectedFiles] = useState<Set<string | number>>(new Set());
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
+  const [editFolder, setEditFolder] = useState<any | null>(null);
+
 
   // View state
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -192,6 +197,18 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       toast.error("Failed to create folder");
     }
   };
+
+  const handleRenameFolder = async (newName: string) => {
+    if (!editFolder) return;
+    try {
+      await updateFolder(editFolder.id, { name: newName });
+      toast.success(`Folder renamed to "${newName}"`);
+      await importFolders(); // Refetch
+    } catch (e) {
+      toast.error("Failed to rename folder");
+    }
+  };
+
 
   const toggleSelection = (type: 'folder' | 'file', id: string | number) => {
     if (type === 'folder') {
@@ -408,7 +425,18 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                     <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded p-1 hover:bg-secondary transition-colors" title="Move folder">
                       <Move className="h-3 w-3 text-muted-foreground" />
                     </button>
+                    {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
+                        className="rounded p-1 hover:bg-secondary transition-colors" 
+                        title="Rename folder"
+                      >
+                        <Pencil className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    )}
+
                   </div>
+
                 )}
               </div>
             </button>
@@ -424,6 +452,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         onCreateFolder={handleCreateFolder}
         type="documents"
       />
+
+      <EditFolderDialog
+        open={!!editFolder}
+        onOpenChange={(open) => !open && setEditFolder(null)}
+        onRename={handleRenameFolder}
+        currentName={editFolder?.name || ''}
+      />
+
 
       <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-2" : "space-y-1.5"}>
         {sortedDocs.map((doc) => {
@@ -474,10 +510,11 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   )}
                 </div>
                 {doc.do_not_follow && (
-                  <div className="absolute top-2 left-2 flex items-center gap-0.5 bg-red-500/10 text-red-500 text-[8px] font-bold px-1 py-0.5 rounded-full backdrop-blur-sm">
-                    <ShieldAlert className="h-2 w-2" /> DNF
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
+                    DNF
                   </div>
                 )}
+
               </div>
             );
           }

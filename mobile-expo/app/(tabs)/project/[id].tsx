@@ -19,6 +19,8 @@ import ProjectSnagList from '@/components/project/ProjectSnagList';
 
 import ProjectManuals from '@/components/project/ProjectManuals';
 import MainHeader from '@/components/shared/MainHeader';
+import EditProjectModal from '@/components/project/EditProjectModal';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -35,6 +37,8 @@ export default function ProjectWorkspaceScreen() {
 
     const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
 
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -120,22 +124,31 @@ export default function ProjectWorkspaceScreen() {
 
             {/* Project Title Header */}
             <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
                 paddingHorizontal: 16,
-                paddingVertical: 12,
+                paddingVertical: 16,
                 backgroundColor: colors.background,
             }}>
-                <View>
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>
                         {project.name.charAt(0).toUpperCase() + project.name.slice(1)}
                     </Text>
-                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                        {project.location ? (project.location.charAt(0).toUpperCase() + project.location.slice(1)) : 'Location not set'}
-                    </Text>
+                    {user.role === 'admin' && (
+                        <TouchableOpacity 
+                            onPress={() => setIsEditModalOpen(true)}
+                            style={{ padding: 4 }}
+                        >
+                            <Feather name="edit-3" size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
+                {project.description && (
+                    <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18 }}>
+                        {project.description}
+                    </Text>
+                )}
             </View>
+
+
 
             {/* Tab Bar */}
             <View style={{ backgroundColor: colors.background }}>
@@ -270,6 +283,14 @@ export default function ProjectWorkspaceScreen() {
                 )}
 
             </View>
+
+            <EditProjectModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                project={project}
+                onUpdate={(updated) => setProject(updated)}
+            />
         </SafeAreaView>
     );
 }
+

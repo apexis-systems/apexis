@@ -9,9 +9,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
 import { useEffect, useState, useCallback } from 'react';
-import { useFocusEffect } from 'expo-router';
-import EditProjectModal from './EditProjectModal';
 import { getSnags } from '@/services/snagService';
+
 import { useSocket } from '@/contexts/SocketContext';
 import { exportHandoverPackage, getLatestExport } from '@/services/projectService';
 
@@ -45,7 +44,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [snagsCount, setSnagsCount] = useState<number>(0);
     const [reportsLoading, setReportsLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
 
     // Export State
     const { socket } = useSocket();
@@ -241,20 +240,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             .catch(() => { });
     }, [projectId]);
 
-    useFocusEffect(
         useCallback(() => {
-            const onBackPress = () => {
-                if (isEditModalOpen) {
-                    setIsEditModalOpen(false);
-                    return true;
-                }
-                return false;
-            };
+            return () => {};
+        }, [])
 
-            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-            return () => subscription.remove();
-        }, [isEditModalOpen])
-    );
 
     const handleCopy = async (text: string, id: string) => {
         if (!text) return;
@@ -488,17 +477,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     </View>
                 )}
 
-                {userRole === 'admin' && (
-                    <EditProjectModal
-                        isOpen={isEditModalOpen}
-                        onClose={() => setIsEditModalOpen(false)}
-                        project={project}
-                        onUpdate={(updated) => {
-                            if (onUpdate) onUpdate(updated);
-                        }}
-                    />
-                )}
+                {/* EditProjectModal moved to [id].tsx */}
             </View>
         </ScrollView>
     );
 }
+

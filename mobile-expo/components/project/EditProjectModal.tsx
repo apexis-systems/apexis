@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
     View, Modal, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -25,7 +27,10 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate }:
     const [endDate, setEndDate] = useState(
         (project.end_date || project.endDate || '').split('T')[0]
     );
+    const [showStartPicker, setShowStartPicker] = useState(false);
+    const [showEndPicker, setShowEndPicker] = useState(false);
     const [loading, setLoading] = useState(false);
+
 
     useEffect(() => {
         setName(project.name);
@@ -33,6 +38,20 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate }:
         setStartDate((project.start_date || project.startDate || '').split('T')[0]);
         setEndDate((project.end_date || project.endDate || '').split('T')[0]);
     }, [project]);
+
+    const onStartDateChange = (event: any, selectedDate?: Date) => {
+        setShowStartPicker(false);
+        if (selectedDate) {
+            setStartDate(selectedDate.toISOString().split('T')[0]);
+        }
+    };
+
+    const onEndDateChange = (event: any, selectedDate?: Date) => {
+        setShowEndPicker(false);
+        if (selectedDate) {
+            setEndDate(selectedDate.toISOString().split('T')[0]);
+        }
+    };
 
     const handleSave = async () => {
         if (!name.trim()) return;
@@ -52,6 +71,7 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate }:
             setLoading(false);
         }
     };
+
 
     return (
         <Modal
@@ -101,26 +121,57 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate }:
                             <View style={styles.row}>
                                 <View style={[styles.inputGroup, { flex: 1 }]}>
                                     <Text style={[styles.label, { color: colors.textMuted }]}>Start Date</Text>
-                                    <TextInput
-                                        style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                                        value={startDate}
-                                        onChangeText={setStartDate}
-                                        placeholder="YYYY-MM-DD"
-                                        placeholderTextColor="#888"
-                                    />
+                                    <TouchableOpacity 
+                                        activeOpacity={0.7}
+                                        onPress={() => setShowStartPicker(true)}
+                                    >
+                                        <View pointerEvents="none">
+                                            <TextInput
+                                                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                                                value={startDate}
+                                                editable={false}
+                                                placeholder="YYYY-MM-DD"
+                                                placeholderTextColor="#888"
+                                            />
+                                        </View>
+                                    </TouchableOpacity>
+                                    {showStartPicker && (
+                                        <DateTimePicker
+                                            value={startDate ? new Date(startDate) : new Date()}
+                                            mode="date"
+                                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                            onChange={onStartDateChange}
+                                        />
+                                    )}
                                 </View>
                                 <View style={{ width: 12 }} />
                                 <View style={[styles.inputGroup, { flex: 1 }]}>
                                     <Text style={[styles.label, { color: colors.textMuted }]}>End Date</Text>
-                                    <TextInput
-                                        style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                                        value={endDate}
-                                        onChangeText={setEndDate}
-                                        placeholder="YYYY-MM-DD"
-                                        placeholderTextColor="#888"
-                                    />
+                                    <TouchableOpacity 
+                                        activeOpacity={0.7}
+                                        onPress={() => setShowEndPicker(true)}
+                                    >
+                                        <View pointerEvents="none">
+                                            <TextInput
+                                                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                                                value={endDate}
+                                                editable={false}
+                                                placeholder="YYYY-MM-DD"
+                                                placeholderTextColor="#888"
+                                            />
+                                        </View>
+                                    </TouchableOpacity>
+                                    {showEndPicker && (
+                                        <DateTimePicker
+                                            value={endDate ? new Date(endDate) : new Date()}
+                                            mode="date"
+                                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                            onChange={onEndDateChange}
+                                        />
+                                    )}
                                 </View>
                             </View>
+
 
                             <View style={styles.footer}>
                                 <TouchableOpacity

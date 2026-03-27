@@ -182,3 +182,56 @@ export const bulkUpdateFolders = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const updateFolder = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { folderId } = req.params;
+        const { name } = req.body;
+
+        if (!name || name.trim() === '') {
+            return res.status(400).json({ error: "Folder name is required" });
+        }
+
+        const folder = await folders.findByPk(folderId);
+        if (!folder) {
+            return res.status(404).json({ error: "Folder not found" });
+        }
+
+        // Authorization: Admins or Project Contributors
+        if (authUser.role !== "admin" && authUser.role !== "contributor") {
+            return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can rename folders" });
+        }
+
+        if (authUser.role === "contributor") {
+            const access = await project_members.findOne({
+                where: { user_id: authUser.user_id, project_id: folder.project_id }
+            });
+            if (!access || access.role !== "contributor") {
+                return res.status(403).json({ error: "Forbidden: You do not have contributor access to this project" });
+            }
+        }
+
+        const oldName = folder.name;
+        folder.name = name;
+        await folder.save();
+
+        await activities.create({
+            project_id: folder.project_id,
+            user_id: authUser.user_id,
+            type: 'edit',
+            description: `Renamed folder from "${oldName}" to "${name}"`
+        });
+
+        res.status(200).json({
+            message: "Folder renamed successfully",
+            folder
+        });
+    } catch (error) {
+        console.error("Update Folder Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+

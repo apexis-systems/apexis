@@ -10,7 +10,7 @@ import { exportHandoverPackage, getLatestExport } from '@/services/projectServic
 import { useSocket } from '@/contexts/SocketContext';
 import { getReports, Report } from '@/services/reportService';
 import { getFiles } from '@/services/fileService';
-import EditProjectModal from "@/components/Project/EditProjectModal";
+
 
 interface ProjectOverviewProps {
   project: Project;
@@ -29,7 +29,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
   const [docsCount, setDocsCount] = useState<number>(0);
   const [counting, setCounting] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
 
   // Export state
   const { socket } = useSocket();
@@ -182,32 +182,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
 
   return (
     <div className="mt-4 space-y-4">
-      {/* Project Description */}
-      {(project.description || userRole === 'admin') && (
-        <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">About the Project</h3>
-            {userRole === 'admin' && (
-              <button
-                onClick={() => setIsEditModalOpen(true)}
-                className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-accent"
-                title="Edit Project"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          {project.description ? (
-            <p className="text-sm text-foreground leading-relaxed italic">
-              "{project.description}"
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              No description provided. Click the edit icon to add one.
-            </p>
-          )}
-        </div>
-      )}
+      {/* Project Description moved to main header in Project.tsx */}
+
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
@@ -362,16 +338,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
         </div>
       )}
 
-      {userRole === 'admin' && (
-        <EditProjectModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          project={project}
-          onUpdate={(updated) => {
-            if (onProjectUpdate) onProjectUpdate(updated);
-          }}
-        />
-      )}
+      {/* EditProjectModal moved to Project.tsx */}
+
     </div>
   );
 };

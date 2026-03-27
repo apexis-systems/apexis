@@ -14,8 +14,10 @@ import ProjectSnagList from '@/pages/Role/Project/ProjectDetails/ProjectSnagList
 
 import ProjectManuals from '@/pages/Role/Project/ProjectDetails/ProjectManuals';
 import ProjectRFI from '@/pages/Role/Project/ProjectDetails/ProjectRFI';
+import EditProjectModal from "@/components/Project/EditProjectModal";
 import { cn } from '@/lib/utils';
-import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle, Calendar } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle, Calendar, Pencil, MapPin } from 'lucide-react';
+
 
 
 type TabKey = 'overview' | 'documents' | 'photos' | 'reports' | 'snags' | 'manuals' | 'rfi';
@@ -38,6 +40,8 @@ export default function Project({ id }: ProjectProps) {
     const searchParams = useSearchParams();
     const urlTab = searchParams?.get('tab') as TabKey | null;
     const [activeTab, setActiveTab] = useState<TabKey>(urlTab || (isClient ? 'documents' : 'overview'));
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
 
 
     // When tab changes, update the URL so back navigation restores it
@@ -121,9 +125,34 @@ export default function Project({ id }: ProjectProps) {
                     })}
                 </nav>
             </div>
-            <div className="flex-1 p-8 max-w-4xl">
-                <h1 className="text-xl font-bold text-foreground mb-1">{visibleNav.find((n) => n.key === activeTab)?.label}</h1>
-                <p className="text-sm text-muted-foreground mb-6">{project.name}</p>
+            <div className="flex-1 p-8 overflow-y-auto max-w-5xl">
+                <div className="mb-6">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
+                        {user.role === 'admin' && (
+                            <button
+                                onClick={() => setIsEditModalOpen(true)}
+                                className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-accent"
+                                title="Edit Project"
+                            >
+                                <Pencil className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
+                    {project.description && (
+                        <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
+                            {project.description}
+                        </p>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-between mb-6">
+
+                    <h2 className="text-lg font-bold text-foreground">
+                        {visibleNav.find((n) => n.key === activeTab)?.label}
+                    </h2>
+                </div>
+
                 {activeTab === 'overview' && !isClient && (
                     <ProjectOverview
                         project={project}
@@ -141,6 +170,16 @@ export default function Project({ id }: ProjectProps) {
                 {activeTab === 'rfi' && <ProjectRFI project={project} />}
                 {activeTab === 'manuals' && <ProjectManuals project={project} />}
             </div>
+
+            <EditProjectModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                project={project}
+                onUpdate={(updated) => {
+                    setProject(updated);
+                }}
+            />
         </div>
     );
 }
+
