@@ -50,3 +50,13 @@ export const getLatestExport = async (id: string | number) => {
         throw error;
     }
 };
+export const getProjectShareLinks = async (id: string | number, role?: string) => {
+    try {
+        const url = role ? `/projects/${id}/share-links?role=${role}` : `/projects/${id}/share-links`;
+        const response = await PrivateAxios.get(url);
+        return response.data;
+    } catch (error) {
+        console.error("getProjectShareLinks Error", error);
+        throw error;
+    }
+};

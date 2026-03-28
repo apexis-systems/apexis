@@ -6,10 +6,11 @@ import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, 
 
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { exportHandoverPackage, getLatestExport } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks } from '@/services/projectService';
 import { useSocket } from '@/contexts/SocketContext';
 import { getReports, Report } from '@/services/reportService';
 import { getFiles } from '@/services/fileService';
+import ShareDialog from '@/components/shared/ShareDialog';
 
 
 interface ProjectOverviewProps {
@@ -29,6 +30,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
   const [docsCount, setDocsCount] = useState<number>(0);
   const [counting, setCounting] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [shareItem, setShareItem] = useState<any | null>(null);
 
 
   // Export state
@@ -163,20 +165,15 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
   };
 
   const handleShareLink = async (role: 'contributor' | 'client', code: string) => {
-    const deepUrl = `${window.location.origin}/auth/login-redirect?role=${role}&code=${code}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
-          text: `Click the link to access the project on Apexis.`,
-          url: deepUrl,
-        });
-      } catch (err) {
-        // Fallback or user canceled
-        console.log("Share failed or canceled", err);
-      }
-    } else {
-      handleCopy(deepUrl, `${role}-link`);
+    try {
+      const data = await getProjectShareLinks(project.id, role);
+      const shareUrl = role === 'contributor' ? data.contributorLink : data.clientLink;
+      setShareItem({
+        file_name: `Project Access (${role === 'contributor' ? 'Contributor' : 'Client'})`,
+        downloadUrl: shareUrl
+      });
+    } catch (e) {
+      toast.error("Failed to generate share link");
     }
   };
 
@@ -340,6 +337,14 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
 
       {/* EditProjectModal moved to Project.tsx */}
 
+      {shareItem && (
+        <ShareDialog
+          open={!!shareItem}
+          onOpenChange={() => setShareItem(null)}
+          itemName={shareItem?.file_name || ''}
+          downloadUrl={shareItem.downloadUrl}
+        />
+      )}
     </div>
   );
 };

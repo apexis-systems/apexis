@@ -12,7 +12,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { getSnags } from '@/services/snagService';
 
 import { useSocket } from '@/contexts/SocketContext';
-import { exportHandoverPackage, getLatestExport } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks } from '@/services/projectService';
 
 interface Props {
     project: Project;
@@ -84,8 +84,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     const handleShareLink = async (role: string, code: string) => {
         try {
-            // Generates a universal web link which routes to the mobile deep-link on the device
-            const shareUrl = `https://apexis-web.vercel.app/auth/login-redirect?role=${role}&code=${code}`;
+            const data = await getProjectShareLinks(projectId, role);
+            const shareUrl = role === 'contributor' ? data.contributorLink : data.clientLink;
             await Share.share({
                 title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
                 message: `You've been invited to access a project on Apexis!\nClick the link below to securely login to your project:\n\n${shareUrl}`,
