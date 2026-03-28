@@ -249,7 +249,9 @@ export default function DashboardScreen() {
                 </Text>
               </View>
 
-              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>{roleSubtitle}</Text>
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
+                {`${roleSubtitle} • ${user.email || user.phone_number}`}
+              </Text>
             </View>
           </View>
 

@@ -2,22 +2,25 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2 } from 'lucide-react';
+import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3 } from 'lucide-react';
+
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { exportHandoverPackage, getLatestExport } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks } from '@/services/projectService';
 import { useSocket } from '@/contexts/SocketContext';
 import { getReports, Report } from '@/services/reportService';
 import { getFiles } from '@/services/fileService';
-import EditProjectModal from "@/components/Project/EditProjectModal";
+import ShareDialog from '@/components/shared/ShareDialog';
+
 
 interface ProjectOverviewProps {
   project: Project;
   userRole: UserRole;
   onProjectUpdate?: (updated: Project) => void;
+  onTabChange?: (tab: 'documents' | 'photos' | 'reports') => void;
 }
 
-const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverviewProps) => {
+const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: ProjectOverviewProps) => {
   if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">Loading project overview...</div>;
 
   const [reports, setReports] = useState<Report[]>([]);
@@ -27,7 +30,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
   const [docsCount, setDocsCount] = useState<number>(0);
   const [counting, setCounting] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [shareItem, setShareItem] = useState<any | null>(null);
+
 
   // Export state
   const { socket } = useSocket();
@@ -150,9 +154,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
       .finally(() => setCounting(false));
   }, [project?.id]);
 
-  const dailyReports = reports.filter(r => r.type === 'daily');
-  const weeklyReports = reports.filter(r => r.type === 'weekly');
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -162,51 +165,22 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
   };
 
   const handleShareLink = async (role: 'contributor' | 'client', code: string) => {
-    const deepUrl = `${window.location.origin}/auth/login-redirect?role=${role}&code=${code}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
-          text: `Click the link to access the project on Apexis.`,
-          url: deepUrl,
-        });
-      } catch (err) {
-        // Fallback or user canceled
-        console.log("Share failed or canceled", err);
-      }
-    } else {
-      handleCopy(deepUrl, `${role}-link`);
+    try {
+      const data = await getProjectShareLinks(project.id, role);
+      const shareUrl = role === 'contributor' ? data.contributorLink : data.clientLink;
+      setShareItem({
+        file_name: `Project Access (${role === 'contributor' ? 'Contributor' : 'Client'})`,
+        downloadUrl: shareUrl
+      });
+    } catch (e) {
+      toast.error("Failed to generate share link");
     }
   };
 
   return (
     <div className="mt-4 space-y-4">
-      {/* Project Description */}
-      {(project.description || userRole === 'admin') && (
-        <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">About the Project</h3>
-            {userRole === 'admin' && (
-              <button
-                onClick={() => setIsEditModalOpen(true)}
-                className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-accent"
-                title="Edit Project"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          {project.description ? (
-            <p className="text-sm text-foreground leading-relaxed italic">
-              "{project.description}"
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              No description provided. Click the edit icon to add one.
-            </p>
-          )}
-        </div>
-      )}
+      {/* Project Description moved to main header in Project.tsx */}
+
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
@@ -224,15 +198,21 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
           </div>
           <div className="mt-1 text-sm font-semibold">{project.end_date ? new Date(project.end_date).toLocaleDateString() : '—'}</div>
         </div>
-        <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center gap-2 text-accent">
+        <div 
+          className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
+          onClick={() => onTabChange?.('documents')}
+        >
+          <div className="flex items-center gap-2 text-accent group-hover:text-accent/80 transition-colors">
             <FileText className="h-4 w-4" />
             <span className="text-xs">Documents</span>
           </div>
           <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : docsCount}</div>
         </div>
-        <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center gap-2 text-accent">
+        <div 
+          className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
+          onClick={() => onTabChange?.('photos')}
+        >
+          <div className="flex items-center gap-2 text-accent group-hover:text-accent/80 transition-colors">
             <Camera className="h-4 w-4" />
             <span className="text-xs">Photos</span>
           </div>
@@ -293,62 +273,10 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
         </div>
       )}
 
-      {/* Reports Section */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-foreground">Reports</h2>
-        </div>
+      {/* Removed Recent Reports list as per user request */}
+      {/* Keeping only Handover below */}
 
-        {loading && <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-accent" /></div>}
 
-        {/* Daily Reports */}
-        {!loading && dailyReports.length > 0 && (
-          <div className="mb-3">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Daily Site Reports</p>
-            <div className="space-y-2">
-              {dailyReports.map((report) => (
-                <div key={report.id} className="flex items-center gap-3 rounded-xl bg-card border border-border p-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
-                    <FileText className="h-4 w-4 text-accent" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold truncate">Daily Report — {fmt(report.period_start)}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-                      <Clock className="h-3 w-3" />
-                      <span>{fmt(report.period_start)}</span>
-                      <span>· {report.photos_count} photos · {report.docs_count} docs</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Weekly Reports */}
-        {!loading && weeklyReports.length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">Weekly Progress Reports</p>
-            <div className="space-y-2">
-              {weeklyReports.map((report) => (
-                <div key={report.id} className="flex items-center gap-3 rounded-xl bg-card border border-border p-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
-                    <FileText className="h-4 w-4 text-accent" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold truncate">Weekly Report — {fmt(report.period_start)} to {fmt(report.period_end)}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-                      <Clock className="h-3 w-3" />
-                      <span>{fmt(report.period_start)} — {fmt(report.period_end)}</span>
-                      <span>· {report.photos_count} photos</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Handover */}
       {userRole === 'admin' && (
@@ -407,14 +335,14 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate }: ProjectOverview
         </div>
       )}
 
-      {userRole === 'admin' && (
-        <EditProjectModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          project={project}
-          onUpdate={(updated) => {
-            if (onProjectUpdate) onProjectUpdate(updated);
-          }}
+      {/* EditProjectModal moved to Project.tsx */}
+
+      {shareItem && (
+        <ShareDialog
+          open={!!shareItem}
+          onOpenChange={() => setShareItem(null)}
+          itemName={shareItem?.file_name || ''}
+          downloadUrl={shareItem.downloadUrl}
         />
       )}
     </div>

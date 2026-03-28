@@ -18,6 +18,8 @@ export default function TabLayout() {
   const { t } = useTranslation();
 
   // The RootLayoutNav handles redirection. We allow Tabs to render with empty or default placeholders momentarily.
+  // BUT we must ensure all hooks (above) are called before any early return to avoid React hook errors.
+  if (!user) return null;
 
   return (
     <Tabs

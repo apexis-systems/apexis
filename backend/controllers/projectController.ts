@@ -278,3 +278,39 @@ export const getLatestExport = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const getProjectShareLinks = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { role } = req.query;
+        const authUser = (req as any).user;
+        const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:4000";
+
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can get share links" });
+        }
+
+        const project = await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+
+        if (!project) {
+            return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        const response: any = {};
+        
+        if (!role || role === 'contributor') {
+            response.contributorLink = `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
+            response.contributorCode = project.contributor_code;
+        }
+        
+        if (!role || role === 'client') {
+            response.clientLink = `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`;
+            response.clientCode = project.client_code;
+        }
+
+        res.status(200).json(response);
+    } catch (error) {
+        console.error("Get Share Links Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

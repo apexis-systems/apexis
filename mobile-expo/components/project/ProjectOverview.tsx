@@ -9,11 +9,10 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
 import { useEffect, useState, useCallback } from 'react';
-import { useFocusEffect } from 'expo-router';
-import EditProjectModal from './EditProjectModal';
 import { getSnags } from '@/services/snagService';
+
 import { useSocket } from '@/contexts/SocketContext';
-import { exportHandoverPackage, getLatestExport } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks } from '@/services/projectService';
 
 interface Props {
     project: Project;
@@ -45,7 +44,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [snagsCount, setSnagsCount] = useState<number>(0);
     const [reportsLoading, setReportsLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
 
     // Export State
     const { socket } = useSocket();
@@ -85,8 +84,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     const handleShareLink = async (role: string, code: string) => {
         try {
-            // Generates a universal web link which routes to the mobile deep-link on the device
-            const shareUrl = `https://apexis-web.vercel.app/auth/login-redirect?role=${role}&code=${code}`;
+            const data = await getProjectShareLinks(projectId, role);
+            const shareUrl = role === 'contributor' ? data.contributorLink : data.clientLink;
             await Share.share({
                 title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
                 message: `You've been invited to access a project on Apexis!\nClick the link below to securely login to your project:\n\n${shareUrl}`,
@@ -100,6 +99,14 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     // Initial Export Status Fetch
     useEffect(() => {
         if (userRole !== 'admin' || !projectId) return;
+
+        // Reset export state when project changes to prevent leakage
+        setIsExporting(false);
+        setExportStatusText('');
+        setExportTimerMs(0);
+        setIsCountingDown(false);
+        setLatestExport(null);
+
         getLatestExport(projectId)
             .then(data => {
                 if (data.downloadUrl) {
@@ -233,20 +240,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             .catch(() => { });
     }, [projectId]);
 
-    useFocusEffect(
         useCallback(() => {
-            const onBackPress = () => {
-                if (isEditModalOpen) {
-                    setIsEditModalOpen(false);
-                    return true;
-                }
-                return false;
-            };
+            return () => {};
+        }, [])
 
-            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-            return () => subscription.remove();
-        }, [isEditModalOpen])
-    );
 
     const handleCopy = async (text: string, id: string) => {
         if (!text) return;
@@ -263,38 +260,45 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     {[
                         { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate) },
                         { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate) },
-                        { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount) },
-                        { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount) },
-                    ].map((item) => (
-                        <View
-                            key={item.label}
-                            style={{
-                                flex: 1,
-                                minWidth: '45%',
-                                borderRadius: 16,
-                                backgroundColor: colors.surface,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                padding: 16,
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.05,
-                                shadowRadius: 4,
-                                elevation: 1,
-                            }}
-                        >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Feather name={item.icon as any} size={12} color={colors.textMuted} />
+                        { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount), id: 'documents' },
+                        { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount), id: 'photos' },
+                    ].map((item) => {
+                        const isClickable = item.id === 'documents' || item.id === 'photos';
+                        const Container = isClickable ? TouchableOpacity : View;
+                        return (
+                            <Container
+                                key={item.label}
+                                onPress={isClickable ? () => onActionPress?.(item.id!) : undefined}
+                                activeOpacity={0.7}
+                                style={{
+                                    flex: 1,
+                                    minWidth: '45%',
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 16,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 4,
+                                    elevation: 1,
+                                }}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name={item.icon as any} size={12} color={item.id ? colors.primary : colors.textMuted} />
+                                    </View>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '500' }}>{item.label}</Text>
                                 </View>
-                                <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '500' }}>{item.label}</Text>
-                            </View>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{item.value}</Text>
-                        </View>
-                    ))}
+                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{item.value}</Text>
+                            </Container>
+                        );
+                    })}
                 </View>
 
-                {/* Project Access Codes */}
+                {/* Project Access Codes — admin only (contributor/client codes are stripped from API response) */}
+                {userRole === 'admin' && (
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                     {[
                         { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code' },
@@ -347,6 +351,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         </View>
                     ))}
                 </View>
+                )}
 
                 {/* Quick Actions */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -474,17 +479,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     </View>
                 )}
 
-                {userRole === 'admin' && (
-                    <EditProjectModal
-                        isOpen={isEditModalOpen}
-                        onClose={() => setIsEditModalOpen(false)}
-                        project={project}
-                        onUpdate={(updated) => {
-                            if (onUpdate) onUpdate(updated);
-                        }}
-                    />
-                )}
+                {/* EditProjectModal moved to [id].tsx */}
             </View>
         </ScrollView>
     );
 }
+

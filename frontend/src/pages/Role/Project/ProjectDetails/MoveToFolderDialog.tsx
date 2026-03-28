@@ -95,7 +95,8 @@ const MoveToFolderDialog = ({
                             className={`w-full flex items-center gap-2 p-2 rounded-md transition-colors text-xs ${isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-secondary'}`}
                             style={{ paddingLeft: `${depth * 16 + 8}px` }}
                         >
-                            <FolderIcon className="h-3.5 w-3.5" />
+                            <FolderIcon className={`h-3.5 w-3.5 ${isSelected ? 'text-accent-foreground' : 'text-accent'}`} />
+
                             <span className="truncate">{folder.name}</span>
                         </button>
                         {renderFolderTree(folder.id, depth + 1)}
@@ -115,7 +116,8 @@ const MoveToFolderDialog = ({
                         onClick={() => setTargetFolder(null)}
                         className={`w-full flex items-center gap-2 p-2 rounded-md transition-colors text-xs ${targetFolder === null ? 'bg-accent text-accent-foreground' : 'hover:bg-secondary'}`}
                     >
-                        <FolderIcon className="h-3.5 w-3.5" />
+                        <FolderIcon className={`h-3.5 w-3.5 ${targetFolder === null ? 'text-accent-foreground' : 'text-accent'}`} />
+
                         <span>{project?.name || 'Project'}</span>
                     </button>
                     {renderFolderTree(null)}

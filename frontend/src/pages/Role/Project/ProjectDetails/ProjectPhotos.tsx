@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert } from 'lucide-react';
+
+
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -10,9 +12,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
-import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder } from '@/services/folderService';
+import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
+
 import MoveToFolderDialog from './MoveToFolderDialog';
+import EditFolderDialog from './EditFolderDialog';
+
 import { Checkbox } from '@/components/ui/Checkbox';
 
 interface ProjectPhotosProps {
@@ -42,6 +47,8 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [selectedFiles, setSelectedFiles] = useState<Set<string | number>>(new Set());
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
+  const [editFolder, setEditFolder] = useState<any | null>(null);
+
 
   // View state
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -139,6 +146,17 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     }
   };
 
+  const togglePhotoDoNotFollow = async (photo: any) => {
+    try {
+      await toggleDoNotFollow(photo.id, !photo.do_not_follow);
+      setPhotos((prev) => prev.map((p) => p.id === photo.id ? { ...p, do_not_follow: !photo.do_not_follow } : p));
+      toast.success(`Photo ${!photo.do_not_follow ? 'marked' : 'unmarked'} as 'Do Not Follow'`);
+    } catch (e) {
+      toast.error('Failed to toggle Do Not Follow');
+    }
+  };
+
+
   const toggleFolderVis = async (folder: any, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -182,6 +200,18 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       toast.error("Failed to create folder");
     }
   };
+
+  const handleRenameFolder = async (newName: string) => {
+    if (!editFolder) return;
+    try {
+      await updateFolder(editFolder.id, { name: newName });
+      toast.success(`Folder renamed to "${newName}"`);
+      await importFolders(); // Refetch
+    } catch (e) {
+      toast.error("Failed to rename folder");
+    }
+  };
+
 
   const toggleSelection = (type: 'folder' | 'file', id: string | number) => {
     if (type === 'folder') {
@@ -383,7 +413,18 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded p-1 hover:bg-secondary transition-colors" title="Move folder">
                       <Move className="h-3 w-3 text-muted-foreground" />
                     </button>
+                    {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
+                        className="rounded p-1 hover:bg-secondary transition-colors" 
+                        title="Rename folder"
+                      >
+                        <Pencil className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    )}
+
                   </div>
+
                 )}
               </div>
             </button>
@@ -399,6 +440,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         onCreateFolder={handleCreateFolder}
         type="photos"
       />
+
+      <EditFolderDialog
+        open={!!editFolder}
+        onOpenChange={(open) => !open && setEditFolder(null)}
+        onRename={handleRenameFolder}
+        currentName={editFolder?.name || ''}
+      />
+
 
       <div className={viewMode === 'grid' ? "grid grid-cols-5 gap-0.5" : "space-y-1"}>
         {sortedPhotos.map((photo) => {
@@ -440,10 +489,16 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                       {user.role === 'admin' && (
-                        <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title="Toggle client visibility">
-                          {photo.client_visible !== false ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
-                        </button>
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title="Toggle client visibility">
+                            {photo.client_visible !== false ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); togglePhotoDoNotFollow(photo); }} className="rounded-md p-1 hover:bg-secondary" title="Toggle Do Not Follow">
+                            <ShieldAlert className={`h-3.5 w-3.5 ${photo.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                          </button>
+                        </>
                       )}
+
                       {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
                         <button onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }} className="rounded-md p-1 hover:bg-destructive/10">
                           <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -452,7 +507,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     </>
                   )}
                 </div>
+                {photo.do_not_follow && (
+                  <div className="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-sm ml-1 shadow-sm uppercase tracking-tighter border border-white/20">
+                    DNF
+                  </div>
+                )}
+
               </div>
+
             );
           }
 
@@ -514,7 +576,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   </>
                 )}
               </div>
+              {photo.do_not_follow && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
+                  DNF
+                </div>
+              )}
+
             </div>
+
           );
         })}
       </div>

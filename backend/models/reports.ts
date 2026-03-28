@@ -16,9 +16,10 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
             },
             type: {
-                type: DataTypes.ENUM("daily", "weekly"),
+                type: DataTypes.ENUM("daily", "weekly", "monthly"),
                 allowNull: false,
             },
+
             period_start: {
                 type: DataTypes.DATEONLY,
                 allowNull: false,
@@ -55,6 +56,13 @@ export default (sequelize: Sequelize) => {
         {
             tableName: "reports",
             timestamps: true,
+            indexes: [
+                {
+                    unique: true,
+                    fields: ['project_id', 'type', 'period_start', 'period_end'],
+                    name: 'reports_project_type_period_unique'
+                }
+            ]
         }
     );
 

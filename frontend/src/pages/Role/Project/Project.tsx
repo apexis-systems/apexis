@@ -8,15 +8,21 @@ import { getProjectById } from '@/services/projectService';
 import ProjectOverview from '@/pages/Role/Project/ProjectDetails/ProjectOverview';
 import ProjectDocuments from '@/pages/Role/Project/ProjectDetails/ProjectDocuments';
 import ProjectPhotos from '@/pages/Role/Project/ProjectDetails/ProjectPhotos';
-import ProjectDailyReports from '@/pages/Role/Project/ProjectDetails/ProjectDailyReports';
-import ProjectWeeklyReports from '@/pages/Role/Project/ProjectDetails/ProjectWeeklyReports';
+import ProjectReports from '@/pages/Role/Project/ProjectDetails/ProjectReports';
+
 import ProjectSnagList from '@/pages/Role/Project/ProjectDetails/ProjectSnagList';
+
 import ProjectManuals from '@/pages/Role/Project/ProjectDetails/ProjectManuals';
 import ProjectRFI from '@/pages/Role/Project/ProjectDetails/ProjectRFI';
+import EditProjectModal from "@/components/Project/EditProjectModal";
 import { cn } from '@/lib/utils';
-import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle, Calendar, Pencil, MapPin } from 'lucide-react';
 
-type TabKey = 'overview' | 'documents' | 'photos' | 'daily' | 'weekly' | 'snags' | 'manuals' | 'rfi';
+
+
+type TabKey = 'overview' | 'documents' | 'photos' | 'reports' | 'snags' | 'manuals' | 'rfi';
+
+
 
 interface ProjectProps {
     id: string;
@@ -34,6 +40,9 @@ export default function Project({ id }: ProjectProps) {
     const searchParams = useSearchParams();
     const urlTab = searchParams?.get('tab') as TabKey | null;
     const [activeTab, setActiveTab] = useState<TabKey>(urlTab || (isClient ? 'documents' : 'overview'));
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+
 
     // When tab changes, update the URL so back navigation restores it
     const setTab = (tab: TabKey) => {
@@ -80,9 +89,10 @@ export default function Project({ id }: ProjectProps) {
         { key: 'overview' as TabKey, label: t('project_overview'), icon: LayoutDashboard, adminOnly: true },
         { key: 'documents' as TabKey, label: t('documents'), icon: FileText },
         { key: 'photos' as TabKey, label: t('photos'), icon: Camera },
-        { key: 'daily' as TabKey, label: t('daily_reports'), icon: ClipboardList, adminOnly: true },
-        { key: 'weekly' as TabKey, label: t('weekly_reports'), icon: BarChart3, adminOnly: true },
+        { key: 'reports' as TabKey, label: 'Reports', icon: ClipboardList, adminOnly: true },
+
         { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle, adminOnly: true },
+
         { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle },
         { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen, adminOnly: true },
     ];
@@ -115,24 +125,61 @@ export default function Project({ id }: ProjectProps) {
                     })}
                 </nav>
             </div>
-            <div className="flex-1 p-8 max-w-4xl">
-                <h1 className="text-xl font-bold text-foreground mb-1">{visibleNav.find((n) => n.key === activeTab)?.label}</h1>
-                <p className="text-sm text-muted-foreground mb-6">{project.name}</p>
+            <div className="flex-1 p-8 overflow-y-auto max-w-5xl">
+                <div className="mb-6">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
+                        {user.role === 'admin' && (
+                            <button
+                                onClick={() => setIsEditModalOpen(true)}
+                                className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-accent"
+                                title="Edit Project"
+                            >
+                                <Pencil className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
+                    {project.description && (
+                        <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
+                            {project.description}
+                        </p>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-between mb-6">
+
+                    <h2 className="text-lg font-bold text-foreground">
+                        {visibleNav.find((n) => n.key === activeTab)?.label}
+                    </h2>
+                </div>
+
                 {activeTab === 'overview' && !isClient && (
                     <ProjectOverview
                         project={project}
                         userRole={user.role}
                         onProjectUpdate={(updated) => setProject(updated)}
+                        onTabChange={setTab as any}
                     />
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} />}
-                {activeTab === 'daily' && !isClient && <ProjectDailyReports project={project} userRole={user.role} />}
-                {activeTab === 'weekly' && !isClient && <ProjectWeeklyReports project={project} userRole={user.role} />}
+                {activeTab === 'reports' && !isClient && <ProjectReports project={project} userRole={user.role} />}
+
                 {activeTab === 'snags' && <ProjectSnagList project={project} />}
+
                 {activeTab === 'rfi' && <ProjectRFI project={project} />}
                 {activeTab === 'manuals' && <ProjectManuals project={project} />}
             </div>
+
+            <EditProjectModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                project={project}
+                onUpdate={(updated) => {
+                    setProject(updated);
+                }}
+            />
         </div>
     );
 }
+

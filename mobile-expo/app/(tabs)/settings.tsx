@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -138,7 +138,12 @@ export default function ProfileScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
-            <ScrollView contentContainerStyle={{ padding: 20 }}>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+            >
+            <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
                 {/* Avatar + Info */}
                 <View style={{ alignItems: 'center', marginBottom: 32 }}>
                     <TouchableOpacity
@@ -205,7 +210,7 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                     )}
 
-                    <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 2 }}>{user.email}</Text>
+                    <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 2 }}>{user.email || user.phone_number}</Text>
                     <View
                         style={{
                             flexDirection: 'row',
@@ -360,6 +365,7 @@ export default function ProfileScreen() {
                     <Text style={{ fontSize: 15, color: '#ef4444', fontWeight: '700' }}>Sign Out</Text>
                 </TouchableOpacity>
             </ScrollView>
+            </KeyboardAvoidingView>
 
             <LogoPreviewModal
                 visible={isPreviewOpen}

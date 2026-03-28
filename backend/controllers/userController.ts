@@ -96,7 +96,7 @@ export const getOrgUsers = async (req: Request, res: Response) => {
 
         const orgUsers = await users.findAll({
             where: { organization_id: authUser.organization_id },
-            attributes: ['id', 'name', 'email', 'role', 'is_primary', 'email_verified', 'createdAt']
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt']
         });
 
         res.status(200).json({ users: orgUsers });

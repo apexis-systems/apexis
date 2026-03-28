@@ -38,6 +38,8 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
     const [assignees, setAssignees] = useState<Assignee[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<'all' | RFIStatus>('all');
+    const [creatorFilter, setCreatorFilter] = useState<string>('all');
+    const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
 
     // Modals
     const [showAdd, setShowAdd] = useState(false);
@@ -134,29 +136,87 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
         }
     };
 
-    const filteredRfis = rfis.filter(r => statusFilter === 'all' || r.status === statusFilter);
+    const filteredRfis = rfis.filter(r => {
+        const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
+        const matchesCreator = creatorFilter === 'all' || String(r.created_by) === creatorFilter;
+        const matchesAssignee = assigneeFilter === 'all' || String(r.assigned_to) === assigneeFilter;
+        return matchesStatus && matchesCreator && matchesAssignee;
+    });
 
     if (loading) return <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading...</div>;
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div className="flex gap-2">
-                    {['all', 'open', 'overdue', 'closed'].map((f) => (
-                        <Button
-                            key={f}
-                            variant={statusFilter === f ? 'default' : 'outline'}
-                            size="sm"
-                            className="text-xs h-8 rounded-full"
-                            onClick={() => setStatusFilter(f as any)}
-                        >
-                            {f.charAt(0).toUpperCase() + f.slice(1)}
-                        </Button>
-                    ))}
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <h2 className="text-lg font-bold">Request for Information</h2>
+                    <Button onClick={() => setShowAdd(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
+                        <Plus className="h-4 w-4 mr-2" /> New RFI
+                    </Button>
                 </div>
-                <Button onClick={() => setShowAdd(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 size-sm h-9">
-                    <Plus className="h-4 w-4 mr-2" /> New RFI
-                </Button>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-secondary/20 rounded-xl border border-border">
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Status</label>
+                        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                            <SelectTrigger className="h-9 text-xs bg-background">
+                                <SelectValue placeholder="All Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Status</SelectItem>
+                                <SelectItem value="open">Open</SelectItem>
+                                <SelectItem value="overdue">Overdue</SelectItem>
+                                <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Created By</label>
+                        <Select value={creatorFilter} onValueChange={setCreatorFilter}>
+                            <SelectTrigger className="h-9 text-xs bg-background">
+                                <SelectValue placeholder="All Creators" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Creators</SelectItem>
+                                {Array.from(new Set(rfis.map(r => r.creator?.id))).filter(Boolean).map(id => {
+                                    const name = rfis.find(r => r.creator?.id === id)?.creator?.name;
+                                    return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
+                                })}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Assigned To</label>
+                        <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+                            <SelectTrigger className="h-9 text-xs bg-background">
+                                <SelectValue placeholder="All Assignees" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Assignees</SelectItem>
+                                <SelectItem value="null">Unassigned</SelectItem>
+                                {Array.from(new Set(rfis.map(r => r.assignee?.id))).filter(Boolean).map(id => {
+                                    const name = rfis.find(r => r.assignee?.id === id)?.assignee?.name;
+                                    return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
+                                })}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex items-end pb-0.5">
+                        {(statusFilter !== 'all' || creatorFilter !== 'all' || assigneeFilter !== 'all') && (
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-[10px] h-8 text-muted-foreground hover:text-foreground"
+                                onClick={() => { setStatusFilter('all'); setCreatorFilter('all'); setAssigneeFilter('all'); }}
+                            >
+                                Clear all
+                            </Button>
+                        )}
+                    </div>
+                </div>
             </div>
 
             <div className="grid gap-4">

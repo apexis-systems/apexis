@@ -20,9 +20,9 @@ import {
 interface Props { project: Project; }
 
 const STATUS_CONFIG: Record<SnagStatus, { icon: keyof typeof Feather.glyphMap; bg: string; label: string }> = {
-    amber: { icon: 'minus', bg: '#f59e0b', label: 'Waiting clearance' },
+    amber: { icon: 'minus', bg: '#f59e0b', label: 'Waiting for Clearance' },
     green: { icon: 'check', bg: '#22c55e', label: 'Completed' },
-    red: { icon: 'x', bg: '#ef4444', label: 'No action needed' },
+    red: { icon: 'x', bg: '#ef4444', label: 'No Action Required' },
 };
 const STATUS_CYCLE: SnagStatus[] = ['amber', 'green', 'red'];
 

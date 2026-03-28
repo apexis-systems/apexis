@@ -14,9 +14,13 @@ import ProjectPhotos from '@/components/project/ProjectPhotos';
 import ProjectRFI from '@/components/project/ProjectRFI';
 import ProjectDailyReports from '@/components/project/ProjectDailyReports';
 import ProjectWeeklyReports from '@/components/project/ProjectWeeklyReports';
+import ProjectMonthlyReports from '@/components/project/ProjectMonthlyReports';
 import ProjectSnagList from '@/components/project/ProjectSnagList';
+
 import ProjectManuals from '@/components/project/ProjectManuals';
 import MainHeader from '@/components/shared/MainHeader';
+import EditProjectModal from '@/components/project/EditProjectModal';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -31,8 +35,11 @@ export default function ProjectWorkspaceScreen() {
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    const [activeTab, setActiveTab] = useState<Tab>('overview');
-    const [reportType, setReportType] = useState<'daily' | 'weekly'>('daily');
+    const [activeTab, setActiveTab] = useState<Tab>(() => user?.role === 'client' ? 'documents' : 'overview');
+    const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+
     const [searchQuery, setSearchQuery] = useState('');
 
     const panResponder = PanResponder.create({
@@ -51,9 +58,10 @@ export default function ProjectWorkspaceScreen() {
 
     useFocusEffect(
         useCallback(() => {
+            const defaultTab = user?.role === 'client' ? 'documents' : 'overview';
             const onBackPress = () => {
-                if (activeTab !== 'overview') {
-                    setActiveTab('overview');
+                if (activeTab !== defaultTab) {
+                    setActiveTab(defaultTab as Tab);
                     return true;
                 }
                 router.push('/(tabs)');
@@ -117,22 +125,31 @@ export default function ProjectWorkspaceScreen() {
 
             {/* Project Title Header */}
             <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
                 paddingHorizontal: 16,
-                paddingVertical: 12,
+                paddingVertical: 16,
                 backgroundColor: colors.background,
             }}>
-                <View>
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>
                         {project.name.charAt(0).toUpperCase() + project.name.slice(1)}
                     </Text>
-                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                        {project.location ? (project.location.charAt(0).toUpperCase() + project.location.slice(1)) : 'Location not set'}
-                    </Text>
+                    {user.role === 'admin' && (
+                        <TouchableOpacity 
+                            onPress={() => setIsEditModalOpen(true)}
+                            style={{ padding: 4 }}
+                        >
+                            <Feather name="edit-3" size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
+                {project.description && (
+                    <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18 }}>
+                        {project.description}
+                    </Text>
+                )}
             </View>
+
+
 
             {/* Tab Bar */}
             <View style={{ backgroundColor: colors.background }}>
@@ -224,13 +241,23 @@ export default function ProjectWorkspaceScreen() {
                                 >
                                     <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
                                 </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setReportType('monthly')}
+                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'monthly' ? colors.surface : 'transparent' }}
+                                >
+                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'monthly' ? colors.text : colors.textMuted }}>Monthly</Text>
+                                </TouchableOpacity>
                             </View>
+
                         </View>
                         {reportType === 'daily' ? (
                             <ProjectDailyReports project={project} userRole={user.role} />
-                        ) : (
+                        ) : reportType === 'weekly' ? (
                             <ProjectWeeklyReports project={project} userRole={user.role} />
+                        ) : (
+                            <ProjectMonthlyReports project={project} userRole={user.role} />
                         )}
+
                     </View>
                 )}
                 {activeTab === 'snags' && (
@@ -257,6 +284,14 @@ export default function ProjectWorkspaceScreen() {
                 )}
 
             </View>
+
+            <EditProjectModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                project={project}
+                onUpdate={(updated) => setProject(updated)}
+            />
         </SafeAreaView>
     );
 }
+

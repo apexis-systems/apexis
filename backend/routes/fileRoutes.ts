@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { uploadFile, listFiles, deleteFile, toggleFileVisibility, viewFile, bulkUpdateFiles, toggleDoNotFollow } from "../controllers/fileController.ts";
+import { uploadFile, uploadScans, listFiles, deleteFile, toggleFileVisibility, viewFile, bulkUpdateFiles, toggleDoNotFollow } from "../controllers/fileController.ts";
 import { verifyToken, isNotClient } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -13,6 +13,8 @@ router.use(verifyToken);
 router.post("/view", viewFile);
 
 router.post("/upload", isNotClient, upload.single('file'), uploadFile);
+router.post("/upload-scans", isNotClient, upload.array('files'), uploadScans);
+
 router.get("/:projectId", listFiles);
 router.put("/bulk", bulkUpdateFiles);
 router.delete("/:fileId", deleteFile);

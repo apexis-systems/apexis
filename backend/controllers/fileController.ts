@@ -1,12 +1,25 @@
 import type { Request, Response } from "express";
+import 'multer';
+
 import db from "../models/index.ts";
-const { files, folders, project_members, activities } = db;
+const { files, folders, project_members, activities, users } = db;
+
 import { Op } from "sequelize";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from 'sharp';
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { users as UsersModel } from "../models/index.ts";
+import { PDFDocument } from 'pdf-lib';
+
+interface MulterFile {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+    size: number;
+}
+
+
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION || "ap-south-2",
@@ -146,17 +159,26 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
         });
 
+        // Fallback for name if missing from token
+        let senderName = authUser.name;
+        if (!senderName) {
+            const sender = await users.findByPk(authUser.user_id);
+            senderName = sender?.name || "Someone";
+        }
+
         const notifiedUserIds = new Set<number>();
         for (const member of members) {
             notifiedUserIds.add(member.user_id);
             await sendNotification({
                 userId: member.user_id,
                 title: 'New File Uploaded',
-                body: `${authUser.name} uploaded ${finalFileName}`,
+                body: `${senderName} uploaded ${finalFileName}`,
                 type: 'file_upload',
                 data: { fileId: String(newFile.id), projectId: String(project_id) }
             });
+
         }
+
 
         // Notify Admins in the organization (if they weren't already notified as project members)
         try {
@@ -172,7 +194,8 @@ export const uploadFile = async (req: Request | any, res: Response) => {
                 await sendNotification({
                     userId: adminUser.id,
                     title: 'New File Uploaded',
-                    body: `${authUser.name} uploaded ${finalFileName}`,
+                    body: `${senderName} uploaded ${finalFileName}`,
+
                     type: 'file_upload_admin',
                     data: { fileId: String(newFile.id), projectId: String(project_id) }
                 });
@@ -481,3 +504,196 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
     }
 };
 
+
+export const uploadScans = async (req: Request | any, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { project_id, folder_id, mode, file_name, location, tags, is_doc_mode } = req.body;
+
+
+        const scanFiles = (req as any).files as MulterFile[];
+
+
+        if (!scanFiles || !Array.isArray(scanFiles) || scanFiles.length === 0) {
+            return res.status(400).json({ error: "No scan files uploaded" });
+        }
+
+        // Access check
+        if (authUser.role === "contributor") {
+            const access = await checkProjectAccess(authUser.user_id, project_id);
+            if (!access || access.role !== "contributor") {
+                return res.status(403).json({ error: "Forbidden: Not a contributor to this project" });
+            }
+        }
+
+        const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
+        const folderPath = validFolderId ? validFolderId.toString() : 'root';
+        const isSeparate = mode === 'separate';
+        
+        const createdFiles = [];
+
+        if (isSeparate) {
+            // mode === 'separate' -> each scan becomes its own PDF
+            for (let i = 0; i < scanFiles.length; i++) {
+                const file = scanFiles[i];
+                const pdfDoc = await PDFDocument.create();
+                const imageBuffer = file.buffer;
+                let image;
+                if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+                    image = await pdfDoc.embedJpg(imageBuffer);
+                } else if (file.mimetype === 'image/png') {
+                    image = await pdfDoc.embedPng(imageBuffer);
+                } else {
+                    try { image = await pdfDoc.embedJpg(imageBuffer); } catch (e) { continue; }
+                }
+
+                if (image) {
+                    const page = pdfDoc.addPage([image.width, image.height]);
+                    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+                }
+
+                const pdfBytes = await pdfDoc.save();
+                const timeSuffix = Date.now() + i;
+                const s3Key = `projects/${project_id}/folders/${folderPath}/${timeSuffix}.pdf`;
+                const individualFileName = `${file_name || 'Scan'}_${i + 1}.pdf`;
+
+                await s3Client.send(new PutObjectCommand({
+                    Bucket: BUCKET_NAME,
+                    Key: s3Key,
+                    ContentType: 'application/pdf',
+                    Body: pdfBytes
+                }));
+
+                const newFile = await files.create({
+                    folder_id: validFolderId,
+                    project_id: parseInt(project_id, 10),
+                    file_url: s3Key,
+                    file_name: individualFileName,
+                    client_visible: true,
+                    file_type: 'application/pdf',
+                    file_size_mb: Math.max(1, Math.round(pdfBytes.length / (1024 * 1024))),
+                    created_by: authUser.user_id,
+                    location: location || null,
+                    tags: tags || null,
+                });
+
+                createdFiles.push(newFile);
+            }
+        } else {
+            // mode === 'single' or empty -> merge all into one PDF
+            const pdfDoc = await PDFDocument.create();
+            for (const file of scanFiles) {
+                const imageBuffer = file.buffer;
+                let image;
+                if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+                    image = await pdfDoc.embedJpg(imageBuffer);
+                } else if (file.mimetype === 'image/png') {
+                    image = await pdfDoc.embedPng(imageBuffer);
+                } else {
+                    try { image = await pdfDoc.embedJpg(imageBuffer); } catch (e) { continue; }
+                }
+
+                if (image) {
+                    const page = pdfDoc.addPage([image.width, image.height]);
+                    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+                }
+            }
+
+            const pdfBytes = await pdfDoc.save();
+            const finalFileName = (file_name || `Scan_${Date.now()}`) + ".pdf";
+            const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}.pdf`;
+
+            await s3Client.send(new PutObjectCommand({
+                Bucket: BUCKET_NAME,
+                Key: s3Key,
+                ContentType: 'application/pdf',
+                Body: pdfBytes
+            }));
+
+            const newFile = await files.create({
+                folder_id: validFolderId,
+                project_id: parseInt(project_id, 10),
+                file_url: s3Key,
+                file_name: finalFileName,
+                client_visible: true,
+                file_type: 'application/pdf',
+                file_size_mb: Math.max(1, Math.round(pdfBytes.length / (1024 * 1024))),
+                created_by: authUser.user_id,
+                location: location || null,
+                tags: tags || null,
+            });
+
+            createdFiles.push(newFile);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: isSeparate ? "Scans uploaded as separate PDFs" : "Scans merged and uploaded successfully",
+            files: createdFiles,
+            file: isSeparate ? createdFiles[0] : createdFiles[0]
+        });
+
+        // Notifications for Scans
+        try {
+            const members = await project_members.findAll({
+                where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
+            });
+
+            let senderName = authUser.name;
+            if (!senderName) {
+                const sender = await users.findByPk(authUser.user_id);
+                senderName = sender?.name || "Someone";
+            }
+
+            const scanType = (is_doc_mode === 'true' || is_doc_mode === true) ? "documents" : "photos";
+            const fileCount = isSeparate ? scanFiles.length : 1;
+            const notificationTitle = (is_doc_mode === 'true' || is_doc_mode === true) ? "New Scans Uploaded" : "New Photos Uploaded";
+            const notificationBody = `${senderName} uploaded ${fileCount} ${scanType}`;
+
+
+            for (const member of members) {
+                await sendNotification({
+                    userId: member.user_id,
+                    title: notificationTitle,
+                    body: notificationBody,
+                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
+                    data: { projectId: String(project_id) }
+                });
+
+            }
+
+            // Also notify organization admins (if they are not project members)
+            const orgAdmins = await users.findAll({
+                where: {
+                    organization_id: authUser.organization_id,
+                    role: 'admin',
+                    id: { [Op.ne]: authUser.user_id }
+                }
+            });
+
+            for (const admin of orgAdmins) {
+                // Check if already notified via project members
+                if (members.some((m: any) => m.user_id === admin.id)) continue;
+
+
+                await sendNotification({
+                    userId: admin.id,
+                    title: notificationTitle,
+                    body: notificationBody,
+                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
+                    data: { projectId: String(project_id) }
+                });
+
+            }
+        } catch (notifErr) {
+            console.error("Notification Error in uploadScans:", notifErr);
+        }
+
+
+    } catch (error) {
+        console.error("Upload Scans Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

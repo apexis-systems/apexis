@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { FileText, Calendar, Loader2, Image, ChevronDown, ChevronUp, FileCheck, Download } from 'lucide-react';
+import { FileText, Calendar, Loader2, Image, TrendingUp, ChevronDown, ChevronUp, FileCheck, Download } from 'lucide-react';
 
 import { getReports, Report, triggerReport, downloadReport } from '@/services/reportService';
 
 
 interface Props { project: Project; userRole: UserRole; }
 
-const ProjectDailyReports = ({ project, userRole }: Props) => {
+const ProjectMonthlyReports = ({ project, userRole }: Props) => {
   if (!project) return null;
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,11 +17,11 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
   const [generating, setGenerating] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-  const fetchReports = () => {
 
+  const fetchReports = () => {
     if (!project?.id) return;
     setLoading(true);
-    getReports(project.id as any, 'daily')
+    getReports(project.id as any, 'monthly')
       .then(setReports)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -34,7 +34,7 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      await triggerReport(project.id, 'daily');
+      await triggerReport(project.id, 'monthly');
       fetchReports();
     } catch (e) {
       console.error(e);
@@ -46,7 +46,7 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
   const handleDownload = async (r: Report) => {
     setDownloadingId(r.id);
     try {
-      await downloadReport(r.id, `Daily_Report_${fmt(r.period_start).replace(/ /g, '_')}.pdf`);
+      await downloadReport(r.id, `Monthly_Report_${fmt(r.period_start).replace(/ /g, '_')}_to_${fmt(r.period_end).replace(/ /g, '_')}.pdf`);
     } catch (e) {
       console.error(e);
     } finally {
@@ -94,7 +94,7 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
           className="w-full mb-3 h-9 rounded-lg bg-accent text-white text-[11px] font-semibold flex items-center justify-center gap-2 hover:bg-accent/90 disabled:opacity-50 transition-all"
         >
           {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Calendar className="h-3 w-3" />}
-          {generating ? 'Generating...' : "Generate Today's Report"}
+          {generating ? 'Generating...' : "Generate Monthly Report"}
         </button>
       )}
       <div className="space-y-2">
@@ -104,13 +104,13 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
               className="flex items-start gap-2.5 p-3 cursor-pointer hover:bg-muted/30 transition-colors"
               onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 shrink-0">
-                <FileText className="h-4 w-4 text-accent" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary shrink-0">
+                <Calendar className="h-4 w-4 text-foreground" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center">
                   <p className="text-[11px] font-semibold">
-                    Daily Report — {fmt(r.period_start)}
+                    Monthly Report — {new Date(r.period_start).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
                   </p>
                   <div className="flex items-center gap-2">
                     {(r.photos_count > 0 || r.docs_count > 0 || (r.summary?.rfis?.length || 0) > 0 || (r.summary?.snags?.length || 0) > 0) && (
@@ -129,7 +129,6 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
 
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-[9px] text-muted-foreground flex-wrap">
-                  <span className="flex items-center gap-1"><Calendar className="h-2.5 w-2.5" />{fmt(r.period_start)}</span>
                   <span className="flex items-center gap-1"><Image className="h-2.5 w-2.5" />{r.photos_count} photos</span>
                   <span className="flex items-center gap-1"><FileText className="h-2.5 w-2.5" />{r.docs_count} docs</span>
                 </div>
@@ -189,17 +188,6 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
                     </div>
                   )}
 
-                  {r.summary.released_files && r.summary.released_files.length > 0 && (
-                    <div className="bg-muted/30 rounded p-2">
-                      <p className="text-[9px] font-semibold text-muted-foreground mb-1 flex items-center gap-1">
-                        <FileCheck className="h-2.5 w-2.5" /> Released to Client (Legacy)
-                      </p>
-                      <ul className="text-[8.5px] text-muted-foreground list-disc list-inside">
-                        {r.summary.released_files.map((name, idx) => <li key={idx} className="truncate">{name}</li>)}
-                      </ul>
-                    </div>
-                  )}
-
                   {(r.summary.rfis && r.summary.rfis.length > 0) || (r.summary.snags && r.summary.snags.length > 0) ? (
                     <div className="flex gap-2">
                       {r.summary.rfis && r.summary.rfis.length > 0 && (
@@ -239,11 +227,11 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
       {reports.length === 0 && (
         <div className="mt-6 text-center">
           <FileText className="mx-auto h-8 w-8 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No daily reports yet</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">No monthly reports yet</p>
         </div>
       )}
     </div>
   );
 };
 
-export default ProjectDailyReports;
+export default ProjectMonthlyReports;

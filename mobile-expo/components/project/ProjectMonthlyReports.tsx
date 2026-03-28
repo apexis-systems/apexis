@@ -16,8 +16,8 @@ interface Props {
     userRole: string;
 }
 
-export default function ProjectWeeklyReports({ project, userRole }: Props) {
-    const { colors } = useTheme();
+export default function ProjectMonthlyReports({ project, userRole }: Props) {
+    const { colors, isDark } = useTheme();
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
     const [expanded, setExpanded] = useState<number | null>(null);
@@ -28,10 +28,10 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
     const fetchReports = async () => {
         try {
             setLoading(true);
-            const data = await getReports(project.id, 'weekly');
+            const data = await getReports(project.id, 'monthly');
             setReports(data);
         } catch (e) {
-            console.error('getReports weekly error:', e);
+            console.error('getReports monthly error:', e);
         } finally {
             setLoading(false);
         }
@@ -96,10 +96,10 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
     const handleGenerate = async () => {
         setGenerating(true);
         try {
-            await triggerReport(project.id, 'weekly');
+            await triggerReport(project.id, 'monthly');
             await fetchReports();
         } catch (e) {
-            console.error('triggerReport weekly error:', e);
+            console.error('triggerReport monthly error:', e);
         } finally {
             setGenerating(false);
         }
@@ -133,9 +133,8 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
     };
 
     const fmt = (d: string) => {
-
         const date = new Date(d);
-        return `${date.getDate()} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
+        return date.toLocaleString('default', { month: 'long', year: 'numeric' });
     };
 
     if (loading) return <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />;
@@ -158,9 +157,9 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                             opacity: generating ? 0.7 : 1
                         }}
                     >
-                        {generating ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="trending-up" size={16} color="#fff" />}
+                        {generating ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="calendar" size={16} color="#fff" />}
                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
-                            {generating ? 'Generating...' : "Generate This Week's Report"}
+                            {generating ? 'Generating...' : "Generate Monthly Report"}
                         </Text>
                     </TouchableOpacity>
                 )}
@@ -173,7 +172,7 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                         >
                             <View style={{ flex: 1 }}>
                                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text }}>
-                                    Weekly Report — {fmt(report.period_start)} to {fmt(report.period_end)}
+                                    Monthly Report — {fmt(report.period_start)}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 3 }}>
                                     <Text style={{ fontSize: 10, color: colors.primary }}>📸 {report.photos_count} photos</Text>
@@ -197,8 +196,6 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                             <Feather name={expanded === report.id ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
                         </TouchableOpacity>
 
-
-
                         {/* Expanded detail */}
                         {expanded === report.id && report.summary && (
                             <View style={{ paddingHorizontal: 12, paddingBottom: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
@@ -209,25 +206,25 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                                             </Text>
                                         )}
                                         {report.summary.document_titles?.length > 0 && (
-                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                            <View style={{ marginTop: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
                                                 <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📄 Documents Uploaded</Text>
-                                                {report.summary.document_titles.map((title, i) => (
+                                                {report.summary.document_titles.map((title: string, i: number) => (
                                                     <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>• {title}</Text>
                                                 ))}
                                             </View>
                                         )}
 
                                         {report.summary.photo_summary?.length > 0 ? (
-                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                            <View style={{ marginTop: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
                                                 <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📸 Photos Uploaded</Text>
-                                                {report.summary.photo_summary.map((ps, i) => (
+                                                {report.summary.photo_summary.map((ps: any, i: number) => (
                                                     <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>
                                                         • <Text style={{ fontWeight: '600', color: colors.text }}>{ps.count} photos</Text> by {ps.user} in {ps.folder}
                                                     </Text>
                                                 ))}
                                             </View>
                                         ) : report.summary.photo_details && report.summary.photo_details.length > 0 && (
-                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                            <View style={{ marginTop: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
                                                 <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📸 Photos Uploaded (Legacy)</Text>
                                                 {(() => {
                                                     const grouped: Record<string, any> = {};
@@ -236,7 +233,7 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                                                         if (!grouped[key]) grouped[key] = { count: 0, user: p.uploaded_by, folder: p.folder };
                                                         grouped[key].count++;
                                                     });
-                                                    return Object.values(grouped).map((ps: any, i) => (
+                                                    return Object.values(grouped).map((ps: any, i: number) => (
                                                         <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>
                                                             • <Text style={{ fontWeight: '600', color: colors.text }}>{ps.count} photos</Text> by {ps.user} in {ps.folder}
                                                         </Text>
@@ -245,20 +242,11 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                                             </View>
                                         )}
 
-                                        {report.summary.released_files && report.summary.released_files.length > 0 && (
-                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, marginBottom: 4 }}>👁️ Released to Client (Legacy)</Text>
-                                                {report.summary.released_files.map((name: string, i: number) => (
-                                                    <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>• {name}</Text>
-                                                ))}
-                                            </View>
-                                        )}
-
                                         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                                             {report.summary.rfis?.length > 0 && (
-                                                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                                <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
                                                     <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>RFIs</Text>
-                                                    {report.summary.rfis.map((rfi, i) => (
+                                                    {report.summary.rfis.map((rfi: any, i: number) => (
                                                         <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                                             <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted, flex: 1, marginRight: 4 }}>{rfi.title}</Text>
                                                             <StatusBadge status={rfi.status} />
@@ -267,9 +255,9 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                                                 </View>
                                             )}
                                             {report.summary.snags?.length > 0 && (
-                                                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
+                                                <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
                                                     <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>Snags</Text>
-                                                    {report.summary.snags.map((snag, i) => (
+                                                    {report.summary.snags.map((snag: any, i: number) => (
                                                         <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                                             <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted, flex: 1, marginRight: 4 }}>{snag.title}</Text>
                                                             <StatusBadge status={snag.status} />
@@ -288,8 +276,8 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
             {reports.length === 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
                     <Feather name="calendar" size={32} color={colors.border} />
-                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No weekly reports yet</Text>
-                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>Reports are auto-generated every Sunday at 11:59 PM</Text>
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No monthly reports yet</Text>
+                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>Reports are auto-generated at the end of every month</Text>
                 </View>
             )}
         </ScrollView>

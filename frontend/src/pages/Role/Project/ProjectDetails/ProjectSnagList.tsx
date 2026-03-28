@@ -22,8 +22,8 @@ interface ProjectSnagListProps {
 }
 
 const STATUS_CONFIG: Record<SnagStatus, { icon: React.ElementType; bg: string; text: string; label: string }> = {
-  red: { icon: X, bg: 'bg-destructive', text: 'text-destructive-foreground', label: 'No action needed' },
-  amber: { icon: Minus, bg: 'bg-amber-500', text: 'text-white', label: 'Waiting clearance' },
+  red: { icon: X, bg: 'bg-destructive', text: 'text-destructive-foreground', label: 'No Action Required' },
+  amber: { icon: Minus, bg: 'bg-amber-500', text: 'text-white', label: 'Waiting for Clearance' },
   green: { icon: Check, bg: 'bg-green-600', text: 'text-white', label: 'Completed' },
 };
 const STATUS_CYCLE: SnagStatus[] = ['amber', 'green', 'red'];

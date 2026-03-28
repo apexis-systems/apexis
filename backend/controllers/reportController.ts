@@ -1,8 +1,24 @@
 import type { Request, Response } from 'express';
 import { Op } from 'sequelize';
-import { reports, files, comments, folders, users, projects } from '../models/index.ts';
+import { reports, files, comments, folders, users, projects, rfis, snags } from '../models/index.ts';
+import { generateSingleReportPDF } from '../services/exportService.ts';
 
 // ── Public API ─────────────────────────────────────────────────────────────
+
+export const shareReport = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const pdfBuffer = await generateSingleReportPDF(Number(id));
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=report_${id}.pdf`);
+        res.send(pdfBuffer);
+    } catch (error: any) {
+        console.error('shareReport error:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+
 
 export const getReports = async (req: Request, res: Response) => {
     try {
@@ -43,7 +59,8 @@ export const triggerReport = async (req: Request, res: Response) => {
         const { project_id, type = 'daily' } = req.query;
         if (!project_id) return res.status(400).json({ error: 'project_id is required' });
 
-        const report = await generateReport(Number(project_id), type as 'daily' | 'weekly');
+        const report = await generateReport(Number(project_id), type as 'daily' | 'weekly' | 'monthly');
+
         res.json({ message: 'Report generated', report });
     } catch (error) {
         console.error('triggerReport error:', error);
@@ -53,7 +70,8 @@ export const triggerReport = async (req: Request, res: Response) => {
 
 // ── Core generation logic (called by cron + trigger) ───────────────────────
 
-export const generateReport = async (projectId: number, type: 'daily' | 'weekly') => {
+export const generateReport = async (projectId: number, type: 'daily' | 'weekly' | 'monthly', skipIfExists: boolean = false) => {
+
     // IST = UTC+5:30. Shift now into IST so calendar day boundaries align with India time.
     const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
     const nowUTC = new Date();
@@ -66,14 +84,20 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
     if (type === 'daily') {
         periodStartIST = new Date(nowIST);
         periodStartIST.setHours(0, 0, 0, 0);
-    } else {
+    } else if (type === 'weekly') {
         // Start from Monday of the current ISO week (in IST)
         periodStartIST = new Date(nowIST);
         const day = periodStartIST.getDay();
         const diff = day === 0 ? 6 : day - 1;
         periodStartIST.setDate(periodStartIST.getDate() - diff);
         periodStartIST.setHours(0, 0, 0, 0);
+    } else {
+        // Monthly: Start from 1st of the current month
+        periodStartIST = new Date(nowIST);
+        periodStartIST.setDate(1);
+        periodStartIST.setHours(0, 0, 0, 0);
     }
+
 
     // Convert IST boundaries back to UTC for DB queries
     const periodStart = new Date(periodStartIST.getTime() - IST_OFFSET_MS);
@@ -82,6 +106,20 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
     // Store the IST date string (what the user sees as "the day")
     const startStr = periodStartIST.toISOString().split('T')[0];
     const endStr = periodEndIST.toISOString().split('T')[0];
+
+    if (skipIfExists) {
+        const existing = await reports.findOne({
+            where: {
+                project_id: projectId,
+                type,
+                period_start: startStr,
+            }
+        });
+        if (existing) {
+            console.log(`[report] Skipping ${type} report for project ${projectId} (already exists for ${startStr})`);
+            return existing;
+        }
+    }
 
 
 
@@ -127,51 +165,95 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
         },
     }) : [];
 
-    // --- Build summary breakdown ---
-    const byFolder: Record<string, { name: string; photos: number; docs: number }> = {};
-    uploadedFiles.forEach((f: any) => {
-        const fid = f.folder_id;
-        if (!byFolder[fid]) byFolder[fid] = { name: f.folder?.name || 'Unknown', photos: 0, docs: 0 };
-        if (f.file_type?.startsWith('image/')) byFolder[fid].photos++;
-        else byFolder[fid].docs++;
+    // --- RFIs in the period ---
+    const periodRfis = await rfis.findAll({
+        where: {
+            project_id: projectId,
+            [Op.or]: [
+                { createdAt: { [Op.between]: [periodStart, periodEnd] } },
+                { updatedAt: { [Op.between]: [periodStart, periodEnd] } },
+            ],
+        },
     });
 
-    const byUser: Record<string, { name: string; uploads: number }> = {};
-    uploadedFiles.forEach((f: any) => {
-        const uid = f.created_by;
-        if (!byUser[uid]) byUser[uid] = { name: f.creator?.name || 'Unknown', uploads: 0 };
-        byUser[uid].uploads++;
+    // --- Snags in the period ---
+    const periodSnags = await snags.findAll({
+        where: {
+            project_id: projectId,
+            [Op.or]: [
+                { createdAt: { [Op.between]: [periodStart, periodEnd] } },
+                { updatedAt: { [Op.between]: [periodStart, periodEnd] } },
+            ],
+        },
+    });
+
+    // --- Build summary breakdown ---
+    const photosByDetails: Record<string, { count: number; user: string; folder: string }> = {};
+    photos.forEach((f: any) => {
+        const key = `${f.created_by}_${f.folder_id}`;
+        if (!photosByDetails[key]) {
+            photosByDetails[key] = {
+                count: 0,
+                user: f.creator?.name || 'Unknown',
+                folder: f.folder?.name || 'Unknown',
+            };
+        }
+        photosByDetails[key].count++;
     });
 
     const summary = {
-        by_folder: Object.values(byFolder),
-        by_user: Object.values(byUser),
-        released_files: released.map((f: any) => f.file_name),
+        document_titles: docs.map((f: any) => f.file_name),
+        photo_summary: Object.values(photosByDetails),
+        rfis: periodRfis.map((r: any) => ({
+            title: r.title,
+            status: r.status,
+        })),
+        snags: periodSnags.map((s: any) => ({
+            title: s.title,
+            status: s.status,
+        })),
     };
 
-    // --- Upsert report ---
-    const [report] = await reports.upsert({
-        project_id: projectId,
-        type,
-        period_start: startStr,
+    // --- Update OR Create report ---
+    let report = await reports.findOne({
+        where: {
+            project_id: projectId,
+            type,
+            period_start: startStr,
+        }
+    });
+
+    const reportData = {
         period_end: endStr,
         photos_count: photos.length,
         docs_count: docs.length,
         releases_count: released.length,
         comments_count: periodComments.length,
         summary,
-    });
+    };
+
+    if (report) {
+        await report.update(reportData);
+    } else {
+        report = await reports.create({
+            project_id: projectId,
+            type,
+            period_start: startStr,
+            ...reportData,
+        });
+    }
 
     return report;
 };
 
 // ── Generate for ALL active projects (called by cron) ─────────────────────
 
-export const generateAllReports = async (type: 'daily' | 'weekly') => {
+export const generateAllReports = async (type: 'daily' | 'weekly' | 'monthly') => {
+
     try {
         const allProjects = await projects.findAll({ attributes: ['id'] });
         for (const p of allProjects) {
-            await generateReport((p as any).id, type).catch((err) =>
+            await generateReport((p as any).id, type, true).catch((err) =>
                 console.error(`Report generation failed for project ${(p as any).id}:`, err)
             );
         }

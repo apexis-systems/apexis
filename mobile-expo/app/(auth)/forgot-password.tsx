@@ -85,6 +85,7 @@ export default function ForgotPasswordScreen() {
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
             >
                 <View style={{ paddingHorizontal: 24, paddingVertical: 16 }}>
                     <TouchableOpacity onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
