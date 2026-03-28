@@ -64,6 +64,7 @@
 
 @layer base {
   :root {
+    --font-montserrat: "Montserrat", sans-serif;
     --background: 0 0% 95%;
     --foreground: 0 0% 8%;
 
