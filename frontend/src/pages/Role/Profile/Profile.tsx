@@ -315,7 +315,7 @@ const Profile = () => {
                     </div>
                 )}
 
-                <p className="text-sm text-muted-foreground">{user.email}</p>
+                <p className="text-sm text-muted-foreground">{user.email || user.phone_number}</p>
                 <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${roleBadgeColor[user.role as UserRole]}`}>
                     <Shield className="h-3 w-3" />
                     {(user.role as string).charAt(0).toUpperCase() + (user.role as string).slice(1)}

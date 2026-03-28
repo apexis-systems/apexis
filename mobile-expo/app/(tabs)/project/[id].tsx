@@ -35,7 +35,7 @@ export default function ProjectWorkspaceScreen() {
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    const [activeTab, setActiveTab] = useState<Tab>('overview');
+    const [activeTab, setActiveTab] = useState<Tab>(() => user?.role === 'client' ? 'documents' : 'overview');
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -58,9 +58,10 @@ export default function ProjectWorkspaceScreen() {
 
     useFocusEffect(
         useCallback(() => {
+            const defaultTab = user?.role === 'client' ? 'documents' : 'overview';
             const onBackPress = () => {
-                if (activeTab !== 'overview') {
-                    setActiveTab('overview');
+                if (activeTab !== defaultTab) {
+                    setActiveTab(defaultTab as Tab);
                     return true;
                 }
                 router.push('/(tabs)');

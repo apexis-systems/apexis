@@ -25,7 +25,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
 
 function RootLayoutNav() {
-  const { isLoggedIn, isLoading: isAuthLoading, user } = useAuth();
+  const { isLoggedIn, isLoading: isAuthLoading, user, isPendingName } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -51,20 +51,23 @@ function RootLayoutNav() {
   }, [isLoggedIn, user]);
 
   useEffect(() => {
-    // Wait until initial API token profile fetch resolves
-    const timer = setTimeout(() => {
-      const inAuthGroup = segments[0] === '(auth)';
-      const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup'; // Check if we are on signup page
+    // Don't run until initial auth check (getMe) has resolved — navigator isn't mounted yet
+    if (isAuthLoading) return;
 
-      if (!isLoggedIn && !inAuthGroup) {
-        router.replace('/(auth)/login');
-      } else if (isLoggedIn && inAuthGroup && !isSignupWithToken) {
-        // Only redirect away from auth group if logged in AND not on a special bypass route like signup
-        router.replace('/(tabs)');
-      }
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [isLoggedIn, isAuthLoading, segments]);
+    const inAuthGroup = segments[0] === '(auth)';
+    const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup';
+    const isSetupName = segments[0] === '(auth)' && segments[1] === 'setup-name';
+
+    if (!isLoggedIn && !inAuthGroup) {
+      router.replace('/(auth)/login');
+    } else if (isLoggedIn && isPendingName && !isSetupName) {
+      // New user (name is "Pending") — must complete name setup before accessing app
+      router.replace('/(auth)/setup-name');
+    } else if (isLoggedIn && inAuthGroup && !isSignupWithToken && !isSetupName) {
+      // Fully set-up user in auth group → go to tabs
+      router.replace('/(tabs)');
+    }
+  }, [isLoggedIn, isAuthLoading, isPendingName, segments]);
 
   if (isAuthLoading || !fontsLoaded) {
     return null;

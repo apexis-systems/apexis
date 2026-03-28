@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import {
-    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform,
+    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -243,7 +243,12 @@ export default function SnagCreateScreen() {
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+            >
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
                 {/* Photo preview */}
                 {capturedPhoto && (
                     <View style={{ marginBottom: 28, alignItems: 'center' }}>
@@ -312,6 +317,7 @@ export default function SnagCreateScreen() {
                     }
                 </TouchableOpacity>
             </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Assignee picker modal */}
             <Modal visible={dropdownOpen} transparent animationType="fade" onRequestClose={() => setDropdownOpen(false)}>

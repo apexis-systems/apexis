@@ -39,7 +39,7 @@ export const adminLogin = async (req: Request, res: Response) => {
         );
 
 
-        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: user.role } });
     } catch (error) {
         console.error("Admin Login Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -118,7 +118,7 @@ export const projectLogin = async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            { user_id: user.id, name: user.name, role: user.role, organization_id: user.organization_id },
+            { user_id: user.id, name: user.name, role: user.role, organization_id: user.organization_id, project_id: project.id },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
         );
@@ -126,7 +126,7 @@ export const projectLogin = async (req: Request, res: Response) => {
 
         res.status(200).json({ 
             token, 
-            user: { id: user.id, name: user.name, email: user.email, role: user.role },
+            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: user.role },
             isPendingName: user.name === "Pending" || !user.name || user.name.trim() === ""
         });
     } catch (error) {
@@ -156,7 +156,7 @@ export const superadminLogin = async (req: Request, res: Response) => {
         );
 
 
-        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, role: "superadmin" } });
+        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: "superadmin" } });
     } catch (error) {
         console.error("Superadmin Login Error:", error);
         res.status(500).json({ error: "Internal server error" });

@@ -4,10 +4,14 @@ export interface User {
     id: string;
     name: string;
     email: string;
+    phone_number?: string;
     role: UserRole;
-    active: boolean;
+    is_primary?: boolean;
+    email_verified?: boolean;
+    phone_verified?: boolean;
     profile_pic?: string;
     fcm_token?: string;
+    createdAt?: string;
     organization?: {
         id: string;
         name: string;

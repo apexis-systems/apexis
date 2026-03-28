@@ -132,6 +132,7 @@ export default function CompanySettingsScreen() {
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ flex: 1, backgroundColor: colors.background }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
         >
             <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
                 {/* Header */}

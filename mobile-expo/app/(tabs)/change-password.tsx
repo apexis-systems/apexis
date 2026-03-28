@@ -60,6 +60,7 @@ export default function ChangePasswordScreen() {
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
             >
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                     <View style={{ flex: 1 }}>

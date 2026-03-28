@@ -671,7 +671,11 @@ export default function UploadScreen() {
     if (mode === 'selection') {
         return (
             <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
-                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+                >
                 <View style={{ 
                     flexDirection: 'row', 
                     alignItems: 'center', 

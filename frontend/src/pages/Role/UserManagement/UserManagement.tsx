@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { UserRole } from '@/types';
 import {
-    UserPlus, Trash2, ToggleLeft, ToggleRight, Loader2, Mail,
-    Briefcase, AlertCircle, Link, Copy, Check
+    UserPlus, Trash2, ToggleLeft, ToggleRight, Loader2, Mail, Phone,
+    Briefcase, AlertCircle, Link, Copy, Check, Shield, CheckCircle2, Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -38,7 +38,18 @@ const UserManagement = () => {
         setLoading(true);
         try {
             const data = await getOrgUsers();
-            setUsers(data || []);
+            const sorted = (data || []).sort((a: any, b: any) => {
+                if (a.is_primary && !b.is_primary) return -1;
+                if (!a.is_primary && b.is_primary) return 1;
+
+                const priority: any = { admin: 1, contributor: 2, client: 3 };
+                const pA = priority[a.role] || 4;
+                const pB = priority[b.role] || 4;
+
+                if (pA !== pB) return pA - pB;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+            setUsers(sorted);
         } catch (error) {
             console.error("fetchUsers error", error);
             toast.error("Failed to load users");
@@ -103,15 +114,7 @@ const UserManagement = () => {
         }
     };
 
-    const toggleActive = (id: string | number) => {
-        setUsers(prev => prev.map(u => (u.id === id ? { ...u, active: !u.active } : u)));
-        toast.success('User status updated');
-    };
 
-    const changeRole = (id: string | number, role: UserRole) => {
-        setUsers(prev => prev.map(u => (u.id === id ? { ...u, role } : u)));
-        toast.success(`Role updated to ${role}`);
-    };
 
     const handleDelete = async () => {
         if (!deleteUserObj) return;
@@ -334,28 +337,32 @@ const UserManagement = () => {
                                         <div className="flex flex-col">
                                             <span className="text-sm font-bold text-foreground">{u.name || 'Invited User'}</span>
                                             <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                <Mail className="h-3 w-3" /> {u.email}
+                                                {u.email ? (
+                                                    <><Mail className="h-3 w-3" /> {u.email}</>
+                                                ) : u.phone_number ? (
+                                                    <><Phone className="h-3 w-3" /> {u.phone_number}</>
+                                                ) : (
+                                                    <span className="italic opacity-50">No contact info</span>
+                                                )}
                                             </span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <Select value={u.role} onValueChange={val => changeRole(u.id, val as UserRole)}>
-                                            <SelectTrigger className="h-8 w-32 text-[10px] font-bold uppercase rounded-lg">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="admin">Admin</SelectItem>
-                                                <SelectItem value="contributor">Contributor</SelectItem>
-                                                <SelectItem value="client">Client</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-foreground">
+                                            {u.is_primary && <Shield className="h-3 w-3 text-accent" />}
+                                            {u.role}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <button onClick={() => toggleActive(u.id)} className="flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-secondary transition-colors text-[10px] font-bold uppercase">
-                                            {u.active !== false
-                                                ? <><ToggleRight className="h-5 w-5 text-accent" /> <span className="text-accent">Active</span></>
-                                                : <><ToggleLeft className="h-5 w-5 text-muted-foreground" /> <span className="text-muted-foreground">Inactive</span></>}
-                                        </button>
+                                        {(u.email_verified || u.phone_verified) ? (
+                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-600 text-[10px] font-bold uppercase w-fit">
+                                                <CheckCircle2 className="h-3 w-3" /> Verified
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold uppercase w-fit">
+                                                <Clock className="h-3 w-3" /> Pending
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 text-xs text-muted-foreground font-medium">
                                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
@@ -386,7 +393,7 @@ const UserManagement = () => {
                     <DialogHeader>
                         <DialogTitle>Remove User?</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to remove <span className="font-bold text-foreground">{deleteUserObj?.email}</span>? This action cannot be undone.
+                            Are you sure you want to remove <span className="font-bold text-foreground">{deleteUserObj?.name || deleteUserObj?.email || deleteUserObj?.phone_number}</span>? This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-2 sm:gap-0">

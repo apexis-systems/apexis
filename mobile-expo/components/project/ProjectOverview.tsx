@@ -297,7 +297,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     })}
                 </View>
 
-                {/* Project Access Codes */}
+                {/* Project Access Codes — admin only (contributor/client codes are stripped from API response) */}
+                {userRole === 'admin' && (
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                     {[
                         { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code' },
@@ -350,6 +351,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         </View>
                     ))}
                 </View>
+                )}
 
                 {/* Quick Actions */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>

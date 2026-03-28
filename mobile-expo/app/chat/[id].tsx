@@ -389,7 +389,7 @@ export default function ChatDetailScreen() {
             <KeyboardAvoidingView
                 style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 70}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 90}
             >
                 {loading ? (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
