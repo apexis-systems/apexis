@@ -14,24 +14,24 @@ interface EditFolderDialogProps {
 }
 
 const EditFolderDialog = ({ open, onOpenChange, onRename, currentName }: EditFolderDialogProps) => {
-  const [name, setName] = useState(currentName);
+  const [name, setName] = useState(currentName || "");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setName(currentName);
+    if (currentName) setName(currentName);
   }, [currentName, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || name === currentName) {
+    if (!name?.trim() || name === currentName) {
       onOpenChange(false);
       return;
     }
 
     setLoading(true);
     try {
-      await onRename(name);
-      onOpenChange(false);
+      if (onRename) await onRename(name);
+      if (onOpenChange) onOpenChange(false);
     } catch (error) {
       console.error("Failed to rename folder:", error);
     } finally {
@@ -51,7 +51,7 @@ const EditFolderDialog = ({ open, onOpenChange, onRename, currentName }: EditFol
               <Label htmlFor="folder-name">New Name</Label>
               <Input
                 id="folder-name"
-                value={name}
+                value={name || ""}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
               />
@@ -61,12 +61,12 @@ const EditFolderDialog = ({ open, onOpenChange, onRename, currentName }: EditFol
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => onOpenChange && onOpenChange(false)}
               disabled={loading}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !name.trim()}>
+            <Button type="submit" disabled={loading || !name?.trim()}>
               {loading ? "Renaming..." : "Save Changes"}
             </Button>
           </DialogFooter>

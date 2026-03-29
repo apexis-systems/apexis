@@ -6,38 +6,38 @@ export const mockUsers: Record<string, User> = {
         name: 'Super Admin User',
         email: 'superadmin@apexis.in',
         role: 'superadmin',
-        active: true,
+        email_verified: true,
     },
     admin: {
         id: 'u1',
         name: 'Rajesh Kumar',
         email: 'rajesh@apexis.in',
         role: 'admin',
-        active: true,
+        email_verified: true,
     },
     contributor: {
         id: 'u2',
         name: 'Priya Sharma',
         email: 'priya@apexis.in',
         role: 'contributor',
-        active: true,
+        email_verified: true,
     },
     client: {
         id: 'u3',
         name: 'Vikram Reddy',
         email: 'vikram@client.com',
         role: 'client',
-        active: true,
+        email_verified: true,
     },
 };
 
 export const mockAllUsers: User[] = [
-    { id: 'u0', name: 'Super Admin User', email: 'superadmin@apexis.in', role: 'superadmin', active: true },
-    { id: 'u1', name: 'Rajesh Kumar', email: 'rajesh@apexis.in', role: 'admin', active: true },
-    { id: 'u2', name: 'Priya Sharma', email: 'priya@apexis.in', role: 'contributor', active: true },
-    { id: 'u3', name: 'Vikram Reddy', email: 'vikram@client.com', role: 'client', active: true },
-    { id: 'u4', name: 'Anita Desai', email: 'anita@apexis.in', role: 'contributor', active: false },
-    { id: 'u5', name: 'Suresh Patel', email: 'suresh@client.com', role: 'client', active: true },
+    { id: 'u0', name: 'Super Admin User', email: 'superadmin@apexis.in', role: 'superadmin', email_verified: true },
+    { id: 'u1', name: 'Rajesh Kumar', email: 'rajesh@apexis.in', role: 'admin', email_verified: true },
+    { id: 'u2', name: 'Priya Sharma', email: 'priya@apexis.in', role: 'contributor', email_verified: true },
+    { id: 'u3', name: 'Vikram Reddy', email: 'vikram@client.com', role: 'client', email_verified: true },
+    { id: 'u4', name: 'Anita Desai', email: 'anita@apexis.in', role: 'contributor', email_verified: false },
+    { id: 'u5', name: 'S सुरेश Patel', email: 's सुरेश@client.com', role: 'client', email_verified: true },
 ];
 
 export const mockProjects: Project[] = [
