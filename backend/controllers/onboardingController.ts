@@ -6,6 +6,7 @@ import redis from "../config/redis.ts";
 import { users, organizations, plans } from "../models/index.ts";
 import { Op } from "sequelize";
 import { sendEmail } from "../utils/email.ts";
+import { normalizePhone, isValidPhone } from "../utils/sms.ts";
 
 const OTP_TTL = 300; // 5 minutes
 
@@ -111,11 +112,18 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Email or Phone is required" });
         }
 
+        if (phone && !isValidPhone(phone)) {
+            return res.status(400).json({ error: "Invalid phone number. Please enter a 10-digit number." });
+        }
+
+        const normalizedPhone = phone ? normalizePhone(phone) : null;
+        const normalizedEmail = email ? email.toLowerCase() : null;
+
         const existingUser = await users.findOne({
             where: {
                 [Op.or]: [
-                    email ? { email: email.toLowerCase() } : null,
-                    phone ? { phone_number: phone } : null
+                    normalizedEmail ? { email: normalizedEmail } : null,
+                    normalizedPhone ? { phone_number: normalizedPhone } : null
                 ].filter(Boolean) as any[]
             }
         });
@@ -137,8 +145,8 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
             JSON.stringify({
                 otp_hash: otpHash,
                 name,
-                email: email || null,
-                phone: phone || null,
+                email: normalizedEmail,
+                phone: normalizedPhone,
                 password_hash: passwordHash,
                 organization_name
             }),
@@ -148,9 +156,9 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
 
         const method = verification_method || (phone ? 'phone' : 'email');
 
-        if (method === 'phone' && phone) {
+        if (method === 'phone' && normalizedPhone) {
             const { sendOTP } = await import("../utils/sms.ts");
-            await sendOTP(phone, otp);
+            await sendOTP(normalizedPhone, otp);
         } else if (method === 'email' && email) {
             await sendEmail(
                 email,
@@ -171,7 +179,9 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
 export const adminVerifyOtp = async (req: Request, res: Response) => {
     try {
         const { email, phone, otp, verification_method } = req.body;
-        const identifier = (verification_method === 'phone' && phone) ? phone : (email || phone);
+        const normalizedPhone = phone ? normalizePhone(phone) : null;
+        const normalizedEmail = email ? email.toLowerCase() : null;
+        const identifier = (verification_method === 'phone' && normalizedPhone) ? normalizedPhone : (normalizedEmail || normalizedPhone);
         const redisKey = `otp:signup:admin:${identifier}`;
 
         const redisDataStr = await redis.get(redisKey);
@@ -220,13 +230,13 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
         const newUser = await users.create({
             organization_id: organization.id,
             name,
-            email: email ? email.toLowerCase() : null,
-            phone_number: phone || null,
+            email: savedEmail,
+            phone_number: savedPhone,
             password: password_hash,
             role: "admin",
             is_primary: isPrimary,
-            email_verified: !!email,
-            phone_verified: !!phone,
+            email_verified: !!savedEmail,
+            phone_verified: !!savedPhone,
         });
 
         await redis.del(redisKey);

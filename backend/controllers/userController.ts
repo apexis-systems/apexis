@@ -1,5 +1,15 @@
 import type { Request, Response } from "express";
-import { users, projects } from "../models/index.ts";
+import { 
+    users, 
+    projects, 
+    project_members, 
+    room_members, 
+    notifications, 
+    activities, 
+    snags, 
+    rfis,
+    sequelize 
+} from "../models/index.ts";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -107,11 +117,13 @@ export const getOrgUsers = async (req: Request, res: Response) => {
 };
 
 export const deleteUser = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
         const authUser = (req as any).user;
 
         if (!authUser || authUser.role !== "admin") {
+            await t.rollback();
             return res.status(403).json({ error: "Forbidden: Only admins can delete users" });
         }
 
@@ -119,26 +131,60 @@ export const deleteUser = async (req: Request, res: Response) => {
             where: {
                 id,
                 organization_id: authUser.organization_id
-            }
+            },
+            transaction: t
         });
 
         if (!userToDelete) {
+            await t.rollback();
             return res.status(404).json({ error: "User not found in your organization" });
         }
 
         if (userToDelete.is_primary) {
+            await t.rollback();
             return res.status(400).json({ error: "Cannot delete the primary organization administrator" });
         }
 
         if (String(userToDelete.id) === String(authUser.user_id)) {
+            await t.rollback();
             return res.status(400).json({ error: "You cannot delete yourself" });
         }
 
-        await userToDelete.destroy();
+        // 1. Delete membership/notification records (Safe to delete)
+        await project_members.destroy({ where: { user_id: id }, transaction: t });
+        await room_members.destroy({ where: { user_id: id }, transaction: t });
+        await notifications.destroy({ where: { user_id: id }, transaction: t });
+        await activities.destroy({ where: { user_id: id }, transaction: t });
 
+        // 2. Nullify assignees (Safe to nullify)
+        await snags.update({ assigned_to: null }, { where: { assigned_to: id }, transaction: t });
+        await rfis.update({ assigned_to: null }, { where: { assigned_to: id }, transaction: t });
+
+        // 3. Attempt to delete the user
+        await userToDelete.destroy({ transaction: t });
+
+        await t.commit();
         res.status(200).json({ message: "User removed successfully" });
-    } catch (error) {
+    } catch (error: any) {
+        await t.rollback();
         console.error("Delete User Error:", error);
+
+        if (error.name === 'SequelizeForeignKeyConstraintError') {
+            const table = error.table || '';
+            let details = "This user is referenced by other project data.";
+            
+            if (table === 'files' || table === 'folders') {
+                details = `User cannot be removed because they have created ${table}. Please deactivate the user instead or reassign their data.`;
+            } else if (table === 'rfis' || table === 'projects') {
+                details = `User cannot be removed because they are the creator of ${table}.`;
+            }
+
+            return res.status(400).json({ 
+                error: "Conflict: User has critical project data", 
+                details 
+            });
+        }
+
         res.status(500).json({ error: "Internal server error" });
     }
 };

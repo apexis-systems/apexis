@@ -17,7 +17,8 @@ export interface VerifyOtpBody {
 }
 
 export interface LoginBody {
-    email: string;
+    email?: string;
+    phone?: string;
     password?: string;
 }
 
@@ -95,6 +96,7 @@ export const loginAdmin = async (data: LoginBody) => {
 
 export interface ProjectLoginBody {
     email?: string; // used for contributors
+    phone?: string; // used for contributors
     name?: string;  // used for clients
     code: string;
 }

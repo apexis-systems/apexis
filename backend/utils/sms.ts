@@ -4,6 +4,28 @@
  * Pricing: ₹5.00 per SMS
  * Delivery: DND & Non-DND
  */
+
+/**
+ * Normalizes phone numbers to +91XXXXXXXXXX format for database consistency.
+ * If 10 digits are provided, prepends +91.
+ */
+export const normalizePhone = (phone: string): string => {
+    const cleaned = phone.trim();
+    if (/^\d{10}$/.test(cleaned)) {
+        return `+91${cleaned}`;
+    }
+    return cleaned;
+};
+
+/**
+ * Validates if the phone number is a valid 10-digit Indian number.
+ * Accepts "9876543210" or "+919876543210".
+ */
+export const isValidPhone = (phone: string): boolean => {
+    const cleaned = phone.trim().replace("+91", "");
+    return /^\d{10}$/.test(cleaned);
+};
+
 export const sendSMS = async (phone: string, message: string) => {
     try {
         const apiKey = process.env.FAST2SMS_API_KEY;
@@ -12,9 +34,12 @@ export const sendSMS = async (phone: string, message: string) => {
             return;
         }
 
-        // Fast2SMS expects numbers as a comma-separated string
-        // If phone starts with +91, remove it as Fast2SMS typically expects 10 digits
-        const cleanPhone = phone.replace("+91", "").trim();
+        // Normalize for internal use
+        const normalizedPhone = normalizePhone(phone);
+        
+        // Fast2SMS expects 10 digits only
+        // Fast2SMS expects 10 digits only for route "q"
+        const cleanPhone = normalizedPhone.replace(/\D/g, "").slice(-10);
 
         const response = await fetch("https://www.fast2sms.com/dev/bulkV2", {
             method: "POST",
