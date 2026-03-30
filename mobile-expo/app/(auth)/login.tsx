@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { loginAdmin, loginProject } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLocalSearchParams } from 'expo-router';
+import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
     { value: 'admin', label: 'Admin', desc: 'Project Control' },
@@ -28,6 +29,7 @@ export default function LoginScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
+    const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]); // India
     const [error, setError] = useState('');
 
     const { login } = useAuth();
@@ -104,8 +106,20 @@ export default function LoginScreen() {
         setError('');
 
         const isEmail = identifier.includes('@');
+        const cleanIdentifier = identifier.trim().replace(selectedCountry.code, "").trim();
+
+        if (!isEmail && !/^\d{10}$/.test(cleanIdentifier)) {
+            setError("Please enter a valid 10-digit phone number.");
+            setIsLoading(false);
+            return;
+        }
+
+        const normalizedIdentifier = isEmail 
+            ? identifier.trim() 
+            : `${selectedCountry.code}${cleanIdentifier}`;
+
         const payload: any = {
-            [isEmail ? 'email' : 'phone']: identifier,
+            [isEmail ? 'email' : 'phone']: normalizedIdentifier,
             [selectedRole === 'admin' ? 'password' : 'code']: selectedRole === 'admin' ? password : projectCode
         };
 
@@ -168,15 +182,25 @@ export default function LoginScreen() {
                     <View style={{ gap: 16 }}>
                         <View>
                             <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Email or Phone Number</Text>
-                            <TextInput
-                                value={identifier}
-                                onChangeText={setIdentifier}
-                                placeholder="you@example.com or +91..."
-                                placeholderTextColor={colors.textMuted}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }}
-                            />
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                {(identifier.length > 0 && /^\d/.test(identifier)) && (
+                                    <CountryCodePicker 
+                                        selectedCountry={selectedCountry} 
+                                        onSelect={setSelectedCountry} 
+                                    />
+                                )}
+                                <TextInput
+                                    value={identifier}
+                                    onChangeText={setIdentifier}
+                                    placeholder="Email or Phone Number"
+                                    placeholderTextColor={colors.textMuted}
+                                    keyboardType={identifier.includes('@') ? "email-address" : "default"}
+                                    autoCapitalize="none"
+                                    textContentType="username"
+                                    autoComplete="username"
+                                    style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }}
+                                />
+                            </View>
                         </View>
 
                         {selectedRole === 'admin' ? (
@@ -189,6 +213,8 @@ export default function LoginScreen() {
                                         placeholder="••••••••"
                                         placeholderTextColor={colors.textMuted}
                                         secureTextEntry={!showPassword}
+                                        textContentType="password"
+                                        autoComplete="password"
                                         style={{ flex: 1, color: colors.text }}
                                     />
                                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>

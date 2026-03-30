@@ -5,6 +5,7 @@ import { users, organizations, project_members, projects } from "../models/index
 import { Op } from "sequelize";
 import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
+import { normalizePhone, isValidPhone } from "../utils/sms.ts";
 
 export const adminLogin = async (req: Request, res: Response) => {
     try {
@@ -14,11 +15,18 @@ export const adminLogin = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Password is required" });
         }
 
+        if (phone && !isValidPhone(phone)) {
+            return res.status(400).json({ error: "Invalid phone number. Please enter a 10-digit number." });
+        }
+
+        const normalizedPhone = phone ? normalizePhone(phone) : null;
+        const normalizedEmail = email ? email.toLowerCase() : null;
+
         const user = await users.findOne({
             where: {
                 [Op.or]: [
-                    email ? { email: email.toLowerCase() } : null,
-                    phone ? { phone_number: phone } : null
+                    normalizedEmail ? { email: normalizedEmail } : null,
+                    normalizedPhone ? { phone_number: normalizedPhone } : null
                 ].filter(Boolean) as any[]
             }
         });
@@ -72,12 +80,19 @@ export const projectLogin = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Email or Phone number is required" });
         }
 
+        if (phone && !isValidPhone(phone)) {
+            return res.status(400).json({ error: "Invalid phone number. Please enter a 10-digit number." });
+        }
+
+        const normalizedPhone = phone ? normalizePhone(phone) : null;
+        const normalizedEmail = email ? email.toLowerCase() : null;
+
         let user = await users.findOne({
             where: {
                 organization_id: project.organization_id,
                 [Op.or]: [
-                    email ? { email: email.toLowerCase() } : null,
-                    phone ? { phone_number: phone } : null
+                    normalizedEmail ? { email: normalizedEmail } : null,
+                    normalizedPhone ? { phone_number: normalizedPhone } : null
                 ].filter(Boolean) as any[]
             }
         });
@@ -90,11 +105,11 @@ export const projectLogin = async (req: Request, res: Response) => {
             user = await users.create({
                 organization_id: project.organization_id,
                 name: "Pending",
-                email: email ? email.toLowerCase() : null,
-                phone_number: phone || null,
+                email: normalizedEmail,
+                phone_number: normalizedPhone,
                 role: roleForCode,
-                email_verified: !!email,
-                phone_verified: !!phone,
+                email_verified: !!normalizedEmail,
+                phone_verified: !!normalizedPhone,
                 is_primary: false
             });
             isNewUser = true;
@@ -260,7 +275,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
             organization_id: decoded.organization_id,
             name,
             email: email?.toLowerCase() || null,
-            phone_number: phone || null,
+            phone_number: phone ? normalizePhone(phone) : null,
             role: decoded.role,
             email_verified: !!email,
             phone_verified: !!phone,

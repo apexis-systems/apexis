@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-    View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Image
+    View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Image, Pressable, TextInput as RNTextInput
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import {
     verifyOnboardingToken, completePublicSignup
 } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useRef } from 'react';
+import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
 
 type Step = 'details' | 'otp' | 'onboarding' | 'public_onboarding';
 
@@ -34,10 +36,12 @@ export default function SignUpScreen() {
 
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]); // India
     const [error, setError] = useState('');
 
     const { login } = useAuth();
     const router = useRouter();
+    const otpRef = useRef<RNTextInput>(null);
     const { colors } = useTheme();
 
     useEffect(() => {
@@ -86,11 +90,21 @@ export default function SignUpScreen() {
         setIsLoading(true);
         setError('');
 
+        const cleanPhone = phone.trim().replace(selectedCountry.code, "").trim();
+
+        if (phone && !/^\d{10}$/.test(cleanPhone)) {
+            setError("Please enter a valid 10-digit phone number.");
+            setIsLoading(false);
+            return;
+        }
+
+        const normalizedPhone = phone && /^\d{10}$/.test(cleanPhone) ? `${selectedCountry.code}${cleanPhone}` : phone?.trim();
+
         try {
             await requestAdminOtp({
                 name,
                 email: email || undefined,
-                phone: phone || undefined,
+                phone: normalizedPhone || undefined,
                 password,
                 organization_name: orgName,
                 verification_method: (email && phone) ? verificationMethod : (phone ? 'phone' : 'email')
@@ -112,10 +126,20 @@ export default function SignUpScreen() {
         setIsLoading(true);
         setError('');
 
+        const cleanPhone = phone.trim().replace(selectedCountry.code, "").trim();
+
+        if (phone && !/^\d{10}$/.test(cleanPhone)) {
+            setError("Please enter a valid 10-digit phone number.");
+            setIsLoading(false);
+            return;
+        }
+
+        const normalizedPhone = phone && /^\d{10}$/.test(cleanPhone) ? `${selectedCountry.code}${cleanPhone}` : phone?.trim();
+
         try {
             const res = await verifyAdminOtp({
                 email: email || undefined,
-                phone: phone || undefined,
+                phone: normalizedPhone || undefined,
                 otp,
                 verification_method: (email && phone) ? verificationMethod : (phone ? 'phone' : 'email')
             });
@@ -124,7 +148,7 @@ export default function SignUpScreen() {
                 router.replace('/(tabs)');
             }
         } catch (err: any) {
-            setError(err.response?.data?.error || "Invalid OTP. Please try again.");
+            setError(err.response?.data?.error || "Failed to verify OTP. Please try again.");
         } finally {
             setIsLoading(false);
         }
@@ -175,7 +199,7 @@ export default function SignUpScreen() {
                 token: publicToken as string,
                 name,
                 email: email || undefined,
-                phone: phone || undefined,
+                phone: (phone && /^\d{10}$/.test(phone.trim().replace(selectedCountry.code, "").trim())) ? `${selectedCountry.code}${phone.trim().replace(selectedCountry.code, "").trim()}` : phone?.trim(),
                 project_code: projectCode
             });
 
@@ -217,19 +241,19 @@ export default function SignUpScreen() {
 
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Email Address</Text>
-                                <TextInput value={email} editable={false} style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.textMuted, paddingHorizontal: 14 }} />
+                                <TextInput value={email} editable={false} textContentType="emailAddress" autoComplete="email" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.textMuted, paddingHorizontal: 14 }} />
                             </View>
 
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Full Name</Text>
-                                <TextInput value={name} onChangeText={setName} placeholder="John Doe" placeholderTextColor={colors.textMuted} autoCapitalize="words" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                <TextInput value={name} onChangeText={setName} placeholder="John Doe" placeholderTextColor={colors.textMuted} autoCapitalize="words" textContentType="name" autoComplete="name" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
                             </View>
 
                             {(role !== 'contributor' && role !== 'client') && (
                                 <View>
                                     <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Create Password</Text>
                                     <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 }}>
-                                        <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} style={{ flex: 1, color: colors.text }} />
+                                        <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} textContentType="newPassword" autoComplete="password-new" style={{ flex: 1, color: colors.text }} />
                                         <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
                                     </View>
                                 </View>
@@ -252,17 +276,20 @@ export default function SignUpScreen() {
 
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Full Name</Text>
-                                <TextInput value={name} onChangeText={setName} placeholder="John Doe" placeholderTextColor={colors.textMuted} autoCapitalize="words" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                <TextInput value={name} onChangeText={setName} placeholder="John Doe" placeholderTextColor={colors.textMuted} autoCapitalize="words" textContentType="name" autoComplete="name" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
                             </View>
 
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Email Address</Text>
-                                <TextInput value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                <TextInput value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" textContentType="emailAddress" autoComplete="email" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
                             </View>
 
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Phone Number (Optional)</Text>
-                                <TextInput value={phone} onChangeText={setPhone} placeholder="+91..." placeholderTextColor={colors.textMuted} keyboardType="phone-pad" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <CountryCodePicker selectedCountry={selectedCountry} onSelect={setSelectedCountry} />
+                                    <TextInput value={phone} onChangeText={setPhone} placeholder="Phone Number (Optional)" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                </View>
                             </View>
 
                             <View>
@@ -283,15 +310,18 @@ export default function SignUpScreen() {
                         <View style={{ gap: 16 }}>
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Full Name</Text>
-                                <TextInput value={name} onChangeText={setName} placeholder="John Doe" placeholderTextColor={colors.textMuted} autoCapitalize="words" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                <TextInput value={name} onChangeText={setName} placeholder="John Doe" placeholderTextColor={colors.textMuted} autoCapitalize="words" textContentType="name" autoComplete="name" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
                             </View>
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Work Email</Text>
-                                <TextInput value={email} onChangeText={setEmail} placeholder="you@company.com" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                <TextInput value={email} onChangeText={setEmail} placeholder="you@company.com" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" textContentType="emailAddress" autoComplete="email" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
                             </View>
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Phone Number</Text>
-                                <TextInput value={phone} onChangeText={setPhone} placeholder="+91..." placeholderTextColor={colors.textMuted} keyboardType="phone-pad" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <CountryCodePicker selectedCountry={selectedCountry} onSelect={setSelectedCountry} />
+                                    <TextInput value={phone} onChangeText={setPhone} placeholder="Phone Number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                </View>
                             </View>
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Organization Name</Text>
@@ -324,7 +354,7 @@ export default function SignUpScreen() {
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Password</Text>
                                 <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 }}>
-                                    <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} style={{ flex: 1, color: colors.text }} />
+                                    <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} textContentType="password" autoComplete="password" style={{ flex: 1, color: colors.text }} />
                                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
                                 </View>
                             </View>
@@ -341,14 +371,25 @@ export default function SignUpScreen() {
                             <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, textAlign: 'center' }}>
                                 Enter 6-digit OTP sent to {((email && phone) ? verificationMethod === 'email' : !phone) ? email : phone}
                             </Text>
-                            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 20 }}>
+                            <Pressable 
+                                onPress={() => otpRef.current?.focus()}
+                                style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 20 }}
+                            >
                                 {Array.from({ length: 6 }).map((_, i) => (
-                                    <View key={i} style={{ width: 44, height: 52, borderRadius: 10, backgroundColor: colors.surface, borderWidth: 2, borderColor: otp[i] ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                    <View key={i} pointerEvents="none" style={{ width: 44, height: 52, borderRadius: 10, backgroundColor: colors.surface, borderWidth: 2, borderColor: otp[i] ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center' }}>
                                         <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>{otp[i] || ''}</Text>
                                     </View>
                                 ))}
-                            </View>
-                            <TextInput value={otp} onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, '').slice(0, 6))} keyboardType="number-pad" maxLength={6} style={{ position: 'absolute', opacity: 0, height: 52, width: '100%' }} autoFocus />
+                                <TextInput 
+                                    ref={otpRef}
+                                    value={otp} 
+                                    onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, '').slice(0, 6))} 
+                                    keyboardType="number-pad" 
+                                    maxLength={6} 
+                                    style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0 }} 
+                                    autoFocus 
+                                />
+                            </Pressable>
                             {error ? <Text style={{ color: '#ef4444', textAlign: 'center', fontSize: 13 }}>{error}</Text> : null}
                             <TouchableOpacity onPress={handleVerifyOtp} disabled={otp.length !== 6 || isLoading} style={{ height: 52, borderRadius: 14, backgroundColor: otp.length === 6 ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center', opacity: isLoading ? 0.7 : 1 }}>
                                 {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: otp.length === 6 ? '#fff' : colors.textMuted }}>Verify & Sign Up</Text>}

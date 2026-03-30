@@ -14,7 +14,7 @@ import { io, Socket } from 'socket.io-client';
 import { QrCode, Monitor, Download, ChevronRight, Lock } from 'lucide-react';
 const Login = () => {
     // Mode toggle
-    const [loginMode, setLoginMode] = useState<'qr' | 'email'>('email');
+    const [loginMode, setLoginMode] = useState<'qr' | 'email'>('qr');
 
     // Email/Password State
     const [email, setEmail] = useState('');
@@ -105,12 +105,19 @@ const Login = () => {
 
         try {
             let res;
+            const isEmail = email.includes('@');
+            const normalizedIdentifier = !isEmail && /^\d{10}$/.test(email.trim()) 
+                ? `+91${email.trim()}` 
+                : email.trim();
+
             if (selectedRole === 'superadmin') {
-                res = await loginSuperAdmin({ email, password });
+                res = await loginSuperAdmin({ email: normalizedIdentifier, password });
             } else if (selectedRole === 'admin') {
-                res = await loginAdmin({ email, password });
+                const payload = isEmail ? { email: normalizedIdentifier, password } : { phone: normalizedIdentifier, password };
+                res = await loginAdmin(payload);
             } else if (selectedRole === 'contributor') {
-                res = await loginProject({ email, code: projectCode });
+                const payload = isEmail ? { email: normalizedIdentifier, code: projectCode } : { phone: normalizedIdentifier, code: projectCode };
+                res = await loginProject(payload);
             } else if (selectedRole === 'client') {
                 res = await loginProject({ name: clientName, code: projectCode });
             }
@@ -304,11 +311,11 @@ const Login = () => {
                                             </div>
                                         ) : (
                                             <div className="space-y-2">
-                                                <Label htmlFor="email" className="text-sm font-medium">Work Email</Label>
+                                                <Label htmlFor="email" className="text-sm font-medium">Email or Phone Number</Label>
                                                 <Input
                                                     id="email"
-                                                    type="email"
-                                                    placeholder="you@company.com"
+                                                    type="text"
+                                                    placeholder="you@company.com or +91..."
                                                     value={email}
                                                     onChange={(e) => setEmail(e.target.value)}
                                                     className="h-12 rounded-xl bg-secondary/50 border-border/50 text-base"
