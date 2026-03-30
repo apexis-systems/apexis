@@ -519,7 +519,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 >
                                     <Feather name="file-text" size={32} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
                                     {isSelected && (
-                                        <View style={{ position: 'absolute', top: 4, left: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
+                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
@@ -779,37 +779,32 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                         </TouchableOpacity>
                         <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{selectedFolders.size + selectedFiles.size} selected</Text>
                     </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', paddingRight: 10 }}>
-                        <View style={{ flexDirection: 'row', gap: 15, alignItems: 'center', marginLeft: 10 }}>
-                            <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
-                                <Feather name="share-2" size={18} color={colors.primary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
-                                <Feather name="move" size={18} color={colors.primary} />
-                            </TouchableOpacity>
-                            {user.role === 'admin' && (
-                                <>
-                                    <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
-                                    <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
-                                        <Feather name="eye" size={18} color={colors.primary} />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
-                                        <Feather name="eye-off" size={18} color={colors.primary} />
-                                    </TouchableOpacity>
-                                    <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
-                                    <TouchableOpacity onPress={() => handleBulkDoNotFollow(true)} style={{ padding: 4 }}>
-                                        <View style={{ position: 'relative' }}>
-                                            <Feather name="shield" size={18} color="#ef4444" />
-                                            <Text style={{ position: 'absolute', top: -4, right: -4, fontSize: 7, color: '#ef4444', fontWeight: 'bold' }}>!</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => handleBulkDoNotFollow(false)} style={{ padding: 4 }}>
-                                        <Feather name="shield" size={18} color={colors.primary} />
-                                    </TouchableOpacity>
-                                </>
-                            )}
-                        </View>
-                    </ScrollView>
+                    <View style={{ flexDirection: 'row', gap: 15, alignItems: 'center' }}>
+                        <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
+                            <Feather name="share-2" size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
+                            <Feather name="move" size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                        {user.role === 'admin' && (
+                            <>
+                                <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
+                                <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
+                                    <Feather name="eye" size={18} color={colors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
+                                    <Feather name="eye-off" size={18} color={colors.primary} />
+                                </TouchableOpacity>
+                                <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
+                                <TouchableOpacity onPress={() => handleBulkDoNotFollow(true)} style={{ padding: 4 }}>
+                                    <Feather name="shield" size={18} color="#ef4444" />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleBulkDoNotFollow(false)} style={{ padding: 4 }}>
+                                    <Feather name="shield-off" size={18} color={colors.primary} />
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
                 </View>
             )}
 

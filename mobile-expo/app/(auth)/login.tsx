@@ -64,14 +64,21 @@ export default function LoginScreen() {
             const stored = await SecureStore.getItemAsync(key);
             if (stored) {
                 const data = JSON.parse(stored);
-                setIdentifier(data.identifier || '');
-                if (selectedRole === 'admin') setPassword(data.secret || '');
-                else setProjectCode(data.secret || '');
+                // Only load stored identifier if not provided via params or already set
+                if (!identifier) setIdentifier(data.identifier || '');
+                
+                if (selectedRole === 'admin') {
+                    if (!password) setPassword(data.secret || '');
+                } else {
+                    // CRITICAL: Do not overwrite projectCode if it came from a deep link (params.code)
+                    if (!params.code) setProjectCode(data.secret || '');
+                }
                 setRememberMe(true);
             } else {
-                setIdentifier('');
-                setPassword('');
-                setProjectCode('');
+                // Only clear if not provided via params
+                if (!identifier) setIdentifier('');
+                if (selectedRole === 'admin') setPassword('');
+                else if (!params.code) setProjectCode('');
                 setRememberMe(false);
             }
         } catch (e) {
