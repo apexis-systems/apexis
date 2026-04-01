@@ -82,7 +82,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let newSocket: Socket | null = null;
 
         if (isLoggedIn) {
-            const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001';
+            const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
             const socketUrl = backendUrl.replace('/api', '');
 
             newSocket = io(socketUrl, {

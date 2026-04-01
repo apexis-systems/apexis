@@ -22,6 +22,7 @@ import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 import MainHeader from '@/components/shared/MainHeader';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { getSecureFileUrl } from '@/services/fileService';
+import { registerForPushNotificationsAsync } from '@/services/notificationService';
 
 export default function DashboardScreen() {
   const { user, updateUser } = useAuth();
@@ -63,6 +64,9 @@ export default function DashboardScreen() {
       if (orgs?.logo) {
         setLocalLogoKey(orgs.logo);
       }
+      
+      // Request notification permissions and register token on home screen
+      registerForPushNotificationsAsync();
     }
   }, [user, selectedOrgId]);
 

@@ -85,11 +85,19 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
         periodStartIST = new Date(nowIST);
         periodStartIST.setHours(0, 0, 0, 0);
     } else if (type === 'weekly') {
-        // Start from Monday of the current ISO week (in IST)
-        periodStartIST = new Date(nowIST);
-        const day = periodStartIST.getDay();
-        const diff = day === 0 ? 6 : day - 1;
-        periodStartIST.setDate(periodStartIST.getDate() - diff);
+        // Find the most recently completed Sunday (in IST)
+        periodEndIST = new Date(nowIST);
+        const day = periodEndIST.getDay(); // 0 (Sun) to 6 (Sat)
+        
+        // If it's not Sunday, go back to the previous Sunday.
+        if (day !== 0) {
+            periodEndIST.setDate(periodEndIST.getDate() - day);
+        }
+        periodEndIST.setHours(23, 59, 59, 999);
+
+        // Period starts 6 days BEFORE that Sunday (i.e., Monday)
+        periodStartIST = new Date(periodEndIST);
+        periodStartIST.setDate(periodStartIST.getDate() - 6);
         periodStartIST.setHours(0, 0, 0, 0);
     } else {
         // Monthly: Start from 1st of the current month

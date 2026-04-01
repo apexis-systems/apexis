@@ -1,11 +1,12 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-
 import { Platform } from 'react-native';
 import { PrivateAxios } from '../helpers/PrivateAxios';
 
 export const registerForPushNotificationsAsync = async () => {
+    let Notifications: any;
+    let messaging: any;
+
     try {
         if (!Device.isDevice) {
             console.log('Must use physical device for Push Notifications');
@@ -17,25 +18,63 @@ export const registerForPushNotificationsAsync = async () => {
             return null;
         }
 
+        // Only require these when actually needed to avoid crashes in Expo Go
+        try {
+            Notifications = require('expo-notifications');
+            messaging = require('@react-native-firebase/messaging').default;
+        } catch (e) {
+            console.log('Native notification modules not found.');
+            return null;
+        }
+
+
+        if (!Notifications || !messaging) {
+            console.log('Push notifications not supported in this environment (likely Expo Go).');
+            return null;
+        }
+
+        // Set how notifications should be handled when the app is in the foreground
+        Notifications.setNotificationHandler({
+            handleNotification: async () => ({
+                shouldShowAlert: true,
+                shouldPlaySound: true,
+                shouldSetBadge: true,
+            }),
+        });
 
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
 
         if (existingStatus !== 'granted') {
-            const { status } = await Notifications.requestPermissionsAsync();
+            console.log('Requesting notification permissions...');
+            const { status } = await Notifications.requestPermissionsAsync({
+                ios: {
+                    allowAlert: true,
+                    allowBadge: true,
+                    allowSound: true,
+                },
+            });
             finalStatus = status;
         }
 
+        console.log('Notification permission status:', finalStatus);
+
         if (finalStatus !== 'granted') {
-            console.log('Failed to get push token for push notification!');
+            console.log('Failed to get push token for push notification (permission not granted)!');
             return null;
         }
 
-        const token = (await Notifications.getDevicePushTokenAsync()).data;
-        console.log('FCM Token:', token);
+        // Register the device with FCM (required for iOS)
+        if (!messaging().isDeviceRegisteredForRemoteMessages) {
+            await messaging().registerDeviceForRemoteMessages();
+        }
+
+        // Use Firebase Native SDK to get the FCM token (works for both iOS and Android)
+        const token = await messaging().getToken();
+        console.log('FCM Token (Native):', token);
 
         if (Platform.OS === 'android') {
-            Notifications.setNotificationChannelAsync('default', {
+            await Notifications.setNotificationChannelAsync('default', {
                 name: 'default',
                 importance: Notifications.AndroidImportance.MAX,
                 vibrationPattern: [0, 250, 250, 250],
