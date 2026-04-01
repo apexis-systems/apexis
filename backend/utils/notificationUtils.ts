@@ -34,6 +34,27 @@ export const sendNotification = async ({
             try {
                 await messaging.send({
                     notification: { title, body },
+                    android: {
+                        priority: 'high',
+                        notification: {
+                            channelId: 'default',
+                            priority: 'max',
+                            sound: 'default',
+                            visibility: 'public'
+                        }
+                    },
+                    apns: {
+                        payload: {
+                            aps: {
+                                sound: 'default',
+                                badge: 1,
+                                'content-available': 1
+                            }
+                        },
+                        headers: {
+                            'apns-priority': '10'
+                        }
+                    },
                     data: {
                         ...Object.keys(data).reduce((acc: any, key) => {
                             acc[key] = String(data[key]);
