@@ -1,4 +1,4 @@
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, useGlobalSearchParams } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
@@ -46,9 +46,11 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (isLoggedIn && user) {
-      registerForPushNotificationsAsync();
+      // Notification registration moved to Dashboard (index.tsx) to ensure it triggers on home screen
     }
   }, [isLoggedIn, user]);
+
+  const { code } = useGlobalSearchParams();
 
   useEffect(() => {
     // Don't run until initial auth check (getMe) has resolved — navigator isn't mounted yet
@@ -58,16 +60,18 @@ function RootLayoutNav() {
     const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup';
     const isSetupName = segments[0] === '(auth)' && segments[1] === 'setup-name';
 
+    const isInvitation = !!code;
+
     if (!isLoggedIn && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (isLoggedIn && isPendingName && !isSetupName) {
       // New user (name is "Pending") — must complete name setup before accessing app
       router.replace('/(auth)/setup-name');
-    } else if (isLoggedIn && inAuthGroup && !isSignupWithToken && !isSetupName) {
-      // Fully set-up user in auth group → go to tabs
+    } else if (isLoggedIn && inAuthGroup && !isSignupWithToken && !isSetupName && !isInvitation) {
+      // Fully set-up user in auth group → go to tabs (unless it's an invitation)
       router.replace('/(tabs)');
     }
-  }, [isLoggedIn, isAuthLoading, isPendingName, segments]);
+  }, [isLoggedIn, isAuthLoading, isPendingName, segments, code]);
 
   if (isAuthLoading || !fontsLoaded) {
     return null;
