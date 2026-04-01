@@ -34,7 +34,7 @@ const REPORT_PDF_ASSETS = {
 
 /** Brand palette aligned with Apexis PDF templates (amber / orange accents). */
 const BRAND = {
-    orange: '#ea8c0a',
+    orange: '#f97415',
     orangeDark: '#c2410c',
     amber: '#fbbf24',
     ink: '#1c1917',
@@ -67,7 +67,7 @@ const fetchS3Buffer = async (fileKey: string): Promise<Buffer> => {
         }
         return Buffer.concat(chunks);
     }
-    
+
     // Node.js stream fallback
     return new Promise((resolve, reject) => {
         const chunks: any[] = [];
@@ -138,7 +138,7 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
             } else {
                 folderCounts.docs++;
                 totalDocs++;
-                
+
                 if (file.file_type === 'application/pdf' || file.file_name.toLowerCase().endsWith('.pdf')) {
                     pdfFiles.push({ file, folderPath });
                 }
@@ -323,7 +323,7 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
         // 4. Merge PDFs
         emitStatus('Assembling final package...', 'progress');
         const mergedPdf = await PDFLibDocument.create();
-        
+
         const imagesPdfBytes = fs.readFileSync(imagesPdfPath);
         const docsPdfBytes = fs.readFileSync(docsPdfPath);
 
@@ -344,7 +344,7 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
                 try {
                     const pdfBuffer = fs.readFileSync(localPath);
                     const externalPdf = await PDFLibDocument.load(pdfBuffer, { ignoreEncryption: true });
-                    
+
                     const validPageIndices: number[] = [];
                     for (let pIdx = 0; pIdx < externalPdf.getPageCount(); pIdx++) {
                         const page = externalPdf.getPage(pIdx);
@@ -357,7 +357,7 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
                             } else if (contents?.constructor?.name === 'PDFArray' && (contents as any).size() === 0) {
                                 if (!annots) isBlank = true;
                             }
-                        } catch (err) {}
+                        } catch (err) { }
 
                         if (!isBlank) {
                             validPageIndices.push(pIdx);
@@ -435,406 +435,682 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
     }
 };
 
-export const generateSingleReportPDF = async (reportId: number): Promise<Buffer> => {
-    const report = await db.reports.findByPk(reportId);
-    if (!report) throw new Error("Report not found");
+/** --- SHARED PDF LAYOUT HELPERS --- */
 
-    const project = await db.projects.findByPk(report.project_id);
-    const projectName = project?.name || 'Project';
-
-    const typeLabel: Record<string, string> = {
-        daily: 'Daily Project Report',
-        weekly: 'Weekly Project Report',
-        monthly: 'Monthly Project Report',
-    };
-    const typeBadge: Record<string, string> = {
-        daily: 'DAILY REPORT',
-        weekly: 'WEEKLY REPORT',
-        monthly: 'MONTHLY REPORT',
-    };
-
-    const reportType = report.type as string;
-    const titleMain = (typeLabel[reportType] || 'Project Report').toUpperCase();
-    const badgeLabel = typeBadge[reportType] || 'REPORT';
-
-    const hasAngelica = fs.existsSync(REPORT_PDF_ASSETS.angelica);
+const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compact: boolean = false) => {
     const hasLogo = fs.existsSync(REPORT_PDF_ASSETS.logo);
-    const brandFont = () => (hasAngelica ? 'Angelica' : 'Helvetica-Bold');
+    const hasAngelica = fs.existsSync(REPORT_PDF_ASSETS.angelica);
+    const brandFont = hasAngelica ? 'Angelica' : 'Helvetica-Bold';
+    const pageW = doc.page.width;
+    const left = doc.page.margins.left;
+    const r = pageW - doc.page.margins.right;
 
-    /** Top clears header rule; bottom reserves space for footer drawn *above* maxY() (see footer pass). */
-    const margin = { top: 96, bottom: 64, left: 44, right: 44 };
+    // Top orange accent (commented out as per previous manual edit)
+    // doc.save().rect(0, 0, pageW, 5).fill(BRAND.orange).restore();
+
+    // Centered Logo & Brand
+    const logoH = 32;
+    const blockTop = 15;
+    doc.font(brandFont).fontSize(20);
+    const brandTextW = doc.widthOfString('APEXIS');
+    doc.font('Helvetica-Bold').fontSize(5.5);
+    const tagW = doc.widthOfString(taglineStr);
+    const gap = 10;
+    const clusterW = (hasLogo ? logoH + gap : 0) + Math.max(brandTextW, tagW);
+    const clusterLeft = (pageW - clusterW) / 2;
+
+    let textLeft = clusterLeft;
+    if (hasLogo) {
+        try {
+            doc.image(REPORT_PDF_ASSETS.logo, clusterLeft, blockTop, { height: logoH });
+        } catch (e) { /* ignore */ }
+        textLeft = clusterLeft + logoH + gap;
+    }
+
+    doc.font(brandFont).fontSize(20).fillColor(BRAND.orange);
+    doc.text('APEXIS', textLeft, blockTop + 4, { lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(5.5).fillColor(BRAND.muted);
+    // Moved from +24 to +28 to increase the vertical gap with the BRAND text (as per user tweak)
+    doc.text(taglineStr, textLeft + (brandTextW - tagW) / 2 + 3, blockTop + 28, { lineBreak: false });
+
+    if (!compact) {
+        // Header Rule
+        const ruleY = 60;
+        doc.moveTo(left, ruleY).lineTo(r, ruleY).strokeColor(BRAND.orange).lineWidth(1.2).stroke();
+
+        // Center Title below rule
+        doc.font('Helvetica-Bold').fontSize(14).fillColor(BRAND.ink);
+        doc.text(titleStr.toUpperCase(), left, ruleY + 12, { width: r - left, align: 'center' });
+        doc.y = ruleY + 35;
+    } else {
+        const ruleY = 60;
+        doc.moveTo(left, ruleY).lineTo(r, ruleY).strokeColor(BRAND.orange).lineWidth(1.2).stroke();
+        doc.y = ruleY + 10;
+    }
+};
+
+const drawMonthlyCoverPage = (doc: any, project: any, report: any) => {
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+    const hasLogo = fs.existsSync(REPORT_PDF_ASSETS.logo);
+    const hasAngelica = fs.existsSync(REPORT_PDF_ASSETS.angelica);
+    const brandFont = hasAngelica ? 'Angelica' : 'Helvetica-Bold';
+    const monthStr = new Date(report.period_start).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }).toUpperCase();
+
+    // Full-page background (Stone/Beige) with 70% opacity
+    doc.save().rect(0, 0, pageWidth, pageHeight).fillOpacity(0.7).fill('#d6d3d1').restore();
+
+    // Top & Bottom Accent
+    doc.save().rect(0, 0, pageWidth, 8).fill(BRAND.orange).restore();
+    doc.save().rect(0, pageHeight - 8, pageWidth, 8).fill(BRAND.orange).restore();
+
+    // Branding Cluster (Centered)
+    const logoH = 64;
+    const blockTop = 100;
+    doc.font(brandFont).fontSize(48);
+    const brandTextW = doc.widthOfString('APEXIS');
+    const taglineStr = 'RECORD · REPORT · RELEASE .';
+    doc.font('Helvetica').fontSize(10);
+    const tagW = doc.widthOfString(taglineStr);
+    const clusterW = Math.max(brandTextW, tagW, hasLogo ? logoH : 0);
+
+    if (hasLogo) {
+        try {
+            doc.image(REPORT_PDF_ASSETS.logo, (pageWidth - logoH) / 2, blockTop, { height: logoH });
+        } catch (e) { /* ignore */ }
+    }
+
+    doc.font(brandFont).fontSize(48).fillColor(BRAND.orange);
+    doc.text('APEXIS', (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
+
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.muted);
+    doc.text(taglineStr, (pageWidth - tagW) / 2, blockTop + logoH + 85, { lineBreak: false });
+
+    // Title Block
+    doc.save().moveTo(pageWidth * 0.35, blockTop + logoH + 115).lineTo(pageWidth * 0.65, blockTop + logoH + 115).strokeColor(BRAND.orange).lineWidth(1.5).stroke().restore();
+
+    doc.font('Helvetica-Bold').fontSize(34).fillColor(BRAND.tableHeader);
+    const title1 = 'MONTHLY PROJECT';
+    const title2 = 'REPORT';
+    doc.text(title1, 0, blockTop + logoH + 145, { width: pageWidth, align: 'center' });
+    doc.text(title2, 0, blockTop + logoH + 185, { width: pageWidth, align: 'center' });
+
+    doc.font('Helvetica-Bold').fontSize(16).fillColor(BRAND.orange);
+    doc.text(monthStr, 0, blockTop + logoH + 235, { width: pageWidth, align: 'center' });
+
+    // Info Box (Large artistic style)
+    const boxW = pageWidth * 0.8;
+    const boxX = (pageWidth - boxW) / 2;
+    const boxY = blockTop + logoH + 280;
+    const boxH = 200;
+
+    doc.save().roundedRect(boxX, boxY, boxW, boxH, 15).fill('#d6d3d1').restore();
+
+    const drawLine = (label: string, value: string, yPos: number) => {
+        doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text(label, boxX + 40, yPos);
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND.tableHeader).text(value || ' ', boxX + 180, yPos, { width: boxW - 220, ellipsis: true });
+    };
+
+    const s = (report.summary || {}) as any;
+    drawLine('Project', project?.name || ' ', boxY + 30);
+    drawLine('Client', (s.client || []).join(', ') || ' ', boxY + 65);
+    drawLine('Consultant', s.consultant || 'Apexis Engineering Consultants', boxY + 100);
+    drawLine('Contributors', (s.contributors || []).join(', ') || ' ', boxY + 135);
+    drawLine('Period', monthStr, boxY + 170);
+
+    // Footer Platform Title
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(BRAND.muted).text('CONSTRUCTION COMMUNICATION PLATFORM', 0, pageHeight - 50, { width: pageWidth, align: 'center', lineBreak: false });
+};
+
+const drawInfoBox = (doc: any, x: number, y: number, w: number, label: string, value: string) => {
+    const h = 34;
+    doc.save();
+    doc.roundedRect(x, y, w, h, 7).fill('#f4f4f5');
+    // doc.roundedRect(x, y, w, h, 3).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+    doc.restore();
+
+    doc.font('Helvetica-Bold').fontSize(6).fillColor(BRAND.muted).text(label.toUpperCase(), x + 8, y + 6);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND.ink).text(value || ' ', x + 8, y + 16, { width: w - 16, height: 14, ellipsis: true });
+};
+
+const drawDashboardKPIs = (doc: any, kpis: { label: string, value: string | number }[]) => {
+    const left = doc.page.margins.left;
+    const r = doc.page.width - doc.page.margins.right;
+    const w = r - left;
+    const gap = 12;
+    const n = kpis.length;
+    const boxW = (w - gap * (n - 1)) / n;
+    const y0 = doc.y;
+    const boxH = 68;
+
+    kpis.forEach((k, i) => {
+        const x = left + i * (boxW + gap);
+        doc.save().roundedRect(x, y0, boxW, boxH, 8).fill(BRAND.tableRowAlt).restore();
+
+        doc.font('Helvetica-Bold').fontSize(24).fillColor(BRAND.orange).text(String(k.value || '0'), x, y0 + 16, { width: boxW, align: 'center' });
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(BRAND.muted).text(k.label.toUpperCase(), x, y0 + 44, { width: boxW, align: 'center' });
+    });
+    doc.y = y0 + boxH + 25; // More breathing room below the dashboard
+};
+
+const drawMonthlyDashboard = (doc: any, kpis: { label: string, value: string | number }[]) => {
+    const left = doc.page.margins.left;
+    const r = doc.page.width - doc.page.margins.right;
+    const w = r - left;
+    const gap = 12;
+    const y0 = doc.y;
+    const boxH = 64;
+    const boxW = (w - gap) / 2;
+
+    kpis.forEach((k, i) => {
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const x = left + col * (boxW + gap);
+        const y = y0 + row * (boxH + 8);
+
+        doc.save().roundedRect(x, y, boxW, boxH, 12).fill(BRAND.tableRowAlt).restore();
+        doc.font('Helvetica-Bold').fontSize(24).fillColor(BRAND.orange).text(String(k.value || '0'), x, y + 14, { width: boxW, align: 'center' });
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(BRAND.muted).text(k.label.toUpperCase(), x, y + 42, { width: boxW, align: 'center' });
+    });
+    doc.y = y0 + boxH * 2 + 18; // More breathing room below the multi-row dashboard
+};
+
+const drawBulletBox = (doc: any, title: string, items: string[], color: string, isRisk: boolean = false) => {
+    const left = doc.page.margins.left;
+    const r = doc.page.width - doc.page.margins.right;
+    const w = r - left;
+    const y0 = doc.y;
+
+    // Estimate box height
+    const initialY = doc.y;
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND.orange).text(title.toUpperCase(), left);
+    doc.moveDown(0.5);
+    const boxStartY = doc.y;
+    const listY = doc.y + 12;
+
+    // Preliminary draw to calculate height
+    let currY = listY;
+    items.forEach(item => {
+        const textH = doc.heightOfString(item, { width: w - 40 });
+        currY += textH + 8;
+    });
+
+    const boxH = Math.max(60, currY - boxStartY + 10);
+    doc.save().roundedRect(left, boxStartY, w, boxH, 10).fill(color).restore();
+
+    doc.y = listY;
+    items.forEach(item => {
+        const xText = left + 25;
+        const yText = doc.y;
+
+        // Bullet
+        if (isRisk) {
+            doc.save().rect(left + 12, yText + 2, 6, 6).fill('#854d0e').restore(); // Square amber/red
+        } else {
+            doc.save().circle(left + 15, yText + 5, 3).fill(BRAND.ink).restore(); // Circle navy
+        }
+
+        doc.font('Helvetica').fontSize(9).fillColor(BRAND.ink).text(item, xText, yText, { width: w - 40 });
+        doc.moveDown(0.6);
+    });
+
+    doc.y = boxStartY + boxH + 15;
+};
+
+const drawStyledTable = (doc: any, title: string, headers: { text: string, w: number }[], rows: any[][]) => {
+    const left = doc.page.margins.left;
+    const r = doc.page.width - doc.page.margins.right;
+    const contentBottom = doc.page.maxY() - 40;
+
+    const ensureSpace = (h: number) => {
+        if (doc.y + h > contentBottom) {
+            doc.addPage();
+            doc.y = 85; // Reserve space for compact header (rule ends at 70, +15px gap)
+            return true;
+        }
+        return false;
+    };
+
+    ensureSpace(40);
+    doc.moveDown(1);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text(title.toUpperCase(), left);
+    doc.moveDown(0.2);
+    const lineY = doc.y;
+    doc.moveTo(left, lineY).lineTo(r, lineY).strokeColor(BRAND.line).lineWidth(0.5).stroke();
+    doc.moveDown(0.5);
+
+    // Header
+    ensureSpace(20);
+    const headY = doc.y;
+    doc.save().roundedRect(left, headY, r - left, 20, 4).fill(BRAND.tableHeader).restore();
+    let currX = left;
+    headers.forEach(h => {
+        doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff').text(h.text, currX + 6, headY + 6, { width: h.w - 12 });
+        currX += h.w;
+    });
+    doc.y = headY + 20;
+
+    // Rows
+    if (rows.length === 0) {
+        ensureSpace(20);
+        doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted).text('No records found.', left + 6, doc.y + 6);
+        doc.y += 20;
+    } else {
+        rows.forEach((row, i) => {
+            const rowH = 20;
+            doc.y += 3.5; // Top margin 2
+            if (ensureSpace(rowH)) {
+                // Redraw table header on new page if needed (simplified here)
+            }
+            const y = doc.y;
+            if (i % 2 !== 1) {
+                doc.save().roundedRect(left, y, r - left, rowH, 4).fill(BRAND.tableRowAlt).restore();
+            }
+            let rowX = left;
+            row.forEach((cell, j) => {
+                doc.font('Helvetica').fontSize(8.5).fillColor(BRAND.ink).text(String(cell || ' '), rowX + 6, y + 6, { width: headers[j].w - 12, lineBreak: false });
+                rowX += headers[j].w;
+            });
+            doc.y = y + rowH;
+        });
+    }
+    doc.moveDown(1);
+};
+
+const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
+    doc.switchToPage(pageIndex);
+    const page = doc.page;
+    const pageWidth = page.width;
+    const pageHeight = page.height;
+    const footerH = 40;
+    const footerY = pageHeight - footerH;
+
+    // Fill footer background with color
+    doc.save().rect(0, footerY, pageWidth, footerH).fill(BRAND.tableRowAlt).restore();
+
+    const brandFont = fs.existsSync(REPORT_PDF_ASSETS.angelica) ? 'Angelica' : 'Helvetica-Bold';
+    const genAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+
+    const m = page.margins;
+    const textY = footerY + 16; // Perfectly centered for 40px height
+
+    doc.font('Helvetica').fontSize(7).fillColor(BRAND.muted);
+    const prefix = 'Generated via ';
+    const wp = doc.widthOfString(prefix);
+    doc.text(prefix, m.left, textY, { lineBreak: false });
+
+    doc.font(brandFont).fontSize(10).fillColor(BRAND.orange);
+    const wb = doc.widthOfString('APEXIS');
+    // Nudged -2 to align better with the baseline of the other text
+    doc.text('APEXIS', m.left + wp, textY - 2.5, { lineBreak: false });
+
+    doc.font('Helvetica').fontSize(7).fillColor(BRAND.muted);
+    doc.text(' — CONSTRUCTION COMMUNICATION PLATFORM', m.left + wp + wb, textY, { lineBreak: false });
+
+    const pgText = `Page ${pageIndex + 1} of ${totalPages} | ${genAt}`;
+    const pgW = doc.widthOfString(pgText);
+    doc.text(pgText, pageWidth - m.right - pgW, textY, { lineBreak: false });
+};
+
+
+/** --- DAILY REPORT RENDERER --- */
+
+export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
+    const project = await db.projects.findByPk(report.project_id);
+    const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
     const chunks: any[] = [];
 
-    const fmtDate = (d: string | Date) =>
-        new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (fs.existsSync(REPORT_PDF_ASSETS.angelica)) {
+        doc.registerFont('Angelica', REPORT_PDF_ASSETS.angelica);
+    }
 
     return new Promise((resolve, reject) => {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
-        if (hasAngelica) {
-            doc.registerFont('Angelica', REPORT_PDF_ASSETS.angelica);
-        }
+        // Header Pass
+        drawBrandedHeader(doc, 'Daily Project Report', 'RECORD · REPORT · RELEASE');
+        const s = (report.summary || {}) as any;
 
+        // Project Info Grid
+        const gridY = doc.y + 10;
         const left = margin.left;
-        const right = () => doc.page.width - margin.right;
-        /** Body must stop above the footer band (footer uses y ≤ maxY so PDFKit does not add a page). */
-        const FOOTER_BAND = 34;
-        const contentBottom = () => doc.page.maxY() - FOOTER_BAND;
+        const r = doc.page.width - margin.right;
+        const colW = (r - left - 10) / 2;
 
-        const ensureSpace = (needed: number) => {
-            if (doc.y + needed > contentBottom()) {
-                doc.addPage();
-            }
-        };
+        const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ' ';
 
-        const HEADER_RULE_Y = 82;
-        const COMPACT_RULE_Y = 54;
-        const TOP_ACCENT_H = 5;
-        const taglineStr =
-            reportType === 'daily' ? 'RECORD · REPORT · RELEASE' : 'BUILDING · MANAGING · MAINTAINING';
+        drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
+        drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
+        drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
+        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || 'Apexis Engineering Consultants');
+        drawInfoBox(doc, left, gridY + 76, colW, 'Date', fmtDate(report.period_start));
 
-        /**
-         * Continuation pages: centered logo + APEXIS + tagline + rule only (matches template).
-         * Page 1: full header with badge. Always reset doc.x / doc.y — explicit header text leaves
-         * doc.y ~40pt and body would otherwise flow into the header on page 2+.
-         */
-        const drawPageHeader = (pageIndex: number) => {
-            const pageW = doc.page.width;
-            const r = right();
-            doc.save();
-            doc.rect(0, 0, pageW, TOP_ACCENT_H).fill(BRAND.orange);
-            doc.restore();
+        doc.y = gridY + 120;
 
-            if (pageIndex > 0) {
-                const logoH = 26;
-                const blockTop = TOP_ACCENT_H + 6;
-                doc.font(brandFont()).fontSize(18);
-                const brandTextW = doc.widthOfString('APEXIS');
-                doc.font('Helvetica-Bold').fontSize(6.5);
-                const tagW = doc.widthOfString(taglineStr);
-                const gap = 8;
-                const clusterW = (hasLogo ? logoH + gap : 0) + Math.max(brandTextW, tagW);
-                const clusterLeft = (pageW - clusterW) / 2;
-                let textLeft = clusterLeft;
-                if (hasLogo) {
-                    try {
-                        doc.image(REPORT_PDF_ASSETS.logo, clusterLeft, blockTop, { height: logoH });
-                    } catch {
-                        /* ignore */
-                    }
-                    textLeft = clusterLeft + logoH + gap;
-                }
-                doc.font(brandFont()).fontSize(18).fillColor(BRAND.orange);
-                doc.text('APEXIS', textLeft, blockTop + 2, { lineBreak: false });
-                doc.font('Helvetica-Bold').fontSize(6.5).fillColor(BRAND.muted);
-                doc.text(taglineStr, textLeft + (brandTextW - tagW) / 2, blockTop + 22, { lineBreak: false });
-                doc.moveTo(left, COMPACT_RULE_Y)
-                    .lineTo(r, COMPACT_RULE_Y)
-                    .strokeColor(BRAND.orange)
-                    .lineWidth(1.1)
-                    .stroke();
-            } else {
-                const logoH = 40;
-                const logoY = TOP_ACCENT_H + 8;
-                if (hasLogo) {
-                    try {
-                        doc.image(REPORT_PDF_ASSETS.logo, left, logoY, { height: logoH });
-                    } catch {
-                        /* ignore bad image */
-                    }
-                }
-                const brandX = left + (hasLogo ? logoH + 14 : 0);
-                doc.font(brandFont())
-                    .fontSize(26)
-                    .fillColor(BRAND.orange)
-                    .text('APEXIS', brandX, logoY + 2, { lineBreak: false });
-                doc.font('Helvetica-Bold')
-                    .fontSize(7)
-                    .fillColor(BRAND.muted)
-                    .text(taglineStr, brandX, logoY + 30, { lineBreak: false });
+        // Sections
+        const summary = (report.summary || {}) as any;
 
-                const badgeW = 124;
-                const badgeH = 42;
-                const badgeX = r - badgeW;
-                const badgeY = TOP_ACCENT_H + 7;
-                doc.save();
-                doc.lineWidth(0.9).roundedRect(badgeX, badgeY, badgeW, badgeH, 3).fillAndStroke('#fff7ed', BRAND.orange);
-                doc.restore();
-                let badgeFs = 8.5;
-                doc.font('Helvetica-Bold').fontSize(badgeFs).fillColor(BRAND.orangeDark);
-                while (doc.widthOfString(badgeLabel) > badgeW - 10 && badgeFs > 6.5) {
-                    badgeFs -= 0.5;
-                    doc.font('Helvetica-Bold').fontSize(badgeFs);
-                }
-                const badgeTextW = doc.widthOfString(badgeLabel);
-                doc.text(badgeLabel, badgeX + (badgeW - badgeTextW) / 2, badgeY + 15, { lineBreak: false });
+        // 1. Files
+        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        const fileW = r - left;
+        drawStyledTable(doc, 'SECTION 1 - FILES UPLOADED THIS WEEK', [
+            { text: '#', w: fileW * 0.08 },
+            { text: 'File Name', w: fileW * 0.52 },
+            { text: 'Uploaded By', w: fileW * 0.2 },
+            { text: 'Date', w: fileW * 0.16 }
+        ], fileRows);
 
-                doc.moveTo(left, HEADER_RULE_Y)
-                    .lineTo(r, HEADER_RULE_Y)
-                    .strokeColor(BRAND.orange)
-                    .lineWidth(1.35)
-                    .stroke();
-            }
+        // 2. Photos
+        const photoRows = (summary.photo_summary || []).map((ps: any) => [ps.count, ps.user, ps.folder]);
+        const photoW = r - left;
+        drawStyledTable(doc, 'SECTION 2 - PHOTOS UPLOADED TODAY', [
+            { text: 'Qty', w: photoW * 0.15 },
+            { text: 'Uploaded By', w: photoW * 0.35 },
+            { text: 'Folder', w: photoW * 0.5 }
+        ], photoRows);
 
-            doc.fillColor(BRAND.ink);
-            doc.x = left;
-            doc.y = margin.top;
-        };
+        // 3. RFIs
+        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.status || ' ', rfi.user || ' ']);
+        const rfiW = r - left;
+        drawStyledTable(doc, 'SECTION 3 - RFIs RAISED TODAY', [
+            { text: 'Title', w: rfiW * 0.45 },
+            { text: 'Status', w: rfiW * 0.2 },
+            { text: 'Raised By', w: rfiW * 0.2 }
+        ], rfiRows);
 
-        doc.on('pageAdded', () => {
-            const idx = doc.bufferedPageRange().count - 1;
-            drawPageHeader(idx);
-        });
-        drawPageHeader(0);
+        // 4. Snags
+        const snagRows = (summary.snags || []).map((snag: any) => [snag.title || ' ', snag.status || ' ', snag.user || ' ']);
+        const snagW = r - left;
+        drawStyledTable(doc, 'SECTION 4 - SNAGS CREATED TODAY', [
+            { text: 'Title', w: snagW * 0.45 },
+            { text: 'Status', w: snagW * 0.2 },
+            { text: 'Raised By', w: snagW * 0.2 }
+        ], snagRows);
 
-        const drawKpiRow = () => {
-            ensureSpace(88);
-            const r = right();
-            const w = r - left;
-            const gap = 8;
-            const n = 4;
-            const boxW = (w - gap * (n - 1)) / n;
-            const kpis = [
-                { label: 'Site photos', value: report.photos_count },
-                { label: 'Documents', value: report.docs_count },
-                { label: 'Client releases', value: (report as any).releases_count ?? 0 },
-                { label: 'Comments', value: report.comments_count },
-            ];
-            const y0 = doc.y;
-            kpis.forEach((k, i) => {
-                const x = left + i * (boxW + gap);
-                doc.save();
-                doc.roundedRect(x, y0, boxW, 56, 4).fill('#f4f4f5');
-                doc.roundedRect(x, y0, boxW, 56, 4).strokeColor(BRAND.line).lineWidth(0.8).stroke();
-                doc.restore();
-                doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted).text(k.label.toUpperCase(), x + 8, y0 + 10, {
-                    width: boxW - 16,
-                });
-                doc.font('Helvetica-Bold').fontSize(18).fillColor(BRAND.orange).text(String(k.value), x + 8, y0 + 28, {
-                    width: boxW - 16,
-                });
-            });
-            doc.y = y0 + 64;
-        };
-
-        let sectionIndex = 0;
-        const sectionTitle = (t: string) => {
-            ensureSpace(40);
-            sectionIndex += 1;
-            const w = right() - left;
-            const label = `SECTION ${sectionIndex} — ${t}`;
-            doc.moveDown(0.15);
-            doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND.orange).text(label, left, doc.y, { width: w });
-            const lineY = doc.y + 2;
-            doc.moveTo(left, lineY).lineTo(right(), lineY).strokeColor(BRAND.line).lineWidth(0.5).stroke();
-            doc.moveDown(0.85);
-        };
-
-        const tableHeader = (cols: { w: number; text: string }[]) => {
-            ensureSpace(22);
-            const y = doc.y;
-            let x = left;
-            doc.save();
-            doc.rect(left, y, right() - left, 18).fill(BRAND.tableHeader);
-            doc.restore();
-            cols.forEach((c) => {
-                doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff').text(c.text, x + 4, y + 5, { width: c.w - 8 });
-                x += c.w;
-            });
-            doc.y = y + 20;
-        };
-
-        const tableRow = (cells: { w: number; text: string }[], alt: boolean) => {
-            const pad = 6;
-            const maxLines = cells.map((c) => {
-                doc.font('Helvetica').fontSize(9).fillColor(BRAND.ink);
-                return doc.heightOfString(c.text, { width: c.w - pad * 2 });
-            });
-            const rowH = Math.max(22, ...maxLines.map((h) => h + pad * 2));
-            ensureSpace(rowH + 4);
-            const y = doc.y;
-            if (alt) {
-                doc.save();
-                doc.rect(left, y, right() - left, rowH).fill(BRAND.tableRowAlt);
-                doc.restore();
-            }
-            let x = left;
-            cells.forEach((c) => {
-                doc.font('Helvetica').fontSize(9).fillColor(BRAND.ink).text(c.text, x + pad, y + pad, {
-                    width: c.w - pad * 2,
-                    lineGap: 1,
-                });
-                x += c.w;
-            });
-            doc.y = y + rowH;
-        };
-
-        // — Title block (template-style headline + project strip; page 1 only)
-        const titleY = doc.y;
-        doc.font('Helvetica-Bold').fontSize(18).fillColor(BRAND.ink).text(titleMain, left, titleY, {
-            width: right() - left,
-            align: 'center',
-        });
-        const afterTitleY = doc.y + 4;
-        doc.moveTo(left, afterTitleY).lineTo(right(), afterTitleY).strokeColor(BRAND.orange).lineWidth(1).stroke();
-        doc.x = left;
-        doc.y = afterTitleY + 10;
-        doc.font('Helvetica-Bold').fontSize(12).fillColor(BRAND.ink).text(projectName, left, doc.y, {
-            width: right() - left,
-            align: 'center',
-        });
-        doc.moveDown(0.25);
-        doc.font('Helvetica').fontSize(9.5).fillColor(BRAND.muted).text(
-            `Reporting period: ${fmtDate(report.period_start)} — ${fmtDate(report.period_end)}`,
-            { width: right() - left, align: 'center' },
-        );
-        doc.moveDown(1.15);
-
-        sectionTitle('EXECUTIVE SUMMARY');
-        drawKpiRow();
-        doc.moveDown(0.6);
-
-        const summary = (report.summary || {}) as {
-            document_titles?: string[];
-            photo_summary?: { count: number; user: string; folder: string }[];
-            rfis?: { title: string; status: string }[];
-            snags?: { title: string; status: string }[];
-        };
-
-        const docs = summary.document_titles || [];
-        sectionTitle('DOCUMENTS UPLOADED');
-        if (docs.length === 0) {
-            doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text('No documents uploaded in this period.');
-            doc.moveDown(1);
-        } else {
-            const maxRows = 45;
-            const shown = docs.slice(0, maxRows);
-            tableHeader([{ w: right() - left, text: 'FILE NAME' }]);
-            shown.forEach((title, i) => tableRow([{ w: right() - left, text: title }], i % 2 === 1));
-            if (docs.length > maxRows) {
-                doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted).text(`… and ${docs.length - maxRows} more`, left, doc.y + 4);
-                doc.moveDown(1.2);
-            }
-            doc.moveDown(0.5);
-        }
-
-        const photos = summary.photo_summary || [];
-        sectionTitle('SITE PHOTO CAPTURE');
-        if (photos.length === 0) {
-            doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text('No site photos captured in this period.');
-            doc.moveDown(1);
-        } else {
-            const cw = right() - left;
-            const w1 = Math.floor(cw * 0.12);
-            const w2 = Math.floor(cw * 0.28);
-            const w3 = cw - w1 - w2;
-            tableHeader([
-                { w: w1, text: 'QTY' },
-                { w: w2, text: 'CAPTURED BY' },
-                { w: w3, text: 'FOLDER' },
-            ]);
-            photos.forEach((ps, i) => {
-                tableRow(
-                    [
-                        { w: w1, text: String(ps.count) },
-                        { w: w2, text: ps.user || '—' },
-                        { w: w3, text: ps.folder || '—' },
-                    ],
-                    i % 2 === 1,
-                );
-            });
-            doc.moveDown(0.5);
-        }
-
-        const rfis = summary.rfis || [];
-        sectionTitle('REQUESTS FOR INFORMATION (RFIs)');
-        if (rfis.length === 0) {
-            doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text('No RFIs created or updated in this period.');
-            doc.moveDown(1);
-        } else {
-            const cw = right() - left;
-            const w1 = Math.floor(cw * 0.22);
-            const w2 = cw - w1;
-            tableHeader([
-                { w: w1, text: 'STATUS' },
-                { w: w2, text: 'TITLE' },
-            ]);
-            rfis.forEach((rfi, i) => {
-                tableRow(
-                    [
-                        { w: w1, text: (rfi.status || '—').toUpperCase() },
-                        { w: w2, text: rfi.title || '—' },
-                    ],
-                    i % 2 === 1,
-                );
-            });
-            doc.moveDown(0.5);
-        }
-
-        const snags = summary.snags || [];
-        sectionTitle('SNAG LIST');
-        if (snags.length === 0) {
-            doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text('No snags created or updated in this period.');
-            doc.moveDown(1);
-        } else {
-            const cw = right() - left;
-            const w1 = Math.floor(cw * 0.22);
-            const w2 = cw - w1;
-            tableHeader([
-                { w: w1, text: 'STATUS' },
-                { w: w2, text: 'TITLE' },
-            ]);
-            snags.forEach((snag, i) => {
-                tableRow(
-                    [
-                        { w: w1, text: (snag.status || '—').toUpperCase() },
-                        { w: w2, text: snag.title || '—' },
-                    ],
-                    i % 2 === 1,
-                );
-            });
-            doc.moveDown(0.5);
-        }
-
-        const pageCount = doc.bufferedPageRange().count;
-        const genAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-
-        const drawFooterOnPage = (pageIndex: number) => {
-            doc.switchToPage(pageIndex);
-            const page = doc.page;
-            const w = page.width;
-            const m = page.margins;
-            const maxY = page.maxY();
-            const lineY1 = maxY - 20;
-            const lineY2 = maxY - 8;
-            doc.font('Helvetica').fontSize(7.5);
-            doc.moveTo(m.left, maxY - 26).lineTo(w - m.right, maxY - 26).strokeColor(BRAND.line).lineWidth(0.45).stroke();
-
-            const prefix = 'Generated via ';
-            const suffix = ' — CONSTRUCTION COMMUNICATION PLATFORM';
-            doc.font('Helvetica').fontSize(7.5).fillColor(BRAND.muted);
-            const wp = doc.widthOfString(prefix);
-            doc.text(prefix, m.left, lineY1, { lineBreak: false });
-            doc.font('Helvetica-Bold').fontSize(7.5).fillColor(BRAND.orange);
-            const wBrand = doc.widthOfString('APEXIS');
-            doc.text('APEXIS', m.left + wp, lineY1, { lineBreak: false });
-            doc.font('Helvetica').fontSize(7.5).fillColor(BRAND.muted);
-            doc.text(suffix, m.left + wp + wBrand, lineY1, { lineBreak: false });
-
-            const line2 = `Page ${pageIndex + 1} of ${pageCount} | ${genAt}`;
-            doc.font('Helvetica').fontSize(7.5).fillColor(BRAND.muted);
-            const w2 = doc.widthOfString(line2);
-            doc.text(line2, w - m.right - w2, lineY2, { lineBreak: false });
-        };
-
-        for (let i = 0; i < pageCount; i++) {
-            drawFooterOnPage(i);
+        // Finalize Headers & Footers
+        const range = doc.bufferedPageRange();
+        for (let i = 0; i < range.count; i++) {
+            doc.switchToPage(i);
+            if (i > 0) drawBrandedHeader(doc, 'Daily Project Report', '', i > 0);
+            drawBrandedFooter(doc, i, range.count);
         }
 
         doc.end();
     });
+};
+
+/** --- WEEKLY REPORT RENDERER --- */
+
+export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
+    const project = await db.projects.findByPk(report.project_id);
+    const margin = { top: 40, bottom: 40, left: 40, right: 40 };
+    const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
+    const chunks: any[] = [];
+
+    if (fs.existsSync(REPORT_PDF_ASSETS.angelica)) {
+        doc.registerFont('Angelica', REPORT_PDF_ASSETS.angelica);
+    }
+
+    const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ' ';
+
+    return new Promise((resolve, reject) => {
+        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        // --- PAGE 1 ---
+        drawBrandedHeader(doc, 'Weekly Project Report', 'RECORD · REPORT · RELEASE');
+
+        const left = margin.left;
+        const r = doc.page.width - margin.right;
+        const colW = (r - left - 10) / 2;
+        const gridY = doc.y + 10;
+
+        const s = (report.summary || {}) as any;
+        drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
+        drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
+        drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
+        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || 'Apexis Engineering Consultants');
+        drawInfoBox(doc, left, gridY + 76, colW, 'Date', `${fmtDate(report.period_start)} — ${fmtDate(report.period_end)}`);
+
+        doc.y = gridY + 120;
+
+        // Section 1 - Dashboard
+        doc.moveDown(0.5);
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND.orange).text('SECTION 1 - WEEKLY PROJECT DASHBOARD', left);
+        doc.moveDown(0.6);
+        drawDashboardKPIs(doc, [
+            { label: 'Files Uploaded', value: report.docs_count || 0 },
+            { label: 'Pending Approvals', value: report.releases_count || 0 },
+            { label: 'Active Consultants', value: 5 } // Sample from image
+        ]);
+
+        // Section 2 - Files
+        const summary = (report.summary || {}) as any;
+        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        const fileW = r - left;
+        drawStyledTable(doc, 'SECTION 2 - FILES UPLOADED THIS WEEK', [
+            { text: '#', w: fileW * 0.08 },
+            { text: 'File Name', w: fileW * 0.52 },
+            { text: 'Uploaded By', w: fileW * 0.2 },
+            { text: 'Date', w: fileW * 0.16 }
+        ], fileRows);
+
+        // Section 3 - Photos
+        const photoRows = (summary.photo_summary || []).map((ps: any, i: number) => [i + 1, ps.folder, ps.count, ps.user]);
+        const photoW = r - left;
+        drawStyledTable(doc, 'SECTION 3 - PHOTOS UPLOADED THIS WEEK', [
+            { text: '#', w: photoW * 0.08 },
+            { text: 'Folder Path', w: photoW * 0.47 },
+            { text: 'Count', w: photoW * 0.15 },
+            { text: 'Uploaded By', w: photoW * 0.3 }
+        ], photoRows);
+
+        // Section 4 — Snags
+        const snagRows = (summary.snags || []).map((snag: any) => [snag.title || ' ', snag.user || ' ', snag.status || ' ']);
+        drawStyledTable(doc, 'SECTION 4 - SNAGS CREATED THIS WEEK', [
+            { text: 'Title', w: fileW * 0.45 },
+            { text: 'Raised By', w: fileW * 0.2 },
+            { text: 'Status', w: fileW * 0.2 }
+        ], snagRows);
+
+        // 3. RFIs
+        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ']);
+        const rfiW = r - left;
+        drawStyledTable(doc, 'SECTION 5 - RFIs RAISED THIS WEEK', [
+            { text: 'Title', w: rfiW * 0.45 },
+            { text: 'Status', w: rfiW * 0.2 },
+            { text: 'Raised By', w: rfiW * 0.2 }
+        ], rfiRows);
+
+        // // --- PAGE 2 ---
+        // doc.addPage();
+        // drawBrandedHeader(doc, 'Weekly Project Report', 'RECORD · REPORT · RELEASE', true);
+
+        // // Section 5 - Key Decisions
+        // const decisions = [
+        //     'Basement parking layout finalized with 142 car spaces',
+        //     'Lift shaft location approved at Grid C-4',
+        //     'Electrical routing revised per MEP coordination',
+        //     'Facade material changed to ACP cladding (approved by client)'
+        // ];
+        // drawBulletBox(doc, 'Section 5 — Key Decisions Taken This Week', decisions, BRAND.tableRowAlt);
+
+        // // Section 6 - Risks
+        // const risks = [
+        //     'Structural inputs pending from consultant — 3 days overdue',
+        //     'Facade material approval awaited from client',
+        //     'Landscape drawings delayed — impacting Phase 2 timeline'
+        // ];
+        // drawBulletBox(doc, 'Section 6 — Risks / Attention Items', risks, '#fef9c3', true);
+
+        // Finalize Headers & Footers
+        const range = doc.bufferedPageRange();
+        for (let i = 0; i < range.count; i++) {
+            doc.switchToPage(i);
+            if (i > 0) drawBrandedHeader(doc, 'Weekly Project Report', '', i > 0);
+            drawBrandedFooter(doc, i, range.count);
+        }
+
+        doc.end();
+    });
+};
+
+/** --- MONTHLY REPORT RENDERER --- */
+
+export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => {
+    const project = await db.projects.findByPk(report.project_id);
+    const margin = { top: 40, bottom: 40, left: 40, right: 40 };
+    const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
+    const chunks: any[] = [];
+
+    if (fs.existsSync(REPORT_PDF_ASSETS.angelica)) {
+        doc.registerFont('Angelica', REPORT_PDF_ASSETS.angelica);
+    }
+
+    const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ' ';
+    const monthName = new Date(report.period_start).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+    return new Promise((resolve, reject) => {
+        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        // --- PAGE 1: COVER ---
+        drawMonthlyCoverPage(doc, project, report);
+
+        // --- PAGE 2 ---
+        doc.addPage();
+        drawBrandedHeader(doc, 'Monthly Project Report', 'RECORD · REPORT · RELEASE');
+
+        const left = margin.left;
+        const r = doc.page.width - margin.right;
+        const colW = (r - left - 10) / 2;
+        const gridY = doc.y + 10;
+
+        const s = (report.summary || {}) as any;
+        drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
+        drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
+        drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
+        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || 'Apexis Engineers Consulting');
+        drawInfoBox(doc, left, gridY + 76, colW, 'Date', monthName);
+
+        doc.y = gridY + 120;
+
+        // Section 1 - Dashboard
+        doc.moveDown(0.5);
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND.orange).text('SECTION 1 — MONTHLY PROJECT DASHBOARD', left);
+        doc.moveDown(0.6);
+        drawMonthlyDashboard(doc, [
+            { label: 'Total Files Uploaded', value: report.docs_count || 0 },
+            { label: 'Total Photos Uploaded', value: report.photos_count || 0 },
+            { label: 'RFIs Raised', value: 18 }, // Sample
+            { label: 'RFIs Closed', value: 14 } // Sample
+        ]);
+
+
+        const tblW = r - left;
+        // Section 2 - Files
+        const summary = (report.summary || {}) as any;
+        const fileRows = (summary.document_titles || []).slice(0, 10).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        drawStyledTable(doc, 'SECTION 2 — FILES UPLOADED THIS MONTH', [
+            { text: '#', w: tblW * 0.08 },
+            { text: 'File Name', w: tblW * 0.52 },
+            { text: 'Uploaded By', w: tblW * 0.24 },
+            { text: 'Date', w: tblW * 0.16 }
+        ], fileRows);
+
+        // Section 3 - Photos
+        const photoRows = (summary.photo_summary || []).map((ps: any, i: number) => [i + 1, ps.folder, ps.count, ps.user]);
+        const photoW = r - left;
+        drawStyledTable(doc, 'SECTION 3 — PHOTOS UPLOADED THIS MONTH', [
+            { text: '#', w: photoW * 0.08 },
+            { text: 'Folder Path', w: photoW * 0.47 },
+            { text: 'Count', w: photoW * 0.15 },
+            { text: 'Uploaded By', w: photoW * 0.3 }
+        ], photoRows);
+
+
+        // Section 4 - RFIs
+        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ']);
+        drawStyledTable(doc, 'SECTION 4 — RFI SUMMARY THIS MONTH', [
+            { text: 'Description', w: tblW * 0.45 },
+            { text: 'Raised By', w: tblW * 0.2 },
+            { text: 'Status', w: tblW * 0.2 }
+        ], rfiRows);
+
+        // Section 5 - Snags
+        const snagRows = (summary.snags || []).map((snag: any) => [snag.title || ' ', snag.user || ' ', snag.status || ' ']);
+        drawStyledTable(doc, 'SECTION 5 — SNAG SUMMARY THIS MONTH', [
+            { text: 'Description', w: tblW * 0.45 },
+            { text: 'Raised By', w: tblW * 0.2 },
+            { text: 'Status', w: tblW * 0.2 }
+        ], snagRows);
+
+
+        // // Section 7 - Key Decisions
+        // const decisions = [
+        //     'Basement parking layout finalized with 142 car spaces',
+        //     'Lift shaft location approved at Grid C-4',
+        //     'Electrical routing revised per MEP coordination',
+        //     'Facade material changed to ACP cladding (approved by client)',
+        //     'Landscape contractor shortlisted — final selection next month'
+        // ];
+        // drawBulletBox(doc, 'Section 7 — Key Decisions Taken This Month', decisions, BRAND.tableRowAlt);
+
+        // // Section 8 - Risks
+        // const risks = [
+        //     'Structural inputs pending from consultant — 3 days overdue',
+        //     'Facade material approval awaited from client',
+        //     'Landscape drawings delayed — impacting Phase 2 timeline',
+        //     'Plumbing riser conflict with structural beam at Level 4',
+        //     'Budget variance of 3.2% on MEP scope — review required'
+        // ];
+        // drawBulletBox(doc, 'Section 8 — Risks / Attention Items', risks, '#fef9c3', true);
+
+
+        // Finalize Headers & Footers
+        const range = doc.bufferedPageRange();
+        for (let i = 0; i < range.count; i++) {
+            if (i === 0) continue; // No header/footer on cover page
+            doc.switchToPage(i);
+            if (i > 1) drawBrandedHeader(doc, 'Monthly Project Report', '', i > 1);
+            drawBrandedFooter(doc, i, range.count);
+        }
+
+        doc.end();
+    });
+};
+
+export const generateSingleReportPDF = async (
+    reportId: number
+): Promise<Buffer> => {
+
+    const report = await db.reports.findByPk(reportId);
+    console.log("DEBUG: Report Data ->", JSON.stringify(report, null, 2));
+
+    if (!report) {
+        throw new Error("Report not found");
+    }
+
+    const reportType = report.type as string;
+
+    // Route based on report type
+    if (reportType === "daily") {
+        return generateDailyReportPDF(report);
+    }
+
+    if (reportType === "weekly") {
+        return generateWeeklyReportPDF(report);
+    }
+
+    if (reportType === "monthly") {
+        return generateMonthlyReportPDF(report);
+    }
+
+    throw new Error(`Unsupported report type: ${reportType}`);
 };
 
