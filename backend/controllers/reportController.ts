@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Op } from 'sequelize';
-import { reports, files, comments, folders, users, projects, rfis, snags } from '../models/index.ts';
+import { reports, files, comments, folders, users, projects, rfis, snags, project_members } from '../models/index.ts';
 import { generateSingleReportPDF } from '../services/exportService.ts';
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -147,6 +147,15 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
         ],
     }) : [];
 
+    // --- Get Project Members (Clients & Contributors) ---
+    const members = await project_members.findAll({
+        where: { project_id: projectId },
+        include: [{ model: users, attributes: ['name'] }]
+    });
+
+    const clientList = members.filter((m: any) => m.role === 'client').map((m: any) => m.user?.name).filter(Boolean);
+    const contributorList = members.filter((m: any) => m.role === 'contributor').map((m: any) => m.user?.name).filter(Boolean);
+
     const photos = uploadedFiles.filter((f: any) => f.file_type?.startsWith('image/'));
     const docs = uploadedFiles.filter((f: any) => !f.file_type?.startsWith('image/'));
 
@@ -173,7 +182,6 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
         },
     }) : [];
 
-    // --- RFIs in the period ---
     const periodRfis = await rfis.findAll({
         where: {
             project_id: projectId,
@@ -182,6 +190,7 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
                 { updatedAt: { [Op.between]: [periodStart, periodEnd] } },
             ],
         },
+        include: [{ model: users, as: 'creator', attributes: ['name'] }]
     });
 
     // --- Snags in the period ---
@@ -193,6 +202,7 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
                 { updatedAt: { [Op.between]: [periodStart, periodEnd] } },
             ],
         },
+        include: [{ model: users, as: 'creator', attributes: ['name'] }]
     });
 
     // --- Build summary breakdown ---
@@ -210,15 +220,24 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
     });
 
     const summary = {
-        document_titles: docs.map((f: any) => f.file_name),
+        client: clientList || ' ',
+        contributors: contributorList || ' ',
+        document_titles: docs.map((f: any) => ({
+            title: f.file_name,
+            user: f.creator?.name || 'Unknown',
+            folder: f.folder?.name || 'Unknown',
+            date: f.createdAt.toISOString().split('T')[0]
+        })),
         photo_summary: Object.values(photosByDetails),
         rfis: periodRfis.map((r: any) => ({
             title: r.title,
             status: r.status,
+            user: r.creator?.name || 'Unknown'
         })),
         snags: periodSnags.map((s: any) => ({
             title: s.title,
             status: s.status,
+            user: s.creator?.name || 'Unknown'
         })),
     };
 
