@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3 } from 'lucide-react';
+import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3, ChevronRight, Mail, Phone } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { exportHandoverPackage, getLatestExport, getProjectShareLinks } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers } from '@/services/projectService';
 import { useSocket } from '@/contexts/SocketContext';
 import { getReports, Report } from '@/services/reportService';
-import { getFiles } from '@/services/fileService';
+import { getFiles, getSecureFileUrl } from '@/services/fileService';
 import ShareDialog from '@/components/shared/ShareDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 
 interface ProjectOverviewProps {
@@ -31,6 +32,31 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
   const [counting, setCounting] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareItem, setShareItem] = useState<any | null>(null);
+
+  const [memberModalType, setMemberModalType] = useState<'contributor' | 'client' | null>(null);
+  const [members, setMembers] = useState<any[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  useEffect(() => {
+    if (!memberModalType || !project?.id) return;
+    setLoadingMembers(true);
+    getProjectMembers(project.id)
+      .then(async data => {
+         const fetchedMembers = data.members.filter((m: any) => m.role === memberModalType);
+         const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
+            if (m.user.profile_pic) {
+                try {
+                   const url = await getSecureFileUrl(m.user.profile_pic);
+                   return { ...m, secure_pic: url };
+                } catch { return m; }
+            }
+            return m;
+         }));
+         setMembers(membersWithPics);
+      })
+      .catch((e) => toast.error("Failed to load members"))
+      .finally(() => setLoadingMembers(false));
+  }, [memberModalType, project?.id]);
 
 
   // Export state
@@ -246,6 +272,13 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
                   </button>
                 </div>
               </div>
+              <span 
+                 className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                 onClick={() => setMemberModalType('contributor')}
+              >
+                  {(project as any).totalContributors || 0} active {(project as any).totalContributors === 1 ? 'contributor' : 'contributors'}
+                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+              </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Client Code</span>
@@ -268,6 +301,13 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
                   </button>
                 </div>
               </div>
+              <span 
+                 className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                 onClick={() => setMemberModalType('client')}
+              >
+                  {(project as any).totalClients || 0} active {(project as any).totalClients === 1 ? 'client' : 'clients'}
+                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+              </span>
             </div>
           </div>
         </div>
@@ -345,6 +385,48 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
           downloadUrl={shareItem.downloadUrl}
         />
       )}
+
+      <Dialog open={!!memberModalType} onOpenChange={(open) => !open && setMemberModalType(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="capitalize flex items-center gap-2 text-xl tracking-wide">
+              <span className="text-accent uppercase tracking-widest text-sm bg-accent/10 px-3 py-1 rounded-full">{memberModalType}s</span> 
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 mt-4 max-h-[60vh] overflow-y-auto pr-2">
+             {loadingMembers ? (
+                <div className="flex justify-center p-6"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>
+             ) : members.length === 0 ? (
+                <div className="text-center p-6 text-sm text-muted-foreground bg-secondary/30 rounded-xl border border-dashed border-border/50">No active {memberModalType}s found</div>
+             ) : (
+                members.map((m, idx) => (
+                  <div key={idx} className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
+                     {m.secure_pic ? (
+                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full shadow-sm border border-border/50 bg-background">
+                           <img src={m.secure_pic} alt={m.user.name} className="h-full w-full object-cover" />
+                        </div>
+                     ) : (
+                        <div className="h-11 w-11 shrink-0 flex items-center justify-center rounded-full bg-secondary text-foreground font-semibold shadow-sm border border-border/50">
+                           {m.user.name?.charAt(0).toUpperCase()}
+                        </div>
+                     )}
+                     <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-sm font-bold truncate text-foreground">{m.user.name} {m.user.is_primary && '(Primary)'}</span>
+                        <div className="flex flex-col gap-1 mt-1.5">
+                           {m.user.email && (
+                             <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Mail className="h-3 w-3 text-accent" />{m.user.email}</span>
+                           )}
+                           {m.user.phone_number && (
+                             <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Phone className="h-3 w-3 text-accent" />{m.user.phone_number}</span>
+                           )}
+                        </div>
+                     </div>
+                  </div>
+                ))
+             )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

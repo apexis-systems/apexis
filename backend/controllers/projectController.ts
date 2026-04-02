@@ -112,6 +112,14 @@ export const getProjects = async (req: Request, res: Response) => {
                         literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "folders" WHERE "folders"."project_id" = "projects"."id")`),
                         'totalFolders'
                     ],
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor' AND u."role" != 'admin')`),
+                        'totalContributors'
+                    ],
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client' AND u."role" != 'admin')`),
+                        'totalClients'
+                    ],
                 ],
             },
             include: [
@@ -161,7 +169,21 @@ export const getProjectById = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const project = await projects.findOne({ where: { id } });
+        const project = await projects.findOne({ 
+            where: { id },
+            attributes: {
+                include: [
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor' AND u."role" != 'admin')`),
+                        'totalContributors'
+                    ],
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client' AND u."role" != 'admin')`),
+                        'totalClients'
+                    ]
+                ]
+            }
+        });
 
         if (!project) {
             return res.status(404).json({ error: "Project not found" });
@@ -311,6 +333,37 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
         res.status(200).json(response);
     } catch (error) {
         console.error("Get Share Links Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getProjectMembers = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can view project members" });
+        }
+
+        const project = await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+        if (!project) {
+            return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        const members = await project_members.findAll({
+            where: { project_id: id },
+            include: [{
+                model: users,
+                where: { role: { [Op.ne]: 'admin' } },
+                attributes: ['id', 'name', 'email', 'phone_number', 'role', 'profile_pic', 'createdAt']
+            }],
+            order: [['createdAt', 'DESC']]
+        });
+
+        res.status(200).json({ members });
+    } catch (error) {
+        console.error("Get Project Members Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
