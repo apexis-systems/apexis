@@ -11,6 +11,7 @@ import { Feather } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import Constants from 'expo-constants';
 
 let DocumentScanner: any;
@@ -291,10 +292,17 @@ export default function UploadScreen() {
 
             if (!photo?.uri) return;
 
+            // Fix orientation for iOS items
+            const manipulated = await ImageManipulator.manipulateAsync(
+                photo.uri,
+                [],
+                { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+            );
+
             addToQueue([{
                 asset: {
-                    uri: photo.uri,
-                    fileName: photo.uri.split('/').pop() || `capture_${Date.now()}.jpg`,
+                    uri: manipulated.uri,
+                    fileName: manipulated.uri.split('/').pop() || `capture_${Date.now()}.jpg`,
                     type: 'image/jpeg',
                     size: 0
                 },
@@ -325,24 +333,52 @@ export default function UploadScreen() {
             return;
         }
 
-
         try {
             const { scannedImages } = await DocumentScanner.scanDocument({
                 maxNumDocuments: 20 - fileQueue.length,
             });
 
-
-
             if (scannedImages && scannedImages.length > 0) {
-                const queue: FileProgress[] = scannedImages.map((uri: string) => ({
+                const queue: FileProgress[] = [];
+                
+                for (let i = 0; i < scannedImages.length; i++) {
+                    const originalUri = scannedImages[i];
+                    // Normalize URI for iOS
+                    let uri = originalUri;
+                    if (Platform.OS === 'ios' && !uri.startsWith('file://')) {
+                        uri = `file://${uri}`;
+                    }
 
-                    asset: { uri, fileName: `scan_${Date.now()}.jpg`, type: 'image/jpeg', size: 0 },
-                    progress: 0, status: 'pending', anim: new Animated.Value(0), source: 'scan',
-                }));
+                    // Optional: Fix orientation/strip EXIF if ImageManipulator is available
+                    try {
+                        const manipulated = await ImageManipulator.manipulateAsync(
+                            uri,
+                            [],
+                            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                        );
+                        uri = manipulated.uri;
+                    } catch (e) {
+                        console.warn('Scanner ImageManipulator failed:', e);
+                    }
+
+                    queue.push({
+                        asset: { 
+                            uri, 
+                            fileName: `scan_${Date.now()}_${i}.jpg`, 
+                            type: 'image/jpeg', 
+                            size: 0 
+                        },
+                        progress: 0, 
+                        status: 'pending', 
+                        anim: new Animated.Value(0), 
+                        source: 'scan',
+                    });
+                }
                 addToQueue(queue);
             }
         } catch (error) {
             console.error('Scan Error:', error);
+            Alert.alert('Scan Error', 'Failed to scan document');
         }
     };
 
@@ -380,7 +416,11 @@ export default function UploadScreen() {
             return;
         }
 
-        const itemsToUpload = [...fileQueue];
+        const itemsToUpload = fileQueue.filter(f => f.status !== 'done');
+        if (itemsToUpload.length === 0) {
+            setMode('done');
+            return;
+        }
         setMode('uploading');
 
 
@@ -1003,8 +1043,14 @@ export default function UploadScreen() {
                     <View style={{ marginBottom: 32 }}>
                         <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: 8 }}>Uploading {fileQueue.length} Files</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <ActivityIndicator size="small" color={colors.primary} />
-                            <Text style={{ fontSize: 14, color: colors.textMuted }}>Please wait while your files are being uploaded</Text>
+                            {!fileQueue.some(f => f.status === 'error') && (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            )}
+                            <Text style={{ fontSize: 14, color: colors.textMuted }}>
+                                {fileQueue.some(f => f.status === 'error') 
+                                    ? 'Some uploads failed. Please retry or cancel.' 
+                                    : 'Please wait while your files are being uploaded'}
+                            </Text>
                         </View>
                     </View>
                 )}
@@ -1044,16 +1090,27 @@ export default function UploadScreen() {
                     ))}
                 </View>
 
-                {mode === 'done' && (
-                    <View style={{ gap: 12 }}>
-                        <TouchableOpacity onPress={() => { setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
-                            <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>Start New Upload</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleClose} style={{ height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Back to Folder</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
+                <View style={{ gap: 12 }}>
+                    {mode === 'done' ? (
+                        <>
+                            <TouchableOpacity onPress={() => { setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>Start New Upload</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleClose} style={{ height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Back to Folder</Text>
+                            </TouchableOpacity>
+                        </>
+                    ) : fileQueue.some(f => f.status === 'error') ? (
+                        <>
+                            <TouchableOpacity onPress={handleUpload} style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 2 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>Retry Failed Uploads</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => { setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Cancel & Clear</Text>
+                            </TouchableOpacity>
+                        </>
+                    ) : null}
+                </View>
             </ScrollView>
         </SafeAreaView>
     );

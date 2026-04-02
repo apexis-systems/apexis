@@ -1,5 +1,5 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Image, FlatList, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Image, FlatList, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
@@ -566,35 +566,36 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                 </View>
                             </ScrollView>
 
-                            {/* View Mode Toggle */}
-                            <TouchableOpacity
-                                onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                                style={{ padding: 6, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-                            >
-                                <Feather name={viewMode === 'grid' ? 'list' : 'grid'} size={16} color={colors.text} />
-                            </TouchableOpacity>
 
-                            {/* Sort Toggle */}
-                            <TouchableOpacity
-                                onPress={() => {
-                                    const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
-                                    setSortBy(next);
-                                }}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                    paddingHorizontal: 8,
-                                    paddingVertical: 6,
-                                    borderRadius: 8,
-                                    backgroundColor: colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: colors.border
-                                }}
-                            >
-                                <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
-                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
-                            </TouchableOpacity>
+                            {visiblePhotos.length > 0 && (
+                                <TouchableOpacity
+                                    onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                                    style={{ padding: 6, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+                                >
+                                    <Feather name={viewMode === 'grid' ? 'list' : 'grid'} size={16} color={colors.text} />
+                                </TouchableOpacity>
+                            )}
+
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
+                                        setSortBy(next);
+                                    }}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 6,
+                                        borderRadius: 8,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border
+                                    }}
+                                >
+                                    <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
+                                </TouchableOpacity>
                         </View>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                             {sortedFolders.map((folder) => {
@@ -602,13 +603,8 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                 const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                                 const isSelected = selectedFolders.has(folder.id);
                                 return (
-                                    <TouchableOpacity
+                                    <View
                                         key={folder.id}
-                                        onPress={() => {
-                                            if (isSelectionMode) toggleSelection('folder', folder.id);
-                                            else setSelectedFolder(folder.id);
-                                        }}
-                                        onLongPress={() => handleLongPress('folder', folder.id)}
                                         style={{
                                             width: '31.5%',
                                             aspectRatio: 1,
@@ -624,13 +620,26 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             shadowOpacity: 0.05,
                                             shadowRadius: 4,
                                             elevation: 1,
+                                            position: 'relative',
+                                            overflow: 'hidden'
                                         }}
                                     >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (isSelectionMode) toggleSelection('folder', folder.id);
+                                                else setSelectedFolder(folder.id);
+                                            }}
+                                            onLongPress={() => handleLongPress('folder', folder.id)}
+                                            style={{
+                                                ...StyleSheet.absoluteFillObject,
+                                                zIndex: 5,
+                                            }}
+                                        />
                                         <View style={{ marginBottom: 8 }}>
                                             <Feather name="folder" size={36} color={colors.primary} />
                                         </View>
                                         {isSelected && (
-                                            <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+                                            <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
@@ -641,13 +650,13 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
 
                                         {(user.role === 'admin' || user.role === 'superadmin') && !isSelectionMode && (
                                             <TouchableOpacity
-                                                onPress={(e) => { e.stopPropagation(); toggleFolderVis(folder); }}
-                                                style={{ position: 'absolute', bottom: 6, right: 6, padding: 4 }}
+                                                onPress={() => toggleFolderVis(folder)}
+                                                style={{ position: 'absolute', bottom: 6, right: 6, padding: 4, zIndex: 10 }}
                                             >
                                                 <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? colors.primary : colors.textMuted} />
                                             </TouchableOpacity>
                                         )}
-                                    </TouchableOpacity>
+                                    </View>
                                 );
                             })}
                         </View>
@@ -666,13 +675,8 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                         const isSelected = selectedFiles.has(photo.id);
                         if (viewMode === 'grid') {
                             return (
-                                <TouchableOpacity
+                                <View
                                     key={photo.id}
-                                    onPress={() => {
-                                        if (isSelectionMode) toggleSelection('file', photo.id);
-                                        else openViewer(index);
-                                    }}
-                                    onLongPress={() => handleLongPress('file', photo.id)}
                                     style={{
                                         width: '23%',
                                         aspectRatio: 1,
@@ -680,21 +684,32 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         borderRadius: 10,
                                         overflow: 'hidden',
                                         borderWidth: 1,
-                                        borderColor: isSelected ? colors.primary : colors.border
+                                        borderColor: isSelected ? colors.primary : colors.border,
+                                        position: 'relative'
                                     }}
                                 >
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (isSelectionMode) toggleSelection('file', photo.id);
+                                            else openViewer(index);
+                                        }}
+                                        onLongPress={() => handleLongPress('file', photo.id)}
+                                        style={{
+                                            ...StyleSheet.absoluteFillObject,
+                                            zIndex: 5,
+                                        }}
+                                    />
                                     <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                                     {isSelected && (
-                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
-                                    <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 4 }}>
+                                    <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 4, zIndex: 10 }}>
                                         {!isSelectionMode && (
                                             <>
                                                 <TouchableOpacity
-                                                    onPress={async (e) => {
-                                                        e.stopPropagation();
+                                                    onPress={async () => {
                                                         try {
                                                             const ext = photo.file_name?.split('.').pop() || 'jpg';
                                                             const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
@@ -716,7 +731,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
                                                     <TouchableOpacity
-                                                        onPress={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
+                                                        onPress={() => togglePhotoVisibility(photo)}
                                                         style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
                                                     >
                                                         <Feather name={photo.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={photo.client_visible !== false ? colors.primary : '#fff'} />
@@ -724,7 +739,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                 )}
                                                 {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
                                                     <TouchableOpacity
-                                                        onPress={(e) => { e.stopPropagation(); confirmDeletePhoto(photo); }}
+                                                        onPress={() => confirmDeletePhoto(photo)}
                                                         style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
                                                     >
                                                         <Feather name="trash-2" size={12} color="#ef4444" />
@@ -733,22 +748,16 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             </>
                                         )}
                                     </View>
-                                    {/* Filename overlay at bottom */}
                                     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 6 }}>
                                         <Text numberOfLines={1} style={{ fontSize: 9, color: '#fff', textAlign: 'center' }}>{photo.file_name}</Text>
                                     </View>
-                                </TouchableOpacity>
+                                </View>
                             );
                         } else {
                             // List View Mode
                             return (
-                                <TouchableOpacity
+                                <View
                                     key={photo.id}
-                                    onPress={() => {
-                                        if (isSelectionMode) toggleSelection('file', photo.id);
-                                        else openViewer(index);
-                                    }}
-                                    onLongPress={() => handleLongPress('file', photo.id)}
                                     style={{
                                         flexDirection: 'row',
                                         alignItems: 'center',
@@ -758,8 +767,21 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         borderWidth: 1,
                                         borderColor: isSelected ? colors.primary : colors.border,
                                         padding: 10,
+                                        position: 'relative',
+                                        overflow: 'hidden'
                                     }}
                                 >
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (isSelectionMode) toggleSelection('file', photo.id);
+                                            else openViewer(index);
+                                        }}
+                                        onLongPress={() => handleLongPress('file', photo.id)}
+                                        style={{
+                                            ...StyleSheet.absoluteFillObject,
+                                            zIndex: 5,
+                                        }}
+                                    />
                                     <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface }}>
                                         <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                                     </View>
@@ -772,12 +794,11 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{photo.file_name}</Text>
                                         <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{photo.file_size_mb} MB</Text>
                                     </View>
-                                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                                    <View style={{ flexDirection: 'row', gap: 6, zIndex: 10 }}>
                                         {!isSelectionMode && (
                                             <>
                                                 <TouchableOpacity
-                                                    onPress={async (e) => {
-                                                        e.stopPropagation();
+                                                    onPress={async () => {
                                                         try {
                                                             const ext = photo.file_name?.split('.').pop() || 'jpg';
                                                             const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
@@ -789,7 +810,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                                     title: photo.file_name || 'Site Photo',
                                                                     message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
                                                                     url: photo.downloadUrl,
-                                                                });
+                                                                 });
                                                             }
                                                         } catch { }
                                                     }}
@@ -799,7 +820,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
                                                     <TouchableOpacity
-                                                        onPress={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
+                                                        onPress={() => togglePhotoVisibility(photo)}
                                                         style={{ padding: 6 }}
                                                     >
                                                         <Feather name={photo.client_visible !== false ? 'eye' : 'eye-off'} size={16} color={photo.client_visible !== false ? colors.primary : colors.textMuted} />
@@ -807,7 +828,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                 )}
                                                 {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
                                                     <TouchableOpacity
-                                                        onPress={(e) => { e.stopPropagation(); confirmDeletePhoto(photo); }}
+                                                        onPress={() => confirmDeletePhoto(photo)}
                                                         style={{ padding: 6 }}
                                                     >
                                                         <Feather name="trash-2" size={16} color="#ef4444" />
@@ -816,7 +837,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             </>
                                         )}
                                     </View>
-                                </TouchableOpacity>
+                                </View>
                             );
                         }
                     })}

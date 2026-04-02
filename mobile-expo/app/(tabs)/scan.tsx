@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Paths, File as FSFile } from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -87,12 +88,19 @@ export default function ScanScreen() {
 
             if (!photo?.uri) return;
 
+            // Fix orientation for iOS
+            const manipulated = await ImageManipulator.manipulateAsync(
+                photo.uri,
+                [],
+                { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+            );
+
             // --- Apply document scan (B&W) enhancement ---
             setProcessingStep('enhancing');
-            let finalUri = photo.uri;
+            let finalUri = manipulated.uri;
 
             try {
-                const processed = await processorRef.current?.process(photo.uri);
+                const processed = await processorRef.current?.process(manipulated.uri);
                 if (processed && processed.startsWith('data:image')) {
                     // Strip data URL prefix and save as real file
                     const base64Data = processed.replace(/^data:image\/\w+;base64,/, '');

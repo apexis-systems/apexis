@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
@@ -401,15 +401,16 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                         </View>
                     </ScrollView>
 
-                    {/* View Mode Toggle */}
-                    <TouchableOpacity
-                        onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                        style={{ padding: 6, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-                    >
-                        <Feather name={viewMode === 'grid' ? 'list' : 'grid'} size={16} color={colors.text} />
-                    </TouchableOpacity>
 
-                    {/* Sort Toggle */}
+                    {visibleDocs.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                            style={{ padding: 6, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+                        >
+                            <Feather name={viewMode === 'grid' ? 'list' : 'grid'} size={16} color={colors.text} />
+                        </TouchableOpacity>
+                    )}
+
                     <TouchableOpacity
                         onPress={() => {
                             const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
@@ -438,13 +439,8 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                         const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                         const isSelected = selectedFolders.has(folder.id);
                         return (
-                            <TouchableOpacity
+                            <View
                                 key={folder.id}
-                                onPress={() => {
-                                    if (isSelectionMode) toggleSelection('folder', folder.id);
-                                    else setSelectedFolder(folder.id);
-                                }}
-                                onLongPress={() => handleLongPress('folder', folder.id)}
                                 style={{
                                     width: '31.5%',
                                     aspectRatio: 1,
@@ -460,13 +456,26 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                     shadowOpacity: 0.05,
                                     shadowRadius: 4,
                                     elevation: 1,
+                                    position: 'relative',
+                                    overflow: 'hidden'
                                 }}
                             >
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        if (isSelectionMode) toggleSelection('folder', folder.id);
+                                        else setSelectedFolder(folder.id);
+                                    }}
+                                    onLongPress={() => handleLongPress('folder', folder.id)}
+                                    style={{
+                                        ...StyleSheet.absoluteFillObject,
+                                        zIndex: 5,
+                                    }}
+                                />
                                 <View style={{ marginBottom: 8 }}>
                                     <Feather name="folder" size={36} color={colors.primary} />
                                 </View>
                                 {isSelected && (
-                                    <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+                                    <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                         <Feather name="check" size={10} color="#fff" />
                                     </View>
                                 )}
@@ -474,13 +483,13 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>{count} files{subcount > 0 ? ` · ${subcount} folders` : ''}</Text>
                                 {(user.role === 'admin' || user.role === 'superadmin') && !isSelectionMode && (
                                     <TouchableOpacity
-                                        onPress={(e) => { e.stopPropagation(); toggleFolderVis(folder); }}
-                                        style={{ position: 'absolute', bottom: 6, right: 6, padding: 4 }}
+                                        onPress={() => toggleFolderVis(folder)}
+                                        style={{ position: 'absolute', bottom: 6, right: 6, padding: 4, zIndex: 10 }}
                                     >
                                         <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? colors.primary : colors.textMuted} />
                                     </TouchableOpacity>
                                 )}
-                            </TouchableOpacity>
+                            </View>
                         );
                     })}
                 </View>
@@ -497,13 +506,8 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                         const isSelected = selectedFiles.has(doc.id);
                         if (viewMode === 'grid') {
                             return (
-                                <TouchableOpacity
+                                <View
                                     key={doc.id}
-                                    onPress={() => {
-                                        if (isSelectionMode) toggleSelection('file', doc.id);
-                                        else openDoc(doc);
-                                    }}
-                                    onLongPress={() => handleLongPress('file', doc.id)}
                                     style={{
                                         width: '23%',
                                         aspectRatio: 1,
@@ -514,9 +518,21 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         borderColor: isSelected ? colors.primary : colors.border,
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        padding: 8
+                                        padding: 8,
+                                        position: 'relative'
                                     }}
                                 >
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (isSelectionMode) toggleSelection('file', doc.id);
+                                            else openDoc(doc);
+                                        }}
+                                        onLongPress={() => handleLongPress('file', doc.id)}
+                                        style={{
+                                            ...StyleSheet.absoluteFillObject,
+                                            zIndex: 5,
+                                        }}
+                                    />
                                     <Feather name="file-text" size={32} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
                                     {isSelected && (
                                         <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
@@ -527,21 +543,21 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                     <View style={{ position: 'absolute', top: 2, right: 2, flexDirection: 'column', gap: 2, zIndex: 30 }}>
                                         {!isSelectionMode && (
                                             <>
-                                                <TouchableOpacity onPress={(e) => { e.stopPropagation(); handleShare(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
+                                                <TouchableOpacity onPress={() => handleShare(doc)} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
                                                     <Feather name="share-2" size={9} color="#fff" />
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
                                                     <>
-                                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
+                                                        <TouchableOpacity onPress={() => toggleDocVisibility(doc)} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
                                                             <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={9} color={doc.client_visible !== false ? colors.primary : "#fff"} />
                                                         </TouchableOpacity>
-                                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
+                                                        <TouchableOpacity onPress={() => toggleDocDoNotFollow(doc)} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
                                                             <Feather name="shield" size={9} color={doc.do_not_follow ? '#ef4444' : "#fff"} />
                                                         </TouchableOpacity>
                                                     </>
                                                 )}
                                                 {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
-                                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
+                                                    <TouchableOpacity onPress={() => deleteDoc(doc.id)} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
                                                         <Feather name="trash-2" size={9} color="#ef4444" />
                                                     </TouchableOpacity>
                                                 )}
@@ -566,17 +582,12 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                             <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
                                         </View>
                                     )}
-                                </TouchableOpacity>
+                                </View>
                             );
                         } else {
                             return (
-                                <TouchableOpacity
+                                <View
                                     key={doc.id}
-                                    onPress={() => {
-                                        if (isSelectionMode) toggleSelection('file', doc.id);
-                                        else openDoc(doc);
-                                    }}
-                                    onLongPress={() => handleLongPress('file', doc.id)}
                                     style={{
                                         flexDirection: 'row',
                                         alignItems: 'center',
@@ -586,8 +597,21 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         borderWidth: 1,
                                         borderColor: isSelected ? colors.primary : colors.border,
                                         padding: 10,
+                                        position: 'relative',
+                                        overflow: 'hidden'
                                     }}
                                 >
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (isSelectionMode) toggleSelection('file', doc.id);
+                                            else openDoc(doc);
+                                        }}
+                                        onLongPress={() => handleLongPress('file', doc.id)}
+                                        style={{
+                                            ...StyleSheet.absoluteFillObject,
+                                            zIndex: 5,
+                                        }}
+                                    />
                                     <View
                                         style={{
                                             width: 34,
@@ -617,31 +641,31 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         </View>
                                         <Text style={{ fontSize: 9, color: colors.textMuted }}>{doc.file_size_mb} MB</Text>
                                     </View>
-                                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
+                                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
                                         {!isSelectionMode && (
                                             <>
-                                                <TouchableOpacity onPress={(e) => { e.stopPropagation(); handleShare(doc); }} style={{ padding: 4 }}>
+                                                <TouchableOpacity onPress={() => handleShare(doc)} style={{ padding: 4 }}>
                                                     <Feather name="share-2" size={14} color="#666" />
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
                                                     <>
-                                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} style={{ padding: 4 }}>
+                                                        <TouchableOpacity onPress={() => toggleDocVisibility(doc)} style={{ padding: 4 }}>
                                                             <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? colors.primary : colors.textMuted} />
                                                         </TouchableOpacity>
-                                                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} style={{ padding: 4 }}>
+                                                        <TouchableOpacity onPress={() => toggleDocDoNotFollow(doc)} style={{ padding: 4 }}>
                                                             <Feather name="shield" size={14} color={doc.do_not_follow ? '#ef4444' : colors.textMuted} />
                                                         </TouchableOpacity>
                                                     </>
                                                 )}
                                                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && String(doc.created_by) === String(user.id) && (
-                                                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} style={{ padding: 4 }}>
+                                                    <TouchableOpacity onPress={() => deleteDoc(doc.id)} style={{ padding: 4 }}>
                                                         <Feather name="trash-2" size={14} color="#ef4444" />
                                                     </TouchableOpacity>
                                                 )}
                                             </>
                                         )}
                                     </View>
-                                </TouchableOpacity>
+                                </View>
                             );
                         }
                     })}
