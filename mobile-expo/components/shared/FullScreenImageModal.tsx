@@ -23,6 +23,7 @@ export default function FullScreenImageModal({ visible, onClose, uri }: Props) {
             animationType="fade"
             statusBarTranslucent={true}
             presentationStyle="fullScreen"
+            onRequestClose={onClose}
         >
             <View style={styles.container}>
                 <TouchableOpacity

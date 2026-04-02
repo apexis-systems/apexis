@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck, X, FileText, Download } from 'lucide-react';
+import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck, X, FileText, Download, CornerUpLeft } from 'lucide-react';
 import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile } from '@/services/chatService';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,6 +38,7 @@ export default function ChatDetail() {
     const [selectedFile, setSelectedFile] = useState<any>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [replyTo, setReplyTo] = useState<any>(null);
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
@@ -180,9 +181,12 @@ export default function ChatDetail() {
                 file_url: fileData?.file_url,
                 file_name: fileData?.file_name,
                 file_type: fileData?.file_type,
-                file_size: fileData?.file_size
+                file_size: fileData?.file_size,
+                parent_id: replyTo?.id || null
             };
             if (tempText) payload.text = tempText;
+            
+            setReplyTo(null);
 
             const res = await sendChatMessage(payload);
             if (res.success && res.message) {
@@ -207,6 +211,15 @@ export default function ChatDetail() {
     const addEmoji = (emoji: string) => {
         setMessage(prev => prev + emoji);
         // setShowEmojiPicker(false);
+    };
+ 
+    const scrollToMessage = (messageId: number) => {
+        const element = document.getElementById(`msg-${messageId}`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.classList.add('bg-accent/10');
+            setTimeout(() => element.classList.remove('bg-accent/10'), 2000);
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -273,7 +286,7 @@ export default function ChatDetail() {
                         const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                         return (
-                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <div key={msg.id} id={`msg-${msg.id}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} transition-colors duration-500 rounded-2xl`}>
                                 <div
                                     className={`max-w-[75%] px-3.5 py-2.5 shadow-sm ${isMe
                                         ? 'bg-accent text-white rounded-2xl rounded-br-sm'
@@ -284,14 +297,35 @@ export default function ChatDetail() {
                                         <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || 'User'}</p>
                                     )}
 
+                                    {msg.parent && (
+                                        <div 
+                                            onClick={() => scrollToMessage(msg.parent_id)}
+                                            className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10' : 'bg-secondary/50'}`}
+                                        >
+                                            <p className="font-bold text-accent mb-0.5">{msg.parent.sender?.name}</p>
+                                            <p className="opacity-70 line-clamp-1">
+                                                {msg.parent.type === 'image' ? '📷 Photo' : msg.parent.type === 'file' ? '📄 File' : msg.parent.text}
+                                            </p>
+                                        </div>
+                                    )}
+
                                     {msg.type === 'image' && msg.downloadUrl && (
-                                        <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20">
+                                        <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20 relative group">
                                             <img
                                                 src={msg.downloadUrl}
                                                 alt={msg.file_name}
                                                 className="max-w-full h-auto cursor-pointer block"
                                                 onClick={() => window.open(msg.downloadUrl, '_blank')}
                                             />
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    window.open(msg.downloadUrl, '_blank');
+                                                }}
+                                                className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Download className="h-4 w-4" />
+                                            </button>
                                         </div>
                                     )}
 
@@ -325,6 +359,12 @@ export default function ChatDetail() {
                                                 )}
                                             </div>
                                         )}
+                                        <button 
+                                            onClick={() => setReplyTo(msg)}
+                                            className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-orange-100' : 'text-muted-foreground'}`}
+                                        >
+                                            <CornerUpLeft className="h-3 w-3" />
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -377,6 +417,24 @@ export default function ChatDetail() {
                         </div>
                         <button
                             onClick={() => setSelectedFile(null)}
+                            className="p-1 rounded-full hover:bg-secondary transition-colors"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                )}
+
+                {/* Reply Preview */}
+                {replyTo && (
+                    <div className="px-4 py-3 bg-secondary/30 flex items-center gap-3 border-b border-border border-l-4 border-l-accent animate-in slide-in-from-bottom-2">
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-accent">{replyTo.sender?.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                                {replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text}
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setReplyTo(null)}
                             className="p-1 rounded-full hover:bg-secondary transition-colors"
                         >
                             <X className="h-4 w-4" />

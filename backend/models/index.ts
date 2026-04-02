@@ -158,6 +158,10 @@ db.rooms.hasMany(db.chat_messages, { foreignKey: 'room_id' });
 db.chat_messages.belongsTo(db.users, { foreignKey: 'sender_id', as: 'sender' });
 db.users.hasMany(db.chat_messages, { foreignKey: 'sender_id' });
 
+// ChatMessage <-> ChatMessage (Replies)
+db.chat_messages.belongsTo(db.chat_messages, { as: 'parent', foreignKey: 'parent_id' });
+db.chat_messages.hasMany(db.chat_messages, { as: 'replies', foreignKey: 'parent_id' });
+
 // User <-> Notification
 db.notifications.belongsTo(db.users, { foreignKey: 'user_id' });
 db.users.hasMany(db.notifications, { foreignKey: 'user_id' });

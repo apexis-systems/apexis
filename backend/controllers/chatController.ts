@@ -79,7 +79,14 @@ export const getRoomMessages = async (req: Request, res: Response) => {
 
         const messages = await chat_messages.findAll({
             where: { room_id: roomId },
-            include: [{ model: users, as: 'sender', attributes: ['id', 'name', 'role'] }],
+            include: [
+                { model: users, as: 'sender', attributes: ['id', 'name', 'role'] },
+                {
+                    model: chat_messages,
+                    as: 'parent',
+                    include: [{ model: users, as: 'sender', attributes: ['id', 'name'] }]
+                }
+            ],
             order: [['createdAt', 'ASC']]
         });
 
@@ -140,15 +147,23 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             file_name: file_name || null,
             file_type: file_type || null,
             file_size: file_size || null,
-            seen: false
+            seen: false,
+            parent_id: req.body.parent_id || null
         });
 
         // Update room updatedAt for sorting
         await rooms.update({ updatedAt: new Date() }, { where: { id: roomId } });
 
-        // Re-fetch message with sender info for broadcast
+        // Re-fetch message with sender info and parent info for broadcast
         const messageWithSender = await chat_messages.findByPk(newMessage.id, {
-            include: [{ model: users, as: 'sender', attributes: ['id', 'name', 'profile_pic'] }]
+            include: [
+                { model: users, as: 'sender', attributes: ['id', 'name', 'profile_pic'] },
+                { 
+                    model: chat_messages, 
+                    as: 'parent', 
+                    include: [{ model: users, as: 'sender', attributes: ['id', 'name'] }] 
+                }
+            ]
         });
 
         // 2. Trigger Notifications
