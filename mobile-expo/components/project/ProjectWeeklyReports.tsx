@@ -211,8 +211,11 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                                         {report.summary.document_titles?.length > 0 && (
                                             <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
                                                 <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📄 Documents Uploaded</Text>
-                                                {report.summary.document_titles.map((title, i) => (
-                                                    <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>• {title}</Text>
+                                                {report.summary.document_titles.map((doc: any, i) => (
+                                                    <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>
+                                                        • <Text style={{ fontWeight: '600' }}>{typeof doc === 'object' ? doc.title : doc}</Text>
+                                                        {typeof doc === 'object' && doc.user && ` (by ${doc.user} in ${doc.folder})`}
+                                                    </Text>
                                                 ))}
                                             </View>
                                         )}

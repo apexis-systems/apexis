@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Op } from 'sequelize';
-import { reports, files, comments, folders, users, projects, rfis, snags, project_members } from '../models/index.ts';
+import { reports, files, comments, folders, users, projects, rfis, snags, project_members, organizations } from '../models/index.ts';
 import { generateSingleReportPDF } from '../services/exportService.ts';
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -85,20 +85,18 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
         periodStartIST = new Date(nowIST);
         periodStartIST.setHours(0, 0, 0, 0);
     } else if (type === 'weekly') {
-        // Find the most recently completed Sunday (in IST)
-        periodEndIST = new Date(nowIST);
-        const day = periodEndIST.getDay(); // 0 (Sun) to 6 (Sat)
-        
-        // If it's not Sunday, go back to the previous Sunday.
-        if (day !== 0) {
-            periodEndIST.setDate(periodEndIST.getDate() - day);
-        }
-        periodEndIST.setHours(23, 59, 59, 999);
-
-        // Period starts 6 days BEFORE that Sunday (i.e., Monday)
-        periodStartIST = new Date(periodEndIST);
-        periodStartIST.setDate(periodStartIST.getDate() - 6);
+        // ALWAYS Current Week's Monday–Sunday window (7 days)
+        // Regardless of when triggered, it shows the Monday to Sunday of the active week.
+        periodStartIST = new Date(nowIST);
+        const day = periodStartIST.getDay(); // 0 (Sun) to 6 (Sat)
+        // If today is Sunday (0), we go back 6 days to Monday. Otherwise, go back (day - 1) days.
+        const diffToMonday = day === 0 ? 6 : day - 1;
+        periodStartIST.setDate(periodStartIST.getDate() - diffToMonday);
         periodStartIST.setHours(0, 0, 0, 0);
+
+        periodEndIST = new Date(periodStartIST);
+        periodEndIST.setDate(periodEndIST.getDate() + 6);
+        periodEndIST.setHours(23, 59, 59, 999);
     } else {
         // Monthly: Start from 1st of the current month
         periodStartIST = new Date(nowIST);
@@ -152,6 +150,10 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
         where: { project_id: projectId },
         include: [{ model: users, attributes: ['name'] }]
     });
+
+    const targetProject = await projects.findByPk(projectId);
+    const organization = await organizations.findByPk(targetProject?.organization_id);
+    const orgName = organization?.name || 'Apexis Engineering Consultants';
 
     const clientList = members.filter((m: any) => m.role === 'client').map((m: any) => m.user?.name).filter(Boolean);
     const contributorList = members.filter((m: any) => m.role === 'contributor').map((m: any) => m.user?.name).filter(Boolean);
@@ -221,6 +223,7 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
 
     const summary = {
         client: clientList || ' ',
+        consultant: orgName,
         contributors: contributorList || ' ',
         document_titles: docs.map((f: any) => ({
             title: f.file_name,

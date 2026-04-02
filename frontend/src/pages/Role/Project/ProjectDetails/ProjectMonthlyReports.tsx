@@ -147,7 +147,12 @@ const ProjectMonthlyReports = ({ project, userRole }: Props) => {
                         <FileText className="h-2.5 w-2.5" /> Documents Uploaded
                       </p>
                       <ul className="text-[8.5px] text-muted-foreground list-disc list-inside">
-                        {r.summary.document_titles.map((title, idx) => <li key={idx} className="truncate">{title}</li>)}
+                        {r.summary.document_titles.map((doc: any, idx) => (
+                          <li key={idx} className="truncate">
+                            <span className="font-medium text-foreground">{typeof doc === 'object' ? doc.title : doc}</span>
+                            {typeof doc === 'object' && doc.user && ` (by ${doc.user} in ${doc.folder})`}
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   )}
