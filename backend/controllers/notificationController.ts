@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import { notifications } from '../models/index.ts';
-
+import { notifications, projects, Sequelize, Sequelize as SequelizeType } from '../models/index.ts';
+import { Op } from 'sequelize';
 /**
  * List all notifications for the current user
  * GET /api/notifications
@@ -10,8 +10,33 @@ export const listNotifications = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
+        const { project_id, type } = req.query;
+        let where: any = { user_id: authUser.user_id };
+        
+        if (project_id && project_id !== 'all') where.project_id = project_id;
+        
+        if (type && type !== 'all') {
+            const categories: Record<string, string[]> = {
+                chat: ['chat'],
+                file: ['file_upload', 'file_upload_admin', 'file_visibility'],
+                photo: ['photo_upload', 'photo_comment'],
+                snag: ['snag_assigned', 'snag_creation_admin', 'snag_status_update'],
+                rfi: ['rfi_created', 'rfi_assigned', 'rfi_status_update', 'rfi_comment'],
+            };
+
+            if (categories[type as string]) {
+                where.type = { [Op.in]: categories[type as string] };
+            } else {
+                where.type = type;
+            }
+        }
+
         const data = await notifications.findAll({
-            where: { user_id: authUser.user_id },
+            where,
+            include: [{
+                model: projects,
+                attributes: ['id', 'name']
+            }],
             order: [['createdAt', 'DESC']],
             limit: 50
         });

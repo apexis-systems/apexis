@@ -15,6 +15,10 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: false,
             },
+            project_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+            },
             title: {
                 type: DataTypes.STRING,
                 allowNull: false,

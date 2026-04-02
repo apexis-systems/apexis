@@ -23,6 +23,7 @@ import MainHeader from '@/components/shared/MainHeader';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { getSecureFileUrl } from '@/services/fileService';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
+import { handleNotificationNavigation } from '@/utils/navigation';
 
 export default function DashboardScreen() {
   const { user, updateUser } = useAuth();
@@ -67,6 +68,18 @@ export default function DashboardScreen() {
       
       // Request notification permissions and register token on home screen
       registerForPushNotificationsAsync();
+
+      // Listen for notification interactions
+      const Notifications = require('expo-notifications');
+      const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
+        const { type } = response.notification.request.content.data;
+        const data = response.notification.request.content.data;
+        handleNotificationNavigation(type, data, router);
+      });
+
+      return () => {
+        responseListener.remove();
+      };
     }
   }, [user, selectedOrgId]);
 

@@ -161,6 +161,8 @@ db.users.hasMany(db.chat_messages, { foreignKey: 'sender_id' });
 // User <-> Notification
 db.notifications.belongsTo(db.users, { foreignKey: 'user_id' });
 db.users.hasMany(db.notifications, { foreignKey: 'user_id' });
+db.notifications.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.notifications, { foreignKey: 'project_id' });
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;

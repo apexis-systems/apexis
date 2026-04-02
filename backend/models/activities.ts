@@ -20,7 +20,7 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
             },
             type: {
-                type: DataTypes.ENUM("upload", "edit", "delete", "share", "upload_photo", "uploaded"),
+                type: DataTypes.ENUM("upload", "edit", "delete", "share", "upload_photo", "uploaded", "comment"),
                 allowNull: false,
             },
 

@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Bell, Check, X } from 'lucide-react';
 import { useSocket } from '@/contexts/SocketContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { handleNotificationNavigation } from '@/helpers/notificationNavigation';
 
 interface Notification {
     id: number;
@@ -16,14 +19,17 @@ interface Notification {
 const NotificationDropdown = () => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
+    const { user } = useAuth();
+    const router = useRouter();
     const { socket, unreadNotificationCount, setUnreadNotificationCount } = useSocket();
 
     const fetchNotifications = async () => {
         try {
             const res = await PrivateAxios.get('/notifications');
             const data = res.data.notifications || [];
-            setNotifications(data);
-            setUnreadNotificationCount(data.filter((n: any) => !n.is_read).length);
+            const unread = data.filter((n: any) => !n.is_read);
+            setNotifications(unread);
+            setUnreadNotificationCount(unread.length);
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
         }
@@ -55,7 +61,7 @@ const NotificationDropdown = () => {
     const markAllRead = async () => {
         try {
             await PrivateAxios.patch('/notifications/read-all');
-            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+            setNotifications([]);
             setUnreadNotificationCount(0);
         } catch (error) {
             console.error('Failed to mark all read:', error);
@@ -111,7 +117,13 @@ const NotificationDropdown = () => {
                                     <div
                                         key={notif.id}
                                         className={`p-3 hover:bg-gray-50 cursor-pointer transition-colors relative ${!notif.is_read ? 'bg-primary/5' : ''}`}
-                                        onClick={() => markRead(notif.id)}
+                                        onClick={() => {
+                                            markRead(notif.id);
+                                            // Immediately remove from list to fulfill "delete seen" requirement
+                                            setNotifications(prev => prev.filter(n => n.id !== notif.id));
+                                            setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+                                            handleNotificationNavigation(notif.type, notif.data, user?.role || 'admin', router);
+                                        }}
                                     >
                                         <div className="flex justify-between items-start mb-1">
                                             <p className="text-xs font-bold text-gray-900 leading-tight pr-4">{notif.title}</p>

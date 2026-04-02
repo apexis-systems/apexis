@@ -1,24 +1,28 @@
 import { notifications, users } from '../models/index.ts';
 import { messaging } from '../config/firebase.ts';
-import { getIO, isUserOnline } from '../socket.ts';
+import { getIO } from '../socket.ts';
 
 export const sendNotification = async ({
     userId,
     title,
     body,
     type,
-    data = {}
+    data = {},
+    projectId
 }: {
     userId: number;
     title: string;
     body: string;
     type: string;
     data?: any;
+    projectId?: number;
 }) => {
     try {
         // 1. In-App Notification (Save to DB)
+        const finalProjectId = projectId || data?.projectId || data?.project_id || null;
         const newNotif = await notifications.create({
             user_id: userId,
+            project_id: finalProjectId ? Number(finalProjectId) : null,
             title,
             body,
             type,
@@ -30,7 +34,7 @@ export const sendNotification = async ({
         const user = await users.findByPk(userId);
 
         // 3. Push Notification (FCM) - Only if OFFLINE
-        if (user?.fcm_token && !isUserOnline(userId)) {
+        if (user?.fcm_token) {
             try {
                 await messaging.send({
                     notification: { title, body },
