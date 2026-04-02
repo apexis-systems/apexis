@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Modal, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import ZoomableImage from './ZoomableImage';
 
 interface Props {
     visible: boolean;
@@ -25,20 +27,18 @@ export default function FullScreenImageModal({ visible, onClose, uri }: Props) {
             presentationStyle="fullScreen"
             onRequestClose={onClose}
         >
-            <View style={styles.container}>
-                <TouchableOpacity
-                    onPress={onClose}
-                    style={[styles.closeButton, { top: Math.max(insets.top, 20) }]}
-                >
-                    <Feather name="x" size={28} color="#fff" />
-                </TouchableOpacity>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+                <View style={styles.container}>
+                    <TouchableOpacity
+                        onPress={onClose}
+                        style={[styles.closeButton, { top: Math.max(insets.top, 20) }]}
+                    >
+                        <Feather name="x" size={28} color="#fff" />
+                    </TouchableOpacity>
 
-                <Image
-                    source={{ uri }}
-                    style={styles.image}
-                    resizeMode="contain"
-                />
-            </View>
+                    <ZoomableImage uri={uri} />
+                </View>
+            </GestureHandlerRootView>
         </Modal>
     );
 }

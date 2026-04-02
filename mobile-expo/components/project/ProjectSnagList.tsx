@@ -16,6 +16,7 @@ import {
     Snag, Assignee, SnagStatus,
     getSnags, getAssignees, updateSnagStatus, deleteSnagApi,
 } from '@/services/snagService';
+import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 
 interface Props { project: Project; }
 
@@ -178,16 +179,11 @@ export default function ProjectSnagList({ project }: Props) {
 
 
             {/* ── Photo viewer ───────────────────────────────────────────────── */}
-            <Modal visible={!!viewPhoto} transparent animationType="fade" onRequestClose={() => setViewPhoto(null)}>
-                <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' }} activeOpacity={1} onPress={() => setViewPhoto(null)}>
-                    {viewPhoto && (
-                        <Image source={{ uri: viewPhoto }} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
-                    )}
-                    <TouchableOpacity onPress={() => setViewPhoto(null)} style={{ position: 'absolute', top: 48, right: 16, padding: 8 }}>
-                        <Feather name="x" size={24} color="#fff" />
-                    </TouchableOpacity>
-                </TouchableOpacity>
-            </Modal>
+            <FullScreenImageModal
+                visible={!!viewPhoto}
+                onClose={() => setViewPhoto(null)}
+                uri={viewPhoto}
+            />
         </ScrollView>
     );
 }

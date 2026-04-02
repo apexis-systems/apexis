@@ -1,6 +1,7 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Image, FlatList, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Image, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet
 } from 'react-native';
+import { FlatList } from 'react-native-gesture-handler';
 import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
@@ -15,92 +16,10 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import ZoomableImage from '../shared/ZoomableImage';
 
-// ── Pinch-to-zoom image component ────────────────────────────────────────────
-function ZoomableImage({ uri, width, height }: { uri: string; width: number; height: number }) {
-    const scale = useSharedValue(1);
-    const savedScale = useSharedValue(1);
-    const translateX = useSharedValue(0);
-    const translateY = useSharedValue(0);
-    const savedTranslateX = useSharedValue(0);
-    const savedTranslateY = useSharedValue(0);
-    const focalX = useSharedValue(0);
-    const focalY = useSharedValue(0);
-
-    const resetZoom = () => {
-        scale.value = withSpring(1, { damping: 20, stiffness: 200 });
-        translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
-        translateY.value = withSpring(0, { damping: 20, stiffness: 200 });
-        savedScale.value = 1;
-        savedTranslateX.value = 0;
-        savedTranslateY.value = 0;
-    };
-
-    const pinchGesture = Gesture.Pinch()
-        .onStart((e) => {
-            focalX.value = e.focalX;
-            focalY.value = e.focalY;
-        })
-        .onUpdate((e) => {
-            const newScale = Math.max(1, Math.min(savedScale.value * e.scale, 6));
-            scale.value = newScale;
-
-            // Translate so the focal point stays fixed while zooming
-            if (savedScale.value > 1 || e.scale > 1) {
-                translateX.value = savedTranslateX.value + (e.focalX - width / 2) * (1 - e.scale);
-                translateY.value = savedTranslateY.value + (e.focalY - height / 2) * (1 - e.scale);
-            }
-        })
-        .onEnd(() => {
-            savedScale.value = scale.value;
-            savedTranslateX.value = translateX.value;
-            savedTranslateY.value = translateY.value;
-            if (scale.value <= 1.05) {
-                runOnJS(resetZoom)();
-            }
-        });
-
-    const doubleTap = Gesture.Tap()
-        .numberOfTaps(2)
-        .onEnd(() => {
-            runOnJS(resetZoom)();
-        });
-
-    const panGesture = Gesture.Pan()
-        .minPointers(2)
-        .onUpdate((e) => {
-            translateX.value = savedTranslateX.value + e.translationX;
-            translateY.value = savedTranslateY.value + e.translationY;
-        })
-        .onEnd(() => {
-            savedTranslateX.value = translateX.value;
-            savedTranslateY.value = translateY.value;
-        });
-
-    const composed = Gesture.Simultaneous(pinchGesture, panGesture);
-    const all = Gesture.Race(doubleTap, composed);
-
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [
-            { translateX: translateX.value },
-            { translateY: translateY.value },
-            { scale: scale.value },
-        ],
-    }));
-
-    return (
-        <GestureDetector gesture={all}>
-            <Animated.View style={[{ width, height, justifyContent: 'center', alignItems: 'center' }, animatedStyle]}>
-                <Image
-                    source={{ uri }}
-                    style={{ width, height }}
-                    resizeMode="contain"
-                />
-            </Animated.View>
-        </GestureDetector>
-    );
-}
+// Removed local ZoomableImage
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -128,6 +47,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerIndex, setViewerIndex] = useState(0);
+    const [isViewerZoomed, setIsViewerZoomed] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
@@ -218,8 +138,8 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
 
     // ── Reload comments when swiping to a new photo ───────────────────────────
     useEffect(() => {
-        if (viewerOpen && visiblePhotos[viewerIndex]?.id) {
-            loadComments(visiblePhotos[viewerIndex].id);
+        if (viewerOpen && sortedPhotos[viewerIndex]?.id) {
+            loadComments(sortedPhotos[viewerIndex].id);
         }
     }, [viewerIndex, viewerOpen]);
 
@@ -236,7 +156,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     };
 
     const handleAddComment = async () => {
-        const photo = visiblePhotos[viewerIndex];
+        const photo = sortedPhotos[viewerIndex];
         if (!photo?.id || !commentText.trim()) return;
         setAddingComment(true);
         try {
@@ -256,10 +176,14 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         setPhotoComments([]);
         setReplyTo(null);
         setCommentText('');
+        setIsViewerZoomed(false);
         setViewerOpen(true);
     };
 
-    const closeViewer = () => setViewerOpen(false);
+    const closeViewer = () => {
+        setViewerOpen(false);
+        setIsViewerZoomed(false);
+    };
 
     useFocusEffect(
         useCallback(() => {
@@ -285,7 +209,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     );
 
     const goNext = () => {
-        const next = Math.min(viewerIndex + 1, visiblePhotos.length - 1);
+        const next = Math.min(viewerIndex + 1, sortedPhotos.length - 1);
         setViewerIndex(next);
         flatListRef.current?.scrollToIndex({ index: next, animated: true });
     };
@@ -297,7 +221,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     };
 
     const handleSharePhoto = async () => {
-        const photo = visiblePhotos[viewerIndex];
+        const photo = sortedPhotos[viewerIndex];
         if (!photo?.downloadUrl) return;
         try {
             const ext = photo.file_name?.split('.').pop() || 'jpg';
@@ -327,7 +251,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     };
 
     const downloadToGallery = async () => {
-        const photo = visiblePhotos[viewerIndex];
+        const photo = sortedPhotos[viewerIndex];
         if (!photo?.downloadUrl) return;
         setDownloading(true);
         try {
@@ -367,7 +291,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     };
 
     const handleDeletePhoto = () => {
-        confirmDeletePhoto(visiblePhotos[viewerIndex]);
+        confirmDeletePhoto(sortedPhotos[viewerIndex]);
     };
 
     // ── Toggle helpers ────────────────────────────────────────────────────────
@@ -947,9 +871,10 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
             {/* ── Full-screen viewer modal (inlined) ── */}
             <Modal visible={viewerOpen} transparent={false} animationType="fade" statusBarTranslucent onRequestClose={closeViewer}>
                 <StatusBar hidden />
-                <View style={{ flex: 1, backgroundColor: '#000' }}>
-                    {/* Top bar */}
-                    <View style={{
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                    <View style={{ flex: 1, backgroundColor: '#000' }}>
+                        {/* Top bar */}
+                        <View style={{
                         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
                         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                         paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
@@ -959,7 +884,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                             <Feather name="x" size={22} color="#fff" />
                         </TouchableOpacity>
                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                            {viewerIndex + 1} / {visiblePhotos.length}
+                            {viewerIndex + 1} / {sortedPhotos.length}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
                             <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
@@ -971,7 +896,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                     : <Feather name="download" size={20} color={colors.primary} />
                                 }
                             </TouchableOpacity>
-                            {(String(visiblePhotos[viewerIndex]?.created_by) === String(user?.id) || String(visiblePhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
+                            {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
                                 <TouchableOpacity onPress={handleDeletePhoto} style={{ padding: 8 }}>
                                     <Feather name="trash-2" size={20} color="#ef4444" />
                                 </TouchableOpacity>
@@ -982,9 +907,10 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                     {/* Photo pager */}
                     <FlatList
                         ref={flatListRef}
-                        data={visiblePhotos}
+                        data={sortedPhotos}
                         horizontal
                         pagingEnabled
+                        scrollEnabled={!isViewerZoomed}
                         showsHorizontalScrollIndicator={false}
                         keyExtractor={(item) => item.id.toString()}
                         getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
@@ -998,6 +924,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                     uri={item.downloadUrl}
                                     width={SCREEN_W}
                                     height={SCREEN_H}
+                                    onZoomStateChange={setIsViewerZoomed}
                                 />
                             </View>
                         )}
@@ -1012,7 +939,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                             <Feather name="chevron-left" size={26} color="#fff" />
                         </TouchableOpacity>
                     )}
-                    {viewerIndex < visiblePhotos.length - 1 && (
+                    {viewerIndex < sortedPhotos.length - 1 && (
                         <TouchableOpacity
                             onPress={goNext}
                             style={{ position: 'absolute', right: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
@@ -1029,10 +956,10 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                         <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
                             <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
                                 <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
-                                    {visiblePhotos[viewerIndex]?.file_name || 'Photo'}
+                                    {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
                                 </Text>
-                                {visiblePhotos[viewerIndex]?.location
-                                    ? <Text style={{ color: '#aaa', fontSize: 10, marginTop: 2 }}>📍 {visiblePhotos[viewerIndex].location}</Text>
+                                {sortedPhotos[viewerIndex]?.location
+                                    ? <Text style={{ color: '#aaa', fontSize: 10, marginTop: 2 }}>📍 {sortedPhotos[viewerIndex].location}</Text>
                                     : null
                                 }
                             </View>
@@ -1100,6 +1027,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                         </View>
                     </KeyboardAvoidingView>
                 </View>
+                </GestureHandlerRootView>
             </Modal>
         </View>
     );

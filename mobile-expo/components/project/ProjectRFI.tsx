@@ -20,6 +20,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { getAssignees, Assignee } from '@/services/snagService';
+import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 
 interface Props {
   project: Project;
@@ -863,23 +864,11 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
         </TouchableOpacity>
       </Modal>
       {/* Photo Preview Modal */}
-      <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
-        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-          <TouchableOpacity 
-            onPress={() => setPreviewImage(null)}
-            style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }}
-          >
-            <Feather name="x" size={30} color="#fff" />
-          </TouchableOpacity>
-          {previewImage && (
-            <Image 
-              source={{ uri: previewImage }} 
-              style={{ width: '100%', height: '80%' }} 
-              resizeMode="contain" 
-            />
-          )}
-        </View>
-      </Modal>
+      <FullScreenImageModal
+        visible={!!previewImage}
+        onClose={() => setPreviewImage(null)}
+        uri={previewImage}
+      />
 
       {/* Image Annotator */}
       {annotatingImageIndex !== null && (
