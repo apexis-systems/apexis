@@ -16,12 +16,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
-    RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees
+    RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse
 } from '@/services/rfiService';
 import { getAssignees, Assignee } from '@/services/snagService';
+import ImageAnnotator from '@/components/common/ImageAnnotator';
 
 interface ProjectRFIProps {
     project: Project;
+    onUpdate?: () => void;
 }
 
 const STATUS_CONFIG: Record<RFIStatus, { icon: any; color: string; bg: string; label: string }> = {
@@ -30,7 +32,7 @@ const STATUS_CONFIG: Record<RFIStatus, { icon: any; color: string; bg: string; l
     overdue: { icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Overdue' },
 };
 
-export default function ProjectRFI({ project }: ProjectRFIProps) {
+export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const { user } = useAuth();
     const { t } = useLanguage();
 
@@ -50,9 +52,44 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
     const [newTitle, setNewTitle] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [newAssignee, setNewAssignee] = useState('');
+    const [newExpiryDate, setNewExpiryDate] = useState('');
     const [newPhotos, setNewPhotos] = useState<File[]>([]);
     const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+    const [responseBody, setResponseBody] = useState('');
+    const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const dataUrlToBlob = (dataUrl: string) => {
+        const arr = dataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        return new Blob([u8arr], { type: mime });
+    };
+
+    const handleAnnotateSave = (annotatedDataUrl: string) => {
+        if (annotatingIdx === null) return;
+        
+        const blob = dataUrlToBlob(annotatedDataUrl);
+        const fileName = newPhotos[annotatingIdx]?.name || `annotated_${Date.now()}.jpg`;
+        const file = new File([blob], fileName, { type: 'image/jpeg' });
+        
+        setNewPhotos((prev: File[]) => {
+            const copy = [...prev];
+            copy[annotatingIdx] = file;
+            return copy;
+        });
+        
+        setPhotoPreviews((prev: string[]) => {
+            const copy = [...prev];
+            copy[annotatingIdx] = annotatedDataUrl;
+            return copy;
+        });
+        
+        setAnnotatingIdx(null);
+    };
 
     const load = async () => {
         if (!project?.id) return;
@@ -78,6 +115,12 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
         const validFiles = files.filter(f => f.type.startsWith('image/'));
         if (validFiles.length !== files.length) toast.error('Some files were skipped (not images)');
 
+        const total = newPhotos.length + validFiles.length;
+        if (total > 3) {
+            toast.error('Maximum 3 photos allowed');
+            return;
+        }
+
         setNewPhotos(prev => [...prev, ...validFiles]);
 
         validFiles.forEach(file => {
@@ -88,8 +131,8 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
     };
 
     const removePhoto = (idx: number) => {
-        setNewPhotos(prev => prev.filter((_, i) => i !== idx));
-        setPhotoPreviews(prev => prev.filter((_, i) => i !== idx));
+        setNewPhotos((prev: File[]) => prev.filter((_, i) => i !== idx));
+        setPhotoPreviews((prev: string[]) => prev.filter((_, i) => i !== idx));
     };
 
     const addRFI = async () => {
@@ -101,6 +144,7 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
             form.append('title', newTitle.trim());
             form.append('description', newDescription.trim());
             if (newAssignee) form.append('assigned_to', newAssignee);
+            if (newExpiryDate) form.append('expiry_date', newExpiryDate);
             newPhotos.forEach(photo => form.append('photos', photo));
 
             await createRFI(form);
@@ -108,6 +152,7 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
             setShowAdd(false);
             resetForm();
             load();
+            if (onUpdate) onUpdate();
         } catch {
             toast.error('Failed to create RFI');
         } finally {
@@ -119,8 +164,25 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
         setNewTitle('');
         setNewDescription('');
         setNewAssignee('');
+        setNewExpiryDate('');
         setNewPhotos([]);
         setPhotoPreviews([]);
+    };
+
+    const handleUpdateResponse = async () => {
+        if (!selectedRFI) return;
+        setSubmitting(true);
+        try {
+            const updated = await updateRFIResponse(selectedRFI.id, { response: responseBody });
+            toast.success('Response updated');
+            setSelectedRFI(updated);
+            load();
+            if (onUpdate) onUpdate();
+        } catch {
+            toast.error('Failed to update response');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleStatusUpdate = async (id: number, status: RFIStatus) => {
@@ -128,6 +190,7 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
             await updateRFIStatus(id, status);
             toast.success(`Status updated to ${status}`);
             load();
+            if (onUpdate) onUpdate();
             if (selectedRFI?.id === id) {
                 setSelectedRFI({ ...selectedRFI, status });
             }
@@ -311,14 +374,23 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
                             </Select>
                         </div>
                         <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Expiry Date</label>
+                            <Input type="datetime-local" value={newExpiryDate} onChange={e => setNewExpiryDate(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
                             <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Attachments</label>
                             <div className="flex flex-wrap gap-2">
                                 {photoPreviews.map((src, idx) => (
                                     <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border group">
                                         <img src={src} alt="Preview" className="w-full h-full object-cover" />
-                                        <button onClick={() => removePhoto(idx)} className="absolute top-1 right-1 bg-destructive p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <X className="h-3 w-3 text-white" />
-                                        </button>
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            <button onClick={() => setAnnotatingIdx(idx)} className="bg-accent p-1.5 rounded-full hover:scale-110 transition-transform">
+                                                <Camera className="h-3 w-3 text-white" />
+                                            </button>
+                                            <button onClick={() => removePhoto(idx)} className="bg-destructive p-1.5 rounded-full hover:scale-110 transition-transform">
+                                                <X className="h-3 w-3 text-white" />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                                 <Button
@@ -372,7 +444,46 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Assigned To</p>
                                         <p className="text-xs font-semibold">{selectedRFI.assignee?.name || 'Unassigned'}</p>
                                     </div>
+                                    {selectedRFI.expiry_date && (
+                                        <div className="col-span-2 mt-2 pt-2 border-t border-border/50">
+                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Expiry Date</p>
+                                            <p className={cn("text-xs font-semibold flex items-center gap-1.5", 
+                                                selectedRFI.status === 'overdue' ? 'text-destructive' : 'text-foreground')}>
+                                                <Clock className="h-3 w-3" />
+                                                {new Date(selectedRFI.expiry_date).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
+
+                                {selectedRFI.response && (
+                                    <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
+                                        <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">Response</p>
+                                        <p className="text-sm text-foreground whitespace-pre-wrap">{selectedRFI.response}</p>
+                                    </div>
+                                )}
+
+                                {((String(selectedRFI.assigned_to) === String(user?.id)) || user?.role === 'admin') && selectedRFI.status !== 'closed' && (
+                                    <div className="space-y-3 pt-4 border-t border-border">
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                            {selectedRFI.response ? 'Update Response' : 'Provide Response'}
+                                        </p>
+                                        <Textarea 
+                                            placeholder="Type your response here..." 
+                                            value={responseBody} 
+                                            onChange={e => setResponseBody(e.target.value)}
+                                            className="min-h-[100px] text-sm"
+                                        />
+                                        <Button 
+                                            onClick={handleUpdateResponse} 
+                                            disabled={submitting || !responseBody.trim()}
+                                            className="w-full bg-accent text-accent-foreground"
+                                        >
+                                            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
+                                            Submit Response
+                                        </Button>
+                                    </div>
+                                )}
 
                                 {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
                                     <div>
@@ -413,6 +524,14 @@ export default function ProjectRFI({ project }: ProjectRFIProps) {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {annotatingIdx !== null && (
+                <ImageAnnotator 
+                    imageSrc={photoPreviews[annotatingIdx]} 
+                    onSave={handleAnnotateSave} 
+                    onCancel={() => setAnnotatingIdx(null)} 
+                />
+            )}
         </div>
     );
 }

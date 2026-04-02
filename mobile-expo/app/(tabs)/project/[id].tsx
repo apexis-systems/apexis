@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import { PanResponder, Dimensions } from 'react-native';
 import ProjectOverview from '@/components/project/ProjectOverview';
@@ -18,6 +19,7 @@ import ProjectMonthlyReports from '@/components/project/ProjectMonthlyReports';
 import ProjectSnagList from '@/components/project/ProjectSnagList';
 
 import ProjectManuals from '@/components/project/ProjectManuals';
+import { getRFIs } from '@/services/rfiService';
 import MainHeader from '@/components/shared/MainHeader';
 import EditProjectModal from '@/components/project/EditProjectModal';
 
@@ -38,6 +40,7 @@ export default function ProjectWorkspaceScreen() {
     const [activeTab, setActiveTab] = useState<Tab>(() => user?.role === 'client' ? 'documents' : 'overview');
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [hasPendingRFI, setHasPendingRFI] = useState(false);
 
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -92,6 +95,52 @@ export default function ProjectWorkspaceScreen() {
         };
         fetchProject();
     }, [id]);
+
+    const checkRFIs = useCallback(async () => {
+        if (!id || !user?.id) return;
+        try {
+            const rfis = await getRFIs(Number(id));
+            const pending = rfis.some(r => 
+                (r.status === 'open' || r.status === 'overdue') && 
+                String(r.assigned_to) === String(user.id)
+            );
+            setHasPendingRFI(pending);
+        } catch (error) {
+            console.error("Failed to check RFIs:", error);
+        }
+    }, [id, user?.id]);
+
+    const { socket, isConnected } = useSocket();
+
+    useEffect(() => {
+        checkRFIs();
+        const interval = setInterval(checkRFIs, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [checkRFIs]);
+
+    // Socket listeners for real-time red dot updates
+    useEffect(() => {
+        if (socket && isConnected && id) {
+            socket.emit('join-project', id);
+
+            const handleRfiUpdate = () => {
+                console.log('[SOCKET] RFI update received, refreshing red dot');
+                checkRFIs();
+            };
+
+            socket.on('rfi-updated', handleRfiUpdate);
+            socket.on('new-notification', (notif: any) => {
+                if (notif.type?.startsWith('rfi_')) {
+                    handleRfiUpdate();
+                }
+            });
+
+            return () => {
+                socket.off('rfi-updated', handleRfiUpdate);
+                socket.off('new-notification', handleRfiUpdate);
+            };
+        }
+    }, [socket, isConnected, id, checkRFIs]);
 
     if (!user || loading) return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
@@ -188,15 +237,27 @@ export default function ProjectWorkspaceScreen() {
                                     } : {})
                                 }}
                             >
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        fontWeight: activeTab === tab.key ? '700' : '500',
-                                        color: activeTab === tab.key ? colors.text : colors.textMuted,
-                                    }}
-                                >
-                                    {tab.label}
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text
+                                        style={{
+                                            fontSize: 12,
+                                            fontWeight: activeTab === tab.key ? '700' : '500',
+                                            color: activeTab === tab.key ? colors.text : colors.textMuted,
+                                        }}
+                                    >
+                                        {tab.label}
+                                    </Text>
+                                    {tab.key === 'rfi' && hasPendingRFI && (
+                                        <View style={{
+                                            width: 6,
+                                            height: 6,
+                                            borderRadius: 3,
+                                            backgroundColor: '#ef4444',
+                                            marginLeft: 4,
+                                            marginTop: -6
+                                        }} />
+                                    )}
+                                </View>
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -215,7 +276,7 @@ export default function ProjectWorkspaceScreen() {
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} />}
-                {activeTab === 'rfi' && <ProjectRFI project={project} user={user} />}
+                {activeTab === 'rfi' && <ProjectRFI project={project} user={user} onUpdate={checkRFIs} />}
 
                 {/* Internal / Hidden Tabs */}
                 {activeTab === 'reports' && (

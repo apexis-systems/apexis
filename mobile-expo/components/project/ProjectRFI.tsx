@@ -1,22 +1,28 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
-  Modal, ScrollView, TextInput, Alert, Image, StyleSheet
+  Modal, ScrollView, TextInput, Alert, Image, StyleSheet, Platform
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as MediaLibrary from 'expo-media-library';
 import { Project, User } from '@/types';
 import {
-  getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees
+  getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse
 } from '@/services/rfiService';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { getAssignees, Assignee } from '@/services/snagService';
 
 interface Props {
   project: Project;
   user: User;
+  onUpdate?: () => void;
 }
 
 const statusConfig = {
@@ -25,8 +31,9 @@ const statusConfig = {
   overdue: { icon: 'alert-triangle', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', label: 'Overdue' },
 };
 
-export default function ProjectRFI({ project, user }: Props) {
+export default function ProjectRFI({ project, user, onUpdate }: Props) {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [rfis, setRfis] = useState<RFI[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'overdue'>('all');
@@ -45,10 +52,45 @@ export default function ProjectRFI({ project, user }: Props) {
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [expiryDate, setExpiryDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [responseBody, setResponseBody] = useState('');
+  const [updatingResponse, setUpdatingResponse] = useState(false);
+  const [annotatingImageIndex, setAnnotatingImageIndex] = useState<number | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
+  const [isCapturing, setIsCapturing] = useState(false);
+  const cameraRef = React.useRef<CameraView>(null);
 
   // Filter Modals
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [activeFilterType, setActiveFilterType] = useState<'status' | 'creator' | 'assignee' | null>(null);
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      if (showDatePicker) {
+        setShowDatePicker(false);
+        if (selectedDate) {
+          setExpiryDate(selectedDate);
+          setShowTimePicker(true);
+        }
+      } else if (showTimePicker) {
+        setShowTimePicker(false);
+        if (selectedDate && expiryDate) {
+          const finalDate = new Date(expiryDate);
+          finalDate.setHours(selectedDate.getHours());
+          finalDate.setMinutes(selectedDate.getMinutes());
+          setExpiryDate(finalDate);
+        }
+      }
+    } else {
+      setShowDatePicker(false);
+      if (selectedDate) setExpiryDate(selectedDate);
+    }
+  };
 
   const projectId = Number(project.id);
 
@@ -79,12 +121,28 @@ export default function ProjectRFI({ project, user }: Props) {
       fetchAssignees();
 
       const onBackPress = () => {
+        if (previewImage) {
+          setPreviewImage(null);
+          return true;
+        }
+        if (annotatingImageIndex !== null) {
+          setAnnotatingImageIndex(null);
+          return true;
+        }
+        if (cameraVisible) {
+          setCameraVisible(false);
+          return true;
+        }
         if (detailModalVisible) {
           setDetailModalVisible(false);
           return true;
         }
         if (createModalVisible) {
           setCreateModalVisible(false);
+          return true;
+        }
+        if (filterModalVisible) {
+          setFilterModalVisible(false);
           return true;
         }
         if (statusFilter !== 'all') {
@@ -96,18 +154,51 @@ export default function ProjectRFI({ project, user }: Props) {
 
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
-    }, [detailModalVisible, createModalVisible, statusFilter, fetchRFIs, fetchAssignees])
+    }, [detailModalVisible, createModalVisible, filterModalVisible, statusFilter, fetchRFIs, fetchAssignees, previewImage, annotatingImageIndex, cameraVisible])
   );
 
-  const pickImage = async () => {
+  const handleImageSelection = () => {
+    if (!cameraPermission?.granted) {
+      requestCameraPermission();
+    }
+    setCameraVisible(true);
+  };
+
+  const capturePhoto = async () => {
+    if (!cameraRef.current || isCapturing) return;
+    if (selectedImages.length >= 3) {
+      Alert.alert('Limit Exceeded', 'Maximum 3 photos allowed');
+      return;
+    }
+    setIsCapturing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      if (photo?.uri) {
+        setSelectedImages([...selectedImages, photo.uri]);
+      }
+    } catch (e) {
+      console.error('capturePhoto error', e);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const pickFromGallery = async () => {
+    const remaining = 3 - selectedImages.length;
+    if (remaining <= 0) {
+      Alert.alert('Limit Exceeded', 'Maximum 3 photos allowed');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsMultipleSelection: true,
+      selectionLimit: remaining,
       quality: 0.7,
     });
 
     if (!result.canceled) {
-      setSelectedImages([...selectedImages, ...result.assets.map(a => a.uri)]);
+      const newUris = result.assets.map(a => a.uri);
+      setSelectedImages([...selectedImages, ...newUris].slice(0, 3));
     }
   };
 
@@ -123,6 +214,7 @@ export default function ProjectRFI({ project, user }: Props) {
       formData.append('title', title.trim());
       formData.append('description', description.trim());
       if (assignedToId) formData.append('assigned_to', String(assignedToId));
+      if (expiryDate) formData.append('expiry_date', expiryDate.toISOString());
 
       selectedImages.forEach((uri, index) => {
         const filename = uri.split('/').pop() || `photo_${index}.jpg`;
@@ -138,7 +230,9 @@ export default function ProjectRFI({ project, user }: Props) {
       setDescription('');
       setSelectedImages([]);
       setAssignedToId(null);
+      setExpiryDate(null);
       fetchRFIs();
+      if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleCreateRFI error', err);
       Alert.alert('Error', 'Failed to create RFI');
@@ -147,10 +241,32 @@ export default function ProjectRFI({ project, user }: Props) {
     }
   };
 
+  const handleUpdateResponse = async () => {
+    if (!selectedRFI) return;
+    if (!responseBody.trim()) {
+      Alert.alert('Error', 'Response cannot be empty');
+      return;
+    }
+    setUpdatingResponse(true);
+    try {
+      const updated = await updateRFIResponse(selectedRFI.id, { response: responseBody.trim() });
+      Alert.alert('Success', 'Response submitted');
+      setSelectedRFI(updated);
+      fetchRFIs();
+      if (onUpdate) onUpdate();
+    } catch (err) {
+      console.error('handleUpdateResponse error', err);
+      Alert.alert('Error', 'Failed to submit response');
+    } finally {
+      setUpdatingResponse(false);
+    }
+  };
+
   const handleStatusUpdate = async (id: number, status: string) => {
     try {
       await updateRFIStatus(id, status);
       fetchRFIs();
+      if (onUpdate) onUpdate();
       if (selectedRFI?.id === id) {
         setSelectedRFI({ ...selectedRFI, status: status as any });
       }
@@ -213,9 +329,19 @@ export default function ProjectRFI({ project, user }: Props) {
               )}
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
-              <Feather name="clock" size={10} color={colors.textMuted} />
-              <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Feather name="calendar" size={10} color={colors.textMuted} />
+                <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+              </View>
+              {item.expiry_date && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Feather name="clock" size={10} color={item.status === 'overdue' ? '#ef4444' : colors.textMuted} />
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: item.status === 'overdue' ? '#ef4444' : colors.textMuted }}>
+                    {new Date(item.expiry_date).toLocaleDateString()}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -305,7 +431,12 @@ export default function ProjectRFI({ project, user }: Props) {
       )}
 
       {/* Detail Modal */}
-      <Modal visible={detailModalVisible} animationType="slide" transparent>
+      <Modal 
+        visible={detailModalVisible} 
+        animationType="slide" 
+        transparent
+        onRequestClose={() => setDetailModalVisible(false)}
+      >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{
             backgroundColor: colors.background,
@@ -362,9 +493,64 @@ export default function ProjectRFI({ project, user }: Props) {
                       <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>Attachments</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                         {selectedRFI.photoDownloadUrls.map((url, idx) => (
-                          <Image key={idx} source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 12 }} />
+                          <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
+                            <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 12 }} />
+                          </TouchableOpacity>
                         ))}
                       </ScrollView>
+                    </View>
+                  )}
+
+                  {selectedRFI.expiry_date && (
+                    <View style={{ marginBottom: 20, padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: selectedRFI.status === 'overdue' ? '#ef4444' : colors.primary }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase' }}>Expiry Date</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: selectedRFI.status === 'overdue' ? '#ef4444' : colors.text }}>
+                        {new Date(selectedRFI.expiry_date).toLocaleString()}
+                      </Text>
+                    </View>
+                  )}
+
+                  {selectedRFI.response && (
+                    <View style={{ marginBottom: 20, padding: 16, backgroundColor: colors.primary + '08', borderRadius: 16, borderWidth: 1, borderColor: colors.primary + '20' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, marginBottom: 8, textTransform: 'uppercase' }}>Response</Text>
+                      <Text style={{ fontSize: 14, color: colors.text, lineHeight: 22 }}>{selectedRFI.response}</Text>
+                    </View>
+                  )}
+
+                  {((String(selectedRFI.assigned_to) === String(user.id)) || user.role === 'admin') && selectedRFI.status !== 'closed' && (
+                    <View style={{ marginBottom: 20, gap: 12 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? 'Update Response' : 'Provide Response'}</Text>
+                      <TextInput
+                        value={responseBody}
+                        onChangeText={setResponseBody}
+                        placeholder="Type your response..."
+                        placeholderTextColor={colors.textMuted}
+                        multiline
+                        style={{
+                          minHeight: 80,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          padding: 12,
+                          color: colors.text,
+                          backgroundColor: colors.surface,
+                          textAlignVertical: 'top'
+                        }}
+                      />
+                      <TouchableOpacity
+                        onPress={handleUpdateResponse}
+                        disabled={updatingResponse || !responseBody.trim()}
+                        style={{
+                          backgroundColor: colors.primary,
+                          height: 48,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: (updatingResponse || !responseBody.trim()) ? 0.6 : 1
+                        }}
+                      >
+                        {updatingResponse ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Submit Response</Text>}
+                      </TouchableOpacity>
                     </View>
                   )}
 
@@ -406,7 +592,12 @@ export default function ProjectRFI({ project, user }: Props) {
       </Modal>
 
       {/* Create Modal */}
-      <Modal visible={createModalVisible} animationType="slide" transparent>
+      <Modal 
+        visible={createModalVisible} 
+        animationType="slide" 
+        transparent
+        onRequestClose={() => setCreateModalVisible(false)}
+      >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{
             backgroundColor: colors.background,
@@ -492,11 +683,55 @@ export default function ProjectRFI({ project, user }: Props) {
                 </View>
 
                 <View>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowDatePicker(true)}
+                    style={{
+                      height: 48,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      paddingHorizontal: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: colors.surface
+                    }}
+                  >
+                    <Text style={{ color: expiryDate ? colors.text : colors.textMuted }}>
+                      {expiryDate ? expiryDate.toLocaleString() : 'Select Date & Time'}
+                    </Text>
+                    <Feather name="calendar" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={expiryDate || new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={handleDateChange}
+                    />
+                  )}
+                  {showTimePicker && Platform.OS === 'android' && (
+                    <DateTimePicker
+                      value={expiryDate || new Date()}
+                      mode="time"
+                      display="default"
+                      onChange={handleDateChange}
+                    />
+                  )}
+                </View>
+
+                <View>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                     {selectedImages.map((uri: string, idx: number) => (
                       <View key={idx}>
-                        <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 10 }} />
+                        <TouchableOpacity onPress={() => setAnnotatingImageIndex(idx)}>
+                          <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 10 }} />
+                          <View style={{ position: 'absolute', bottom: 5, right: 5, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, padding: 4 }}>
+                            <Feather name="edit-2" size={10} color="#fff" />
+                          </View>
+                        </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => setSelectedImages(selectedImages.filter((_: string, i: number) => i !== idx))}
                           style={{ position: 'absolute', top: -5, right: -5, backgroundColor: 'red', borderRadius: 10, padding: 2 }}
@@ -506,7 +741,7 @@ export default function ProjectRFI({ project, user }: Props) {
                       </View>
                     ))}
                     <TouchableOpacity
-                      onPress={pickImage}
+                      onPress={handleImageSelection}
                       style={{
                         width: 80,
                         height: 80,
@@ -519,7 +754,7 @@ export default function ProjectRFI({ project, user }: Props) {
                         backgroundColor: colors.surface
                       }}
                     >
-                      <Feather name="camera" size={24} color={colors.textMuted} />
+                      <Feather name="plus" size={24} color={colors.textMuted} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -550,7 +785,7 @@ export default function ProjectRFI({ project, user }: Props) {
         </View>
       </Modal>
       {/* Filter Options Modal */}
-      <Modal visible={filterModalVisible} animationType="fade" transparent>
+      <Modal visible={filterModalVisible} animationType="fade" transparent onRequestClose={() => setFilterModalVisible(false)}>
         <TouchableOpacity 
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}
           onPress={() => setFilterModalVisible(false)}
@@ -625,6 +860,248 @@ export default function ProjectRFI({ project, user }: Props) {
           </View>
         </TouchableOpacity>
       </Modal>
+      {/* Photo Preview Modal */}
+      <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
+        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity 
+            onPress={() => setPreviewImage(null)}
+            style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }}
+          >
+            <Feather name="x" size={30} color="#fff" />
+          </TouchableOpacity>
+          {previewImage && (
+            <Image 
+              source={{ uri: previewImage }} 
+              style={{ width: '100%', height: '80%' }} 
+              resizeMode="contain" 
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* Image Annotator */}
+      {annotatingImageIndex !== null && (
+        <ImageAnnotator
+          uri={selectedImages[annotatingImageIndex]}
+          onSave={(newUri) => {
+            const newImages = [...selectedImages];
+            newImages[annotatingImageIndex] = newUri;
+            setSelectedImages(newImages);
+            setAnnotatingImageIndex(null);
+          }}
+          onCancel={() => setAnnotatingImageIndex(null)}
+        />
+      )}
+      {/* High-Fidelity Camera Modal */}
+      <Modal 
+        visible={cameraVisible} 
+        animationType="slide" 
+        transparent={false} 
+        presentationStyle="fullScreen"
+        statusBarTranslucent={true}
+        onRequestClose={() => setCameraVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <View style={{ flex: 1 }}>
+            {cameraPermission?.granted ? (
+              <>
+                <CameraView style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
+                
+                {/* Header Overlay */}
+                <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                  <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
+                    <Feather name="x" size={24} color="#fff" />
+                  </TouchableOpacity>
+                  <Text style={cameraStyles.headerTitle}>Take RFI Photos</Text>
+                  <View style={{ width: 60 }} />
+                </View>
+
+                {/* Bottom Controls Overlay */}
+                <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                  {/* Preview row */}
+                  {selectedImages.length > 0 && (
+                    <View style={cameraStyles.previewContainer}>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false} 
+                        contentContainerStyle={{ gap: 14, paddingHorizontal: 20, paddingTop: 10, paddingRight: 30 }}
+                      >
+                        {selectedImages.map((uri, idx) => (
+                          <View key={idx} style={cameraStyles.previewWrapper}>
+                            <Image source={{ uri }} style={cameraStyles.previewThumb} />
+                            <TouchableOpacity 
+                              onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
+                              style={cameraStyles.removeBtn}
+                            >
+                              <Feather name="x" size={12} color="#fff" />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                  
+                  <View style={cameraStyles.shutterRow}>
+                    <TouchableOpacity onPress={pickFromGallery} style={cameraStyles.sideBtn}>
+                      <View style={cameraStyles.iconCircle}>
+                        <Feather name="image" size={24} color="#fff" />
+                      </View>
+                      <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                      <View style={cameraStyles.shutterOuter}>
+                        <View style={cameraStyles.shutterInner} />
+                      </View>
+                      <Text style={cameraStyles.btnLabel}>Photo</Text>
+                    </TouchableOpacity>
+                    
+                    <View style={{ width: 70 }} />
+                  </View>
+                </View>
+
+                {/* Floating Done Button (like in Upload) */}
+                {selectedImages.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setCameraVisible(false)}
+                    style={{
+                      position: 'absolute',
+                      bottom: insets.bottom + 180,
+                      right: 20,
+                      backgroundColor: colors.primary,
+                      paddingHorizontal: 24,
+                      paddingVertical: 14,
+                      borderRadius: 30,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      elevation: 8,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 5,
+                      zIndex: 20
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Done ({selectedImages.length})</Text>
+                    <Feather name="arrow-right" size={20} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+const cameraStyles = StyleSheet.create({
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  headerBtn: {
+    padding: 10,
+  },
+  headerTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  controlsOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 10,
+    paddingTop: 10
+  },
+  previewContainer: {
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  previewWrapper: {
+    position: 'relative',
+    marginRight: 5,
+  },
+  previewThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#ef4444',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#000',
+    zIndex: 20,
+  },
+  shutterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  sideBtn: {
+    alignItems: 'center',
+    width: 70,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterBtn: {
+    alignItems: 'center',
+  },
+  shutterOuter: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 4,
+    borderColor: '#fff',
+    backgroundColor: '#ea8c0a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fff',
+  },
+  btnLabel: {
+    color: '#ccc',
+    fontSize: 10,
+    marginTop: 5,
+  },
+});

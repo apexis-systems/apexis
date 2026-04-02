@@ -8,6 +8,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
@@ -70,7 +71,6 @@ export default function DashboardScreen() {
       registerForPushNotificationsAsync();
 
       // Listen for notification interactions
-      const Notifications = require('expo-notifications');
       const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
         const { type } = response.notification.request.content.data;
         const data = response.notification.request.content.data;

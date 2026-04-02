@@ -93,7 +93,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setIsConnected(true);
             });
 
-            newSocket.on('new-notification', () => {
+            newSocket.on('new-notification', (notif: any) => {
                 setUnreadNotificationCount(prev => prev + 1);
                 playAlertSound();
             });

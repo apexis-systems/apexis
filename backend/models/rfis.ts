@@ -45,6 +45,14 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.JSON,
                 allowNull: true,
             },
+            expiry_date: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            response: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
         },
         {
             tableName: "rfis",
