@@ -32,7 +32,7 @@ export default function LoginScreen() {
     const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]); // India
     const [error, setError] = useState('');
 
-    const { login } = useAuth();
+    const { login, logout, isLoggedIn } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
     const params = useLocalSearchParams<{ role?: string; code?: string }>();
@@ -45,6 +45,10 @@ export default function LoginScreen() {
 
     useEffect(() => {
         if (params.code) {
+            // Force logout if user is already logged in and enters via deep link 
+            if (isLoggedIn) {
+                logout();
+            }
             setProjectCode(params.code);
             if (params.role === 'contributor' || params.role === 'client') {
                 setSelectedRole(params.role as UserRole);
@@ -52,7 +56,7 @@ export default function LoginScreen() {
                 setSelectedRole('contributor');
             }
         }
-    }, [params.code, params.role]);
+    }, [params.code, params.role, isLoggedIn]);
 
     useEffect(() => {
         loadStoredCredentials();
@@ -62,24 +66,22 @@ export default function LoginScreen() {
         try {
             const key = STORAGE_KEYS[selectedRole as keyof typeof STORAGE_KEYS];
             const stored = await SecureStore.getItemAsync(key);
+
+            // Always reset the fields when switching roles to avoid overlap collision
+            setIdentifier('');
+            if (selectedRole === 'admin') setPassword('');
+            else if (!params.code) setProjectCode('');
+            setRememberMe(false);
+
             if (stored) {
                 const data = JSON.parse(stored);
-                // Only load stored identifier if not provided via params or already set
-                if (!identifier) setIdentifier(data.identifier || '');
-                
+                setIdentifier(data.identifier || '');
                 if (selectedRole === 'admin') {
-                    if (!password) setPassword(data.secret || '');
+                    setPassword(data.secret || '');
                 } else {
-                    // CRITICAL: Do not overwrite projectCode if it came from a deep link (params.code)
                     if (!params.code) setProjectCode(data.secret || '');
                 }
                 setRememberMe(true);
-            } else {
-                // Only clear if not provided via params
-                if (!identifier) setIdentifier('');
-                if (selectedRole === 'admin') setPassword('');
-                else if (!params.code) setProjectCode('');
-                setRememberMe(false);
             }
         } catch (e) {
             console.error("Error loading credentials", e);
@@ -262,9 +264,11 @@ export default function LoginScreen() {
                         {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>}
                     </TouchableOpacity>
 
-                    <TouchableOpacity onPress={() => router.push('/(auth)/signup')} style={{ alignItems: 'center' }}>
-                        <Text style={{ fontSize: 13, color: colors.textMuted }}>Don't have an account? <Text style={{ fontWeight: '600', color: colors.primary }}>Sign Up</Text></Text>
-                    </TouchableOpacity>
+                    {selectedRole === 'admin' && (
+                        <TouchableOpacity onPress={() => router.push('/(auth)/signup')} style={{ alignItems: 'center' }}>
+                            <Text style={{ fontSize: 13, color: colors.textMuted }}>Don't have an account? <Text style={{ fontWeight: '600', color: colors.primary }}>Sign Up</Text></Text>
+                        </TouchableOpacity>
+                    )}
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
