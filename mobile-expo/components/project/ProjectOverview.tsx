@@ -9,6 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
 import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { getSnags } from '@/services/snagService';
 import { getSecureFileUrl } from '@/services/fileService';
 
@@ -198,6 +199,39 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         };
     }, [socket, isExporting, isCountingDown, projectId, userRole]);
 
+    // Join project room and listen for real-time stats updates
+    useEffect(() => {
+        if (!socket || !projectId) return;
+
+        socket.emit('join-project', projectId);
+
+        const handleStatsUpdate = (data: any) => {
+            if (String(data.projectId) !== String(projectId)) return;
+            // Re-fetch file counts
+            setCounting(true);
+            getProjectFiles(projectId)
+                .then((d) => {
+                    let photos = 0, docs = 0;
+                    if (d.fileData) {
+                        d.fileData.forEach((file: any) => {
+                            if (file.file_type?.startsWith('image/')) photos++;
+                            else docs++;
+                        });
+                    }
+                    setPhotosCount(photos);
+                    setDocsCount(docs);
+                })
+                .catch(() => {})
+                .finally(() => setCounting(false));
+        };
+
+        socket.on('project-stats-updated', handleStatsUpdate);
+
+        return () => {
+            socket.off('project-stats-updated', handleStatsUpdate);
+        };
+    }, [socket, projectId]);
+
     const handleStartExport = async () => {
         try {
             if (!projectId) return;
@@ -228,7 +262,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         } catch { return String(d); }
     };
 
-    useEffect(() => {
+    const fetchProjectStats = useCallback(() => {
         if (!projectId) return;
 
         // Load file counts
@@ -266,9 +300,12 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             .catch(() => { });
     }, [projectId]);
 
+    // Re-fetch stats every time the screen focuses (catches same-app uploads)
+    useFocusEffect(
         useCallback(() => {
-            return () => {};
-        }, [])
+            fetchProjectStats();
+        }, [fetchProjectStats])
+    );
 
 
     const handleCopy = async (text: string, id: string) => {

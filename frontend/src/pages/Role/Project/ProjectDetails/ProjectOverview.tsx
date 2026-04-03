@@ -136,6 +136,35 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
     };
   }, [socket, isExporting, isCountingDown, project?.id, userRole]);
 
+  // Real-time stat updates
+  useEffect(() => {
+    if (!socket || !project?.id) return;
+
+    socket.emit('join-project', project.id);
+
+    const handleStatsUpdate = (data: any) => {
+      if (String(data.projectId) !== String(project.id)) return;
+      setCounting(true);
+      getFiles(project.id)
+        .then((d) => {
+          let photos = 0, docs = 0;
+          if (d.fileData) {
+            d.fileData.forEach((file: any) => {
+              if (file.file_type?.startsWith('image/')) photos++;
+              else docs++;
+            });
+          }
+          setPhotosCount(photos);
+          setDocsCount(docs);
+        })
+        .catch(() => {})
+        .finally(() => setCounting(false));
+    };
+
+    socket.on('project-stats-updated', handleStatsUpdate);
+    return () => { socket.off('project-stats-updated', handleStatsUpdate); };
+  }, [socket, project?.id]);
+
   const handleStartExport = async () => {
     try {
       if (!project?.id) return;

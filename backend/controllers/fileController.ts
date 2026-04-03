@@ -11,6 +11,7 @@ import sharp from 'sharp';
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { users as UsersModel } from "../models/index.ts";
 import { PDFDocument } from 'pdf-lib';
+import { getIO } from '../socket.ts';
 
 interface MulterFile {
     buffer: Buffer;
@@ -202,6 +203,14 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             }
         } catch (err) {
             console.error('Error notifying admins of new file upload:', err);
+        }
+
+        // Broadcast live stats update to all members viewing this project
+        try {
+            const io = getIO();
+            io.to(`project-${project_id}`).emit('project-stats-updated', { projectId: String(project_id) });
+        } catch (e) {
+            console.error('Socket emit error (non-fatal):', e);
         }
 
         res.status(200).json({
