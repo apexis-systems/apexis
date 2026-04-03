@@ -1,4 +1,5 @@
-import UserManagement from '@/pages/Role/UserManagement/UserManagement'
+import UserManagement from '@/pages/Role/UserManagement/UserManagement';
 
-const page = () => <UserManagement />
-export default page
+export default function UserManagementPage() {
+    return <UserManagement />;
+}

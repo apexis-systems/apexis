@@ -183,6 +183,9 @@ module.exports = {
         code: ['var(--font-source-code-pro)'],
         inter: ['var(--font-inter)'],
         'space-mono': ['var(--font-space-mono)'],
+        'angelica': ['Angelica'],
+        'montserrat': ['Montserrat'],
+        sans: ['Montserrat', 'Inter', 'sans-serif'],
       },
       fontWeight: {
         extrablack: '950',

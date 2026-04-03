@@ -33,9 +33,25 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 unique: true,
             },
+            start_date: {
+                type: DataTypes.DATE,
+                allowNull: false,
+            },
+            end_date: {
+                type: DataTypes.DATE,
+                allowNull: false,
+            },
             created_by: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
+            },
+            last_export_url: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
+            last_export_date: {
+                type: DataTypes.DATE,
+                allowNull: true,
             },
         },
         {

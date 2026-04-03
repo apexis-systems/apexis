@@ -27,6 +27,15 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: false,
             },
+            client_visible: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            folder_type: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
         },
         {
             tableName: "folders",

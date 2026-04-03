@@ -18,7 +18,7 @@ export default {
       },
       folder_id: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: "folders",
           key: "id",

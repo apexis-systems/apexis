@@ -81,9 +81,92 @@ db.folders.hasMany(db.folders, { as: 'children', foreignKey: 'parent_id' });
 db.files.belongsTo(db.folders, { foreignKey: 'folder_id' });
 db.folders.hasMany(db.files, { foreignKey: 'folder_id' });
 
+// Project <-> File
+db.files.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.files, { foreignKey: 'project_id' });
+
 // User <-> File (Creator)
-db.files.belongsTo(db.users, { foreignKey: 'created_by' });
+db.files.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
 db.users.hasMany(db.files, { foreignKey: 'created_by' });
+
+// File <-> Comment
+db.comments.belongsTo(db.files, { foreignKey: 'file_id' });
+db.files.hasMany(db.comments, { foreignKey: 'file_id' });
+
+// User <-> Comment
+db.comments.belongsTo(db.users, { foreignKey: 'user_id', as: 'user' });
+db.users.hasMany(db.comments, { foreignKey: 'user_id' });
+
+// Comment <-> Comment (threaded replies)
+db.comments.belongsTo(db.comments, { as: 'parent', foreignKey: 'parent_id' });
+db.comments.hasMany(db.comments, { as: 'replies', foreignKey: 'parent_id' });
+
+// Project <-> Report
+db.reports.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.reports, { foreignKey: 'project_id' });
+
+// Project <-> Snag
+db.snags.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.snags, { foreignKey: 'project_id' });
+
+// Snag <-> User (assignee + creator)
+db.snags.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
+db.snags.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
+
+// Project <-> RFI
+db.rfis.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.rfis, { foreignKey: 'project_id' });
+
+// RFI <-> User (assignee + creator)
+db.rfis.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
+db.rfis.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
+
+// Project <-> Manual
+db.manuals.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.manuals, { foreignKey: 'project_id' });
+db.manuals.belongsTo(db.users, { foreignKey: 'uploaded_by', as: 'uploader' });
+
+// Project <-> Activity
+db.activities.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.activities, { foreignKey: 'project_id' });
+
+// User <-> Activity
+db.activities.belongsTo(db.users, { foreignKey: 'user_id', as: 'user' });
+db.users.hasMany(db.activities, { foreignKey: 'user_id' });
+
+// Room <-> Organization
+db.rooms.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.rooms, { foreignKey: 'organization_id' });
+
+// Room <-> Project
+db.rooms.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.rooms, { foreignKey: 'project_id' });
+
+// Room <-> RoomMember
+db.room_members.belongsTo(db.rooms, { foreignKey: 'room_id' });
+db.rooms.hasMany(db.room_members, { foreignKey: 'room_id' });
+
+// User <-> RoomMember
+db.room_members.belongsTo(db.users, { foreignKey: 'user_id' });
+db.users.hasMany(db.room_members, { foreignKey: 'user_id' });
+
+// Room <-> ChatMessage
+db.chat_messages.belongsTo(db.rooms, { foreignKey: 'room_id' });
+db.rooms.hasMany(db.chat_messages, { foreignKey: 'room_id' });
+
+// User <-> ChatMessage (Sender)
+db.chat_messages.belongsTo(db.users, { foreignKey: 'sender_id', as: 'sender' });
+db.users.hasMany(db.chat_messages, { foreignKey: 'sender_id' });
+
+// ChatMessage <-> ChatMessage (Replies)
+db.chat_messages.belongsTo(db.chat_messages, { as: 'parent', foreignKey: 'parent_id' });
+db.chat_messages.hasMany(db.chat_messages, { as: 'replies', foreignKey: 'parent_id' });
+
+// User <-> Notification
+db.notifications.belongsTo(db.users, { foreignKey: 'user_id' });
+db.users.hasMany(db.notifications, { foreignKey: 'user_id' });
+db.notifications.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.notifications, { foreignKey: 'project_id' });
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
@@ -96,6 +179,16 @@ export const projects = db.projects;
 export const project_members = db.project_members;
 export const folders = db.folders;
 export const files = db.files;
+export const comments = db.comments;
+export const reports = db.reports;
+export const snags = db.snags;
+export const rfis = db.rfis;
+export const manuals = db.manuals;
+export const activities = db.activities;
+export const rooms = db.rooms;
+export const room_members = db.room_members;
+export const chat_messages = db.chat_messages;
+export const notifications = db.notifications;
 
 export { sequelize, Sequelize };
 export default db;

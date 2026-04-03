@@ -4,21 +4,34 @@ export interface User {
     id: string;
     name: string;
     email: string;
+    phone_number?: string;
     role: UserRole;
-    active?: boolean;
+    is_primary?: boolean;
+    email_verified?: boolean;
+    phone_verified?: boolean;
+    profile_pic?: string;
+    createdAt?: string;
+    organization?: {
+        id: string;
+        name: string;
+        logo: string;
+    };
 }
 
 export interface Project {
     id: string;
     name: string;
+    description?: string;
     location: string;
-    startDate: string;
-    endDate: string;
+    start_date: string;
+    end_date: string;
     color: string;
     totalDocs: number;
     totalPhotos: number;
     assignedTo: string[];
     sharedWith: string[];
+    contributor_code: string;
+    client_code: string;
 }
 
 export interface Folder {
@@ -27,32 +40,34 @@ export interface Folder {
     name: string;
     type: 'documents' | 'photos';
 }
-
 export interface ProjectDocument {
     id: string;
-    projectId: string;
-    folderId: string;
-    name: string;
-    type: 'pdf' | 'dwg';
-    uploadDate: string;
-    uploader: string;
-    uploaderId: string;
-    version: number;
-    clientVisible: boolean;
-    size: string;
+    folder_id: string;
+    project_id: string;
+    file_name: string;
+    file_type: string;
+    file_size_mb: number;
+    downloadUrl: string;
+    created_by: string;
+    client_visible: boolean;
+    createdAt: string;
+    creator?: { id: string; name: string };
 }
 
 export interface ProjectPhoto {
     id: string;
-    projectId: string;
-    folderId: string;
-    url: string;
-    date: string;
-    location: string;
-    tags: string[];
-    uploader: string;
-    uploaderId: string;
-    clientVisible: boolean;
+    folder_id: string;
+    project_id: string;
+    file_name: string;
+    file_type: string;
+    file_size_mb: number;
+    downloadUrl: string;
+    created_by: string;
+    client_visible: boolean;
+    createdAt: string;
+    location?: string;
+    tags?: string[];
+    creator?: { id: string; name: string };
 }
 
 export interface Report {
@@ -66,9 +81,10 @@ export interface Report {
 
 export interface ActivityItem {
     id: string;
-    type: 'upload' | 'edit' | 'delete' | 'share';
+    type: 'upload' | 'edit' | 'delete' | 'share' | 'upload_photo';
     description: string;
     projectName: string;
+    userName?: string;
     timestamp: string;
 }
 
@@ -96,6 +112,8 @@ export interface SnagItem {
     status: SnagStatus;
     comments: string[];
     createdAt: string;
+    created_by: string;
+    creator?: { id: string; name: string };
 }
 
 export interface ManualSOP {
@@ -105,6 +123,6 @@ export interface ManualSOP {
     type: string;
     uploadDate: string;
     uploader: string;
-    uploaderId: string;
+    uploaded_by: string;
     size: string;
 }

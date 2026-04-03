@@ -1,199 +1,189 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, TextInput, ScrollView } from 'react-native';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import {
+    View, TouchableOpacity, Modal, ScrollView, Image, ActivityIndicator, Alert, Platform, BackHandler
+} from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
-import { Project, SnagItem, SnagStatus } from '@/types';
-import { mockSnags, mockAllUsers } from '@/data/mock';
+import { useNavigation, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback } from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { Project } from '@/types';
+import {
+    Snag, Assignee, SnagStatus,
+    getSnags, getAssignees, updateSnagStatus, deleteSnagApi,
+} from '@/services/snagService';
+import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 
-interface Props {
-    project: Project;
-}
+interface Props { project: Project; }
 
-type StatusConfig = { icon: keyof typeof Feather.glyphMap; bg: string; iconColor: string; label: string };
-
-const statusConfig: Record<SnagStatus, StatusConfig> = {
-    red: { icon: 'x', bg: '#ef4444', iconColor: '#fff', label: 'No action needed' },
-    amber: { icon: 'minus', bg: '#f59e0b', iconColor: '#fff', label: 'Waiting clearance' },
-    green: { icon: 'check', bg: '#22c55e', iconColor: '#fff', label: 'Completed' },
+const STATUS_CONFIG: Record<SnagStatus, { icon: keyof typeof Feather.glyphMap; bg: string; label: string }> = {
+    amber: { icon: 'minus', bg: '#f59e0b', label: 'Waiting for Clearance' },
+    green: { icon: 'check', bg: '#22c55e', label: 'Completed' },
+    red: { icon: 'x', bg: '#ef4444', label: 'No Action Required' },
 };
+const STATUS_CYCLE: SnagStatus[] = ['amber', 'green', 'red'];
+
+// Step: 'camera' = show full-screen camera, 'details' = show snag form
+type SnagStep = 'camera' | 'details';
 
 export default function ProjectSnagList({ project }: Props) {
+    const { colors } = useTheme();
     const { user } = useAuth();
-    const [snags, setSnags] = useState<SnagItem[]>(
-        mockSnags.filter((s) => s.projectId === project.id)
+    const router = useRouter();
+    const projectId = (project as any)?.id;
+
+    const [snags, setSnags] = useState<Snag[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Photo viewer
+    const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+
+    // ── Fetch data ─────────────────────────────────────────────────────────────
+
+    useFocusEffect(
+        useCallback(() => {
+            if (projectId) {
+                setLoading(true);
+                getSnags(projectId)
+                    .then(snags => setSnags(snags))
+                    .catch(e => console.error('fetchSnags error', e))
+                    .finally(() => setLoading(false));
+            }
+
+            const onBackPress = () => {
+                if (viewPhoto) {
+                    setViewPhoto(null);
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [projectId, viewPhoto])
     );
-    const [showAdd, setShowAdd] = useState(false);
-    const [newTitle, setNewTitle] = useState('');
-    const [newDescription, setNewDescription] = useState('');
-    const [newAssignee, setNewAssignee] = useState('');
 
-    const cycleStatus = (id: string) => {
-        const order: SnagStatus[] = ['amber', 'green', 'red'];
-        setSnags((prev) =>
-            prev.map((s) => {
-                if (s.id !== id) return s;
-                const idx = order.indexOf(s.status);
-                return { ...s, status: order[(idx + 1) % order.length] };
-            })
-        );
+    // ── Status cycle ───────────────────────────────────────────────────────────
+
+    const handleCycleStatus = async (snag: Snag) => {
+        const idx = STATUS_CYCLE.indexOf(snag.status);
+        const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+        setSnags((prev) => prev.map((s) => s.id === snag.id ? { ...s, status: next } : s));
+        try { await updateSnagStatus(snag.id, next); }
+        catch { setSnags((prev) => prev.map((s) => s.id === snag.id ? { ...s, status: snag.status } : s)); }
     };
 
-    const addSnag = () => {
-        if (!newTitle.trim() || !newAssignee) {
-            Alert.alert('Error', 'Title and assignee are required');
-            return;
-        }
-        const assignee = mockAllUsers.find((u) => u.id === newAssignee);
-        const snag: SnagItem = {
-            id: `s-${Date.now()}`,
-            projectId: project.id,
-            title: newTitle.trim(),
-            description: newDescription.trim() || undefined,
-            assignedTo: newAssignee,
-            assignedToName: assignee?.name || 'Unknown',
-            status: 'amber',
-            comments: [],
-            createdAt: new Date().toISOString().split('T')[0],
-        };
-        setSnags((prev) => [...prev, snag]);
-        setNewTitle('');
-        setNewDescription('');
-        setNewAssignee('');
-        setShowAdd(false);
+    // ── Open Add flow ──────────────────────────────────────────────────────────
+
+    const openAddSnag = () => {
+        router.push(`/(tabs)/project/snag-create?projectId=${projectId}`);
     };
 
-    const assignableUsers = mockAllUsers.filter((u) => u.role !== 'client');
+    // ── Render ─────────────────────────────────────────────────────────────────
 
     return (
-        <View>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
+            {/* Add Snag button */}
             {user?.role !== 'client' && (
                 <TouchableOpacity
-                    onPress={() => setShowAdd(true)}
-                    style={{
-                        height: 38,
-                        borderRadius: 10,
-                        backgroundColor: '#f97316',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexDirection: 'row',
-                        gap: 6,
-                        marginBottom: 12,
-                    }}
+                    onPress={openAddSnag}
+                    style={{ height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
                 >
                     <Feather name="plus" size={15} color="#fff" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>Add Snag</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Add Snag</Text>
                 </TouchableOpacity>
             )}
 
-            <View style={{ gap: 8 }}>
-                {snags.map((snag) => {
-                    const cfg = statusConfig[snag.status];
-                    return (
-                        <View
-                            key={snag.id}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'flex-start',
-                                gap: 10,
-                                borderRadius: 10,
-                                borderWidth: 1,
-                                borderColor: '#2a2a2a',
-                                backgroundColor: '#111111',
-                                padding: 12,
-                            }}
-                        >
-                            <TouchableOpacity
-                                onPress={() => cycleStatus(snag.id)}
-                                style={{
-                                    width: 24,
-                                    height: 24,
-                                    borderRadius: 12,
-                                    backgroundColor: cfg.bg,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginTop: 2,
-                                }}
+            {/* Snag list */}
+            {loading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
+            ) : (
+                <View style={{ gap: 8 }}>
+                    {snags.map((snag) => {
+                        const cfg = STATUS_CONFIG[snag.status];
+                        return (
+                            <View
+                                key={snag.id}
+                                style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, padding: 12 }}
                             >
-                                <Feather name={cfg.icon} size={13} color={cfg.iconColor} />
-                            </TouchableOpacity>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }}>{snag.title}</Text>
-                                {snag.description && (
-                                    <Text numberOfLines={2} style={{ fontSize: 10, color: '#888', marginTop: 2 }}>{snag.description}</Text>
+                                <TouchableOpacity
+                                    onPress={() => handleCycleStatus(snag)}
+                                    style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: cfg.bg, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}
+                                >
+                                    <Feather name={cfg.icon} size={13} color="#fff" />
+                                </TouchableOpacity>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{snag.title}</Text>
+                                    {snag.description ? (
+                                        <Text numberOfLines={2} style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{snag.description}</Text>
+                                    ) : null}
+                                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>
+                                        Assigned: {snag.assignee?.name || 'Unassigned'} · {cfg.label}
+                                    </Text>
+                                    {snag.last_comment ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                            <Feather name="message-square" size={10} color="#555" />
+                                            <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted }}>{snag.last_comment}</Text>
+                                        </View>
+                                    ) : null}
+                                </View>
+                                {(String(snag.creator?.id) === String(user?.id)) && (
+                                    <TouchableOpacity
+                                        onPress={async () => {
+                                            Alert.alert('Delete', `Remove "${snag.title}"?`, [
+                                                { text: 'Cancel', style: 'cancel' },
+                                                {
+                                                    text: 'Delete', style: 'destructive',
+                                                    onPress: async () => {
+                                                        try {
+                                                            await deleteSnagApi(snag.id);
+                                                            setSnags((prev) => prev.filter((s) => s.id !== snag.id));
+                                                        } catch { Alert.alert('Error', 'Failed to delete'); }
+                                                    }
+                                                }
+                                            ]);
+                                        }}
+                                        style={{ padding: 4 }}
+                                    >
+                                        <Feather name="trash-2" size={14} color="#ef4444" />
+                                    </TouchableOpacity>
                                 )}
-                                <Text style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
-                                    Assigned: {snag.assignedToName} · {cfg.label}
-                                </Text>
-                                {snag.comments.length > 0 && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                                        <Feather name="message-square" size={10} color="#555" />
-                                        <Text numberOfLines={1} style={{ fontSize: 9, color: '#555' }}>{snag.comments[snag.comments.length - 1]}</Text>
-                                    </View>
-                                )}
+                                {(snag.photoDownloadUrl || snag.photo_url) ? (
+                                    <TouchableOpacity
+                                        onPress={() => setViewPhoto(snag.photoDownloadUrl || snag.photo_url!)}
+                                        style={{ width: 56, height: 56, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}
+                                    >
+                                        <Image
+                                            source={{ uri: snag.photoDownloadUrl || snag.photo_url }}
+                                            style={{ width: '100%', height: '100%' }}
+                                            resizeMode="cover"
+                                        />
+                                    </TouchableOpacity>
+                                ) : null}
                             </View>
+                        );
+                    })}
+                    {snags.length === 0 && (
+                        <View style={{ marginTop: 30, alignItems: 'center' }}>
+                            <Feather name="check-square" size={32} color={colors.border} />
+                            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No snags yet</Text>
                         </View>
-                    );
-                })}
-            </View>
-
-            {snags.length === 0 && (
-                <View style={{ marginTop: 30, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, color: '#888' }}>No snags yet</Text>
+                    )}
                 </View>
             )}
 
-            {/* Add Snag Modal */}
-            <Modal visible={showAdd} transparent animationType="slide">
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 14 }}>Add Snag</Text>
-                        <TextInput
-                            value={newTitle}
-                            onChangeText={setNewTitle}
-                            placeholder="Snag title"
-                            placeholderTextColor="#555"
-                            style={{ height: 40, borderRadius: 10, backgroundColor: '#2a2a2a', color: '#fff', paddingHorizontal: 12, fontSize: 13, marginBottom: 10 }}
-                        />
-                        <TextInput
-                            value={newDescription}
-                            onChangeText={setNewDescription}
-                            placeholder="Description (optional)"
-                            placeholderTextColor="#555"
-                            multiline
-                            style={{ height: 70, borderRadius: 10, backgroundColor: '#2a2a2a', color: '#fff', paddingHorizontal: 12, paddingTop: 10, fontSize: 13, marginBottom: 10 }}
-                        />
-                        <Text style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>Assign to:</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
-                            <View style={{ flexDirection: 'row', gap: 6 }}>
-                                {assignableUsers.map((u) => (
-                                    <TouchableOpacity
-                                        key={u.id}
-                                        onPress={() => setNewAssignee(u.id)}
-                                        style={{
-                                            paddingHorizontal: 12,
-                                            paddingVertical: 8,
-                                            borderRadius: 10,
-                                            borderWidth: 2,
-                                            borderColor: newAssignee === u.id ? '#f97316' : '#2a2a2a',
-                                            backgroundColor: newAssignee === u.id ? 'rgba(249,115,22,0.1)' : '#2a2a2a',
-                                        }}
-                                    >
-                                        <Text style={{ fontSize: 12, color: newAssignee === u.id ? '#f97316' : '#888' }}>{u.name}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </ScrollView>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity onPress={() => setShowAdd(false)} style={{ flex: 1, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#444', alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: '#888' }}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={addSnag} style={{ flex: 1, height: 42, borderRadius: 10, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Add</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-        </View>
+
+
+            {/* ── Photo viewer ───────────────────────────────────────────────── */}
+            <FullScreenImageModal
+                visible={!!viewPhoto}
+                onClose={() => setViewPhoto(null)}
+                uri={viewPhoto}
+            />
+        </ScrollView>
     );
 }

@@ -4,6 +4,24 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@layer base {
+  @font-face {
+    font-family: 'Angelica';
+    src: url('/fonts/Angelica-C.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: 'Montserrat';
+    src: url('/fonts/Montserrat-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -39,12 +57,24 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-montserrat);
   --font-mono: var(--font-geist-mono);
+  --font-angelica: "Angelica", serif;
+  --font-montserrat: "Montserrat", sans-serif;
+}
+
+/* Explicit utility classes for custom fonts to ensure consistent loading */
+.font-angelica {
+  font-family: "Angelica", serif !important;
+}
+
+.font-montserrat {
+  font-family: "Montserrat", sans-serif !important;
 }
 
 @layer base {
   :root {
+    --font-montserrat: "Montserrat", sans-serif;
     --background: 0 0% 95%;
     --foreground: 0 0% 8%;
 
@@ -63,7 +93,7 @@
     --muted: 0 0% 94%;
     --muted-foreground: 0 0% 45%;
 
-    --accent: 32 95% 52%;
+    --accent: 25 95% 53%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -71,18 +101,18 @@
 
     --border: 0 0% 88%;
     --input: 0 0% 88%;
-    --ring: 32 95% 52%;
+    --ring: 25 95% 53%;
 
     --radius: 0.75rem;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 8%;
-    --sidebar-primary: 32 95% 52%;
+    --sidebar-primary: 25 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 95%;
     --sidebar-accent-foreground: 0 0% 8%;
     --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 32 95% 52%;
+    --sidebar-ring: 25 95% 53%;
   }
 
   .dark {
@@ -104,7 +134,7 @@
     --muted: 0 0% 16%;
     --muted-foreground: 0 0% 60%;
 
-    --accent: 32 95% 52%;
+    --accent: 25 95% 53%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 30%;
@@ -112,16 +142,16 @@
 
     --border: 0 0% 18%;
     --input: 0 0% 18%;
-    --ring: 32 95% 52%;
+    --ring: 25 95% 53%;
 
     --sidebar-background: 0 0% 8%;
     --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 32 95% 52%;
+    --sidebar-primary: 25 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 14%;
     --sidebar-accent-foreground: 0 0% 95%;
     --sidebar-border: 0 0% 18%;
-    --sidebar-ring: 32 95% 52%;
+    --sidebar-ring: 25 95% 53%;
   }
 }
 

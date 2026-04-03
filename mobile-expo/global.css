@@ -1,3 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+
+    Text,
+    TextInput {
+        font-family: 'Montserrat';
+    }
+}

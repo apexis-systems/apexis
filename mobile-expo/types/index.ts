@@ -1,24 +1,40 @@
-export type UserRole = 'admin' | 'contributor' | 'client';
+export type UserRole = 'superadmin' | 'admin' | 'contributor' | 'client';
 
 export interface User {
     id: string;
     name: string;
     email: string;
+    phone_number?: string;
     role: UserRole;
-    active: boolean;
+    is_primary?: boolean;
+    email_verified?: boolean;
+    phone_verified?: boolean;
+    profile_pic?: string;
+    fcm_token?: string;
+    createdAt?: string;
+    organization?: {
+        id: string;
+        name: string;
+        logo: string;
+    };
 }
 
 export interface Project {
     id: string;
     name: string;
+    description: string;
     location: string;
     startDate: string;
     endDate: string;
+    start_date?: string;
+    end_date?: string;
     color: string;
     totalDocs: number;
     totalPhotos: number;
     assignedTo: string[];
     sharedWith: string[];
+    contributor_code?: string;
+    client_code?: string;
 }
 
 export interface Folder {
@@ -36,10 +52,11 @@ export interface ProjectDocument {
     type: 'pdf' | 'dwg';
     uploadDate: string;
     uploader: string;
-    uploaderId: string;
+    created_by: string;
     version: number;
     clientVisible: boolean;
     size: string;
+    creator?: { id: string; name: string };
 }
 
 export interface ProjectPhoto {
@@ -51,8 +68,9 @@ export interface ProjectPhoto {
     location: string;
     tags: string[];
     uploader: string;
-    uploaderId: string;
+    created_by: string;
     clientVisible: boolean;
+    creator?: { id: string; name: string };
 }
 
 export interface Report {
@@ -66,9 +84,10 @@ export interface Report {
 
 export interface ActivityItem {
     id: string;
-    type: 'upload' | 'edit' | 'delete' | 'share';
+    type: 'upload' | 'edit' | 'delete' | 'share' | 'upload_photo';
     description: string;
     projectName: string;
+    userName?: string;
     timestamp: string;
 }
 
@@ -96,6 +115,8 @@ export interface SnagItem {
     status: SnagStatus;
     comments: string[];
     createdAt: string;
+    created_by: string;
+    creator?: { id: string; name: string };
 }
 
 export interface ManualSOP {
@@ -105,6 +126,7 @@ export interface ManualSOP {
     type: 'pdf';
     uploadDate: string;
     uploader: string;
-    uploaderId: string;
+    uploaded_by: string;
     size: string;
+    creator?: { id: string; name: string };
 }

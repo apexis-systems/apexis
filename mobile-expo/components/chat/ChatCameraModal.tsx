@@ -1,0 +1,165 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { View, TouchableOpacity, Modal, Image, ActivityIndicator, Alert, Platform } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { Text } from '@/components/ui/AppText';
+import { useTheme } from '@/contexts/ThemeContext';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+interface Props {
+    visible: boolean;
+    onClose: () => void;
+    onCapture: (asset: any) => void;
+}
+
+export default function ChatCameraModal({ visible, onClose, onCapture }: Props) {
+    const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
+    const [permission, requestPermission] = useCameraPermissions();
+    const cameraRef = useRef<CameraView>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
+
+    useEffect(() => {
+        if (visible) {
+            requestPermission();
+        }
+    }, [visible]);
+
+    const handleCapture = async () => {
+        if (!cameraRef.current || isProcessing) return;
+        setIsProcessing(true);
+        try {
+            const photo = await cameraRef.current.takePictureAsync({
+                quality: 0.8,
+            });
+            if (photo) {
+                // Fix orientation for iOS
+                const manipulated = await ImageManipulator.manipulateAsync(
+                    photo.uri,
+                    [],
+                    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                );
+
+                onCapture({
+                    uri: manipulated.uri,
+                    name: `photo_${Date.now()}.jpg`,
+                    type: 'image/jpeg',
+                    size: 0
+                });
+                onClose();
+            }
+        } catch (error) {
+            console.error('Capture error:', error);
+            Alert.alert('Error', 'Failed to capture photo');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const pickFromGallery = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: false,
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            const asset = result.assets[0];
+            onCapture({
+                uri: asset.uri,
+                name: asset.fileName || `image_${Date.now()}.jpg`,
+                type: asset.mimeType || 'image/jpeg',
+                size: asset.fileSize || 0
+            });
+            onClose();
+        }
+    };
+
+    return (
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent={false}
+            statusBarTranslucent={true}
+            presentationStyle="fullScreen"
+        >
+            <View style={{ flex: 1, backgroundColor: '#000' }}>
+                {/* Header */}
+                <View style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    paddingHorizontal: 20, paddingTop: Math.max(insets.top, 16), paddingBottom: 16,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                }}>
+                    <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
+                        <Feather name="x" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Capture Photo</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+
+                {/* Camera View */}
+                {permission?.granted ? (
+                    <CameraView
+                        ref={cameraRef}
+                        style={{ flex: 1 }}
+                        facing={cameraFacing}
+                    />
+                ) : (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                        <Text style={{ color: '#fff', textAlign: 'center', marginBottom: 20 }}>Camera permission is needed to take photos.</Text>
+                        <TouchableOpacity
+                            onPress={requestPermission}
+                            style={{ backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 }}
+                        >
+                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Grant Permission</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Processing Overlay */}
+                {isProcessing && (
+                    <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 20 }}>
+                        <ActivityIndicator size="large" color="#fff" />
+                    </View>
+                )}
+
+                {/* Bottom Controls */}
+                <View style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                    backgroundColor: 'rgba(0,0,0,0.85)', paddingBottom: Math.max(insets.bottom, 16), paddingTop: 20,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around'
+                }}>
+                    <TouchableOpacity onPress={pickFromGallery} style={{ alignItems: 'center', width: 70 }}>
+                        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                            <Feather name="image" size={22} color="#fff" />
+                        </View>
+                        <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Gallery</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={handleCapture} disabled={isProcessing} style={{ alignItems: 'center' }}>
+                        <View style={{
+                            width: 76, height: 76, borderRadius: 38,
+                            borderWidth: 4, borderColor: '#fff',
+                            backgroundColor: '#ea8c0a',
+                            alignItems: 'center', justifyContent: 'center'
+                        }}>
+                            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#fff' }} />
+                        </View>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', marginTop: 5 }}>Capture</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => setCameraFacing(current => current === 'back' ? 'front' : 'back')} style={{ alignItems: 'center', width: 70 }}>
+                        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="camera-reverse-outline" size={26} color="#fff" />
+                        </View>
+                        <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Flip</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
+    );
+}

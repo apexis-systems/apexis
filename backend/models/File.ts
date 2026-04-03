@@ -13,7 +13,11 @@ export default (sequelize: Sequelize) => {
             },
             folder_id: {
                 type: DataTypes.INTEGER,
-                allowNull: false,
+                allowNull: true,
+            },
+            project_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
             },
             file_url: {
                 type: DataTypes.STRING,
@@ -34,6 +38,16 @@ export default (sequelize: Sequelize) => {
             created_by: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
+            },
+            client_visible: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            do_not_follow: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
             },
         },
         {

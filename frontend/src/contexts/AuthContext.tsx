@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { User, UserRole } from '@/types';
 import Cookies from 'js-cookie';
 import { getMe } from '@/services/authService';
+import { io, Socket } from 'socket.io-client';
 
 interface AuthContextType {
     user: User | null;
@@ -12,6 +13,7 @@ interface AuthContextType {
     login: (token: string) => Promise<User | undefined>;
     logout: () => void;
     switchRole: (role: UserRole) => void;
+    setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
     login: async () => undefined,
     logout: () => { },
     switchRole: () => { },
+    setUser: () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -28,10 +31,14 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const isLoggedIn = !!user;
 
     const logout = useCallback(() => {
         setUser(null);
         Cookies.remove('token');
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('qrSessionId');
+        }
     }, []);
 
     const switchRole = useCallback((role: UserRole) => {
@@ -53,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             const res = await getMe();
             if (res?.user) {
-                setUser(res.user);
+                setUser({ ...res.user, organization: res.organization, project_id: res.project_id });
             }
         } catch (e) {
             console.error("Failed to fetch user context", e);
@@ -67,13 +74,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchUser();
     }, [fetchUser]);
 
+    useEffect(() => {
+        let socket: Socket | null = null;
+        if (isLoggedIn && typeof window !== 'undefined') {
+            const qrSessionId = localStorage.getItem('qrSessionId');
+            if (qrSessionId) {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+                const backendUrl = apiUrl.endsWith('/api') ? apiUrl.slice(0, -4) : apiUrl;
+                socket = io(backendUrl);
+
+                socket.on('connect', () => {
+                    socket?.emit('join-qr-room', qrSessionId);
+                });
+
+                socket.on('qr-revoked', () => {
+                    logout();
+                    // Let the proxy logic in _middleware or proxy.ts redirect to login, 
+                    // or force window reload so it resets state entirely
+                    window.location.href = '/login';
+                });
+            }
+        }
+
+        return () => {
+            if (socket) socket.disconnect();
+        }
+    }, [isLoggedIn, logout]);
+
     const login = useCallback(async (token: string) => {
-        Cookies.set('token', token, { expires: 1 });
+        Cookies.set('token', token, { expires: 30 });
         try {
             const res = await getMe();
             if (res?.user) {
-                setUser(res.user);
-                return res.user as User;
+                const fullUser = { ...res.user, organization: res.organization, project_id: res.project_id };
+                setUser(fullUser);
+                return fullUser as User;
             }
         } catch (e) {
             console.error("Failed to login", e);
@@ -83,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [logout]);
 
     return (
-        <AuthContext.Provider value={{ user, isLoggedIn: !!user, isLoading, login, logout, switchRole }}>
+        <AuthContext.Provider value={{ user, isLoggedIn: !!user, isLoading, login, logout, switchRole, setUser }}>
             {children}
         </AuthContext.Provider>
     );

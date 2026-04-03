@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
@@ -91,9 +92,9 @@ const Signup = () => {
         <div className="flex min-h-screen flex-col items-center justify-center bg-card px-6">
             <div className="mb-10 text-center">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-                    <span className="text-2xl font-black tracking-tight text-primary-foreground">A</span>
+                    <span className="text-2xl font-black tracking-tight text-primary-foreground font-angelica">A</span>
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">apexis</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground font-angelica uppercase">APEXIS</h1>
                 <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground">CREATE YOUR ACCOUNT</p>
             </div>
 
@@ -164,9 +165,8 @@ const Signup = () => {
 
                             <div className="space-y-2">
                                 <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                                <Input
+                                <PasswordInput
                                     id="password"
-                                    type="password"
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
