@@ -321,13 +321,13 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {/* Stats Grid — 2×2 */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                     {[
-                        { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate) },
-                        { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate) },
+                        { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
+                        { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
                         { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount), id: 'documents' },
                         { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount), id: 'photos' },
                     ].map((item) => {
-                        const isClickable = item.id === 'documents' || item.id === 'photos';
-                        const Container = isClickable ? TouchableOpacity : View;
+                        const isClickable = true;
+                        const Container = TouchableOpacity;
                         return (
                             <Container
                                 key={item.label}

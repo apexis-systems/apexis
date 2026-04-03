@@ -40,6 +40,7 @@ export default function ProjectWorkspaceScreen() {
     const [activeTab, setActiveTab] = useState<Tab>(() => user?.role === 'client' ? 'documents' : 'overview');
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editModalFocus, setEditModalFocus] = useState<'start_date' | 'end_date' | null>(null);
     const [hasPendingRFI, setHasPendingRFI] = useState(false);
 
 
@@ -184,7 +185,7 @@ export default function ProjectWorkspaceScreen() {
                     </Text>
                     {user.role === 'admin' && (
                         <TouchableOpacity 
-                            onPress={() => setIsEditModalOpen(true)}
+                            onPress={() => { setIsEditModalOpen(true); setEditModalFocus(null); }}
                             style={{ padding: 4 }}
                         >
                             <Feather name="edit-3" size={18} color={colors.primary} />
@@ -271,7 +272,17 @@ export default function ProjectWorkspaceScreen() {
                         project={project}
                         userRole={user.role}
                         onUpdate={(updated) => setProject(updated)}
-                        onActionPress={(actionId: string) => setActiveTab(actionId as Tab)}
+                        onActionPress={(actionId: string) => {
+                            if (actionId === 'edit-start') {
+                                setEditModalFocus('start_date');
+                                setIsEditModalOpen(true);
+                            } else if (actionId === 'edit-end') {
+                                setEditModalFocus('end_date');
+                                setIsEditModalOpen(true);
+                            } else {
+                                setActiveTab(actionId as Tab);
+                            }
+                        }}
                     />
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} />}
@@ -348,9 +359,10 @@ export default function ProjectWorkspaceScreen() {
 
             <EditProjectModal
                 isOpen={isEditModalOpen}
-                onClose={() => setIsEditModalOpen(false)}
+                onClose={() => { setIsEditModalOpen(false); setEditModalFocus(null); }}
                 project={project}
                 onUpdate={(updated) => setProject(updated)}
+                initialFocus={editModalFocus}
             />
         </SafeAreaView>
     );

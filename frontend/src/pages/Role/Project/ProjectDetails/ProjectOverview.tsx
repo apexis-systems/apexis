@@ -19,9 +19,10 @@ interface ProjectOverviewProps {
   userRole: UserRole;
   onProjectUpdate?: (updated: Project) => void;
   onTabChange?: (tab: 'documents' | 'photos' | 'reports') => void;
+  onEditClick?: (field?: 'start_date' | 'end_date') => void;
 }
 
-const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: ProjectOverviewProps) => {
+const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEditClick }: ProjectOverviewProps) => {
   if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">Loading project overview...</div>;
 
   const [reports, setReports] = useState<Report[]>([]);
@@ -239,15 +240,21 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange }: Pr
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
+        <div 
+          className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
+          onClick={() => onEditClick?.('start_date')}
+        >
+          <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
             <CalendarDays className="h-4 w-4" />
             <span className="text-xs">Start Date</span>
           </div>
           <div className="mt-1 text-sm font-semibold">{project.start_date ? new Date(project.start_date).toLocaleDateString() : '—'}</div>
         </div>
-        <div className="rounded-xl bg-card border border-border p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
+        <div 
+          className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
+          onClick={() => onEditClick?.('end_date')}
+        >
+          <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
             <CalendarDays className="h-4 w-4" />
             <span className="text-xs">End Date</span>
           </div>

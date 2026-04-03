@@ -44,6 +44,7 @@ export default function Project({ id }: ProjectProps) {
     const urlTab = searchParams?.get('tab') as TabKey | null;
     const [activeTab, setActiveTab] = useState<TabKey>(urlTab || (isClient ? 'documents' : 'overview'));
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editModalFocus, setEditModalFocus] = useState<'start_date' | 'end_date' | null>(null);
 
 
 
@@ -213,6 +214,10 @@ export default function Project({ id }: ProjectProps) {
                         userRole={user.role}
                         onProjectUpdate={(updated) => setProject(updated)}
                         onTabChange={setTab as any}
+                        onEditClick={(field?: 'start_date' | 'end_date') => {
+                            setEditModalFocus(field || null);
+                            setIsEditModalOpen(true);
+                        }}
                     />
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} />}
@@ -227,11 +232,12 @@ export default function Project({ id }: ProjectProps) {
 
             <EditProjectModal
                 isOpen={isEditModalOpen}
-                onClose={() => setIsEditModalOpen(false)}
+                onClose={() => { setIsEditModalOpen(false); setEditModalFocus(null); }}
                 project={project}
                 onUpdate={(updated) => {
                     setProject(updated);
                 }}
+                initialFocus={editModalFocus}
             />
         </div>
     );

@@ -15,9 +15,10 @@ interface Props {
     onClose: () => void;
     project: Project;
     onUpdate: (updated: Project) => void;
+    initialFocus?: 'start_date' | 'end_date' | null;
 }
 
-export default function EditProjectModal({ isOpen, onClose, project, onUpdate }: Props) {
+export default function EditProjectModal({ isOpen, onClose, project, onUpdate, initialFocus }: Props) {
     const { colors, isDark } = useTheme();
     const [name, setName] = useState(project.name);
     const [description, setDescription] = useState(project.description || '');
@@ -38,6 +39,16 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate }:
         setStartDate((project.start_date || project.startDate || '').split('T')[0]);
         setEndDate((project.end_date || project.endDate || '').split('T')[0]);
     }, [project]);
+
+    useEffect(() => {
+        if (isOpen && initialFocus) {
+            if (initialFocus === 'start_date') {
+                setShowStartPicker(true);
+            } else if (initialFocus === 'end_date') {
+                setShowEndPicker(true);
+            }
+        }
+    }, [isOpen, initialFocus]);
 
     const onStartDateChange = (event: any, selectedDate?: Date) => {
         setShowStartPicker(false);

@@ -22,6 +22,7 @@ interface EditProjectModalProps {
     onClose: () => void;
     project: Project;
     onUpdate: (updatedProject: Project) => void;
+    initialFocus?: 'start_date' | 'end_date' | null;
 }
 
 export default function EditProjectModal({
@@ -29,6 +30,7 @@ export default function EditProjectModal({
     onClose,
     project,
     onUpdate,
+    initialFocus,
 }: EditProjectModalProps) {
     const [name, setName] = useState(project.name);
     const [description, setDescription] = useState(project.description || "");
@@ -46,6 +48,20 @@ export default function EditProjectModal({
         setStartDate(project.start_date ? project.start_date.split("T")[0] : "");
         setEndDate(project.end_date ? project.end_date.split("T")[0] : "");
     }, [project]);
+
+    useEffect(() => {
+        if (isOpen && initialFocus) {
+            setTimeout(() => {
+                const element = document.getElementById(initialFocus);
+                if (element) {
+                    element.focus();
+                    if ('showPicker' in HTMLInputElement.prototype) {
+                        try { (element as HTMLInputElement).showPicker(); } catch(e){}
+                    }
+                }
+            }, 100);
+        }
+    }, [isOpen, initialFocus]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
