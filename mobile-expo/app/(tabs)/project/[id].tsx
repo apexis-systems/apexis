@@ -252,7 +252,7 @@ export default function ProjectWorkspaceScreen() {
                                             width: 6,
                                             height: 6,
                                             borderRadius: 3,
-                                            backgroundColor: '#ef4444',
+                                            backgroundColor: colors.primary,
                                             marginLeft: 4,
                                             marginTop: -6
                                         }} />

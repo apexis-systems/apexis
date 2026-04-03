@@ -135,13 +135,13 @@ export default function ActivityScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }} edges={['top', 'left', 'right']}>
-            <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 14 }}>
-                {/* Header */}
-                <View style={{ marginBottom: 14 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '700', color: themeColors.text }}>{t('activity') || 'Recent Activity'}</Text>
-                    <Text style={{ fontSize: 11, color: themeColors.textMuted, marginTop: 2 }}>Updates from your projects</Text>
-                </View>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: themeColors.surface, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
+                <Text style={{ fontSize: 24, fontWeight: '700', color: themeColors.text }}>{t('activity') || 'Activity'}</Text>
+            </View>
 
+
+            <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 14 }}>
                 {/* Filters */}
                 <View style={{ marginBottom: 14 }}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>

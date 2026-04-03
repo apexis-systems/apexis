@@ -296,27 +296,7 @@ export default function AdminAnalyticsScreen() {
                             ))}
                         </View>
 
-                        {/* App Usage mini strip */}
-                        <Card>
-                            <SectionTitle icon="users" title="App Usage" />
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                {[
-                                    { label: 'Daily Active', value: appUsage.dailyActive },
-                                    { label: 'Weekly Active', value: appUsage.weeklyActive },
-                                    { label: 'Total Users', value: appUsage.total },
-                                    { label: 'Engagement', value: `${appUsage.engagement}%` },
-                                ].map((s, i) => (
-                                    <View key={i} style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 10, alignItems: 'center' }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{s.value}</Text>
-                                        <Text style={{ fontSize: 8, color: colors.textMuted, textAlign: 'center', marginTop: 2, textTransform: 'uppercase' }}>{s.label}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                            <View style={{ marginTop: 10, gap: 3 }}>
-                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Most Active: <Text style={{ color: colors.text, fontWeight: '600' }}>{appUsage.mostActive}</Text></Text>
-                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Least Active: <Text style={{ color: colors.text, fontWeight: '600' }}>{appUsage.leastActive}</Text></Text>
-                            </View>
-                        </Card>
+
 
                         {/* Project Status Donut */}
                         <Card>

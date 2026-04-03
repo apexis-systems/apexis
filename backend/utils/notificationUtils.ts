@@ -42,21 +42,26 @@ export const sendNotification = async ({
                         priority: 'high',
                         notification: {
                             channelId: 'default',
-                            priority: 'max',
-                            sound: 'default',
+                            defaultSound: true,
+                            defaultVibrateTimings: true,
                             visibility: 'public'
                         }
                     },
                     apns: {
                         payload: {
                             aps: {
+                                alert: {
+                                    title,
+                                    body
+                                },
                                 sound: 'default',
                                 badge: 1,
                                 'content-available': 1
                             }
                         },
                         headers: {
-                            'apns-priority': '10'
+                            'apns-priority': '10',
+                            'apns-push-type': 'alert'
                         }
                     },
                     data: {

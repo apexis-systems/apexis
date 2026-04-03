@@ -17,7 +17,8 @@
         "NSPhotoLibraryUsageDescription": "APEXIS needs access to your photo library to attach photos to snags and upload site images.",
         "NSPhotoLibraryAddUsageDescription": "APEXIS needs permission to save downloaded photos to your library.",
         "NSCameraUsageDescription": "APEXIS needs camera access to capture site photos.",
-        "NSMicrophoneUsageDescription": "APEXIS needs microphone access for video capture."
+        "NSMicrophoneUsageDescription": "APEXIS needs microphone access for video capture.",
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {
@@ -40,7 +41,7 @@
       ],
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
-        "foregroundImage": "./assets/images/icon.png"
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -60,7 +61,13 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#f97316"
+        }
+      ],
       "expo-secure-store",
       "@react-native-community/datetimepicker",
       [
@@ -85,7 +92,15 @@
         }
       ],
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

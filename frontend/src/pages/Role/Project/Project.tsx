@@ -172,7 +172,7 @@ export default function Project({ id }: ProjectProps) {
                                 <Icon className="h-4 w-4" />
                                 {item.label}
                                 {item.key === 'rfi' && hasPendingRFI && (
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-accent shadow-[0_0_8px_rgba(249,116,22,0.5)]" />
                                 )}
                             </button>
                         );

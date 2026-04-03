@@ -315,8 +315,8 @@ export default function AdminAnalytics() {
                 </div>
             </div>
 
-            {/* ── File Uploads + App Usage ──────────────────────────── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* ── File Uploads ──────────────────────────── */}
+            <div className="grid grid-cols-1 gap-4">
 
                 {/* File Upload Line Chart */}
                 <div className="rounded-xl bg-card border border-border p-4">
@@ -340,33 +340,7 @@ export default function AdminAnalytics() {
                     </ResponsiveContainer>
                 </div>
 
-                {/* App Usage */}
-                <div className="rounded-xl bg-card border border-border p-4">
-                    <h3 className="text-xs font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <Users className="h-3.5 w-3.5 text-accent" /> App Usage
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        {[
-                            { label: 'Daily Active', value: appUsage.dailyActive },
-                            { label: 'Weekly Active', value: appUsage.weeklyActive },
-                            { label: 'Total Users', value: appUsage.total },
-                            { label: 'Engagement', value: `${appUsage.engagement}%` },
-                        ].map((s, i) => (
-                            <div key={i} className="rounded-lg bg-secondary/50 p-3 text-center">
-                                <div className="text-lg font-bold text-foreground">{s.value}</div>
-                                <div className="text-[9px] text-muted-foreground uppercase tracking-wide mt-0.5">{s.label}</div>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="mt-3 space-y-1">
-                        <p className="text-[10px] text-muted-foreground">
-                            Most Active: <span className="text-foreground font-medium">{appUsage.mostActive}</span>
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                            Least Active: <span className="text-foreground font-medium">{appUsage.leastActive}</span>
-                        </p>
-                    </div>
-                </div>
+
             </div>
 
         </div>

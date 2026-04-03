@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Modal, View, TouchableOpacity, FlatList, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -53,9 +54,24 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
         (u.email?.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
+    const handleDirectSelect = async (userId: number) => {
+        setSubmitting(true);
+        try {
+            const room = await createRoom({
+                type: 'direct',
+                memberIds: [userId]
+            });
+            onSuccess(room);
+            onClose();
+        } catch (err) {
+            console.error("Failed to create chat", err);
+            setSubmitting(false);
+        }
+    };
+
     const toggleUser = (userId: number) => {
         if (type === 'direct') {
-            setSelectedUsers([userId]);
+            handleDirectSelect(userId);
         } else {
             setSelectedUsers(prev =>
                 prev.includes(userId)
@@ -115,28 +131,34 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             transparent={false}
             onRequestClose={onClose}
         >
-            <KeyboardAvoidingView
-                style={{ flex: 1, backgroundColor: colors.background }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-                {/* Header */}
-                <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <Feather name="x" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: colors.text }]}>New Chat</Text>
-                    <TouchableOpacity
-                        onPress={handleCreate}
-                        disabled={submitting || selectedUsers.length === 0 || (type === 'group' && !groupName.trim())}
-                        style={{ opacity: (submitting || selectedUsers.length === 0 || (type === 'group' && !groupName.trim())) ? 0.5 : 1 }}
-                    >
-                        {submitting ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+                <KeyboardAvoidingView
+                    style={{ flex: 1, backgroundColor: colors.background }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                    {/* Header */}
+                    <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                            <Feather name="x" size={24} color={colors.text} />
+                        </TouchableOpacity>
+                        <Text style={[styles.headerTitle, { color: colors.text }]}>{type === 'group' ? 'New Group' : 'New Direct Chat'}</Text>
+                        
+                        {type === 'group' ? (
+                            <TouchableOpacity
+                                onPress={handleCreate}
+                                disabled={submitting || selectedUsers.length === 0 || !groupName.trim()}
+                                style={{ opacity: (submitting || selectedUsers.length === 0 || !groupName.trim()) ? 0.5 : 1 }}
+                            >
+                                {submitting ? (
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                ) : (
+                                    <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
+                                )}
+                            </TouchableOpacity>
                         ) : (
-                            <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
+                            <View style={{ width: 40 }} />
                         )}
-                    </TouchableOpacity>
-                </View>
+                    </View>
 
                 {/* Type Selector */}
                 <View style={[styles.typeSelector, { borderBottomColor: colors.border }]}>
@@ -146,7 +168,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                     >
                         <Text style={[styles.typeTabText, { color: type === 'direct' ? colors.primary : colors.textMuted }]}>Direct</Text>
                     </TouchableOpacity>
-                    {authUser?.role === 'admin' && (
+                    {(authUser?.role === 'admin' || authUser?.role === 'contributor') && (
                         <TouchableOpacity
                             onPress={() => { setType('group'); setSelectedUsers([]); }}
                             style={[styles.typeTab, type === 'group' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
@@ -219,20 +241,20 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                         }
                     />
                 )}
-            </KeyboardAvoidingView>
+                </KeyboardAvoidingView>
+            </SafeAreaView>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
     header: {
-        height: 60,
+        height: 56,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        marginTop: Platform.OS === 'ios' ? 44 : 0,
     },
     closeButton: {
         padding: 4,
