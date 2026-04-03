@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Feather } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -108,7 +109,15 @@ export default function SnagCreateScreen() {
         try {
             const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
             if (!photo?.uri) return;
-            setCapturedPhoto({ uri: photo.uri, mime: 'image/jpeg', name: `snag_${Date.now()}.jpg` });
+
+            // Fix orientation for iOS
+            const manipulated = await ImageManipulator.manipulateAsync(
+                photo.uri,
+                [],
+                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+            );
+
+            setCapturedPhoto({ uri: manipulated.uri, mime: 'image/jpeg', name: `snag_${Date.now()}.jpg` });
             setStep('details');
         } catch (e) {
             console.error('capturePhoto error:', e);

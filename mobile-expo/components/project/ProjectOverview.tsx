@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking, Share } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking, Share, Modal, SafeAreaView, Image } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Text } from '@/components/ui/AppText';
@@ -9,10 +9,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
 import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { getSnags } from '@/services/snagService';
+import { getSecureFileUrl } from '@/services/fileService';
 
 import { useSocket } from '@/contexts/SocketContext';
-import { exportHandoverPackage, getLatestExport, getProjectShareLinks } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers } from '@/services/projectService';
 
 interface Props {
     project: Project;
@@ -44,6 +46,31 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [snagsCount, setSnagsCount] = useState<number>(0);
     const [reportsLoading, setReportsLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    const [memberModalType, setMemberModalType] = useState<'contributor' | 'client' | null>(null);
+    const [members, setMembers] = useState<any[]>([]);
+    const [loadingMembers, setLoadingMembers] = useState(false);
+
+    useEffect(() => {
+        if (!memberModalType || !projectId) return;
+        setLoadingMembers(true);
+        getProjectMembers(projectId)
+            .then(async data => {
+                const fetchedMembers = data.members.filter((m: any) => m.role === memberModalType);
+                const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
+                    if (m.user.profile_pic) {
+                        try {
+                           const url = await getSecureFileUrl(m.user.profile_pic);
+                           return { ...m, secure_pic: url };
+                        } catch { return m; }
+                    }
+                    return m;
+                }));
+                setMembers(membersWithPics);
+            })
+            .catch(() => Alert.alert("Error", "Failed to load members"))
+            .finally(() => setLoadingMembers(false));
+    }, [memberModalType, projectId]);
 
 
     // Export State
@@ -172,6 +199,39 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         };
     }, [socket, isExporting, isCountingDown, projectId, userRole]);
 
+    // Join project room and listen for real-time stats updates
+    useEffect(() => {
+        if (!socket || !projectId) return;
+
+        socket.emit('join-project', projectId);
+
+        const handleStatsUpdate = (data: any) => {
+            if (String(data.projectId) !== String(projectId)) return;
+            // Re-fetch file counts
+            setCounting(true);
+            getProjectFiles(projectId)
+                .then((d) => {
+                    let photos = 0, docs = 0;
+                    if (d.fileData) {
+                        d.fileData.forEach((file: any) => {
+                            if (file.file_type?.startsWith('image/')) photos++;
+                            else docs++;
+                        });
+                    }
+                    setPhotosCount(photos);
+                    setDocsCount(docs);
+                })
+                .catch(() => {})
+                .finally(() => setCounting(false));
+        };
+
+        socket.on('project-stats-updated', handleStatsUpdate);
+
+        return () => {
+            socket.off('project-stats-updated', handleStatsUpdate);
+        };
+    }, [socket, projectId]);
+
     const handleStartExport = async () => {
         try {
             if (!projectId) return;
@@ -202,7 +262,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         } catch { return String(d); }
     };
 
-    useEffect(() => {
+    const fetchProjectStats = useCallback(() => {
         if (!projectId) return;
 
         // Load file counts
@@ -240,9 +300,12 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             .catch(() => { });
     }, [projectId]);
 
+    // Re-fetch stats every time the screen focuses (catches same-app uploads)
+    useFocusEffect(
         useCallback(() => {
-            return () => {};
-        }, [])
+            fetchProjectStats();
+        }, [fetchProjectStats])
+    );
 
 
     const handleCopy = async (text: string, id: string) => {
@@ -258,13 +321,13 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {/* Stats Grid — 2×2 */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                     {[
-                        { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate) },
-                        { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate) },
+                        { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
+                        { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
                         { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount), id: 'documents' },
                         { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount), id: 'photos' },
                     ].map((item) => {
-                        const isClickable = item.id === 'documents' || item.id === 'photos';
-                        const Container = isClickable ? TouchableOpacity : View;
+                        const isClickable = true;
+                        const Container = TouchableOpacity;
                         return (
                             <Container
                                 key={item.label}
@@ -301,8 +364,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {userRole === 'admin' && (
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                     {[
-                        { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code' },
-                        { label: 'Client Code', value: (project as any).client_code, id: 'client_code' },
+                        { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0 },
+                        { label: 'Client Code', value: (project as any).client_code, id: 'client_code', count: (project as any).totalClients || 0 },
                     ].map((item) => (
                         <View
                             key={item.id}
@@ -348,6 +411,15 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                     </View>
                                 ) : null}
                             </View>
+                            <TouchableOpacity 
+                                onPress={() => setMemberModalType(item.id === 'cont_code' ? 'contributor' : 'client')}
+                                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+                            >
+                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                    {item.count} active {item.id === 'cont_code' ? (item.count === 1 ? 'contributor' : 'contributors') : (item.count === 1 ? 'client' : 'clients')}
+                                </Text>
+                                <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
+                            </TouchableOpacity>
                         </View>
                     ))}
                 </View>
@@ -481,7 +553,57 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
                 {/* EditProjectModal moved to [id].tsx */}
             </View>
+
+            {/* Member List Modal */}
+            <Modal visible={!!memberModalType} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setMemberModalType(null)}>
+                <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>
+                            {memberModalType}s
+                        </Text>
+                        <TouchableOpacity onPress={() => setMemberModalType(null)} style={{ padding: 8, backgroundColor: colors.surface, borderRadius: 20 }}>
+                            <Feather name="x" size={20} color={colors.text} />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+                        {loadingMembers ? (
+                            <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+                        ) : members.length === 0 ? (
+                            <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 40 }}>No active {memberModalType}s found</Text>
+                        ) : (
+                            members.map((m, idx) => (
+                                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                    {m.secure_pic ? (
+                                        <Image source={{ uri: m.secure_pic }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background }} />
+                                    ) : (
+                                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primary }}>{m.user.name?.charAt(0).toUpperCase()}</Text>
+                                        </View>
+                                    )}
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{m.user.name} {m.user.is_primary ? '(Primary)' : ''}</Text>
+                                        <View style={{ marginTop: 4, gap: 2 }}>
+                                            {m.user.email && (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <Feather name="mail" size={12} color={colors.primary} />
+                                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{m.user.email}</Text>
+                                                </View>
+                                            )}
+                                            {m.user.phone_number && (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <Feather name="phone" size={12} color={colors.primary} />
+                                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{m.user.phone_number}</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    </View>
+                                </View>
+                            ))
+                        )}
+                    </ScrollView>
+                </SafeAreaView>
+            </Modal>
         </ScrollView>
     );
-}
+};
 

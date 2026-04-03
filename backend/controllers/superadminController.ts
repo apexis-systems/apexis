@@ -99,25 +99,31 @@ export const inviteSuperAdmin = async (req: Request, res: Response) => {
         }
 
         // Check if user already exists
-        const existingUser = await users.findOne({ where: { email } });
-        if (existingUser) {
-            return res.status(400).json({ error: "User with this email already exists" });
+        let user = await users.findOne({ where: { email } });
+        
+        if (user) {
+            // If they already exist, we can promote them to superadmin
+            if (user.role === 'superadmin') {
+                return res.status(400).json({ error: "User is already a SuperAdmin" });
+            }
+            // Promotion logic: Update role to superadmin
+            await user.update({ role: 'superadmin', organization_id: null });
+        } else {
+            // Create pending user
+            user = await users.create({
+                name: "Pending", // Placeholder
+                email,
+                password: "", // No password yet
+                role: "superadmin",
+                is_primary: false,
+                email_verified: false,
+                organization_id: null
+            });
         }
-
-        // Create pending user
-        const newUser = await users.create({
-            name: "Pending", // Placeholder
-            email,
-            password: "", // No password yet
-            role: "superadmin",
-            is_primary: false,
-            email_verified: false,
-            organization_id: null
-        });
 
         // Generate invitation token
         const token = jwt.sign(
-            { user_id: newUser.id, email: newUser.email },
+            { user_id: user.id, email: user.email },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "24h" }
         );
@@ -136,7 +142,7 @@ export const inviteSuperAdmin = async (req: Request, res: Response) => {
             true
         );
 
-        res.status(201).json({ message: "Invitation sent successfully", user: newUser });
+        res.status(201).json({ message: "Invitation sent successfully", user: user });
     } catch (error) {
         console.error("Invite SuperAdmin Error:", error);
         res.status(500).json({ error: "Internal server error" });

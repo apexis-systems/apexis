@@ -6,6 +6,7 @@ import { Op } from "sequelize";
 import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
 import { normalizePhone, isValidPhone } from "../utils/sms.ts";
+import { sendNotification } from "../utils/notificationUtils.ts";
 
 export const adminLogin = async (req: Request, res: Response) => {
     try {
@@ -87,9 +88,9 @@ export const projectLogin = async (req: Request, res: Response) => {
         const normalizedPhone = phone ? normalizePhone(phone) : null;
         const normalizedEmail = email ? email.toLowerCase() : null;
 
+        // GLOBAL SEARCH: Look for user across all organizations to support multi-org/project access
         let user = await users.findOne({
             where: {
-                organization_id: project.organization_id,
                 [Op.or]: [
                     normalizedEmail ? { email: normalizedEmail } : null,
                     normalizedPhone ? { phone_number: normalizedPhone } : null
@@ -103,7 +104,7 @@ export const projectLogin = async (req: Request, res: Response) => {
         if (!user) {
             // Auto-create user because they have valid project code and no signup is required
             user = await users.create({
-                organization_id: project.organization_id,
+                organization_id: project.organization_id, // Default to this project's org
                 name: "Pending",
                 email: normalizedEmail,
                 phone_number: normalizedPhone,
@@ -115,37 +116,82 @@ export const projectLogin = async (req: Request, res: Response) => {
             isNewUser = true;
         }
 
-        // Verify if user is already a member of this project
-        const membership = await project_members.findOne({
+        // Verify if user is already a member of this project with the SAME role
+        const existingMembershipWithSameRole = await project_members.findOne({
             where: {
                 project_id: project.id,
-                user_id: user.id
+                user_id: user.id,
+                role: roleForCode
             }
         });
 
-        if (!membership) {
-            // Auto-add them to the project since they possess the valid project code
+        if (!existingMembershipWithSameRole) {
+            // Auto-add them to the project since they possess a valid code for a role they don't have yet
             await project_members.create({
                 project_id: project.id,
                 user_id: user.id,
                 role: roleForCode
             });
+
+            // Notify all existing members (admin, contributors, clients) of this project
+            try {
+                const existingMembers = await project_members.findAll({
+                    where: { project_id: project.id, user_id: { [Op.ne]: user.id } }
+                });
+                const joinerName = user.name && user.name !== 'Pending' ? user.name : (email || phone || 'Someone');
+                const roleLabel = roleForCode === 'contributor' ? 'Contributor' : 'Client';
+                for (const member of existingMembers) {
+                    await sendNotification({
+                        userId: member.user_id,
+                        title: `New ${roleLabel} Joined`,
+                        body: `${joinerName} joined the project as a ${roleLabel}.`,
+                        type: 'member_joined',
+                        data: { projectId: String(project.id) }
+                    });
+                }
+                const orgAdmins = await users.findAll({
+                    where: {
+                        organization_id: project.organization_id,
+                        role: 'admin',
+                        id: { [Op.notIn]: [user.id, ...existingMembers.map((m: any) => m.user_id)] }
+                    }
+                });
+                for (const admin of orgAdmins) {
+                    await sendNotification({
+                        userId: admin.id,
+                        title: `New ${roleLabel} Joined`,
+                        body: `${joinerName} joined the project as a ${roleLabel}.`,
+                        type: 'member_joined',
+                        data: { projectId: String(project.id) }
+                    });
+                }
+            } catch (notifErr) {
+                console.error('Member join notification error (non-fatal):', notifErr);
+            }
         }
 
         const token = jwt.sign(
-            { user_id: user.id, name: user.name, role: user.role, organization_id: user.organization_id, project_id: project.id },
+            { 
+                user_id: user.id, 
+                name: user.name, 
+                role: roleForCode, // Use the role associated with the login code
+                organization_id: user.organization_id || project.organization_id, 
+                project_id: project.id 
+            },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
         );
 
-
         res.status(200).json({ 
             token, 
-            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: user.role },
+            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: roleForCode },
             isPendingName: user.name === "Pending" || !user.name || user.name.trim() === ""
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Project Login Error:", error);
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(400).json({ error: "Email or phone number already in use by another account" });
+        }
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -181,17 +227,25 @@ export const superadminLogin = async (req: Request, res: Response) => {
 export const me = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        const user = await users.findByPk(authUser.user_id, {
+        const dbUser = await users.findByPk(authUser.user_id, {
             attributes: ['id', 'name', 'email', 'phone_number', 'role', 'organization_id', 'profile_pic']
         });
 
-        if (!user) return res.status(404).json({ error: "User not found" });
+        if (!dbUser) return res.status(404).json({ error: "User not found" });
 
-        const organization = user.organization_id ? await organizations.findByPk(user.organization_id) : null;
+        const organization = dbUser.organization_id ? await organizations.findByPk(dbUser.organization_id) : null;
+
+        // Override the role from the database with the role from the JWT session
+        // This ensures multi-role users see their current active role in the UI
+        const userData = dbUser.toJSON();
+        if (authUser.role) {
+            userData.role = authUser.role;
+        }
 
         res.status(200).json({
-            user,
-            organization
+            user: userData,
+            organization,
+            project_id: authUser.project_id || null
         });
     } catch (error) {
         console.error("Me Error:", error);
@@ -257,7 +311,6 @@ export const completePublicSignup = async (req: Request, res: Response) => {
         if (!email && !phone) return res.status(400).json({ error: "Email or Phone is required" });
         if (!project_code) return res.status(400).json({ error: "Project code is required" });
 
-        // Find project by code
         const project = await projects.findOne({
             where: {
                 organization_id: decoded.organization_id,
@@ -270,24 +323,82 @@ export const completePublicSignup = async (req: Request, res: Response) => {
 
         if (!project) return res.status(404).json({ error: "Invalid project code" });
 
-        // Create user
-        const newUser = await users.create({
-            organization_id: decoded.organization_id,
-            name,
-            email: email?.toLowerCase() || null,
-            phone_number: phone ? normalizePhone(phone) : null,
-            role: decoded.role,
-            email_verified: !!email,
-            phone_verified: !!phone,
-            is_primary: false
+        const normalizedEmail = email?.toLowerCase() || null;
+        const normalizedPhone = phone ? normalizePhone(phone) : null;
+
+        // GLOBAL SEARCH: Look for existing user to support multi-org/project enrollment
+        let user = await users.findOne({
+            where: {
+                [Op.or]: [
+                    normalizedEmail ? { email: normalizedEmail } : null,
+                    normalizedPhone ? { phone_number: normalizedPhone } : null
+                ].filter(Boolean) as any[]
+            }
         });
 
-        // Add to project
-        await project_members.create({
-            project_id: project.id,
-            user_id: newUser.id,
-            role: decoded.role
+        if (!user) {
+            // Create user only if they don't exist globally
+            user = await users.create({
+                organization_id: decoded.organization_id,
+                name,
+                email: normalizedEmail,
+                phone_number: normalizedPhone,
+                role: decoded.role,
+                email_verified: !!email,
+                phone_verified: !!phone,
+                is_primary: false
+            });
+        }
+
+        // Verify if already a member with the EXACT same role
+        const existingMembershipWithSameRole = await project_members.findOne({
+            where: { project_id: project.id, user_id: user.id, role: decoded.role }
         });
+
+        if (!existingMembershipWithSameRole) {
+            // Add to project with the new role
+            await project_members.create({
+                project_id: project.id,
+                user_id: user.id,
+                role: decoded.role
+            });
+        }
+
+        // Notify all existing project members
+        try {
+            const existingMembers = await project_members.findAll({
+                where: { project_id: project.id, user_id: { [Op.ne]: user.id } }
+            });
+            const roleLabel = decoded.role === 'contributor' ? 'Contributor' : 'Client';
+            const joinerName = user.name && user.name !== 'Pending' ? user.name : (name || email || phone || 'Someone');
+            for (const member of existingMembers) {
+                await sendNotification({
+                    userId: member.user_id,
+                    title: `New ${roleLabel} Joined`,
+                    body: `${joinerName} joined the project as a ${roleLabel}.`,
+                    type: 'member_joined',
+                    data: { projectId: String(project.id) }
+                });
+            }
+            const orgAdmins = await users.findAll({
+                where: {
+                    organization_id: decoded.organization_id,
+                    role: 'admin',
+                    id: { [Op.notIn]: [user.id, ...existingMembers.map((m: any) => m.user_id)] }
+                }
+            });
+            for (const admin of orgAdmins) {
+                await sendNotification({
+                    userId: admin.id,
+                    title: `New ${roleLabel} Joined`,
+                    body: `${joinerName} joined the project as a ${roleLabel}.`,
+                    type: 'member_joined',
+                    data: { projectId: String(project.id) }
+                });
+            }
+        } catch (notifErr) {
+            console.error('Member join notification error (non-fatal):', notifErr);
+        }
 
         res.status(201).json({ message: "Signup complete" });
     } catch (error) {
@@ -364,6 +475,69 @@ export const changePassword = async (req: Request, res: Response) => {
 
         res.status(200).json({ message: "Password updated successfully" });
     } catch (error) {
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+export const getMyMemberships = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const memberships = await project_members.findAll({
+            where: { user_id: authUser.user_id },
+            include: [{ 
+                model: projects, 
+                attributes: ['id', 'name', 'organization_id'],
+                include: [{ model: organizations, attributes: ['name'] }]
+            }]
+        });
+        res.status(200).json({ memberships });
+    } catch (error) {
+        console.error("Get My Memberships Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const switchContext = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { project_id, role } = req.body;
+
+        if (!project_id || !role) {
+            return res.status(400).json({ error: "Project ID and role are required" });
+        }
+
+        const membership = await project_members.findOne({
+            where: { user_id: authUser.user_id, project_id, role }
+        });
+
+        if (!membership) {
+            return res.status(403).json({ error: "No such membership found" });
+        }
+
+        const user = await users.findByPk(authUser.user_id);
+        const project = await projects.findByPk(project_id);
+
+        if (!user || !project) {
+            return res.status(404).json({ error: "User or project not found" });
+        }
+
+        const token = jwt.sign(
+            {
+                user_id: user.id,
+                name: user.name,
+                role: role,
+                organization_id: project.organization_id,
+                project_id: project.id
+            },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "30d" }
+        );
+
+        res.status(200).json({ 
+            token, 
+            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: role }
+        });
+    } catch (error) {
+        console.error("Switch Context Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

@@ -106,8 +106,8 @@ const Login = () => {
         try {
             let res;
             const isEmail = email.includes('@');
-            const normalizedIdentifier = !isEmail && /^\d{10}$/.test(email.trim()) 
-                ? `+91${email.trim()}` 
+            const normalizedIdentifier = !isEmail && /^\d{10}$/.test(email.trim())
+                ? `+91${email.trim()}`
                 : email.trim();
 
             if (selectedRole === 'superadmin') {
@@ -152,11 +152,11 @@ const Login = () => {
             <div className="w-full max-w-4xl flex flex-col gap-6 items-center">
 
                 <div className="flex flex-col items-center gap-5">
-                    <div className="hidden sm:flex h-14 w-14 bg-secondary/50 rounded-2xl items-center justify-center border border-border/50">
-                        <Monitor className="h-6 w-6 text-foreground/80" />
+                    <div className="hidden sm:flex h-32 w-32 items-center justify-center">
+                        <img src="/app-icon.png" alt="Apexis Logo" className="h-28 w-28 object-contain" />
                     </div>
                     <div className='flex flex-col items-center'>
-                        <h1 className="text-3xl font-bold tracking-tight text-foreground uppercase font-angelica">APEXIS</h1>
+                        <h1 className="text-4xl tracking-[0.1em] text-accent font-angelica uppercase">APEXIS</h1>
                         <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground">
                             RECORD · REPORT · RELEASE
                         </p>
@@ -171,12 +171,12 @@ const Login = () => {
                             <div className="flex flex-col md:flex-row min-h-[500px]">
                                 {/* Left Side: Scan Instructions */}
                                 <div className="flex-1 p-8 sm:p-14 border-b md:border-b-0 md:border-r border-border/40 flex flex-col">
-                                    <h2 className="text-[32px] font-normal text-foreground mb-10 tracking-tight">Scan to log in</h2>
+                                <h2 className="text-[28px] font-bold text-foreground mb-10 tracking-tight uppercase text-center md:text-left font-montserrat">Scan to log in</h2>
 
                                     <div className="space-y-8 flex-1">
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">1</div>
-                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Open the <span className="font-semibold text-foreground inline-flex items-center gap-1.5 bg-secondary px-2 py-0.5 rounded-md font-angelica uppercase tracking-wider">APEXIS</span> mobile app & log in</p>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5 font-montserrat">Open the <span className="text-accent inline-flex items-center gap-1.5 bg-accent/5 px-2 py-0.5 rounded-md font-angelica uppercase tracking-widest">APEXIS</span> mobile app & log in</p>
                                         </div>
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">2</div>
@@ -240,9 +240,9 @@ const Login = () => {
                                                 />
                                                 {/* Custom center logo/icon overlay */}
                                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                    <div className="bg-white p-1 rounded-full flex items-center justify-center" style={{ width: 54, height: 54 }}>
-                                                        <div className="bg-[#111b21] w-full h-full rounded-full flex items-center justify-center border-2 border-white">
-                                                            <span className="text-2xl font-black text-white font-angelica">A</span>
+                                                    <div className="bg-white p-1.5 rounded-2xl flex items-center justify-center shadow-sm" style={{ width: 62, height: 62 }}>
+                                                        <div className="w-full h-full rounded-xl flex items-center justify-center overflow-hidden">
+                                                            <img src="/app-icon.png" alt="Apexis" className="w-full h-full object-contain" />
                                                         </div>
                                                     </div>
                                                 </div>

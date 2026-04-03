@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, TouchableOpacity, Image, Modal, TextInput } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
+import { useTour } from '@/contexts/TourContext';
 import HelpSupportModal from './HelpSupportModal';
 import FeedbackModal from './FeedbackModal';
 import LanguageSelectorModal from './LanguageSelectorModal';
@@ -19,6 +20,7 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
     const { isDark, colors, toggleTheme } = useTheme();
     const router = useRouter();
     const { unreadNotificationCount } = useSocket();
+    const { isTourActive, registerSpotlight } = useTour();
 
     const [isSearchActive, setIsSearchActive] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -26,6 +28,18 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
     const [showHelp, setShowHelp] = useState(false);
     const [showFeedback, setShowFeedback] = useState(false);
     const [showLanguage, setShowLanguage] = useState(false);
+
+    const bellRef = useRef<View>(null);
+
+    useEffect(() => {
+        if (isTourActive) {
+            setTimeout(() => {
+                bellRef.current?.measureInWindow((x, y, w, h) => {
+                    registerSpotlight('notificationsIcon', { x: x + w / 2, y: y + h / 2, r: 35 });
+                });
+            }, 1000);
+        }
+    }, [isTourActive, registerSpotlight]);
 
     const handleSearchChange = (text: string) => {
         setSearchQuery(text);
@@ -91,6 +105,7 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                     </TouchableOpacity>
 
                     <TouchableOpacity
+                        ref={bellRef}
                         onPress={() => router.push('/(tabs)/notifications')}
                         style={{ padding: 6, borderRadius: 20, position: 'relative' }}
                     >

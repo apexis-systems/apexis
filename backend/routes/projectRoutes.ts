@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createProject, getProjects, getProjectById, updateProject, exportHandoverPackage, getLatestExport, getProjectShareLinks } from "../controllers/projectController.ts";
+import { createProject, getProjects, getProjectById, updateProject, exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers } from "../controllers/projectController.ts";
 import { verifyToken, isAdmin } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -10,6 +10,7 @@ router.use(verifyToken);
 router.post("/", isAdmin, createProject);
 router.get("/", getProjects);
 router.get("/:id", getProjectById);
+router.get("/:id/members", isAdmin, getProjectMembers);
 router.get("/:id/share-links", isAdmin, getProjectShareLinks);
 router.patch("/:id", isAdmin, updateProject);
 router.post("/:id/export-handover", isAdmin, exportHandoverPackage);

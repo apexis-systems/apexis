@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Smartphone, Download, ExternalLink, Loader2 } from 'lucide-react';
+import { Smartphone, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Suspense } from 'react';
+import { AppStoreIcon, PlayStoreIcon } from '@/components/ui/store-icons';
 
 function OnboardingLandingContent() {
     const searchParams = useSearchParams();
@@ -46,8 +47,8 @@ function OnboardingLandingContent() {
     return (
         <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
             {/* App Icon / Logo */}
-            <div className="w-24 h-24 bg-accent rounded-3xl flex items-center justify-center mb-8 shadow-lg shadow-accent/20 animate-in fade-in zoom-in duration-500">
-                <Smartphone className="w-12 h-12 text-white" />
+            <div className="w-24 h-24 mb-8 animate-in fade-in zoom-in duration-500">
+                <img src="/app-icon.png" alt="Apexis Logo" className="w-full h-full object-contain drop-shadow-md" />
             </div>
 
             <h1 className="text-2xl font-bold text-foreground mb-3 font-angelica uppercase tracking-wider">APEXIS</h1>
@@ -67,7 +68,7 @@ function OnboardingLandingContent() {
                             onClick={handleOpenApp}
                             className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-white font-bold"
                         >
-                            <ExternalLink className="w-4 h-4 mr-2" /> Open <span className="font-angelica uppercase tracking-tighter ml-1">APEXIS</span>
+                            <ExternalLink className="w-4 h-4 mr-2" /> Open APEXIS
                         </Button>
 
                         <div className="relative py-4">
@@ -77,22 +78,22 @@ function OnboardingLandingContent() {
 
                         <div className="grid grid-cols-2 gap-3">
                             <a
-                                href="https://apps.apple.com/app/apexis"
+                                href="https://apps.apple.com/in/app/apexis-record-report-release/id6760482687"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-border bg-card hover:bg-secondary transition-colors"
+                                className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-border bg-card hover:bg-secondary/80 transition-all px-2 shadow-sm"
                             >
-                                <Download className="w-5 h-5 text-foreground" />
-                                <span className="text-[10px] font-bold uppercase tracking-wider">App Store</span>
+                                <AppStoreIcon className="w-7 h-7 text-foreground" />
+                                <span className="text-[10px] font-bold uppercase tracking-wider mt-1">App Store</span>
                             </a>
                             <a
                                 href="https://play.google.com/store/apps/details?id=com.apexis.app"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-border bg-card hover:bg-secondary transition-colors"
+                                className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-border bg-card hover:bg-secondary/80 transition-all px-2 shadow-sm"
                             >
-                                <Download className="w-5 h-5 text-foreground" />
-                                <span className="text-[10px] font-bold uppercase tracking-wider">Play Store</span>
+                                <PlayStoreIcon className="w-7 h-7 text-foreground" />
+                                <span className="text-[10px] font-bold uppercase tracking-wider mt-1">Play Store</span>
                             </a>
                         </div>
                     </>

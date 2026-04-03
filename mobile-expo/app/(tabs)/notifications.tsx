@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, FlatList, TouchableOpacity, StyleSheet, RefreshControl, BackHandler } from 'react-native';
+import { View, FlatList, TouchableOpacity, StyleSheet, RefreshControl, BackHandler, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import { useRouter, useFocusEffect } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import { handleNotificationNavigation } from '@/utils/navigation';
 
 interface Notification {
     id: number;
@@ -23,8 +23,23 @@ export default function NotificationsScreen() {
     const { colors } = useTheme();
     const router = useRouter();
     const { socket, setUnreadNotificationCount } = useSocket();
+    const { isTourActive } = require('@/contexts/TourContext').useTour();
     const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [projects, setProjects] = useState<any[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [loading, setLoading] = useState(true);
+    
+    const [selectedProjectId, setSelectedProjectId] = useState<number | 'all'>('all');
+    const [selectedType, setSelectedType] = useState<string | 'all'>('all');
+
+    const filterTypes = [
+        { label: 'All', value: 'all' },
+        { label: 'Chat', value: 'chat' },
+        { label: 'Files', value: 'file' },
+        { label: 'Photos', value: 'photo' },
+        { label: 'Snags', value: 'snag' },
+        { label: 'RFI', value: 'rfi' },
+    ];
 
     useFocusEffect(
         useCallback(() => {
@@ -35,17 +50,40 @@ export default function NotificationsScreen() {
 
             const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
             return () => subscription.remove();
-        }, [])
+        }, [router])
     );
+
+    const fetchProjects = async () => {
+        try {
+            const res = await PrivateAxios.get('/projects');
+            setProjects(res.data.projects || []);
+        } catch (error) {
+            console.error('Failed to fetch projects:', error);
+        }
+    };
 
     const fetchNotifications = async () => {
         try {
-            const res = await PrivateAxios.get('/notifications');
+            setLoading(true);
+            let url = '/notifications';
+            const params: string[] = [];
+            if (selectedProjectId !== 'all') params.push(`project_id=${selectedProjectId}`);
+            if (selectedType !== 'all') params.push(`type=${selectedType}`);
+            
+            if (params.length > 0) url += `?${params.join('&')}`;
+
+            const res = await PrivateAxios.get(url);
             const data = res.data.notifications || [];
-            setNotifications(data);
-            setUnreadNotificationCount(data.filter((n: any) => !n.is_read).length);
+            const unread = data.filter((n: any) => !n.is_read);
+            setNotifications(unread);
+            
+            if (selectedProjectId === 'all' && selectedType === 'all') {
+                setUnreadNotificationCount(unread.length);
+            }
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -53,26 +91,43 @@ export default function NotificationsScreen() {
         try {
             await PrivateAxios.patch('/notifications/read-all');
             setUnreadNotificationCount(0);
-            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+            setNotifications([]);
         } catch (error) {
             console.error('Failed to mark all read:', error);
         }
     };
 
     useEffect(() => {
+        fetchProjects();
+    }, []);
+
+    const DUMMY_NOTIFICATIONS = [
+        { id: 1, title: 'Project Status Updated', body: 'The foundation work for Site A has been approved.', type: 'snag_status_update', is_read: false, createdAt: new Date().toISOString(), data: {} },
+        { id: 2, title: 'New Document Uploaded', body: 'Sarah uploaded "Borehole Test Results".', type: 'file_upload', is_read: false, createdAt: new Date().toISOString(), data: {} },
+    ];
+
+    const displayNotifications = isTourActive ? DUMMY_NOTIFICATIONS : notifications;
+
+    useEffect(() => {
         fetchNotifications();
-        markAllRead();
+    }, [selectedProjectId, selectedType]);
 
+    useEffect(() => {
         if (socket) {
-            socket.on('new-notification', (notif: Notification) => {
-                setNotifications(prev => [notif, ...prev]);
-            });
-
+            const handleNewNotif = (notif: Notification) => {
+                const matchesProject = selectedProjectId === 'all' || notif.data?.projectId == selectedProjectId;
+                const matchesType = selectedType === 'all' || notif.type === selectedType;
+                
+                if (matchesProject && matchesType) {
+                    setNotifications(prev => [notif, ...prev]);
+                }
+            };
+            socket.on('new-notification', handleNewNotif);
             return () => {
-                socket.off('new-notification');
+                socket.off('new-notification', handleNewNotif);
             };
         }
-    }, [socket]);
+    }, [socket, selectedProjectId, selectedType]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -82,17 +137,13 @@ export default function NotificationsScreen() {
 
     const markRead = async (id: number) => {
         try {
-            const notif = notifications.find(n => n.id === id);
-            if (notif && !notif.is_read) {
-                await PrivateAxios.patch(`/notifications/${id}/read`);
-                setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-                setUnreadNotificationCount(prev => Math.max(0, prev - 1));
-            }
+            await PrivateAxios.patch(`/notifications/${id}/read`);
+            setNotifications(prev => prev.filter(n => n.id !== id));
+            setUnreadNotificationCount(prev => Math.max(0, prev - 1));
         } catch (error) {
             console.error('Failed to mark read:', error);
         }
     };
-
 
     const renderItem = ({ item }: { item: Notification }) => (
         <TouchableOpacity
@@ -101,23 +152,15 @@ export default function NotificationsScreen() {
                 {
                     backgroundColor: item.is_read ? colors.surface : 'rgba(249,115,22,0.05)',
                     borderColor: item.is_read ? colors.border : 'rgba(249,115,22,0.2)',
-                    borderWidth: 1,
-                    borderRadius: 12,
-                    marginHorizontal: 14,
-                    marginBottom: 8,
-                    padding: 12,
                 }
             ]}
-            onPress={() => markRead(item.id)}
+            onPress={() => {
+                markRead(item.id);
+                handleNotificationNavigation(item.type, item.data, router);
+            }}
         >
             <View style={[styles.iconContainer, {
                 backgroundColor: item.is_read ? colors.background : 'rgba(249,115,22,0.1)',
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 12
             }]}>
                 <Ionicons
                     name={getIconName(item.type)}
@@ -127,13 +170,13 @@ export default function NotificationsScreen() {
             </View>
             <View style={styles.contentContainer}>
                 <View style={styles.headerRow}>
-                    <Text style={[styles.title, { color: colors.text, fontSize: 13, fontWeight: '700' }]}>{item.title}</Text>
-                    {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: colors.primary, width: 8, height: 8, borderRadius: 4 }]} />}
+                    <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+                    {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
                 </View>
-                <Text style={[styles.body, { color: colors.textMuted, fontSize: 11, marginTop: 2 }]}>{item.body}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                <Text style={[styles.body, { color: colors.textMuted }]}>{item.body}</Text>
+                <View style={styles.timeRow}>
                     <Ionicons name="time-outline" size={10} color={colors.textMuted} />
-                    <Text style={[styles.time, { fontSize: 10 }]}>{new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                    <Text style={styles.timeText}>{new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                 </View>
             </View>
         </TouchableOpacity>
@@ -143,9 +186,17 @@ export default function NotificationsScreen() {
         switch (type) {
             case 'chat': return 'chatbubble-ellipses';
             case 'group_creation': return 'people';
-            case 'file_upload': return 'document-text';
-            case 'snag_assigned': return 'warning';
+            case 'file_upload':
+            case 'file_visibility':
+            case 'file_upload_admin': return 'document-text';
+            case 'photo_upload':
+            case 'photo_comment': return 'camera';
+            case 'snag_assigned':
+            case 'snag_creation_admin': return 'warning';
             case 'snag_status_update': return 'checkmark-circle';
+            case 'rfi_created':
+            case 'rfi_assigned':
+            case 'rfi_status_update': return 'help-circle';
             default: return 'notifications';
         }
     };
@@ -154,27 +205,83 @@ export default function NotificationsScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
-                {notifications.some(n => !n.is_read) && (
+                {notifications.length > 0 && (
                     <TouchableOpacity onPress={markAllRead}>
                         <Text style={[styles.markAll, { color: colors.primary }]}>Mark all read</Text>
                     </TouchableOpacity>
                 )}
             </View>
 
-            <FlatList
-                data={notifications}
-                renderItem={renderItem}
-                keyExtractor={item => item.id.toString()}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-                }
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="notifications-off-outline" size={64} color={colors.textMuted} style={{ opacity: 0.3 }} />
-                        <Text style={[styles.emptyText, { color: colors.textMuted }]}>No notifications yet</Text>
-                    </View>
-                }
-            />
+            <View style={{ paddingTop: 10 }}>
+                <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    data={filterTypes}
+                    contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 10 }}
+                    keyExtractor={item => item.value}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity
+                            onPress={() => setSelectedType(item.value)}
+                            style={[
+                                styles.chip,
+                                {
+                                    backgroundColor: selectedType === item.value ? colors.primary : colors.surface,
+                                    borderColor: colors.border,
+                                }
+                            ]}
+                        >
+                            <Text style={[styles.chipText, { color: selectedType === item.value ? '#fff' : colors.textMuted }]}>
+                                {item.label}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                />
+
+                <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    data={[{ id: 'all', name: 'All Projects' }, ...projects]}
+                    contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 12 }}
+                    keyExtractor={item => item.id.toString()}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity
+                            onPress={() => setSelectedProjectId(item.id === 'all' ? 'all' : item.id)}
+                            style={[
+                                styles.chip,
+                                {
+                                    backgroundColor: (item.id === 'all' ? selectedProjectId === 'all' : selectedProjectId === item.id) ? colors.primary : colors.surface,
+                                    borderColor: colors.border,
+                                }
+                            ]}
+                        >
+                            <Text style={[styles.chipText, { color: (item.id === 'all' ? selectedProjectId === 'all' : selectedProjectId === item.id) ? '#fff' : colors.textMuted }]}>
+                                {item.name}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                />
+            </View>
+
+            {loading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            ) : (
+                <FlatList
+                    data={displayNotifications as Notification[]}
+                    renderItem={renderItem}
+                    keyExtractor={item => item.id.toString()}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="notifications-off-outline" size={64} color={colors.textMuted} style={{ opacity: 0.3 }} />
+                            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No notifications yet</Text>
+                        </View>
+                    }
+                />
+            )}
         </SafeAreaView>
     );
 }
@@ -198,12 +305,19 @@ const styles = StyleSheet.create({
     },
     notificationItem: {
         flexDirection: 'row',
-        padding: 15,
-        borderBottomWidth: 1,
+        padding: 12,
+        borderRadius: 12,
+        marginHorizontal: 14,
+        marginBottom: 8,
+        borderWidth: 1,
     },
     iconContainer: {
-        marginRight: 15,
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
         justifyContent: 'center',
+        marginRight: 12,
     },
     contentContainer: {
         flex: 1,
@@ -212,10 +326,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     title: {
-        fontSize: 15,
+        fontSize: 13,
         fontWeight: '700',
     },
     unreadDot: {
@@ -224,12 +338,17 @@ const styles = StyleSheet.create({
         borderRadius: 4,
     },
     body: {
-        fontSize: 13,
-        lineHeight: 18,
-        marginBottom: 4,
-    },
-    time: {
         fontSize: 11,
+        marginTop: 2,
+    },
+    timeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 6,
+    },
+    timeText: {
+        fontSize: 10,
         color: '#999',
     },
     emptyContainer: {
@@ -241,5 +360,16 @@ const styles = StyleSheet.create({
     emptyText: {
         marginTop: 15,
         fontSize: 16,
+    },
+    chip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginRight: 8,
+        borderWidth: 1,
+    },
+    chipText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
 });

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, FlatList, TouchableOpacity, Platform, Image, RefreshControl, Animated } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -11,6 +11,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { listRooms } from '@/services/chatService';
 import NewChatModal from '@/components/chat/NewChatModal';
 import { useSocket } from '@/contexts/SocketContext';
+import { useTour } from '@/contexts/TourContext';
+import Svg, { Defs, Mask, Rect, Circle } from 'react-native-svg';
 
 export default function ChatListScreen() {
     const { user } = (useAuth() as any) || {};
@@ -18,6 +20,7 @@ export default function ChatListScreen() {
     const { t } = useTranslation();
     const router = useRouter();
     const { socket, setUnreadChatCount } = useSocket();
+    const { isTourActive } = useTour();
     const [searchQuery, setSearchQuery] = useState('');
     const joinedRoomsRef = useRef<Set<string>>(new Set());
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,9 +73,11 @@ export default function ChatListScreen() {
         }
     };
 
-    useEffect(() => {
-        fetchRooms();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchRooms();
+        }, [])
+    );
 
     useEffect(() => {
         if (!socket) return;
@@ -91,10 +96,9 @@ export default function ChatListScreen() {
                 room.chat_messages = [data.message];
                 room.updatedAt = data.message.createdAt || new Date().toISOString();
 
-                // Increment unread count if message is from someone else
-                // Use sender_id from message data
-                const senderId = data.message.sender_id || data.message.sender?.id;
-                if (String(senderId) !== String(user?.id)) {
+                // Increment unread count only if message is from someone else
+                const messageSenderId = data.message.sender_id || data.message.sender?.id;
+                if (String(messageSenderId) !== String(user?.id)) {
                     room.unread_count = (Number(room.unread_count) || 0) + 1;
                 }
 
@@ -189,7 +193,30 @@ export default function ChatListScreen() {
         fetchRooms();
     };
 
-    const filteredChats = rooms
+    const DUMMY_CHATS = [
+        {
+            id: 'dc1',
+            name: 'John Engineering',
+            type: 'individual',
+            updatedAt: new Date().toISOString(),
+            room_members: [{ user: { id: 'u1', name: 'John' } }],
+            chat_messages: [{ text: 'The site report is ready for review.', createdAt: new Date().toISOString() }],
+            unread_count: 1
+        },
+        {
+            id: 'dc2',
+            name: 'Project Delta Site Team',
+            type: 'group',
+            updatedAt: new Date().toISOString(),
+            room_members: [{ user: { id: 'u2', name: 'Team' } }],
+            chat_messages: [{ text: '📷 Photo', type: 'image', createdAt: new Date().toISOString() }],
+            unread_count: 0
+        }
+    ];
+
+    const displayRooms = isTourActive ? DUMMY_CHATS : rooms;
+
+    const filteredChats = displayRooms
         .filter(c => {
             const otherMember = c.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id));
             const name = c.name || otherMember?.user?.name || 'Chat';
@@ -208,7 +235,11 @@ export default function ChatListScreen() {
 
         const isOnline = otherMember?.user?.id && onlineUsers.has(String(otherMember.user.id));
         const lastMsg = item.chat_messages?.[0];
-        const lastMsgText = lastMsg ? lastMsg.text : 'No messages yet';
+        const lastMsgText = lastMsg ? (
+            lastMsg.type === 'image' ? '📷 Photo' : 
+            lastMsg.type === 'file' ? '📄 File' : 
+            lastMsg.text || 'No message content'
+        ) : 'No messages yet';
         const time = lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
         const unreadCount = item.unread_count || 0;
 

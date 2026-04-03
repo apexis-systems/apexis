@@ -34,6 +34,14 @@ export const createProject = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Start date and end date are required" });
         }
 
+        if (name && name.length > 25) {
+            return res.status(400).json({ error: "Project name cannot exceed 25 characters" });
+        }
+
+        if (description && description.length > 50) {
+            return res.status(400).json({ error: "Project description cannot exceed 50 characters" });
+        }
+
         let contributor_code = generateCode();
         let client_code = generateCode();
 
@@ -90,10 +98,17 @@ export const getProjects = async (req: Request, res: Response) => {
         } else if (authUser.role === 'admin') {
             whereCondition.organization_id = authUser.organization_id;
         } else if (authUser.role === 'contributor' || authUser.role === 'client') {
-            if (!authUser.project_id) {
-                return res.status(400).json({ error: "No project linked to session" });
+            if (authUser.project_id) {
+                // User logged in with a specific project code, restrict to ONLY that project
+                whereCondition.id = authUser.project_id;
+            } else {
+                const userMemberships = await project_members.findAll({
+                    where: { user_id: authUser.user_id },
+                    attributes: ['project_id']
+                });
+                const projectIds = userMemberships.map((pm: any) => pm.project_id);
+                whereCondition.id = { [Op.in]: projectIds };
             }
-            whereCondition.id = authUser.project_id;
         }
 
         const result = await projects.findAll({
@@ -111,6 +126,14 @@ export const getProjects = async (req: Request, res: Response) => {
                     [
                         literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "folders" WHERE "folders"."project_id" = "projects"."id")`),
                         'totalFolders'
+                    ],
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor' AND u."role" != 'admin')`),
+                        'totalContributors'
+                    ],
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client' AND u."role" != 'admin')`),
+                        'totalClients'
                     ],
                 ],
             },
@@ -161,7 +184,21 @@ export const getProjectById = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const project = await projects.findOne({ where: { id } });
+        const project = await projects.findOne({ 
+            where: { id },
+            attributes: {
+                include: [
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor' AND u."role" != 'admin')`),
+                        'totalContributors'
+                    ],
+                    [
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client' AND u."role" != 'admin')`),
+                        'totalClients'
+                    ]
+                ]
+            }
+        });
 
         if (!project) {
             return res.status(404).json({ error: "Project not found" });
@@ -204,6 +241,14 @@ export const updateProject = async (req: Request, res: Response) => {
 
         if (!project) {
             return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        if (name && name.length > 25) {
+            return res.status(400).json({ error: "Project name cannot exceed 25 characters" });
+        }
+
+        if (description && description.length > 50) {
+            return res.status(400).json({ error: "Project description cannot exceed 50 characters" });
         }
 
         await project.update({
@@ -311,6 +356,37 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
         res.status(200).json(response);
     } catch (error) {
         console.error("Get Share Links Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getProjectMembers = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can view project members" });
+        }
+
+        const project = await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+        if (!project) {
+            return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        const members = await project_members.findAll({
+            where: { project_id: id },
+            include: [{
+                model: users,
+                where: { role: { [Op.ne]: 'admin' } },
+                attributes: ['id', 'name', 'email', 'phone_number', 'role', 'profile_pic', 'createdAt']
+            }],
+            order: [['createdAt', 'DESC']]
+        });
+
+        res.status(200).json({ members });
+    } catch (error) {
+        console.error("Get Project Members Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

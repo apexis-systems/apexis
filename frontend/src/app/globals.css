@@ -60,6 +60,16 @@
   --font-sans: var(--font-montserrat);
   --font-mono: var(--font-geist-mono);
   --font-angelica: "Angelica", serif;
+  --font-montserrat: "Montserrat", sans-serif;
+}
+
+/* Explicit utility classes for custom fonts to ensure consistent loading */
+.font-angelica {
+  font-family: "Angelica", serif !important;
+}
+
+.font-montserrat {
+  font-family: "Montserrat", sans-serif !important;
 }
 
 @layer base {

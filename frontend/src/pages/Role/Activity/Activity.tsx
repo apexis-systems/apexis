@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, FileText, Camera, Clock, Loader2, ChevronDown } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { getActivities } from '@/services/activityService';
 import { getOrganizations } from '@/services/superadminService';
 import { getOrgUsers } from '@/services/userService';
@@ -27,6 +28,9 @@ const actionTypes = [
 const Activity = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
+    const searchParams = useSearchParams();
+    const initialType = searchParams?.get('type') || 'all';
+
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [organizations, setOrganizations] = useState<any[]>([]);
     const [usersList, setUsersList] = useState<any[]>([]);
@@ -34,7 +38,7 @@ const Activity = () => {
 
     const [selectedOrgId, setSelectedOrgId] = useState<string>('all');
     const [selectedUserId, setSelectedUserId] = useState<string>('all');
-    const [selectedType, setSelectedType] = useState<string>('all');
+    const [selectedType, setSelectedType] = useState<string>(initialType);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
 
     const [loading, setLoading] = useState(true);
@@ -102,7 +106,7 @@ const Activity = () => {
         <div className="max-w-4xl p-8 mx-auto">
             <div className="flex flex-col gap-6 mb-8">
                 <div>
-                    <h1 className="text-xl font-bold text-foreground">{t('activity')}</h1>
+                    <h1 className="text-xl font-bold text-foreground">{t('Activity')}</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Updates from your projects</p>
                 </div>
 

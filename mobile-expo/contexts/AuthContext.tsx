@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             const res = await getMe();
             if (res?.user) {
-                setUser({ ...res.user, organization: res.organization });
+                setUser({ ...res.user, organization: res.organization, project_id: res.project_id });
             }
         } catch (e: any) {
             if (e?.response?.status !== 401) {
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const res = await getMe();
             if (res?.user) {
-                const fullUser = { ...res.user, organization: res.organization };
+                const fullUser = { ...res.user, organization: res.organization, project_id: res.project_id };
                 setUser(fullUser);  // isPendingName derives from this automatically
                 return fullUser as User;
             }

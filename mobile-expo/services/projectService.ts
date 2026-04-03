@@ -60,3 +60,13 @@ export const getProjectShareLinks = async (id: string | number, role?: string) =
         throw error;
     }
 };
+
+export const getProjectMembers = async (id: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/projects/${id}/members`);
+        return response.data;
+    } catch (error) {
+        console.error("getProjectMembers Error", error);
+        throw error;
+    }
+};

@@ -11,21 +11,24 @@ import { updateUserProfilePic, updateUserName } from '@/services/userService';
 import { getSecureFileUrl } from '@/services/fileService';
 import { uploadOrganizationLogo, updateOrganization } from '@/services/organizationService';
 import { toast } from 'sonner';
-import { changePassword } from '@/services/authService';
+import { changePassword, getMyMemberships, switchContext } from '@/services/authService';
 import ProfilePreviewModal from '@/components/shared/ProfilePreviewModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
-import { KeyRound, CheckCircle2, Edit2, Check, Briefcase, Building } from 'lucide-react';
+import { KeyRound, CheckCircle2, Edit2, Check, Briefcase, Building, Layers, RefreshCw } from 'lucide-react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { cn } from '@/lib/utils';
 
 const Profile = () => {
-    const { user, setUser, logout } = useAuth() as any;
+    const { user, setUser, logout, login } = useAuth() as any;
     const router = useRouter();
     const { t } = useLanguage();
+    
+    const [memberships, setMemberships] = useState<any[]>([]);
+    const [isSwitching, setIsSwitching] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -98,6 +101,32 @@ const Profile = () => {
     const [crop, setCrop] = useState<Crop>();
     const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
     const imgRef = useRef<HTMLImageElement>(null);
+
+    useEffect(() => {
+        if (user && user.role !== 'superadmin') {
+            getMyMemberships().then(res => {
+                if (res.memberships) setMemberships(res.memberships);
+            }).catch(err => console.error("Load memberships error:", err));
+        }
+    }, [user?.id]);
+
+    const handleSwitchContext = async (projectId: number, role: string) => {
+        if (isSwitching) return;
+        setIsSwitching(true);
+        try {
+            const res = await switchContext(projectId, role);
+            if (res.token) {
+                await login(res.token);
+                toast.success(`Switched to ${role} role.`);
+                // Force a hard reload or redirect to dashboard to ensure all states are clean
+                window.location.href = '/dashboard';
+            }
+        } catch (error) {
+            toast.error("Failed to switch project context.");
+        } finally {
+            setIsSwitching(false);
+        }
+    };
 
     if (!user) return null;
 
@@ -389,66 +418,138 @@ const Profile = () => {
                 )}
 
                 {/* Change Password Toggle */}
-                <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
-                    <button
-                        onClick={() => setIsChangingPassword(!isChangingPassword)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-secondary/20 transition-colors"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-xl bg-accent/10 flex items-center justify-center">
-                                <KeyRound className="h-5 w-5 text-accent" />
+                {(user.role === 'admin' || user.role === 'superadmin') && (
+                    <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
+                        <button
+                            onClick={() => setIsChangingPassword(!isChangingPassword)}
+                            className="w-full flex items-center justify-between p-4 hover:bg-secondary/20 transition-colors"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-xl bg-accent/10 flex items-center justify-center">
+                                    <KeyRound className="h-5 w-5 text-accent" />
+                                </div>
+                                <span className="font-bold text-sm uppercase tracking-wide">Change Password</span>
                             </div>
-                            <span className="font-bold text-sm uppercase tracking-wide">Change Password</span>
-                        </div>
-                        <span className={cn("transition-transform", isChangingPassword ? "rotate-90" : "")}>
-                            <ArrowLeft className="-rotate-90 h-4 w-4" />
-                        </span>
-                    </button>
+                            <span className={cn("transition-transform", isChangingPassword ? "rotate-90" : "")}>
+                                <ArrowLeft className="-rotate-90 h-4 w-4" />
+                            </span>
+                        </button>
 
-                    {isChangingPassword && (
-                        <div className="p-4 pt-0 border-t border-border/50">
-                            <form onSubmit={handleChangePassword} className="space-y-4 pt-4">
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Current Password</Label>
-                                    <PasswordInput
-                                        value={currentPassword}
-                                        onChange={(e) => setCurrentPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        className="h-11 rounded-xl bg-secondary/50 border-0"
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">New Password</Label>
-                                    <PasswordInput
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        className="h-11 rounded-xl bg-secondary/50 border-0"
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Confirm New Password</Label>
-                                    <PasswordInput
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        className="h-11 rounded-xl bg-secondary/50 border-0"
-                                        required
-                                    />
-                                </div>
-                                <Button
-                                    type="submit"
-                                    disabled={passwordLoading}
-                                    className="w-full h-11 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-xs"
-                                >
-                                    {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Password"}
-                                </Button>
-                            </form>
+                        {isChangingPassword && (
+                            <div className="p-4 pt-0 border-t border-border/50">
+                                <form onSubmit={handleChangePassword} className="space-y-4 pt-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Current Password</Label>
+                                        <PasswordInput
+                                            value={currentPassword}
+                                            onChange={(e) => setCurrentPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="h-11 rounded-xl bg-secondary/50 border-0"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">New Password</Label>
+                                        <PasswordInput
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="h-11 rounded-xl bg-secondary/50 border-0"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Confirm New Password</Label>
+                                        <PasswordInput
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="h-11 rounded-xl bg-secondary/50 border-0"
+                                            required
+                                        />
+                                    </div>
+                                    <Button
+                                        type="submit"
+                                        disabled={passwordLoading}
+                                        className="w-full h-11 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-xs"
+                                    >
+                                        {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Password"}
+                                    </Button>
+                                </form>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Switch Project / Role Section */}
+                {(() => {
+                    const filtered = memberships.filter(m => !(Number(m.project_id) === Number(user.project_id) && m.role === user.role));
+                    if (filtered.length === 0) return null;
+
+                    const groups: Record<number, any> = {};
+                    filtered.forEach(m => {
+                        if (!groups[m.project_id]) {
+                            groups[m.project_id] = { project: m.project, roles: [] };
+                        }
+                        groups[m.project_id].roles.push(m.role);
+                    });
+
+                    return (
+                        <div className="border border-border rounded-3xl overflow-hidden bg-secondary/5 backdrop-blur-sm">
+                            <div className="p-5 border-b border-border/50 bg-secondary/10">
+                                <h3 className="font-bold text-xs uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
+                                    <Layers className="h-4 w-4 text-primary" />
+                                    Available Projects & Roles
+                                </h3>
+                            </div>
+                            <div className="p-4 space-y-4">
+                                {Object.values(groups).map((group: any, idx) => (
+                                    <div key={idx} className="bg-background/50 border border-border/50 rounded-2xl p-6 transition-all hover:border-primary/30 group/project">
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover/project:bg-primary group-hover/project:border-primary transition-all duration-500">
+                                                <Building className="h-6 w-6 text-primary group-hover/project:text-white transition-colors" />
+                                            </div>
+                                            <div>
+                                                <p className="text-base font-bold text-foreground group-hover/project:text-primary transition-colors">{group.project?.name || 'Project'}</p>
+                                                <p className="text-[11px] text-muted-foreground uppercase font-black tracking-widest opacity-60">
+                                                    {group.project?.organization?.name}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {group.roles.map((r: string, rIdx: number) => (
+                                                <button
+                                                    key={rIdx}
+                                                    onClick={() => handleSwitchContext(group.project.id, r)}
+                                                    disabled={isSwitching}
+                                                    className="w-full flex items-center justify-between p-4 bg-secondary/30 hover:bg-primary hover:text-white rounded-2xl transition-all duration-300 group/role border border-transparent hover:border-primary-foreground/20 hover:shadow-lg hover:shadow-primary/20"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={cn(
+                                                            "text-[10px] uppercase font-black tracking-widest px-2.5 py-1 rounded-lg transition-colors",
+                                                            r === 'admin' ? "bg-orange-500/20 text-orange-600 group-hover/role:bg-white/20 group-hover/role:text-white" : "bg-blue-500/20 text-blue-600 group-hover/role:bg-white/20 group-hover/role:text-white"
+                                                        )}>
+                                                            {r}
+                                                        </span>
+                                                        <span className="text-sm font-bold opacity-80 group-hover/role:opacity-100 italic">Switch to this role</span>
+                                                    </div>
+                                                    {isSwitching ? (
+                                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                                    ) : (
+                                                        <div className="h-8 w-8 rounded-xl bg-background/50 flex items-center justify-center group-hover/role:bg-white group-hover/role:text-primary transition-all">
+                                                            <RefreshCw className="h-4 w-4 opacity-40 group-hover/role:opacity-100 group-hover/role:rotate-180 transition-all duration-500" />
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    )}
-                </div>
+                    );
+                })()}
 
                 <Button
                     variant="outline"

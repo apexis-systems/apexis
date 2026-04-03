@@ -177,19 +177,24 @@ export default function AdminAnalyticsScreen() {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'team'>('overview');
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [data, setData] = useState<any>(null);
 
+    const fetchAnalytics = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const results = await getAnalyticsOverview();
+            setData(results);
+        } catch (err: any) {
+            console.error("Mobile Analytics Fetch Error:", err);
+            setError(err.message || "Failed to load analytics");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchAnalytics = async () => {
-            try {
-                const results = await getAnalyticsOverview();
-                setData(results);
-            } catch (err) {
-                console.error("Mobile Analytics Fetch Error:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
         if (user) fetchAnalytics();
     }, [user]);
 
@@ -203,10 +208,26 @@ export default function AdminAnalyticsScreen() {
         );
     }
 
-    if (loading || !data) {
+    if (loading) {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
                 <ActivityIndicator size="large" color={colors.primary} />
+            </SafeAreaView>
+        );
+    }
+
+    if (error || !data) {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                <Feather name="alert-circle" size={40} color="#ef4444" />
+                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700', marginTop: 12 }}>Connection Issue</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 4, textAlign: 'center' }}>{error || "Unable to retrieve analytics data."}</Text>
+                <TouchableOpacity 
+                    onPress={fetchAnalytics}
+                    style={{ marginTop: 20, backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }}
+                >
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+                </TouchableOpacity>
             </SafeAreaView>
         );
     }
@@ -222,6 +243,7 @@ export default function AdminAnalyticsScreen() {
         { label: 'Pending Tasks', value: quickStats.pendingTasks, icon: 'clock', accent: false },
         { label: 'Overdue Tasks', value: quickStats.overdueTasks, icon: 'alert-triangle', accent: false },
         { label: 'Delayed', value: quickStats.delayedProjects, icon: 'alert-circle', accent: false },
+        { label: 'Avg Completion', value: (quickStats.avgCompletion || 0) + '%', icon: 'check-circle', accent: false },
     ];
 
     const donutSlices = projectStatus.map((s: any) => ({
@@ -281,42 +303,32 @@ export default function AdminAnalyticsScreen() {
                         {/* Quick Stats: 2x2 Grid */}
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 8 }}>
                             {STAT_CARDS.map((s, i) => (
-                                <View key={i} style={{
-                                    width: '48.5%', backgroundColor: colors.surface, borderRadius: 14,
-                                    borderWidth: 1, borderColor: colors.border, padding: 14,
-                                    marginBottom: 10,
-                                    ...(s.accent ? { borderColor: colors.primary } : {}),
-                                }}>
+                                <TouchableOpacity
+                                    key={i}
+                                    onPress={() => {
+                                        if (s.label === 'Active Projects') {
+                                            router.push('/');
+                                        } else if (s.label.includes('Tasks') || s.label === 'Delayed') {
+                                            router.push('/activity');
+                                        }
+                                    }}
+                                    style={{
+                                        width: '48.5%', backgroundColor: colors.surface, borderRadius: 14,
+                                        borderWidth: 1, borderColor: colors.border, padding: 14,
+                                        marginBottom: 10,
+                                        ...(s.accent ? { borderColor: colors.primary } : {}),
+                                    }}
+                                >
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                                         <Feather name={s.icon as any} size={14} color={s.accent ? colors.primary : colors.textMuted} />
                                         <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>{s.label}</Text>
                                     </View>
                                     <Text style={{ fontSize: 26, fontWeight: '800', color: s.accent ? colors.primary : colors.text }}>{s.value}</Text>
-                                </View>
+                                </TouchableOpacity>
                             ))}
                         </View>
 
-                        {/* App Usage mini strip */}
-                        <Card>
-                            <SectionTitle icon="users" title="App Usage" />
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                {[
-                                    { label: 'Daily Active', value: appUsage.dailyActive },
-                                    { label: 'Weekly Active', value: appUsage.weeklyActive },
-                                    { label: 'Total Users', value: appUsage.total },
-                                    { label: 'Engagement', value: `${appUsage.engagement}%` },
-                                ].map((s, i) => (
-                                    <View key={i} style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 10, alignItems: 'center' }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{s.value}</Text>
-                                        <Text style={{ fontSize: 8, color: colors.textMuted, textAlign: 'center', marginTop: 2, textTransform: 'uppercase' }}>{s.label}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                            <View style={{ marginTop: 10, gap: 3 }}>
-                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Most Active: <Text style={{ color: colors.text, fontWeight: '600' }}>{appUsage.mostActive}</Text></Text>
-                                <Text style={{ fontSize: 10, color: colors.textMuted }}>Least Active: <Text style={{ color: colors.text, fontWeight: '600' }}>{appUsage.leastActive}</Text></Text>
-                            </View>
-                        </Card>
+
 
                         {/* Project Status Donut */}
                         <Card>

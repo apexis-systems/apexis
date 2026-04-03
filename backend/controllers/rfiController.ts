@@ -4,6 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { rfis, users, activities, projects, project_members } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
 import { Op } from 'sequelize';
+import { getIO } from '../socket.ts';
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION || 'ap-south-2',
@@ -69,7 +70,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        const { project_id, title, description, assigned_to } = req.body;
+        const { project_id, title, description, assigned_to, expiry_date } = req.body;
         if (!project_id || !title) return res.status(400).json({ error: 'project_id and title are required' });
 
         // Photo Upload Logic
@@ -111,6 +112,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
             status: 'open',
             is_client_visible,
             photos: uploadedPhotos,
+            expiry_date: expiry_date ? new Date(expiry_date) : null,
         });
 
         await activities.create({
@@ -174,7 +176,15 @@ export const createRFI = async (req: Request | any, res: Response) => {
             ],
         });
 
-        res.status(201).json({ rfi: await withPresignedUrls(full!) });
+        const rfiWithUrls = await withPresignedUrls(full!);
+        
+        try {
+            getIO().to(`project-${project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
+        } catch (e) {
+            console.error('Socket emit error (createRFI):', e);
+        }
+
+        res.status(201).json({ rfi: rfiWithUrls });
     } catch (err) {
         console.error('createRFI error:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -206,6 +216,12 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         }
 
         res.json({ rfi });
+
+        try {
+            getIO().to(`project-${(rfi as any).project_id}`).emit('rfi-updated', { rfi });
+        } catch (e) {
+            console.error('Socket emit error (updateRFIStatus):', e);
+        }
 
         // Notify creator and assignee if someone else changed it
         const notifyIds = new Set<number>();
@@ -283,6 +299,59 @@ export const getRFIAssignees = async (req: Request, res: Response) => {
         res.json({ assignees });
     } catch (err) {
         console.error('getRFIAssignees error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// PATCH /rfis/:id/response
+export const updateRFIResponse = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { id } = req.params;
+        const { response, status } = req.body;
+
+        const rfi = await rfis.findByPk(id);
+        if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+
+        if (authUser.role !== 'admin' && rfi.assigned_to !== authUser.user_id && rfi.created_by !== authUser.user_id) {
+            return res.status(403).json({ error: 'Unauthorized to update response' });
+        }
+
+        if (response !== undefined) (rfi as any).response = response;
+        if (status && ['open', 'closed', 'overdue'].includes(status)) (rfi as any).status = status;
+        
+        await rfi.save();
+
+        await activities.create({
+            project_id: (rfi as any).project_id,
+            user_id: authUser.user_id,
+            type: 'edit',
+            description: `Updated response for RFI "${(rfi as any).title}"`
+        });
+
+        // Notify creator if assignee responded
+        if (authUser.user_id === rfi.assigned_to && rfi.created_by) {
+            const sender = await users.findByPk(authUser.user_id);
+            await sendNotification({
+                userId: rfi.created_by,
+                title: 'RFI Response Received',
+                body: `${sender?.name || 'Assignee'} responded to your RFI: ${rfi.title}`,
+                type: 'rfi_comment',
+                data: { rfiId: String(rfi.id), projectId: String(rfi.project_id) }
+            });
+        }
+
+        const rfiWithUrls = await withPresignedUrls(rfi);
+
+        try {
+            getIO().to(`project-${(rfi as any).project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
+        } catch (e) {
+            console.error('Socket emit error (updateRFIResponse):', e);
+        }
+
+        res.json({ rfi: rfiWithUrls });
+    } catch (err) {
+        console.error('updateRFIResponse error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

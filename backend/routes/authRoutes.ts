@@ -11,7 +11,9 @@ import {
     resetPassword,
     changePassword,
     verifyOnboardingToken,
-    completePublicSignup
+    completePublicSignup,
+    getMyMemberships,
+    switchContext
 } from "../controllers/authController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
@@ -38,5 +40,9 @@ router.post("/forgot-password/request-otp", forgotPasswordRequestOtp);
 router.post("/forgot-password/verify-otp", forgotPasswordVerifyOtp);
 router.post("/forgot-password/reset", resetPassword);
 router.post("/change-password", verifyToken, changePassword);
+
+// Context Switching
+router.get("/memberships", verifyToken, getMyMemberships);
+router.post("/switch-context", verifyToken, switchContext);
 
 export default router;

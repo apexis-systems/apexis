@@ -47,6 +47,14 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.BOOLEAN,
                 defaultValue: false,
             },
+            parent_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+                references: {
+                    model: 'chat_messages',
+                    key: 'id'
+                }
+            },
         },
         {
             tableName: "chat_messages",

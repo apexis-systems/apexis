@@ -14,6 +14,7 @@ import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
+import { Op } from "sequelize";
 
 export const inviteUser = async (req: Request, res: Response) => {
     try {
@@ -34,33 +35,54 @@ export const inviteUser = async (req: Request, res: Response) => {
         }
 
         // Unified Invitation Logic for all roles
-        const existingUser = await users.findOne({ where: { email } });
-        if (existingUser) {
-            return res.status(400).json({ error: "User already exists with this email" });
-        }
+        let user = await users.findOne({ where: { email } });
+        let isNewUser = false;
 
-        const newUser = await users.create({
-            organization_id: authUser.organization_id,
-            name: "Pending",
-            email,
-            role,
-            is_primary: false,
-            email_verified: false,
-        });
+        if (!user) {
+            user = await users.create({
+                organization_id: authUser.organization_id,
+                name: "Pending",
+                email,
+                role,
+                is_primary: false,
+                email_verified: false,
+            });
+            isNewUser = true;
+        } else {
+            // User exists. If they are invited to a project, we'll add the association below.
+            // If they are invited as an 'admin' but are already an 'admin' elsewhere, 
+            // the current schema only supports one organization_id in the User table.
+            
+            if (role === 'admin' && user.organization_id && user.organization_id !== authUser.organization_id) {
+                // Return a specific error if they are already an admin of another org
+                return res.status(400).json({ error: "User is already an administrator for another organization." });
+            }
+        }
 
         // For Project Roles, pre-associate with the project
         if ((role === 'contributor' || role === 'client') && actualProjectId) {
-            const { project_members: ProjectMember } = await import("../models/index.ts");
-            await ProjectMember.create({
-                project_id: actualProjectId,
-                user_id: newUser.id,
-                role: role
+            const existingMembership = await project_members.findOne({
+                where: { project_id: actualProjectId, user_id: user.id }
             });
+
+            if (!existingMembership) {
+                await project_members.create({
+                    project_id: actualProjectId,
+                    user_id: user.id,
+                    role: role
+                });
+            } else if (existingMembership.role === role) {
+                return res.status(400).json({ error: `User is already a ${role} in this project` });
+            } else {
+                // Already a member with different role, update it or leave it?
+                // For now, let's allow updating to the new invited role
+                await existingMembership.update({ role });
+            }
         }
 
         // Generate invitation token
         const token = jwt.sign(
-            { user_id: newUser.id, email: newUser.email, organization_id: authUser.organization_id },
+            { user_id: user.id, email: user.email, organization_id: authUser.organization_id },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "48h" }
         );
@@ -88,7 +110,7 @@ export const inviteUser = async (req: Request, res: Response) => {
             true
         );
 
-        return res.status(201).json({ message: `${roleName} invited successfully`, user: newUser });
+        return res.status(201).json({ message: `${roleName} invited successfully`, user: user });
 
     } catch (error) {
         console.error("Invite User Error:", error);
@@ -104,8 +126,25 @@ export const getOrgUsers = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
+        let whereCondition: any = { organization_id: authUser.organization_id };
+
+        if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            // Non-admins: Only see users who share a project with them
+            const myProjectIds = await project_members.findAll({
+                where: { user_id: authUser.user_id },
+                attributes: ['project_id']
+            }).then((pms: any[]) => pms.map((pm: any) => pm.project_id));
+
+            const peerUserIds = await project_members.findAll({
+                where: { project_id: { [Op.in]: myProjectIds } },
+                attributes: ['user_id']
+            }).then((pms: any[]) => pms.map((pm: any) => pm.user_id));
+
+            whereCondition.id = { [Op.in]: [...new Set([...peerUserIds, authUser.user_id])] };
+        }
+
         const orgUsers = await users.findAll({
-            where: { organization_id: authUser.organization_id },
+            where: whereCondition,
             attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt']
         });
 

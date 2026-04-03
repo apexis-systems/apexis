@@ -5,6 +5,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
@@ -35,8 +36,15 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                 quality: 0.8,
             });
             if (photo) {
+                // Fix orientation for iOS
+                const manipulated = await ImageManipulator.manipulateAsync(
+                    photo.uri,
+                    [],
+                    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                );
+
                 onCapture({
-                    uri: photo.uri,
+                    uri: manipulated.uri,
                     name: `photo_${Date.now()}.jpg`,
                     type: 'image/jpeg',
                     size: 0
@@ -54,7 +62,7 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
     const pickFromGallery = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            allowsEditing: true,
+            allowsEditing: false,
             quality: 0.8,
         });
 

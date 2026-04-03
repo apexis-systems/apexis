@@ -11,6 +11,7 @@ import sharp from 'sharp';
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { users as UsersModel } from "../models/index.ts";
 import { PDFDocument } from 'pdf-lib';
+import { getIO } from '../socket.ts';
 
 interface MulterFile {
     buffer: Buffer;
@@ -202,6 +203,14 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             }
         } catch (err) {
             console.error('Error notifying admins of new file upload:', err);
+        }
+
+        // Broadcast live stats update to all members viewing this project
+        try {
+            const io = getIO();
+            io.to(`project-${project_id}`).emit('project-stats-updated', { projectId: String(project_id) });
+        } catch (e) {
+            console.error('Socket emit error (non-fatal):', e);
         }
 
         res.status(200).json({
@@ -539,14 +548,27 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             for (let i = 0; i < scanFiles.length; i++) {
                 const file = scanFiles[i];
                 const pdfDoc = await PDFDocument.create();
-                const imageBuffer = file.buffer;
+                
+                let imageBuffer = file.buffer;
+                // Use sharp to normalize image before embedding
+                try {
+                    imageBuffer = await sharp(file.buffer)
+                        .jpeg({ quality: 85 })
+                        .toBuffer();
+                } catch (sharpErr) {
+                    console.warn("Sharp standardization failed, using original buffer", sharpErr);
+                }
+
                 let image;
-                if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+                try {
                     image = await pdfDoc.embedJpg(imageBuffer);
-                } else if (file.mimetype === 'image/png') {
-                    image = await pdfDoc.embedPng(imageBuffer);
-                } else {
-                    try { image = await pdfDoc.embedJpg(imageBuffer); } catch (e) { continue; }
+                } catch (embedJpgErr) {
+                    try {
+                        image = await pdfDoc.embedPng(imageBuffer);
+                    } catch (embedPngErr) {
+                        console.error("Failed to embed image in PDF:", embedPngErr);
+                        continue;
+                    }
                 }
 
                 if (image) {
@@ -585,14 +607,29 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             // mode === 'single' or empty -> merge all into one PDF
             const pdfDoc = await PDFDocument.create();
             for (const file of scanFiles) {
-                const imageBuffer = file.buffer;
+                let imageBuffer = file.buffer;
+                
+                // Use sharp to normalize image before embedding in PDF
+                try {
+                    imageBuffer = await sharp(file.buffer)
+                        .jpeg({ quality: 85 })
+                        .toBuffer();
+                } catch (sharpErr) {
+                    console.warn("Sharp standardization failed, using original buffer", sharpErr);
+                }
+
                 let image;
-                if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+                // Since we normalized to JPEG via sharp, we try embedJpg first
+                try {
                     image = await pdfDoc.embedJpg(imageBuffer);
-                } else if (file.mimetype === 'image/png') {
-                    image = await pdfDoc.embedPng(imageBuffer);
-                } else {
-                    try { image = await pdfDoc.embedJpg(imageBuffer); } catch (e) { continue; }
+                } catch (embedJpgErr) {
+                    // Fallback to PNG if it was actually a PNG that sharp didn't convert (unlikely with .jpeg())
+                    try {
+                        image = await pdfDoc.embedPng(imageBuffer);
+                    } catch (embedPngErr) {
+                        console.error("Failed to embed image in PDF:", embedPngErr);
+                        continue;
+                    }
                 }
 
                 if (image) {

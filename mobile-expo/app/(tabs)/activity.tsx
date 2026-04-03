@@ -1,4 +1,4 @@
-import { View, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { useLocalSearchParams } from 'expo-router';
 import { getActivities } from '@/services/activityService';
 import { getOrganizations } from '@/services/organizationService';
 import { getOrgUsers } from '@/services/userService';
@@ -41,6 +42,8 @@ export default function ActivityScreen() {
     const { user } = useAuth();
     const { colors: themeColors } = useTheme();
     const { t } = useTranslation();
+    const { type } = useLocalSearchParams<{ type?: string }>();
+    const { isTourActive } = require('@/contexts/TourContext').useTour();
 
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [organizations, setOrganizations] = useState<any[]>([]);
@@ -50,7 +53,7 @@ export default function ActivityScreen() {
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-    const [selectedType, setSelectedType] = useState<string | null>(null);
+    const [selectedType, setSelectedType] = useState<string | null>(type || null);
 
     const [activeModal, setActiveModal] = useState<'org' | 'user' | 'project' | 'type' | null>(null);
     const [loading, setLoading] = useState(true);
@@ -108,6 +111,13 @@ export default function ActivityScreen() {
         fetchFeed();
     }, [user, selectedOrgId, selectedUserId, selectedProjectId, selectedType]);
 
+    const DUMMY_ACTIVITIES = [
+        { id: 'da1', type: 'upload', description: 'uploaded new floor plans', userName: 'John Doe', projectName: 'Project Alpha', timestamp: 'Just now' },
+        { id: 'da2', type: 'upload_photo', description: 'added 5 site photos', userName: 'Sarah Smith', projectName: 'Site B', timestamp: '2 mins ago' },
+    ];
+
+    const displayActivities = isTourActive ? DUMMY_ACTIVITIES : activities;
+
     if (!user) return null;
 
     const FilterButton = ({ label, value, onPress, title }: { label: string; value: string | null; onPress: () => void; title: string }) => (
@@ -135,13 +145,13 @@ export default function ActivityScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }} edges={['top', 'left', 'right']}>
-            <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 14 }}>
-                {/* Header */}
-                <View style={{ marginBottom: 14 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '700', color: themeColors.text }}>{t('activity') || 'Recent Activity'}</Text>
-                    <Text style={{ fontSize: 11, color: themeColors.textMuted, marginTop: 2 }}>Updates from your projects</Text>
-                </View>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: themeColors.surface, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
+                <Text style={{ fontSize: 24, fontWeight: '700', color: themeColors.text }}>{t('Activity') || 'Activity'}</Text>
+            </View>
 
+
+            <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 14 }}>
                 {/* Filters */}
                 <View style={{ marginBottom: 14 }}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -181,7 +191,7 @@ export default function ActivityScreen() {
                         </View>
                     ) : (
                         <View style={{ gap: 8 }}>
-                            {activities.map((activity) => {
+                            {(displayActivities as any[]).map((activity) => {
                                 const iconName = iconMap[activity.type] || 'clock';
                                 const colors = colorMap[activity.type] || { bg: 'rgba(100,100,100,0.15)', icon: '#666' };
                                 return (

@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import Constants from 'expo-constants';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Audio } from 'expo-av';
+import { AppState, AppStateStatus } from 'react-native';
 
 interface SocketContextType {
     socket: Socket | null;
@@ -32,6 +33,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [isConnected, setIsConnected] = useState(false);
     const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
     const [unreadChatCount, setUnreadChatCount] = useState(0);
+    const socketRef = useRef<Socket | null>(null);
 
     const playAlertSound = async () => {
         try {
@@ -93,7 +95,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setIsConnected(true);
             });
 
-            newSocket.on('new-notification', () => {
+            newSocket.on('new-notification', (notif: any) => {
                 setUnreadNotificationCount(prev => prev + 1);
                 playAlertSound();
             });
@@ -107,6 +109,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setIsConnected(false);
             });
 
+            socketRef.current = newSocket;
             setSocket(newSocket);
         }
 
@@ -116,6 +119,24 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
     }, [isLoggedIn]);
+
+    // Reconnect on foreground (critical for iOS)
+    useEffect(() => {
+        const handleAppStateChange = (nextState: AppStateStatus) => {
+            const s = socketRef.current;
+            if (!s || !isLoggedIn) return;
+            if (nextState === 'active') {
+                if (!s.connected) {
+                    s.connect();
+                }
+                if (user?.id) {
+                    s.emit('join-user-room', user.id);
+                }
+            }
+        };
+        const sub = AppState.addEventListener('change', handleAppStateChange);
+        return () => sub.remove();
+    }, [isLoggedIn, user?.id]);
 
     // Separate effect for joining user-specific room
     useEffect(() => {

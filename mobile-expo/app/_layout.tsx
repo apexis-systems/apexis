@@ -23,11 +23,22 @@ import '@/global.css';
 import '@/i18n';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useState } from 'react';
 
 function RootLayoutNav() {
   const { isLoggedIn, isLoading: isAuthLoading, user, isPendingName } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      const value = await AsyncStorage.getItem('hasSeenOnboarding');
+      setHasSeenOnboarding(value === 'true');
+    };
+    checkOnboarding();
+  }, [segments]); // Re-check when route changes to catch updates from onboarding screen
 
   const [fontsLoaded, fontError] = useFonts({
     'Angelica': require('../assets/fonts/Angelica-C.otf'),
@@ -53,25 +64,40 @@ function RootLayoutNav() {
   const { code } = useGlobalSearchParams();
 
   useEffect(() => {
-    // Don't run until initial auth check (getMe) has resolved — navigator isn't mounted yet
-    if (isAuthLoading) return;
+    const checkAndRedirect = async () => {
+      // Don't run until initial auth check (getMe) has resolved
+      if (isAuthLoading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-    const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup';
-    const isSetupName = segments[0] === '(auth)' && segments[1] === 'setup-name';
+      const inAuthGroup = segments[0] === '(auth)';
+      const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup';
+      const isSetupName = segments[0] === '(auth)' && segments[1] === 'setup-name';
+      const isOnboarding = segments[0] === 'onboarding';
+      const isInvitation = !!code;
 
-    const isInvitation = !!code;
+      // Double-check storage if state says false, to avoid race conditions during transitions
+      let currentOnboardingDone = hasSeenOnboarding;
+      if (!currentOnboardingDone) {
+        const value = await AsyncStorage.getItem('hasSeenOnboarding');
+        currentOnboardingDone = value === 'true';
+        if (currentOnboardingDone) setHasSeenOnboarding(true);
+      }
 
-    if (!isLoggedIn && !inAuthGroup) {
-      router.replace('/(auth)/login');
-    } else if (isLoggedIn && isPendingName && !isSetupName) {
-      // New user (name is "Pending") — must complete name setup before accessing app
-      router.replace('/(auth)/setup-name');
-    } else if (isLoggedIn && inAuthGroup && !isSignupWithToken && !isSetupName && !isInvitation) {
-      // Fully set-up user in auth group → go to tabs (unless it's an invitation)
-      router.replace('/(tabs)');
-    }
-  }, [isLoggedIn, isAuthLoading, isPendingName, segments, code]);
+      if (!currentOnboardingDone && !isOnboarding) {
+        router.replace('/onboarding');
+        return;
+      }
+
+      if (!isLoggedIn && !inAuthGroup && !isOnboarding) {
+        router.replace('/(auth)/login');
+      } else if (isLoggedIn && isPendingName && !isSetupName) {
+        router.replace('/(auth)/setup-name');
+      } else if (isLoggedIn && inAuthGroup && !isSignupWithToken && !isSetupName && !isInvitation) {
+        router.replace('/(tabs)');
+      }
+    };
+
+    checkAndRedirect();
+  }, [isLoggedIn, isAuthLoading, isPendingName, segments, code, hasSeenOnboarding]);
 
   if (isAuthLoading || !fontsLoaded) {
     return null;
@@ -79,6 +105,7 @@ function RootLayoutNav() {
 
   return (
     <Stack>
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
@@ -87,6 +114,8 @@ function RootLayoutNav() {
 
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { SocketProvider } from '@/contexts/SocketContext';
+import { TourProvider } from '@/contexts/TourContext';
+import TourOverlay from '@/components/tour/TourOverlay';
 
 function ThemedLayout() {
   const { isDark } = useTheme();
@@ -94,7 +123,10 @@ function ThemedLayout() {
     <GluestackUIProvider mode={isDark ? "dark" : "light"}>
       <AuthProvider>
         <SocketProvider>
-          <RootLayoutNav />
+          <TourProvider>
+            <RootLayoutNav />
+            <TourOverlay />
+          </TourProvider>
         </SocketProvider>
         <StatusBar style={isDark ? "light" : "dark"} />
       </AuthProvider>

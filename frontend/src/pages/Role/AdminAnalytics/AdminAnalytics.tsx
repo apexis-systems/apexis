@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import {
     TrendingUp, Clock, AlertTriangle, Users, Activity, Upload,
     CheckCircle2, MessageSquare, FileText, Shield, BarChart2,
-    Loader2
+    Loader2,
+    AlertCircle,
+    CheckCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -118,18 +120,22 @@ export default function AdminAnalytics() {
             {/* ── Quick Stats Row ────────────────────────────────────── */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {[
-                    { label: 'Active Projects', value: quickStats.activeProjects, icon: TrendingUp, accent: true },
-                    { label: 'Tasks Pending', value: quickStats.pendingTasks, icon: Clock, accent: false },
-                    { label: 'Tasks Overdue', value: quickStats.overdueTasks, icon: AlertTriangle, accent: false },
-                    { label: 'Delayed Projects', value: quickStats.delayedProjects, icon: AlertTriangle, accent: false },
-                    { label: 'Team Activity', value: `${quickStats.engagementPercent}%`, icon: Users, accent: false },
+                    { label: 'Active Projects', value: quickStats.activeProjects, icon: TrendingUp, accent: true, path: `/${user.role}/dashboard` },
+                    { label: 'Tasks Pending', value: quickStats.pendingTasks, icon: Clock, accent: false, path: `/${user.role}/snags` },
+                    { label: 'Tasks Overdue', value: quickStats.overdueTasks, icon: AlertTriangle, accent: false, path: `/${user.role}/snags` },
+                    { label: 'Delayed Projects', value: quickStats.delayedProjects, icon: AlertCircle, accent: false, path: `/${user.role}/dashboard` },
+                    { label: 'Avg completion', value: quickStats.avgCompletion + '%', icon: CheckCircle, accent: false, path: null },
                 ].map((s, i) => (
-                    <div key={i} className={`rounded-xl bg-card border p-4 flex flex-col gap-1 ${s.accent ? 'border-accent/30' : 'border-border'}`}>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                            <s.icon className={`h-4 w-4 ${s.accent ? 'text-accent' : ''}`} />
-                            <span className="text-[10px] font-medium uppercase tracking-wide">{s.label}</span>
+                    <div
+                        key={i}
+                        onClick={() => s.path && router.push(s.path)}
+                        className={`rounded-xl bg-card border p-4 transition-all duration-200 ${s.path ? 'cursor-pointer hover:border-accent group' : ''} ${s.accent ? 'border-accent shadow-sm shadow-accent/5' : 'border-border'}`}
+                    >
+                        <div className="flex items-center gap-2 mb-2">
+                            <s.icon className={`h-4 w-4 ${s.accent ? 'text-accent' : 'text-muted-foreground group-hover:text-accent transition-colors'}`} />
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider group-hover:text-accent transition-colors whitespace-nowrap">{s.label}</span>
                         </div>
-                        <span className={`text-2xl font-bold ${s.accent ? 'text-accent' : 'text-foreground'}`}>{s.value}</span>
+                        <div className={`text-2xl font-bold ${s.accent ? 'text-accent' : 'text-foreground'}`}>{s.value}</div>
                     </div>
                 ))}
             </div>
@@ -315,8 +321,8 @@ export default function AdminAnalytics() {
                 </div>
             </div>
 
-            {/* ── File Uploads + App Usage ──────────────────────────── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* ── File Uploads ──────────────────────────── */}
+            <div className="grid grid-cols-1 gap-4">
 
                 {/* File Upload Line Chart */}
                 <div className="rounded-xl bg-card border border-border p-4">
@@ -340,33 +346,7 @@ export default function AdminAnalytics() {
                     </ResponsiveContainer>
                 </div>
 
-                {/* App Usage */}
-                <div className="rounded-xl bg-card border border-border p-4">
-                    <h3 className="text-xs font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <Users className="h-3.5 w-3.5 text-accent" /> App Usage
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        {[
-                            { label: 'Daily Active', value: appUsage.dailyActive },
-                            { label: 'Weekly Active', value: appUsage.weeklyActive },
-                            { label: 'Total Users', value: appUsage.total },
-                            { label: 'Engagement', value: `${appUsage.engagement}%` },
-                        ].map((s, i) => (
-                            <div key={i} className="rounded-lg bg-secondary/50 p-3 text-center">
-                                <div className="text-lg font-bold text-foreground">{s.value}</div>
-                                <div className="text-[9px] text-muted-foreground uppercase tracking-wide mt-0.5">{s.label}</div>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="mt-3 space-y-1">
-                        <p className="text-[10px] text-muted-foreground">
-                            Most Active: <span className="text-foreground font-medium">{appUsage.mostActive}</span>
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                            Least Active: <span className="text-foreground font-medium">{appUsage.leastActive}</span>
-                        </p>
-                    </div>
-                </div>
+
             </div>
 
         </div>

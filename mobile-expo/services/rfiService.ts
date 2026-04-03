@@ -15,6 +15,8 @@ export interface RFI {
     assignee?: { id: number; name: string; role: string; profile_pic?: string };
     creator?: { id: number; name: string; role: string; profile_pic?: string };
     photoDownloadUrls?: string[];
+    expiry_date?: string;
+    response?: string;
 }
 
 export const getRFIs = async (projectId: number): Promise<RFI[]> => {
@@ -65,6 +67,16 @@ export const getRFIById = async (id: number): Promise<RFI> => {
         return res.data.rfi;
     } catch (error) {
         console.error("getRFIById Error", error);
+        throw error;
+    }
+};
+
+export const updateRFIResponse = async (id: number, data: { response?: string; status?: string }): Promise<RFI> => {
+    try {
+        const res = await PrivateAxios.patch(`/rfis/${id}/response`, data);
+        return res.data.rfi;
+    } catch (error) {
+        console.error("updateRFIResponse Error", error);
         throw error;
     }
 };

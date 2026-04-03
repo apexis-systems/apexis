@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView } from 'react-native';
+import { View, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -12,6 +12,8 @@ import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadCha
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import ChatCameraModal from '@/components/chat/ChatCameraModal';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 
@@ -43,6 +45,8 @@ export default function ChatDetailScreen() {
     const [showEmojis, setShowEmojis] = useState(false);
     const [isCameraVisible, setIsCameraVisible] = useState(false);
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+    const [replyTo, setReplyTo] = useState<any>(null);
+    const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
@@ -196,9 +200,12 @@ export default function ChatDetailScreen() {
                 file_url: fileData?.file_url,
                 file_name: fileData?.file_name,
                 file_type: fileData?.file_type,
-                file_size: fileData?.file_size
+                file_size: fileData?.file_size,
+                parent_id: replyTo?.id || null
             };
             if (textToSubmit) payload.text = textToSubmit;
+            
+            setReplyTo(null);
 
             const res = await sendChatMessage(payload);
 
@@ -217,7 +224,7 @@ export default function ChatDetailScreen() {
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            allowsEditing: true,
+            allowsEditing: false,
             quality: 0.8,
         });
 
@@ -253,6 +260,38 @@ export default function ChatDetailScreen() {
         }
     };
 
+    const scrollToMessage = (messageId: number) => {
+        const index = messages.findIndex(m => m.id === messageId);
+        if (index !== -1) {
+            flatListRef.current?.scrollToIndex({
+                index,
+                animated: true,
+                viewPosition: 0.5 // Center the message
+            });
+        }
+    };
+
+    const handleDownload = async (msg: any) => {
+        if (!msg.downloadUrl) return;
+        setIsDownloading(String(msg.id));
+        try {
+            const fileName = msg.file_name || `chat_file_${msg.id}`;
+            const fileUri = (FileSystem as any).cacheDirectory + fileName;
+
+            const downloadRes = await FileSystem.downloadAsync(msg.downloadUrl, fileUri);
+            if (downloadRes.status === 200) {
+                await Sharing.shareAsync(downloadRes.uri);
+            } else {
+                Alert.alert('Error', 'Failed to download file');
+            }
+        } catch (error) {
+            console.error('Download error:', error);
+            Alert.alert('Error', 'An error occurred during download');
+        } finally {
+            setIsDownloading(null);
+        }
+    };
+
     const renderMessage = ({ item }: { item: any }) => {
         if (item.type === 'system') {
             return (
@@ -270,7 +309,11 @@ export default function ChatDetailScreen() {
         const time = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return (
-            <View style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
+            <TouchableOpacity 
+                activeOpacity={0.9}
+                onLongPress={() => setReplyTo(item)}
+                style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}
+            >
                 <View style={{
                     maxWidth: '80%',
                     backgroundColor: isMe ? colors.primary : colors.surface,
@@ -285,42 +328,85 @@ export default function ChatDetailScreen() {
                         <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
                     )}
 
-                    {item.type === 'image' && item.downloadUrl && (
-                        <TouchableOpacity
-                            onPress={() => setFullScreenImage(item.downloadUrl)}
-                            style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
+                    {item.parent && (
+                        <TouchableOpacity 
+                            onPress={() => scrollToMessage(item.parent_id)}
+                            style={{
+                                backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
+                                padding: 8,
+                                borderRadius: 8,
+                                borderLeftWidth: 4,
+                                borderLeftColor: colors.primary,
+                                marginBottom: 8
+                            }}
                         >
-                            <Image
-                                source={{ uri: item.downloadUrl }}
-                                style={{ width: 240, height: 240, borderRadius: 12 }}
-                                resizeMode="cover"
-                            />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>{item.parent.sender?.name}</Text>
+                            <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : colors.textMuted }}>
+                                {item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text}
+                            </Text>
                         </TouchableOpacity>
                     )}
 
+                    {item.type === 'image' && item.downloadUrl && (
+                        <View>
+                            <TouchableOpacity
+                                onPress={() => setFullScreenImage(item.downloadUrl)}
+                                style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
+                            >
+                                <Image
+                                    source={{ uri: item.downloadUrl }}
+                                    style={{ width: 240, height: 240, borderRadius: 12 }}
+                                    resizeMode="cover"
+                                />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                onPress={() => handleDownload(item)}
+                                disabled={isDownloading === String(item.id)}
+                                style={{ position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 15 }}
+                            >
+                                {isDownloading === String(item.id) ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Feather name="download" size={16} color="#fff" />
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
                     {item.type === 'file' && item.downloadUrl && (
-                        <TouchableOpacity
-                            onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                                padding: 12,
-                                borderRadius: 12,
-                                marginBottom: 10,
-                                gap: 12,
-                                width: 240
-                            }}
-                        >
-                            <View style={{ width: 48, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Feather name="file-text" size={22} color="#fff" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
-                                <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
-                            </View>
-                            <Feather name="external-link" size={16} color={isMe ? '#fff' : colors.primary} />
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                            <TouchableOpacity
+                                onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                    padding: 12,
+                                    borderRadius: 12,
+                                    gap: 12,
+                                    flex: 1
+                                }}
+                            >
+                                <View style={{ width: 44, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Feather name="file-text" size={20} color="#fff" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
+                                    <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                onPress={() => handleDownload(item)}
+                                disabled={isDownloading === String(item.id)}
+                                style={{ padding: 10, borderRadius: 12, backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+                            >
+                                {isDownloading === String(item.id) ? (
+                                    <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
+                                ) : (
+                                    <Feather name="download" size={20} color={isMe ? '#fff' : colors.primary} />
+                                )}
+                            </TouchableOpacity>
+                        </View>
                     )}
 
                     {item.text ? (
@@ -328,21 +414,24 @@ export default function ChatDetailScreen() {
                             {item.text}
                         </Text>
                     ) : null}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 }}>
-                        <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
-                            {time}
-                        </Text>
-                        {isMe && (
-                            <Ionicons
-                                name="checkmark-done"
-                                size={14}
-                                color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
-                                style={{ marginLeft: 4 }}
-                            />
-                        )}
+                    
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
+                                {time}
+                            </Text>
+                            {isMe && (
+                                <Ionicons
+                                    name="checkmark-done"
+                                    size={14}
+                                    color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
+                                    style={{ marginLeft: 4 }}
+                                />
+                            )}
+                        </View>
                     </View>
                 </View>
-            </View>
+            </TouchableOpacity>
         );
     };
 
@@ -401,9 +490,13 @@ export default function ChatDetailScreen() {
                         data={messages}
                         keyExtractor={item => String(item.id)}
                         renderItem={renderMessage}
-                        contentContainerStyle={{ padding: 16 }}
-                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                        contentContainerStyle={{ paddingBottom: 20 }}
+                        onScrollToIndexFailed={(info) => {
+                            flatListRef.current?.scrollToOffset({
+                                offset: info.averageItemLength * info.index,
+                                animated: true
+                            });
+                        }}
                     />
                 )}
 
@@ -452,6 +545,21 @@ export default function ChatDetailScreen() {
                                 <Text style={{ fontSize: 11, color: colors.textMuted }}>{(attachment.size / 1024).toFixed(1)} KB</Text>
                             </View>
                             <TouchableOpacity onPress={() => setAttachment(null)} style={{ padding: 4 }}>
+                                <Ionicons name="close-circle" size={24} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* Reply Preview */}
+                    {replyTo && (
+                        <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, borderLeftWidth: 4, borderLeftColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>{replyTo.sender?.name}</Text>
+                                <Text numberOfLines={1} style={{ fontSize: 13, color: colors.textMuted }}>
+                                    {replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text}
+                                </Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setReplyTo(null)} style={{ padding: 4 }}>
                                 <Ionicons name="close-circle" size={24} color={colors.textMuted} />
                             </TouchableOpacity>
                         </View>

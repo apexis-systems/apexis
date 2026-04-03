@@ -12,7 +12,7 @@ import { sendNotification } from '../utils/notificationUtils.ts';
 
 export const activeExports = new Map<number, { startTime: number, statusText: string, etaMs?: number }>();
 
-const { projects, folders, files } = db;
+const { projects, folders, files, organizations } = db;
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION || "ap-south-2",
@@ -489,7 +489,7 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     }
 };
 
-const drawMonthlyCoverPage = (doc: any, project: any, report: any) => {
+const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: string) => {
     const pageWidth = doc.page.width;
     const pageHeight = doc.page.height;
     const hasLogo = fs.existsSync(REPORT_PDF_ASSETS.logo);
@@ -554,7 +554,7 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any) => {
     const s = (report.summary || {}) as any;
     drawLine('Project', project?.name || ' ', boxY + 30);
     drawLine('Client', (s.client || []).join(', ') || ' ', boxY + 65);
-    drawLine('Consultant', s.consultant || 'Apexis Engineering Consultants', boxY + 100);
+    drawLine('Consultant', s.consultant || orgName, boxY + 100);
     drawLine('Contributors', (s.contributors || []).join(', ') || ' ', boxY + 135);
     drawLine('Period', monthStr, boxY + 170);
 
@@ -757,6 +757,9 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
 
 export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
+    const organization = await organizations.findByPk(project?.organization_id);
+    const orgName = organization?.name || 'Apexis Engineering Consultants';
+
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
     const chunks: any[] = [];
@@ -785,7 +788,7 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
         drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
         drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
         drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
-        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || 'Apexis Engineering Consultants');
+        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || orgName);
         drawInfoBox(doc, left, gridY + 76, colW, 'Date', fmtDate(report.period_start));
 
         doc.y = gridY + 120;
@@ -846,6 +849,9 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
 
 export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
+    const organization = await organizations.findByPk(project?.organization_id);
+    const orgName = organization?.name || 'Apexis Engineering Consultants';
+
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
     const chunks: any[] = [];
@@ -873,7 +879,7 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
         drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
         drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
         drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
-        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || 'Apexis Engineering Consultants');
+        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || orgName);
         drawInfoBox(doc, left, gridY + 76, colW, 'Date', `${fmtDate(report.period_start)} — ${fmtDate(report.period_end)}`);
 
         doc.y = gridY + 120;
@@ -963,6 +969,9 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
 
 export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
+    const organization = await organizations.findByPk(project?.organization_id);
+    const orgName = organization?.name || 'Apexis Engineering Consultants';
+
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
     const chunks: any[] = [];
@@ -980,7 +989,7 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         doc.on('error', reject);
 
         // --- PAGE 1: COVER ---
-        drawMonthlyCoverPage(doc, project, report);
+        drawMonthlyCoverPage(doc, project, report, orgName);
 
         // --- PAGE 2 ---
         doc.addPage();
@@ -995,7 +1004,7 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
         drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
         drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
-        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || 'Apexis Engineers Consulting');
+        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || orgName);
         drawInfoBox(doc, left, gridY + 76, colW, 'Date', monthName);
 
         doc.y = gridY + 120;

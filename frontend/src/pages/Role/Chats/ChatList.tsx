@@ -58,8 +58,11 @@ export default function ChatList() {
         if (!socket) return;
 
         socket.on('new-message-global', (data: any) => {
+            console.log("Received new-message-global", data);
             setRooms(prevRooms => {
                 const roomIndex = prevRooms.findIndex(r => String(r.id) === String(data.room_id));
+                
+                // If room doesn't exist, we should probably fetch the list again to get the new room
                 if (roomIndex === -1) {
                     fetchRooms();
                     return prevRooms;
@@ -67,12 +70,14 @@ export default function ChatList() {
 
                 const updatedRooms = [...prevRooms];
                 const room = { ...updatedRooms[roomIndex] };
+                
+                // Force message array update to show latest in preview
                 room.chat_messages = [data.message];
                 room.updatedAt = data.message.createdAt || new Date().toISOString();
 
-                // Increment unread count if it exists, otherwise start at 1
-                // We only increment if the message is from someone else
-                if (data.message.sender_id !== authUser?.id) {
+                // Increment unread count only if the message is from someone else
+                // AND we are not currently in that chat room (though this component is the list)
+                if (String(data.message.sender_id) !== String(authUser?.id)) {
                     room.unread_count = (Number(room.unread_count) || 0) + 1;
                 }
 
@@ -237,7 +242,13 @@ export default function ChatList() {
                                             </p>
                                         ) : (
                                             <p className="text-xs truncate text-muted-foreground">
-                                                {chat.chat_messages?.[0]?.text || (chat.type === 'group' ? 'Group Chat' : 'Direct Message')}
+                                                {chat.chat_messages?.[0]?.type === 'image' ? (
+                                                    <span className="flex items-center gap-1"><Camera className="h-3 w-3" /> Photo</span>
+                                                ) : chat.chat_messages?.[0]?.type === 'file' ? (
+                                                    <span className="flex items-center gap-1">📄 File</span>
+                                                ) : (
+                                                    chat.chat_messages?.[0]?.text || (chat.type === 'group' ? 'Group Chat' : 'Direct Message')
+                                                )}
                                             </p>
                                         )}
                                         {chat.unread_count > 0 && (

@@ -67,6 +67,12 @@ export const initIO = (httpServer: HTTPServer) => {
             console.log(`[SOCKET] ${socket.id} joined ${roomName}`);
         });
 
+        socket.on('join-project', (projectId: string | number) => {
+            const projectName = `project-${String(projectId)}`;
+            socket.join(projectName);
+            console.log(`[SOCKET] ${socket.id} joined ${projectName}`);
+        });
+
         socket.on('send-message', (data: { roomId: string | number; text: string; senderId: number; senderName: string; createdAt: Date }) => {
             io.to(`room-${String(data.roomId)}`).emit('new-message', data);
         });

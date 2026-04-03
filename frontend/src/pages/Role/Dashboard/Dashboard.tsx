@@ -276,7 +276,7 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4 mb-4">
+            <div id="projects-list-header" className="flex items-center justify-between gap-4 mb-4">
                 <h2 className="text-lg font-bold text-foreground">
                     {user.role === 'superadmin' ? "Organization Projects" : t('your_projects')}
                 </h2>
@@ -309,19 +309,21 @@ export default function Dashboard() {
                     <h3 className="text-lg font-bold text-foreground mb-4">Create New Project</h3>
                     <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Project Name</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">Project Name (max 25)</label>
                             <input
                                 required
                                 type="text"
+                                maxLength={25}
                                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
                                 value={newProject.name}
                                 onChange={e => setNewProject({ ...newProject, name: e.target.value })}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Description</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">Description (max 50)</label>
                             <input
                                 type="text"
+                                maxLength={50}
                                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-border/80"
                                 value={newProject.description}
                                 onChange={e => setNewProject({ ...newProject, description: e.target.value })}
@@ -380,7 +382,7 @@ export default function Dashboard() {
                             style={{ backgroundColor: project.color || 'hsl(var(--accent))' }}
                         />
 
-                        <h3 className="text-sm font-bold text-foreground group-hover:text-accent transition-colors">
+                        <h3 className="text-sm font-bold text-foreground group-hover:text-accent transition-colors line-clamp-2 min-h-[2.5rem]">
                             {project.name}
                         </h3>
 

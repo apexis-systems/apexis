@@ -15,9 +15,10 @@ interface Props {
     onClose: () => void;
     project: Project;
     onUpdate: (updated: Project) => void;
+    initialFocus?: 'start_date' | 'end_date' | null;
 }
 
-export default function EditProjectModal({ isOpen, onClose, project, onUpdate }: Props) {
+export default function EditProjectModal({ isOpen, onClose, project, onUpdate, initialFocus }: Props) {
     const { colors, isDark } = useTheme();
     const [name, setName] = useState(project.name);
     const [description, setDescription] = useState(project.description || '');
@@ -38,6 +39,16 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate }:
         setStartDate((project.start_date || project.startDate || '').split('T')[0]);
         setEndDate((project.end_date || project.endDate || '').split('T')[0]);
     }, [project]);
+
+    useEffect(() => {
+        if (isOpen && initialFocus) {
+            if (initialFocus === 'start_date') {
+                setShowStartPicker(true);
+            } else if (initialFocus === 'end_date') {
+                setShowEndPicker(true);
+            }
+        }
+    }, [isOpen, initialFocus]);
 
     const onStartDateChange = (event: any, selectedDate?: Date) => {
         setShowStartPicker(false);
@@ -95,22 +106,24 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate }:
                     >
                         <ScrollView style={styles.content}>
                             <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: colors.textMuted }]}>Project Name</Text>
+                                <Text style={[styles.label, { color: colors.textMuted }]}>Project Name (max 25)</Text>
                                 <TextInput
                                     style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
                                     value={name}
                                     onChangeText={setName}
+                                    maxLength={25}
                                     placeholder="Enter project name"
                                     placeholderTextColor="#888"
                                 />
                             </View>
 
                             <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: colors.textMuted }]}>Description</Text>
+                                <Text style={[styles.label, { color: colors.textMuted }]}>Description (max 50)</Text>
                                 <TextInput
                                     style={[styles.input, styles.textArea, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
                                     value={description}
                                     onChangeText={setDescription}
+                                    maxLength={50}
                                     placeholder="Enter description"
                                     placeholderTextColor="#888"
                                     multiline
