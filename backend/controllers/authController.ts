@@ -6,6 +6,7 @@ import { Op } from "sequelize";
 import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
 import { normalizePhone, isValidPhone } from "../utils/sms.ts";
+import { sendNotification } from "../utils/notificationUtils.ts";
 
 export const adminLogin = async (req: Request, res: Response) => {
     try {
@@ -130,6 +131,43 @@ export const projectLogin = async (req: Request, res: Response) => {
                 user_id: user.id,
                 role: roleForCode
             });
+
+            // Notify all existing members (admin, contributors, clients) of this project
+            try {
+                const existingMembers = await project_members.findAll({
+                    where: { project_id: project.id, user_id: { [Op.ne]: user.id } }
+                });
+                const joinerName = user.name && user.name !== 'Pending' ? user.name : (email || phone || 'Someone');
+                const roleLabel = roleForCode === 'contributor' ? 'Contributor' : 'Client';
+                for (const member of existingMembers) {
+                    await sendNotification({
+                        userId: member.user_id,
+                        title: `New ${roleLabel} Joined`,
+                        body: `${joinerName} joined the project as a ${roleLabel}.`,
+                        type: 'member_joined',
+                        data: { projectId: String(project.id) }
+                    });
+                }
+                // Also notify admins of the organisation who may not be in project_members
+                const orgAdmins = await users.findAll({
+                    where: {
+                        organization_id: project.organization_id,
+                        role: 'admin',
+                        id: { [Op.notIn]: [user.id, ...existingMembers.map((m: any) => m.user_id)] }
+                    }
+                });
+                for (const admin of orgAdmins) {
+                    await sendNotification({
+                        userId: admin.id,
+                        title: `New ${roleLabel} Joined`,
+                        body: `${joinerName} joined the project as a ${roleLabel}.`,
+                        type: 'member_joined',
+                        data: { projectId: String(project.id) }
+                    });
+                }
+            } catch (notifErr) {
+                console.error('Member join notification error (non-fatal):', notifErr);
+            }
         }
 
         const token = jwt.sign(
@@ -288,6 +326,42 @@ export const completePublicSignup = async (req: Request, res: Response) => {
             user_id: newUser.id,
             role: decoded.role
         });
+
+        // Notify all existing project members
+        try {
+            const existingMembers = await project_members.findAll({
+                where: { project_id: project.id, user_id: { [Op.ne]: newUser.id } }
+            });
+            const roleLabel = decoded.role === 'contributor' ? 'Contributor' : 'Client';
+            const joinerName = name || email || phone || 'Someone';
+            for (const member of existingMembers) {
+                await sendNotification({
+                    userId: member.user_id,
+                    title: `New ${roleLabel} Joined`,
+                    body: `${joinerName} joined the project as a ${roleLabel}.`,
+                    type: 'member_joined',
+                    data: { projectId: String(project.id) }
+                });
+            }
+            const orgAdmins = await users.findAll({
+                where: {
+                    organization_id: decoded.organization_id,
+                    role: 'admin',
+                    id: { [Op.notIn]: [newUser.id, ...existingMembers.map((m: any) => m.user_id)] }
+                }
+            });
+            for (const admin of orgAdmins) {
+                await sendNotification({
+                    userId: admin.id,
+                    title: `New ${roleLabel} Joined`,
+                    body: `${joinerName} joined the project as a ${roleLabel}.`,
+                    type: 'member_joined',
+                    data: { projectId: String(project.id) }
+                });
+            }
+        } catch (notifErr) {
+            console.error('Member join notification error (non-fatal):', notifErr);
+        }
 
         res.status(201).json({ message: "Signup complete" });
     } catch (error) {

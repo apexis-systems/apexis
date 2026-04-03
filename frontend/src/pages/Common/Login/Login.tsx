@@ -14,7 +14,7 @@ import { io, Socket } from 'socket.io-client';
 import { QrCode, Monitor, Download, ChevronRight, Lock } from 'lucide-react';
 const Login = () => {
     // Mode toggle
-    const [loginMode, setLoginMode] = useState<'qr' | 'email'>('email');
+    const [loginMode, setLoginMode] = useState<'qr' | 'email'>('qr');
 
     // Email/Password State
     const [email, setEmail] = useState('');
@@ -106,8 +106,8 @@ const Login = () => {
         try {
             let res;
             const isEmail = email.includes('@');
-            const normalizedIdentifier = !isEmail && /^\d{10}$/.test(email.trim()) 
-                ? `+91${email.trim()}` 
+            const normalizedIdentifier = !isEmail && /^\d{10}$/.test(email.trim())
+                ? `+91${email.trim()}`
                 : email.trim();
 
             if (selectedRole === 'superadmin') {
