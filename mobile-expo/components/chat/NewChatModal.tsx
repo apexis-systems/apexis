@@ -131,7 +131,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             transparent={false}
             onRequestClose={onClose}
         >
-            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
                 <KeyboardAvoidingView
                     style={{ flex: 1, backgroundColor: colors.background }}
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -147,13 +147,15 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                             <TouchableOpacity
                                 onPress={handleCreate}
                                 disabled={submitting || selectedUsers.length === 0 || !groupName.trim()}
-                                style={{ opacity: (submitting || selectedUsers.length === 0 || !groupName.trim()) ? 0.5 : 1 }}
+                                style={{
+                                    opacity: (submitting || selectedUsers.length === 0 || !groupName.trim()) ? 0.4 : 1,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
                             >
-                                {submitting ? (
-                                    <ActivityIndicator size="small" color={colors.primary} />
-                                ) : (
-                                    <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
-                                )}
+                                {submitting && <ActivityIndicator size="small" color={colors.primary} />}
+                                <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
                             </TouchableOpacity>
                         ) : (
                             <View style={{ width: 40 }} />
@@ -234,6 +236,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                         data={filteredUsers}
                         keyExtractor={item => String(item.id)}
                         renderItem={renderUser}
+                        contentContainerStyle={{ paddingBottom: 80 }}
                         ListEmptyComponent={
                             <View style={styles.centerContainer}>
                                 <Text style={{ color: colors.textMuted }}>No users found</Text>
