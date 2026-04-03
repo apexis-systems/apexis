@@ -232,7 +232,7 @@ export default function ProfileScreen() {
                 <View style={{ gap: 12, marginBottom: 24 }}>
                     {user.role === 'admin' && (
                         <TouchableOpacity
-                            onPress={() => router.push('/(tabs)/company-settings')}
+                            onPress={() => router.push('/company-settings')}
                             style={{
                                 borderRadius: 16,
                                 backgroundColor: colors.surface,
@@ -256,7 +256,7 @@ export default function ProfileScreen() {
                     )}
 
                     <TouchableOpacity
-                        onPress={() => router.push('/(tabs)/linked-devices')}
+                        onPress={() => router.push('/linked-devices')}
                         style={{
                             borderRadius: 16,
                             backgroundColor: colors.surface,
@@ -278,28 +278,30 @@ export default function ProfileScreen() {
                         <Feather name="chevron-right" size={18} color={colors.textMuted} />
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        onPress={() => router.push('/(tabs)/change-password')}
-                        style={{
-                            borderRadius: 16,
-                            backgroundColor: colors.surface,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            padding: 16,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 14
-                        }}
-                    >
-                        <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                            <Feather name="lock" size={20} color={colors.text} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Change Password</Text>
-                            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Update your account security</Text>
-                        </View>
-                        <Feather name="chevron-right" size={18} color={colors.textMuted} />
-                    </TouchableOpacity>
+                    {(user.role === 'admin' || user.role === 'superadmin') && (
+                        <TouchableOpacity
+                            onPress={() => router.push('/change-password')}
+                            style={{
+                                borderRadius: 16,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: 16,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 14
+                            }}
+                        >
+                            <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                <Feather name="lock" size={20} color={colors.text} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Change Password</Text>
+                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Update your account security</Text>
+                            </View>
+                            <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Role Switcher */}

@@ -23,7 +23,7 @@ export default function CompanySettingsScreen() {
     useFocusEffect(
         useCallback(() => {
             const onBackPress = () => {
-                router.push('/(tabs)/settings');
+                router.push('/settings');
                 return true;
             };
 
@@ -121,7 +121,7 @@ export default function CompanySettingsScreen() {
                 <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: 8 }}>
                     Only administrators can access company settings.
                 </Text>
-                <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={{ marginTop: 24, padding: 12 }}>
+                <TouchableOpacity onPress={() => router.push('/settings')} style={{ marginTop: 24, padding: 12 }}>
                     <Text style={{ color: colors.primary, fontWeight: '700' }}>Go Back</Text>
                 </TouchableOpacity>
             </SafeAreaView>
@@ -146,7 +146,7 @@ export default function CompanySettingsScreen() {
                     borderBottomColor: colors.border,
                     backgroundColor: colors.background
                 }}>
-                    <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={{ padding: 4 }}>
+                    <TouchableOpacity onPress={() => router.push('/settings')} style={{ padding: 4 }}>
                         <Feather name="arrow-left" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Company Settings</Text>

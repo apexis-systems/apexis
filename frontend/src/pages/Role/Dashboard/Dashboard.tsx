@@ -276,7 +276,7 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4 mb-4">
+            <div id="projects-list-header" className="flex items-center justify-between gap-4 mb-4">
                 <h2 className="text-lg font-bold text-foreground">
                     {user.role === 'superadmin' ? "Organization Projects" : t('your_projects')}
                 </h2>

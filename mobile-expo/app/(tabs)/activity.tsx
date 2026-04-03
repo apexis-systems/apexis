@@ -1,4 +1,4 @@
-import { View, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { useLocalSearchParams } from 'expo-router';
 import { getActivities } from '@/services/activityService';
 import { getOrganizations } from '@/services/organizationService';
 import { getOrgUsers } from '@/services/userService';
@@ -41,6 +42,7 @@ export default function ActivityScreen() {
     const { user } = useAuth();
     const { colors: themeColors } = useTheme();
     const { t } = useTranslation();
+    const { type } = useLocalSearchParams<{ type?: string }>();
     const { isTourActive } = require('@/contexts/TourContext').useTour();
 
     const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -51,7 +53,7 @@ export default function ActivityScreen() {
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-    const [selectedType, setSelectedType] = useState<string | null>(null);
+    const [selectedType, setSelectedType] = useState<string | null>(type || null);
 
     const [activeModal, setActiveModal] = useState<'org' | 'user' | 'project' | 'type' | null>(null);
     const [loading, setLoading] = useState(true);

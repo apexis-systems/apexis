@@ -14,6 +14,7 @@ import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
+import { Op } from "sequelize";
 
 export const inviteUser = async (req: Request, res: Response) => {
     try {
@@ -125,8 +126,25 @@ export const getOrgUsers = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
+        let whereCondition: any = { organization_id: authUser.organization_id };
+
+        if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            // Non-admins: Only see users who share a project with them
+            const myProjectIds = await project_members.findAll({
+                where: { user_id: authUser.user_id },
+                attributes: ['project_id']
+            }).then((pms: any[]) => pms.map((pm: any) => pm.project_id));
+
+            const peerUserIds = await project_members.findAll({
+                where: { project_id: { [Op.in]: myProjectIds } },
+                attributes: ['user_id']
+            }).then((pms: any[]) => pms.map((pm: any) => pm.user_id));
+
+            whereCondition.id = { [Op.in]: [...new Set([...peerUserIds, authUser.user_id])] };
+        }
+
         const orgUsers = await users.findAll({
-            where: { organization_id: authUser.organization_id },
+            where: whereCondition,
             attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt']
         });
 

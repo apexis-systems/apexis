@@ -389,66 +389,68 @@ const Profile = () => {
                 )}
 
                 {/* Change Password Toggle */}
-                <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
-                    <button
-                        onClick={() => setIsChangingPassword(!isChangingPassword)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-secondary/20 transition-colors"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-xl bg-accent/10 flex items-center justify-center">
-                                <KeyRound className="h-5 w-5 text-accent" />
+                {(user.role === 'admin' || user.role === 'superadmin') && (
+                    <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
+                        <button
+                            onClick={() => setIsChangingPassword(!isChangingPassword)}
+                            className="w-full flex items-center justify-between p-4 hover:bg-secondary/20 transition-colors"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-xl bg-accent/10 flex items-center justify-center">
+                                    <KeyRound className="h-5 w-5 text-accent" />
+                                </div>
+                                <span className="font-bold text-sm uppercase tracking-wide">Change Password</span>
                             </div>
-                            <span className="font-bold text-sm uppercase tracking-wide">Change Password</span>
-                        </div>
-                        <span className={cn("transition-transform", isChangingPassword ? "rotate-90" : "")}>
-                            <ArrowLeft className="-rotate-90 h-4 w-4" />
-                        </span>
-                    </button>
+                            <span className={cn("transition-transform", isChangingPassword ? "rotate-90" : "")}>
+                                <ArrowLeft className="-rotate-90 h-4 w-4" />
+                            </span>
+                        </button>
 
-                    {isChangingPassword && (
-                        <div className="p-4 pt-0 border-t border-border/50">
-                            <form onSubmit={handleChangePassword} className="space-y-4 pt-4">
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Current Password</Label>
-                                    <PasswordInput
-                                        value={currentPassword}
-                                        onChange={(e) => setCurrentPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        className="h-11 rounded-xl bg-secondary/50 border-0"
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">New Password</Label>
-                                    <PasswordInput
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        className="h-11 rounded-xl bg-secondary/50 border-0"
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Confirm New Password</Label>
-                                    <PasswordInput
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        className="h-11 rounded-xl bg-secondary/50 border-0"
-                                        required
-                                    />
-                                </div>
-                                <Button
-                                    type="submit"
-                                    disabled={passwordLoading}
-                                    className="w-full h-11 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-xs"
-                                >
-                                    {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Password"}
-                                </Button>
-                            </form>
-                        </div>
-                    )}
-                </div>
+                        {isChangingPassword && (
+                            <div className="p-4 pt-0 border-t border-border/50">
+                                <form onSubmit={handleChangePassword} className="space-y-4 pt-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Current Password</Label>
+                                        <PasswordInput
+                                            value={currentPassword}
+                                            onChange={(e) => setCurrentPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="h-11 rounded-xl bg-secondary/50 border-0"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">New Password</Label>
+                                        <PasswordInput
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="h-11 rounded-xl bg-secondary/50 border-0"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Confirm New Password</Label>
+                                        <PasswordInput
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="h-11 rounded-xl bg-secondary/50 border-0"
+                                            required
+                                        />
+                                    </div>
+                                    <Button
+                                        type="submit"
+                                        disabled={passwordLoading}
+                                        className="w-full h-11 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-xs"
+                                    >
+                                        {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Password"}
+                                    </Button>
+                                </form>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <Button
                     variant="outline"

@@ -353,7 +353,7 @@ export default function DashboardScreen() {
           {/* Admin Analytics shortcut — admin / superadmin only */}
           {(user.role === 'admin' || user.role === 'superadmin') && (
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/analytics')}
+              onPress={() => router.push('/analytics')}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',

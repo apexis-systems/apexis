@@ -23,7 +23,7 @@ export default function ChangePasswordScreen() {
     useFocusEffect(
         useCallback(() => {
             const onBackPress = () => {
-                router.push('/(tabs)/settings');
+                router.push('/settings');
                 return true;
             };
 
@@ -46,7 +46,7 @@ export default function ChangePasswordScreen() {
         try {
             await changePassword({ currentPassword, newPassword });
             Alert.alert('Success', 'Password updated successfully', [
-                { text: 'OK', onPress: () => router.push('/(tabs)/settings') }
+                { text: 'OK', onPress: () => router.push('/settings') }
             ]);
         } catch (error: any) {
             Alert.alert('Error', error.response?.data?.error || 'Failed to update password');
@@ -66,7 +66,7 @@ export default function ChangePasswordScreen() {
                     <View style={{ flex: 1 }}>
                         <View style={{ paddingTop: 20, paddingHorizontal: 24, marginBottom: 30 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={{ marginRight: 16 }}>
+                                <TouchableOpacity onPress={() => router.push('/settings')} style={{ marginRight: 16 }}>
                                     <Feather name="arrow-left" size={24} color={colors.text} />
                                 </TouchableOpacity>
                                 <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>Change Password</Text>

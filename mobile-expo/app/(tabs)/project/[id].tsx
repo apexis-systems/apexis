@@ -68,7 +68,7 @@ export default function ProjectWorkspaceScreen() {
                     setActiveTab(defaultTab as Tab);
                     return true;
                 }
-                router.push('/(tabs)');
+                router.push('/');
                 return true;
             };
 

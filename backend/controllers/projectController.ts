@@ -98,10 +98,12 @@ export const getProjects = async (req: Request, res: Response) => {
         } else if (authUser.role === 'admin') {
             whereCondition.organization_id = authUser.organization_id;
         } else if (authUser.role === 'contributor' || authUser.role === 'client') {
-            if (!authUser.project_id) {
-                return res.status(400).json({ error: "No project linked to session" });
-            }
-            whereCondition.id = authUser.project_id;
+            const userMemberships = await project_members.findAll({
+                where: { user_id: authUser.user_id },
+                attributes: ['project_id']
+            });
+            const projectIds = userMemberships.map((pm: any) => pm.project_id);
+            whereCondition.id = { [Op.in]: projectIds };
         }
 
         const result = await projects.findAll({
