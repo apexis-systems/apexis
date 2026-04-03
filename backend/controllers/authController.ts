@@ -227,17 +227,25 @@ export const superadminLogin = async (req: Request, res: Response) => {
 export const me = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        const user = await users.findByPk(authUser.user_id, {
+        const dbUser = await users.findByPk(authUser.user_id, {
             attributes: ['id', 'name', 'email', 'phone_number', 'role', 'organization_id', 'profile_pic']
         });
 
-        if (!user) return res.status(404).json({ error: "User not found" });
+        if (!dbUser) return res.status(404).json({ error: "User not found" });
 
-        const organization = user.organization_id ? await organizations.findByPk(user.organization_id) : null;
+        const organization = dbUser.organization_id ? await organizations.findByPk(dbUser.organization_id) : null;
+
+        // Override the role from the database with the role from the JWT session
+        // This ensures multi-role users see their current active role in the UI
+        const userData = dbUser.toJSON();
+        if (authUser.role) {
+            userData.role = authUser.role;
+        }
 
         res.status(200).json({
-            user,
-            organization
+            user: userData,
+            organization,
+            project_id: authUser.project_id || null
         });
     } catch (error) {
         console.error("Me Error:", error);
@@ -467,6 +475,69 @@ export const changePassword = async (req: Request, res: Response) => {
 
         res.status(200).json({ message: "Password updated successfully" });
     } catch (error) {
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+export const getMyMemberships = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const memberships = await project_members.findAll({
+            where: { user_id: authUser.user_id },
+            include: [{ 
+                model: projects, 
+                attributes: ['id', 'name', 'organization_id'],
+                include: [{ model: organizations, attributes: ['name'] }]
+            }]
+        });
+        res.status(200).json({ memberships });
+    } catch (error) {
+        console.error("Get My Memberships Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const switchContext = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { project_id, role } = req.body;
+
+        if (!project_id || !role) {
+            return res.status(400).json({ error: "Project ID and role are required" });
+        }
+
+        const membership = await project_members.findOne({
+            where: { user_id: authUser.user_id, project_id, role }
+        });
+
+        if (!membership) {
+            return res.status(403).json({ error: "No such membership found" });
+        }
+
+        const user = await users.findByPk(authUser.user_id);
+        const project = await projects.findByPk(project_id);
+
+        if (!user || !project) {
+            return res.status(404).json({ error: "User or project not found" });
+        }
+
+        const token = jwt.sign(
+            {
+                user_id: user.id,
+                name: user.name,
+                role: role,
+                organization_id: project.organization_id,
+                project_id: project.id
+            },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "30d" }
+        );
+
+        res.status(200).json({ 
+            token, 
+            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: role }
+        });
+    } catch (error) {
+        console.error("Switch Context Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

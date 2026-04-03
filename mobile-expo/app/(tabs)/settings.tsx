@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { fetchSecureLogo } from '@/services/organizationService';
 import { updateUserProfilePic, updateUserName } from '@/services/userService';
+import { getMyMemberships, switchContext } from '@/services/authService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 import { Text, TextInput } from '@/components/ui/AppText';
 
@@ -28,9 +29,12 @@ const roleBadgeColor: Record<UserRole, { bg: string; text: string }> = {
 };
 
 export default function ProfileScreen() {
-    const { user, switchRole, logout, updateUser } = useAuth() as any;
+    const { user, login, logout, updateUser } = useAuth() as any;
     const router = useRouter();
     const { colors } = useTheme();
+
+    const [memberships, setMemberships] = useState<any[]>([]);
+    const [isSwitching, setIsSwitching] = useState(false);
 
     const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -45,6 +49,31 @@ export default function ProfileScreen() {
             setEditNameValue(user.name || '');
         }
     }, [user?.name]);
+
+    useEffect(() => {
+        if (user && user.role !== 'superadmin') {
+            getMyMemberships().then(res => {
+                if (res.memberships) setMemberships(res.memberships);
+            }).catch(err => console.error("Load memberships error:", err));
+        }
+    }, [user?.id]);
+
+    const handleSwitchContext = async (projectId: number, role: string) => {
+        if (isSwitching) return;
+        setIsSwitching(true);
+        try {
+            const res = await switchContext(projectId, role);
+            if (res.token) {
+                await login(res.token);
+                Alert.alert('Success', `Switched to ${role} role.`);
+                router.replace('/(tabs)');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to switch project context.');
+        } finally {
+            setIsSwitching(false);
+        }
+    };
 
     useEffect(() => {
         const loadProfilePic = async () => {
@@ -304,49 +333,101 @@ export default function ProfileScreen() {
                     )}
                 </View>
 
-                {/* Role Switcher */}
-                {/* <View
-                    style={{
-                        borderRadius: 16,
-                        backgroundColor: colors.surface,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        padding: 16,
-                        marginBottom: 24,
-                    }}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                        <Feather name="edit-3" size={16} color={colors.textMuted} />
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Switch Demo Role</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        {['admin', 'contributor', 'client'].map((r) => (
-                            <TouchableOpacity
-                                key={r}
-                                onPress={() => switchRole(r as UserRole)}
-                                style={{
-                                    flex: 1,
-                                    borderRadius: 12,
-                                    borderWidth: 2,
-                                    borderColor: user.role === r ? colors.primary : colors.border,
-                                    backgroundColor: user.role === r ? 'rgba(249,115,22,0.1)' : colors.background,
-                                    paddingVertical: 12,
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        fontWeight: '700',
-                                        color: user.role === r ? colors.primary : colors.textMuted,
-                                    }}
-                                >
-                                    {r.charAt(0).toUpperCase() + r.slice(1)}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View> */}
+                {/* Switch Project / Role Section */}
+                {(() => {
+                    const filtered = memberships.filter(m => !(Number(m.project_id) === Number(user.project_id) && m.role === user.role));
+                    if (filtered.length === 0) return null;
+
+                    // Group by project_id
+                    const groups: Record<number, any> = {};
+                    filtered.forEach(m => {
+                        if (!groups[m.project_id]) {
+                            groups[m.project_id] = {
+                                project: m.project,
+                                roles: []
+                            };
+                        }
+                        groups[m.project_id].roles.push(m.role);
+                    });
+
+                    return (
+                        <View style={{ marginBottom: 24 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textMuted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 4 }}>Switch Project / Role</Text>
+                            <View style={{ gap: 12 }}>
+                                {Object.values(groups).map((group: any, idx) => (
+                                    <View
+                                        key={idx}
+                                        style={{
+                                            borderRadius: 24,
+                                            backgroundColor: colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            padding: 16,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 4 },
+                                            shadowOpacity: 0.05,
+                                            shadowRadius: 10,
+                                            elevation: 3
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+                                            <View style={{ 
+                                                backgroundColor: 'rgba(249,115,22,0.1)', 
+                                                width: 44, 
+                                                height: 44, 
+                                                borderRadius: 14, 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center',
+                                                borderWidth: 1,
+                                                borderColor: 'rgba(249,115,22,0.2)'
+                                            }}>
+                                                <Feather name="layers" size={22} color="#f97316" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }} numberOfLines={1}>{group.project?.name || 'Project'}</Text>
+                                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>{group.project?.organization?.name}</Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={{ gap: 8 }}>
+                                            {group.roles.map((r: string, rIdx: number) => (
+                                                <TouchableOpacity
+                                                    key={rIdx}
+                                                    onPress={() => handleSwitchContext(group.project.id, r)}
+                                                    disabled={isSwitching}
+                                                    activeOpacity={0.7}
+                                                    style={{
+                                                        backgroundColor: r === 'admin' ? 'rgba(249,115,22,0.1)' : colors.surface,
+                                                        borderWidth: 1,
+                                                        borderColor: r === 'admin' ? '#f97316' : colors.border,
+                                                        paddingHorizontal: 16,
+                                                        paddingVertical: 12,
+                                                        borderRadius: 14,
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between'
+                                                    }}
+                                                >
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                        <View style={{ backgroundColor: roleBadgeColor[r as UserRole]?.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                                            <Text style={{ fontSize: 9, fontWeight: '900', color: '#fff', textTransform: 'uppercase' }}>{r}</Text>
+                                                        </View>
+                                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Switch Role</Text>
+                                                    </View>
+                                                    {isSwitching ? (
+                                                        <ActivityIndicator size={16} color="#f97316" />
+                                                    ) : (
+                                                        <Feather name="refresh-cw" size={16} color={r === 'admin' ? '#f97316' : colors.textMuted} />
+                                                    )}
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    );
+                })()}
 
                 {/* Sign Out */}
                 <TouchableOpacity

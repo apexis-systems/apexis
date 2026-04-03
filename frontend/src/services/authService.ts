@@ -194,3 +194,23 @@ export const changePassword = async (data: { currentPassword: string; newPasswor
         throw error;
     }
 };
+
+export const getMyMemberships = async () => {
+    try {
+        const response = await PrivateAxios.get("/auth/memberships");
+        return response.data;
+    } catch (error) {
+        console.error("getMyMemberships Error", error);
+        throw error;
+    }
+};
+
+export const switchContext = async (project_id: number, role: string) => {
+    try {
+        const response = await PrivateAxios.post("/auth/switch-context", { project_id, role });
+        return response.data; // { token, user: { ... } }
+    } catch (error) {
+        console.error("switchContext Error", error);
+        throw error;
+    }
+};
