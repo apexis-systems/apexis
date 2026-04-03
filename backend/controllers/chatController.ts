@@ -167,14 +167,19 @@ export const sendChatMessage = async (req: Request, res: Response) => {
         });
 
         // 2. Trigger Notifications
-        const members = await room_members.findAll({
+        const otherMembers = await room_members.findAll({
             where: { room_id: roomId, user_id: { [Op.ne]: authUser.user_id } },
+            include: [{ model: users, attributes: ['id', 'fcm_token'] }]
+        });
+
+        const allMembers = await room_members.findAll({
+            where: { room_id: roomId },
             include: [{ model: users, attributes: ['id', 'fcm_token'] }]
         });
 
         const notificationBody = text || (type === 'image' ? 'Sent an image' : type === 'file' ? 'Sent a file' : 'New message');
 
-        for (const member of members) {
+        for (const member of otherMembers) {
             await sendNotification({
                 userId: member.user_id,
                 title: authUser.name || 'New Message',
@@ -213,7 +218,7 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             io.to(roomName).emit('new-message', messageJson);
 
             // Globally to each member (for list reordering/notifications)
-            for (const member of members) {
+            for (const member of allMembers) {
                 const userRoom = `user-${member.user_id}`;
                 console.log(`[SOCKET] Broadcasting new-message-global to ${userRoom}`);
                 io.to(userRoom).emit('new-message-global', {

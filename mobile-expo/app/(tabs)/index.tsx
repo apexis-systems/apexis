@@ -389,7 +389,7 @@ export default function DashboardScreen() {
                     lineHeight: 13,
                   }}
                 >
-                  {project.name.split(' ').slice(0, 2).join(' ')}
+                  {project.name}
                 </Text>
                 {/* Stats */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -472,21 +472,23 @@ export default function DashboardScreen() {
                 <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
                   <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 16 }}>Create New Project</Text>
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Project Name</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Project Name (max 25)</Text>
                   <TextInput
                     style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
                     placeholder="E.g. Alpha Tower"
                     placeholderTextColor={colors.textMuted}
                     value={newProject.name}
+                    maxLength={25}
                     onChangeText={(text) => setNewProject({ ...newProject, name: text })}
                   />
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Description</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Description (max 50)</Text>
                   <TextInput
                     style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
                     placeholder="Short description"
                     placeholderTextColor={colors.textMuted}
                     value={newProject.description}
+                    maxLength={50}
                     onChangeText={(text) => setNewProject({ ...newProject, description: text })}
                   />
 

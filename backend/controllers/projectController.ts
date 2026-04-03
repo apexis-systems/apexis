@@ -34,6 +34,14 @@ export const createProject = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Start date and end date are required" });
         }
 
+        if (name && name.length > 25) {
+            return res.status(400).json({ error: "Project name cannot exceed 25 characters" });
+        }
+
+        if (description && description.length > 50) {
+            return res.status(400).json({ error: "Project description cannot exceed 50 characters" });
+        }
+
         let contributor_code = generateCode();
         let client_code = generateCode();
 
@@ -226,6 +234,14 @@ export const updateProject = async (req: Request, res: Response) => {
 
         if (!project) {
             return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        if (name && name.length > 25) {
+            return res.status(400).json({ error: "Project name cannot exceed 25 characters" });
+        }
+
+        if (description && description.length > 50) {
+            return res.status(400).json({ error: "Project description cannot exceed 50 characters" });
         }
 
         await project.update({

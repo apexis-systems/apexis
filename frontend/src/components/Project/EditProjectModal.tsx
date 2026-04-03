@@ -94,20 +94,22 @@ export default function EditProjectModal({
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="name">Project Name</Label>
+                        <Label htmlFor="name">Project Name (max 25)</Label>
                         <Input
                             id="name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
+                            maxLength={25}
                             required
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
+                        <Label htmlFor="description">Description (max 50)</Label>
                         <Textarea
                             id="description"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
+                            maxLength={50}
                             rows={3}
                         />
                     </div>

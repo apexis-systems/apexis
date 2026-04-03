@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, FlatList, TouchableOpacity, Platform, Image, RefreshControl, Animated } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -70,9 +70,11 @@ export default function ChatListScreen() {
         }
     };
 
-    useEffect(() => {
-        fetchRooms();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchRooms();
+        }, [])
+    );
 
     useEffect(() => {
         if (!socket) return;
@@ -91,10 +93,9 @@ export default function ChatListScreen() {
                 room.chat_messages = [data.message];
                 room.updatedAt = data.message.createdAt || new Date().toISOString();
 
-                // Increment unread count if message is from someone else
-                // Use sender_id from message data
-                const senderId = data.message.sender_id || data.message.sender?.id;
-                if (String(senderId) !== String(user?.id)) {
+                // Increment unread count only if message is from someone else
+                const messageSenderId = data.message.sender_id || data.message.sender?.id;
+                if (String(messageSenderId) !== String(user?.id)) {
                     room.unread_count = (Number(room.unread_count) || 0) + 1;
                 }
 
@@ -208,7 +209,11 @@ export default function ChatListScreen() {
 
         const isOnline = otherMember?.user?.id && onlineUsers.has(String(otherMember.user.id));
         const lastMsg = item.chat_messages?.[0];
-        const lastMsgText = lastMsg ? lastMsg.text : 'No messages yet';
+        const lastMsgText = lastMsg ? (
+            lastMsg.type === 'image' ? '📷 Photo' : 
+            lastMsg.type === 'file' ? '📄 File' : 
+            lastMsg.text || 'No message content'
+        ) : 'No messages yet';
         const time = lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
         const unreadCount = item.unread_count || 0;
 
