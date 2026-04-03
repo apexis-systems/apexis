@@ -9,6 +9,7 @@
             },
             "stats": {
                 "projects": "Projects",
+                "folders": "Folders",
                 "documents": "Documents",
                 "photos": "Photos"
             },

@@ -7,8 +7,35 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useTranslation } from 'react-i18next';
+import { useTour } from '@/contexts/TourContext';
+import { useRef, useEffect } from 'react';
 
 const INACTIVE = '#666666';
+
+// Component to handle tab bar icon spotlights
+const TabBarIcon = ({ name, color, spotlightId, size = 22 }: any) => {
+  const { registerSpotlight, isTourActive } = useTour();
+  const ref = useRef<View>(null);
+  
+  useEffect(() => {
+    if (isTourActive) {
+      const timer = setTimeout(() => {
+        ref.current?.measureInWindow((x, y, w, h) => {
+          if (w > 0) {
+            registerSpotlight(spotlightId, { x: x + w / 2, y: y + h / 2, r: 40 });
+          }
+        });
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isTourActive, spotlightId, registerSpotlight]);
+
+  return (
+    <View ref={ref}>
+      <Feather name={name} size={size} color={color} />
+    </View>
+  );
+};
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -56,7 +83,7 @@ export default function TabLayout() {
         name="activity"
         options={{
           title: t('tabs.activity') || 'Activity',
-          tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="clock" color={color} spotlightId="activityTab" />,
         }}
       />
       <Tabs.Screen
@@ -90,7 +117,7 @@ export default function TabLayout() {
         options={{
           href: user?.role === 'superadmin' ? null : '/(tabs)/chat',
           title: 'Chat',
-          tabBarIcon: ({ color }) => <Feather name="message-circle" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="message-circle" color={color} spotlightId="chatTab" />,
           tabBarBadge: unreadChatCount > 0 ? unreadChatCount : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.primary },
         }}
@@ -109,7 +136,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: t('tabs.settings'),
-          tabBarIcon: ({ color }) => <Feather name="settings" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="settings" color={color} spotlightId="settingsTab" />,
         }}
       />
       <Tabs.Screen

@@ -41,6 +41,7 @@ export default function ActivityScreen() {
     const { user } = useAuth();
     const { colors: themeColors } = useTheme();
     const { t } = useTranslation();
+    const { isTourActive } = require('@/contexts/TourContext').useTour();
 
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [organizations, setOrganizations] = useState<any[]>([]);
@@ -107,6 +108,13 @@ export default function ActivityScreen() {
         };
         fetchFeed();
     }, [user, selectedOrgId, selectedUserId, selectedProjectId, selectedType]);
+
+    const DUMMY_ACTIVITIES = [
+        { id: 'da1', type: 'upload', description: 'uploaded new floor plans', userName: 'John Doe', projectName: 'Project Alpha', timestamp: 'Just now' },
+        { id: 'da2', type: 'upload_photo', description: 'added 5 site photos', userName: 'Sarah Smith', projectName: 'Site B', timestamp: '2 mins ago' },
+    ];
+
+    const displayActivities = isTourActive ? DUMMY_ACTIVITIES : activities;
 
     if (!user) return null;
 
@@ -181,7 +189,7 @@ export default function ActivityScreen() {
                         </View>
                     ) : (
                         <View style={{ gap: 8 }}>
-                            {activities.map((activity) => {
+                            {(displayActivities as any[]).map((activity) => {
                                 const iconName = iconMap[activity.type] || 'clock';
                                 const colors = colorMap[activity.type] || { bg: 'rgba(100,100,100,0.15)', icon: '#666' };
                                 return (

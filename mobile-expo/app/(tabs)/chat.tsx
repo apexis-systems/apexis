@@ -11,6 +11,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { listRooms } from '@/services/chatService';
 import NewChatModal from '@/components/chat/NewChatModal';
 import { useSocket } from '@/contexts/SocketContext';
+import { useTour } from '@/contexts/TourContext';
+import Svg, { Defs, Mask, Rect, Circle } from 'react-native-svg';
 
 export default function ChatListScreen() {
     const { user } = (useAuth() as any) || {};
@@ -18,6 +20,7 @@ export default function ChatListScreen() {
     const { t } = useTranslation();
     const router = useRouter();
     const { socket, setUnreadChatCount } = useSocket();
+    const { isTourActive } = useTour();
     const [searchQuery, setSearchQuery] = useState('');
     const joinedRoomsRef = useRef<Set<string>>(new Set());
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -190,7 +193,30 @@ export default function ChatListScreen() {
         fetchRooms();
     };
 
-    const filteredChats = rooms
+    const DUMMY_CHATS = [
+        {
+            id: 'dc1',
+            name: 'John Engineering',
+            type: 'individual',
+            updatedAt: new Date().toISOString(),
+            room_members: [{ user: { id: 'u1', name: 'John' } }],
+            chat_messages: [{ text: 'The site report is ready for review.', createdAt: new Date().toISOString() }],
+            unread_count: 1
+        },
+        {
+            id: 'dc2',
+            name: 'Project Delta Site Team',
+            type: 'group',
+            updatedAt: new Date().toISOString(),
+            room_members: [{ user: { id: 'u2', name: 'Team' } }],
+            chat_messages: [{ text: '📷 Photo', type: 'image', createdAt: new Date().toISOString() }],
+            unread_count: 0
+        }
+    ];
+
+    const displayRooms = isTourActive ? DUMMY_CHATS : rooms;
+
+    const filteredChats = displayRooms
         .filter(c => {
             const otherMember = c.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id));
             const name = c.name || otherMember?.user?.name || 'Chat';

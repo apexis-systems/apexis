@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { listRooms } from '@/services/chatService';
+import { useTour } from '@/contexts/TourContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import HelpSupportModal from '@/components/shared/HelpSupportModal';
@@ -28,11 +29,11 @@ import { handleNotificationNavigation } from '@/utils/navigation';
 
 export default function DashboardScreen() {
   const { user, updateUser } = useAuth();
-  const { isDark, toggleTheme, colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { unreadNotificationCount } = useSocket();
   const { t } = useTranslation();
   const router = useRouter();
-
+  const { isTourActive, startTour, hasSeenTour, registerSpotlight } = useTour();
 
   const [projects, setProjects] = useState<any[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -54,6 +55,35 @@ export default function DashboardScreen() {
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [profileUri, setProfileUri] = useState<string | null>(null);
 
+  const headerRef = useRef<View>(null);
+  const statsRef = useRef<View>(null);
+  const projectListRef = useRef<View>(null);
+  const createButtonRef = useRef<View>(null);
+
+  const measureAndRegister = useCallback(() => {
+    // We need a small delay to ensure the layout is settled
+    setTimeout(() => {
+      headerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+        registerSpotlight('dashboardHeader', { x: x + w / 2, y: y + h - 20, r: 100 });
+      });
+      statsRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+        registerSpotlight('dashboardStats', { x: x + w / 2, y: y + h / 2, r: 160 });
+      });
+      projectListRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+        // Spotlight the first project card
+        registerSpotlight('projectCard', { x: x + (Platform.OS === 'ios' ? 50 : 58), y: y + (Platform.OS === 'ios' ? 40 : 45), r: 60 });
+      });
+      createButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+        registerSpotlight('createProjectButton', { x: x + w / 2, y: y + h / 2, r: 45 });
+      });
+    }, 500);
+  }, [registerSpotlight]);
+
+  useEffect(() => {
+    if (isTourActive) {
+      measureAndRegister();
+    }
+  }, [isTourActive, measureAndRegister]);
 
   useEffect(() => {
     if (user) {
@@ -82,6 +112,14 @@ export default function DashboardScreen() {
       };
     }
   }, [user, selectedOrgId]);
+
+  useEffect(() => {
+    if (!hasSeenTour && user && !isTourActive) {
+        // Auto-start tour for new users after a short delay
+        const timer = setTimeout(startTour, 1000);
+        return () => clearTimeout(timer);
+    }
+  }, [hasSeenTour, user]);
 
   useEffect(() => {
     const fetchLogo = async () => {
@@ -133,13 +171,23 @@ export default function DashboardScreen() {
     }
   };
 
-  const filteredProjects = projects.filter((p) =>
+  const totalDocs = projects.reduce((sum, p) => sum + (parseInt(p.totalDocs, 10) || 0), 0);
+  const totalPhotos = projects.reduce((sum, p) => sum + (parseInt(p.totalPhotos, 10) || 0), 0);
+  const totalFolders = projects.reduce((sum, p) => sum + (parseInt(p.totalFolders, 10) || 0), 0);
+
+  const DUMMY_PROJECTS = [
+      { id: 'd1', name: 'Alpha Construction', description: 'Infrastructure Phase 1', start_date: '2026-01-01', end_date: '2026-12-31', totalDocs: '12', totalPhotos: '45', color: colors.primary },
+      { id: 'd2', name: 'Bridge Beta', description: 'Main Span Engineering', start_date: '2026-02-01', end_date: '2026-11-30', totalDocs: '8', totalPhotos: '32', color: '#10b981' },
+  ];
+
+  const displayProjects = isTourActive ? DUMMY_PROJECTS : projects;
+  const displayStats = isTourActive 
+    ? { totalDocs: 20, totalPhotos: 77, totalFolders: 8 } 
+    : { totalDocs, totalPhotos, totalFolders };
+
+  const filteredProjects = displayProjects.filter((p) =>
     p.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const totalDocs = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalDocs, 10) || 0), 0);
-  const totalPhotos = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalPhotos, 10) || 0), 0);
-  const totalFolders = filteredProjects.reduce((sum, p) => sum + (parseInt(p.totalFolders, 10) || 0), 0);
 
   const handleCreate = async () => {
     if (!newProject.name || !newProject.start_date || !newProject.end_date) return;
@@ -216,7 +264,7 @@ export default function DashboardScreen() {
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
           {/* Centered Company Logo + User Name */}
-          <View style={{ alignItems: 'center', marginBottom: 20 }}>
+          <View ref={headerRef} style={{ alignItems: 'center', marginBottom: 20 }}>
             <TouchableOpacity
               onPress={() => setIsPreviewOpen(true)}
               style={{
@@ -272,28 +320,32 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Stats Row */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+          <View ref={statsRef} style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
             {[
-              { label: 'Projects', value: filteredProjects.length },
-              { label: 'Folders', value: totalFolders },
-              { label: 'Documents', value: totalDocs },
-              { label: 'Photos', value: totalPhotos },
-            ].map((stat) => (
+              { label: t('dashboard.stats.projects'), count: displayProjects.length },
+              { label: t('dashboard.stats.folders'), count: displayStats.totalFolders },
+              { label: t('dashboard.stats.documents'), count: displayStats.totalDocs },
+              { label: t('dashboard.stats.photos'), count: displayStats.totalPhotos },
+            ].map((stat, i) => (
               <View
-                key={stat.label}
+                key={i}
                 style={{
                   flex: 1,
+                  backgroundColor: '#fff',
+                  paddingVertical: 12,
                   borderRadius: 12,
-                  backgroundColor: colors.surface,
                   borderWidth: 1,
-                  borderColor: colors.border,
-                  padding: 8,
+                  borderColor: '#e5e7eb',
                   alignItems: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1
                 }}
               >
-                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{stat.value}</Text>
-                <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2, textAlign: 'center' }}>{stat.label}</Text>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>{stat.count}</Text>
+                <Text style={{ fontSize: 10, color: '#6b7280', marginTop: 2, fontWeight: '600' }}>{stat.label}</Text>
               </View>
             ))}
           </View>
@@ -354,7 +406,7 @@ export default function DashboardScreen() {
           </View>
 
           {/* Project Grid */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <View ref={projectListRef} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             {filteredProjects.map((project) => (
               <TouchableOpacity
                 key={project.id}
@@ -409,13 +461,14 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             ))}
 
-            {/* Add Create Project card — admin only */}
-            {user.role === 'admin' && (
+            {/* Add Create Project card — admin only, but show for everyone during tour */}
+            {(user.role === 'admin' || isTourActive) && (
               <TouchableOpacity
                 onPress={() => setIsCreating(true)}
                 style={{ width: '22%', alignItems: 'center', gap: 4 }}
               >
                 <View
+                  ref={createButtonRef}
                   style={{
                     width: 56,
                     height: 56,

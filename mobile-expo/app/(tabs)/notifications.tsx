@@ -23,6 +23,7 @@ export default function NotificationsScreen() {
     const { colors } = useTheme();
     const router = useRouter();
     const { socket, setUnreadNotificationCount } = useSocket();
+    const { isTourActive } = require('@/contexts/TourContext').useTour();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [projects, setProjects] = useState<any[]>([]);
     const [refreshing, setRefreshing] = useState(false);
@@ -99,6 +100,13 @@ export default function NotificationsScreen() {
     useEffect(() => {
         fetchProjects();
     }, []);
+
+    const DUMMY_NOTIFICATIONS = [
+        { id: 1, title: 'Project Status Updated', body: 'The foundation work for Site A has been approved.', type: 'snag_status_update', is_read: false, createdAt: new Date().toISOString(), data: {} },
+        { id: 2, title: 'New Document Uploaded', body: 'Sarah uploaded "Borehole Test Results".', type: 'file_upload', is_read: false, createdAt: new Date().toISOString(), data: {} },
+    ];
+
+    const displayNotifications = isTourActive ? DUMMY_NOTIFICATIONS : notifications;
 
     useEffect(() => {
         fetchNotifications();
@@ -260,7 +268,7 @@ export default function NotificationsScreen() {
                 </View>
             ) : (
                 <FlatList
-                    data={notifications}
+                    data={displayNotifications as Notification[]}
                     renderItem={renderItem}
                     keyExtractor={item => item.id.toString()}
                     refreshControl={
