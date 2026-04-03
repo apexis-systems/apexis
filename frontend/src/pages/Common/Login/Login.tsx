@@ -156,7 +156,7 @@ const Login = () => {
                         <img src="/app-icon.png" alt="Apexis Logo" className="h-28 w-28 object-contain" />
                     </div>
                     <div className='flex flex-col items-center'>
-                        <h1 className="text-4xl font-bold tracking-[0.1em] text-accent font-angelica uppercase">APEXIS</h1>
+                        <h1 className="text-4xl tracking-[0.1em] text-accent font-angelica uppercase">APEXIS</h1>
                         <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground">
                             RECORD · REPORT · RELEASE
                         </p>
@@ -171,12 +171,12 @@ const Login = () => {
                             <div className="flex flex-col md:flex-row min-h-[500px]">
                                 {/* Left Side: Scan Instructions */}
                                 <div className="flex-1 p-8 sm:p-14 border-b md:border-b-0 md:border-r border-border/40 flex flex-col">
-                                <h2 className="text-[28px] font-bold text-foreground mb-10 tracking-tight uppercase text-center md:text-left">Scan to log in</h2>
+                                <h2 className="text-[28px] font-bold text-foreground mb-10 tracking-tight uppercase text-center md:text-left font-montserrat">Scan to log in</h2>
 
                                     <div className="space-y-8 flex-1">
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">1</div>
-                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Open the <span className="font-semibold text-accent inline-flex items-center gap-1.5 bg-accent/5 px-2 py-0.5 rounded-md font-angelica uppercase tracking-widest">APEXIS</span> mobile app & log in</p>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5 font-montserrat">Open the <span className="text-accent inline-flex items-center gap-1.5 bg-accent/5 px-2 py-0.5 rounded-md font-angelica uppercase tracking-widest">APEXIS</span> mobile app & log in</p>
                                         </div>
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">2</div>
