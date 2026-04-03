@@ -15,7 +15,7 @@ const SLIDES = [
         id: '1',
         title: 'APEXIS',
         subtitle: 'Construction Communication Infrastructure',
-        description: 'Building the foundation for seamless engineering collaboration and site management.',
+        description: 'APEXIS transforms informal site communication into structured, professional project documentation.',
         icon: 'layers',
         color: '#f97316', // Primary Orange
     },
@@ -76,6 +76,9 @@ export default function OnboardingScreen() {
                             <Animated.Text
                                 entering={FadeInDown.duration(600).delay(300)}
                                 style={[styles.title, { color: colors.text, fontFamily: 'Angelica' }]}
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                                minimumFontScale={0.5}
                             >
                                 {item.title}
                             </Animated.Text>
@@ -197,7 +200,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
     },
     title: {
-        fontSize: 48,
+        fontSize: 42,
         fontWeight: 'bold',
         marginBottom: 8,
         textAlign: 'center',

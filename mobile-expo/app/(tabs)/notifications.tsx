@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, FlatList, TouchableOpacity, StyleSheet, RefreshControl, BackHandler, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +20,7 @@ interface Notification {
 }
 
 export default function NotificationsScreen() {
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
     const router = useRouter();
     const { socket, setUnreadNotificationCount } = useSocket();
     const { isTourActive } = require('@/contexts/TourContext').useTour();
@@ -96,6 +96,19 @@ export default function NotificationsScreen() {
             console.error('Failed to mark all read:', error);
         }
     };
+
+    const bellRef = useRef<View>(null);
+    const { registerSpotlight } = require('@/contexts/TourContext').useTour();
+
+    useEffect(() => {
+        if (isTourActive) {
+            setTimeout(() => {
+                bellRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+                    registerSpotlight('notificationsIcon', { x: x + w / 2, y: y + h / 2, r: 35 });
+                });
+            }, 1000);
+        }
+    }, [isTourActive, registerSpotlight]);
 
     useEffect(() => {
         fetchProjects();
@@ -204,7 +217,14 @@ export default function NotificationsScreen() {
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
+                    {isTourActive && (
+                        <View ref={bellRef} style={{ padding: 6, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}>
+                            <Ionicons name="notifications" size={20} color={colors.primary} />
+                        </View>
+                    )}
+                </View>
                 {notifications.length > 0 && (
                     <TouchableOpacity onPress={markAllRead}>
                         <Text style={[styles.markAll, { color: colors.primary }]}>Mark all read</Text>

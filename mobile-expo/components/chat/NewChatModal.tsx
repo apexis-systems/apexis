@@ -65,6 +65,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             onClose();
         } catch (err) {
             console.error("Failed to create chat", err);
+        } finally {
             setSubmitting(false);
         }
     };

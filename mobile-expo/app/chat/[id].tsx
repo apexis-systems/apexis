@@ -21,7 +21,7 @@ export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams();
     const { colors, isDark } = useTheme();
     const { user } = useAuth();
-    const { socket } = useSocket();
+    const { socket, isConnected } = useSocket();
     const router = useRouter();
 
     if (user?.role === 'superadmin') {
@@ -145,13 +145,6 @@ export default function ChatDetailScreen() {
 
 
 
-            // Check member status
-            room?.room_members?.forEach((m: any) => {
-                if (m.user?.id && String(m.user.id) !== String(user?.id)) {
-                    socket.emit('check-user-status', m.user.id);
-                }
-            });
-
             socket.on('new-message', handleNewMessage);
             socket.on('message-seen-update', handleMessageSeen);
             socket.on('user-status-changed', handleStatusChange);
@@ -166,7 +159,19 @@ export default function ChatDetailScreen() {
                 socket.off('user-typing', handleTyping);
             };
         }
-    }, [id, socket, user?.id, room?.id]);
+    }, [id, socket, user?.id]);
+// Removed room?.id from dependencies as it's for status check below
+
+    // Active status check when room members are loaded
+    useEffect(() => {
+        if (socket && isConnected && room?.room_members) {
+            room.room_members.forEach((m: any) => {
+                if (m.user?.id && String(m.user.id) !== String(user?.id)) {
+                    socket.emit('check-user-status', m.user.id);
+                }
+            });
+        }
+    }, [socket, isConnected, room?.id, user?.id]);
 
 
     const handleSend = async () => {
@@ -319,10 +324,14 @@ export default function ChatDetailScreen() {
                     backgroundColor: isMe ? colors.primary : colors.surface,
                     borderWidth: isMe ? 0 : 1,
                     borderColor: colors.border,
-                    padding: 12,
-                    borderRadius: 16,
-                    borderBottomRightRadius: isMe ? 4 : 16,
-                    borderBottomLeftRadius: isMe ? 16 : 4,
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    marginHorizontal: 8,
+                    borderRadius: 18,
+                    borderBottomRightRadius: isMe ? 4 : 18,
+                    borderBottomLeftRadius: isMe ? 18 : 4,
+                    overflow: 'visible', // Ensure no cropping on Android
+                    elevation: 1, // Subtle shadow for depth
                 }}>
                     {!isMe && (
                         <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
@@ -416,7 +425,7 @@ export default function ChatDetailScreen() {
                     ) : null}
                     
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
                                 {time}
                             </Text>
@@ -425,8 +434,12 @@ export default function ChatDetailScreen() {
                                     name="checkmark-done"
                                     size={14}
                                     color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
-                                    style={{ marginLeft: 4 }}
                                 />
+                            )}
+                            {!isMe && (
+                                <TouchableOpacity onPress={() => setReplyTo(item)}>
+                                    <Feather name="corner-up-left" size={14} color={colors.primary} />
+                                </TouchableOpacity>
                             )}
                         </View>
                     </View>
@@ -491,6 +504,16 @@ export default function ChatDetailScreen() {
                         keyExtractor={item => String(item.id)}
                         renderItem={renderMessage}
                         contentContainerStyle={{ paddingBottom: 20 }}
+                        onContentSizeChange={() => {
+                            if (messages.length > 0) {
+                                flatListRef.current?.scrollToEnd({ animated: true });
+                            }
+                        }}
+                        onLayout={() => {
+                            if (messages.length > 0) {
+                                flatListRef.current?.scrollToEnd({ animated: false });
+                            }
+                        }}
                         onScrollToIndexFailed={(info) => {
                             flatListRef.current?.scrollToOffset({
                                 offset: info.averageItemLength * info.index,
