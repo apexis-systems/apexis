@@ -145,7 +145,7 @@ export default function ActivityScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }} edges={['top', 'left', 'right']}>
             {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: themeColors.surface, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
-                <Text style={{ fontSize: 24, fontWeight: '700', color: themeColors.text }}>{t('activity') || 'Activity'}</Text>
+                <Text style={{ fontSize: 24, fontWeight: '700', color: themeColors.text }}>{t('Activity') || 'Activity'}</Text>
             </View>
 
 

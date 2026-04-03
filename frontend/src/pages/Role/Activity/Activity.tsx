@@ -102,7 +102,7 @@ const Activity = () => {
         <div className="max-w-4xl p-8 mx-auto">
             <div className="flex flex-col gap-6 mb-8">
                 <div>
-                    <h1 className="text-xl font-bold text-foreground">{t('activity')}</h1>
+                    <h1 className="text-xl font-bold text-foreground">{t('Activity')}</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Updates from your projects</p>
                 </div>
 
