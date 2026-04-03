@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert } from 'react-native';
+import { View, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert, StatusBar } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import SecureAvatar from '@/components/shared/SecureAvatar';
@@ -23,6 +23,7 @@ export default function ChatDetailScreen() {
     const { user } = useAuth();
     const { socket, isConnected } = useSocket();
     const router = useRouter();
+    const insets = useSafeAreaInsets();
 
     if (user?.role === 'superadmin') {
         router.replace('/(tabs)');
@@ -449,11 +450,21 @@ export default function ChatDetailScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top', 'left', 'right']}>
+        <View style={{ flex: 1, backgroundColor: colors.surface }}>
             <Stack.Screen options={{ headerShown: false }} />
 
             {/* Header */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 10, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                paddingHorizontal: 8, 
+                paddingBottom: 10, 
+                paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
+                backgroundColor: colors.surface, 
+                borderBottomWidth: 1, 
+                borderBottomColor: colors.border,
+                minHeight: 52 + (Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0)
+            }}>
                 <TouchableOpacity onPress={() => router.back()} style={{ padding: 8, flexDirection: 'row', alignItems: 'center' }}>
                     <Feather name="chevron-left" size={28} color={colors.primary} style={{ marginLeft: -8 }} />
                     {room?.type === 'group' ? (
@@ -646,6 +657,6 @@ export default function ChatDetailScreen() {
                     uri={fullScreenImage}
                 />
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 }

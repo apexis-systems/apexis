@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Modal, View, TouchableOpacity, FlatList, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform
+    Modal, View, TouchableOpacity, FlatList, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform, StatusBar
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -19,6 +19,7 @@ interface Props {
 export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
     const { user: authUser } = (useAuth() as any) || {};
     const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
     const [type, setType] = useState<'direct' | 'group'>('direct');
     const [searchQuery, setSearchQuery] = useState('');
     const [users, setUsers] = useState<any[]>([]);
@@ -132,13 +133,20 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             transparent={false}
             onRequestClose={onClose}
         >
-            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
                 <KeyboardAvoidingView
                     style={{ flex: 1, backgroundColor: colors.background }}
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 >
                     {/* Header */}
-                    <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+                    <View style={[
+                        styles.header, 
+                        { 
+                            backgroundColor: colors.surface, 
+                            borderBottomColor: colors.border,
+                            paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
+                            height: 56 + (Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0)
+                        }
+                    ]}>
                         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                             <Feather name="x" size={24} color={colors.text} />
                         </TouchableOpacity>
@@ -246,7 +254,6 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                     />
                 )}
                 </KeyboardAvoidingView>
-            </SafeAreaView>
         </Modal>
     );
 }
