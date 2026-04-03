@@ -5,6 +5,10 @@ import Providers from "@/components/Providers";
 export const metadata: Metadata = {
   title: "APEXIS",
   description: "APEXIS Hub application",
+  icons: {
+    icon: "/favicon.ico", // Standard favicon
+    apple: "/app-icon.png", // Apple touch icon
+  },
 };
 
 export default function RootLayout({
