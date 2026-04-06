@@ -442,7 +442,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                             <View
                                 key={folder.id}
                                 style={{
-                                    width: '31.5%',
+                                    width: '23%',
                                     aspectRatio: 1,
                                     alignItems: 'center',
                                     justifyContent: 'center',

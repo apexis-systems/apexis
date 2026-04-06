@@ -378,7 +378,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         {sortedFolders.map((folder) => {
           const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
@@ -449,7 +449,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       />
 
 
-      <div className={viewMode === 'grid' ? "grid grid-cols-5 gap-0.5" : "space-y-1"}>
+      <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-0.5" : "space-y-1"}>
         {sortedPhotos.map((photo) => {
           const isSelected = selectedFiles.has(photo.id);
 

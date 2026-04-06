@@ -390,7 +390,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         {sortedFolders.map((folder) => {
           const folderDocs = docs.filter((d) => d.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);

@@ -56,22 +56,35 @@ export const createProject = async (req: Request, res: Response) => {
             created_by: authUser.user_id,
         });
 
-        // Create default folders
-        const defaultFolders = [
-            { name: "Drawings", type: "document" },
-            { name: "Photos", type: "photo" }
+        // Create default folders (Photo & Doc types)
+        const folderNames = [
+            "3D files", "3D images", "Architectural", "Automation",
+            "Brick marking", "Carpentry", "Electrical", "Fabrication",
+            "Flooring", "HVAC", "Interiors", "Landscape",
+            "Permit", "Plumbing", "Structural"
         ];
-        await Promise.all(
-            defaultFolders.map((f) =>
-                folders.create({
-                    project_id: newProject.id,
-                    name: f.name,
-                    created_by: authUser.user_id,
-                    client_visible: true,
-                    folder_type: f.type,
-                })
-            )
-        );
+
+        const folderCreationTasks: any[] = [];
+        folderNames.forEach((name) => {
+            // Create for Photos
+            folderCreationTasks.push(folders.create({
+                project_id: newProject.id,
+                name,
+                created_by: authUser.user_id,
+                client_visible: true,
+                folder_type: "photo",
+            }));
+            // Create for Docs
+            folderCreationTasks.push(folders.create({
+                project_id: newProject.id,
+                name,
+                created_by: authUser.user_id,
+                client_visible: true,
+                folder_type: "document",
+            }));
+        });
+
+        await Promise.all(folderCreationTasks);
 
         res.status(201).json({ message: "Project created successfully", project: newProject });
     } catch (error) {
