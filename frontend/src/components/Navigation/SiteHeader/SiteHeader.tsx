@@ -16,7 +16,7 @@ const SiteHeader = () => {
   const { user, logout } = useAuth() || {};
   const { setMode } = useInterface() || {};
   const { unreadChatCount } = useSocket();
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -25,8 +25,13 @@ const SiteHeader = () => {
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    setIsDark(isDarkMode);
+    const savedTheme = localStorage.getItem('user-theme');
+    if (savedTheme) {
+      setIsDark(savedTheme === 'dark');
+    } else {
+      // Always default to light for first-time users as requested
+      setIsDark(false);
+    }
     setMounted(true);
   }, []);
 
@@ -34,8 +39,10 @@ const SiteHeader = () => {
     if (!mounted) return;
     if (isDark) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('user-theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('user-theme', 'light');
     }
   }, [isDark, mounted]);
 

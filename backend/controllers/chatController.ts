@@ -75,7 +75,10 @@ export const getRoomMessages = async (req: Request, res: Response) => {
         const membership = await room_members.findOne({
             where: { room_id: roomId, user_id: authUser.user_id }
         });
-        if (!membership) return res.status(403).json({ error: 'Forbidden' });
+        if (!membership) {
+            console.warn(`[CHAT] 403 Forbidden: User ${authUser.user_id} requested room ${roomId} messages but is not a member.`);
+            return res.status(403).json({ error: 'Forbidden' });
+        }
 
         const messages = await chat_messages.findAll({
             where: { room_id: roomId },
@@ -372,21 +375,26 @@ export const createRoom = async (req: Request, res: Response) => {
 
             // Check if direct room already exists
             const existingRoom = await rooms.findOne({
-                where: { type: 'direct', organization_id: actualOrgId },
+                where: { 
+                    type: 'direct', 
+                    organization_id: actualOrgId 
+                },
                 include: [
                     {
                         model: room_members,
                         where: { user_id: authUser.user_id }
-                    },
-                    {
-                        model: room_members,
-                        where: { user_id: targetUserId }
                     }
                 ]
             });
 
+            // If found a room where we are a member, check if the other user is also a member of THAT room
             if (existingRoom) {
-                return res.status(200).json({ room: existingRoom });
+                const otherMembership = await room_members.findOne({
+                    where: { room_id: existingRoom.id, user_id: targetUserId }
+                });
+                if (otherMembership) {
+                    return res.status(200).json({ room: existingRoom });
+                }
             }
 
             // Create new direct room

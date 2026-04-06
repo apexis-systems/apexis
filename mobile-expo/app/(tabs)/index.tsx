@@ -331,21 +331,21 @@ export default function DashboardScreen() {
                 key={i}
                 style={{
                   flex: 1,
-                  backgroundColor: '#fff',
+                  backgroundColor: colors.surface,
                   paddingVertical: 12,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: '#e5e7eb',
+                  borderColor: colors.border,
                   alignItems: 'center',
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.05,
+                  shadowOpacity: isDark ? 0.3 : 0.05,
                   shadowRadius: 2,
                   elevation: 1
                 }}
               >
-                <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>{stat.count}</Text>
-                <Text style={{ fontSize: 10, color: '#6b7280', marginTop: 2, fontWeight: '600' }}>{stat.label}</Text>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{stat.count}</Text>
+                <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontWeight: '600' }}>{stat.label}</Text>
               </View>
             ))}
           </View>

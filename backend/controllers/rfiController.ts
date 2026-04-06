@@ -3,6 +3,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { rfis, users, activities, projects, project_members } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
+import { addWatermark } from '../utils/watermark.ts';
 import { Op } from 'sequelize';
 import { getIO } from '../socket.ts';
 
@@ -77,13 +78,22 @@ export const createRFI = async (req: Request | any, res: Response) => {
         const uploadedPhotos: string[] = [];
         if (req.files && Array.isArray(req.files)) {
             for (const file of req.files) {
+                let fileBuffer = file.buffer;
+                if (file.mimetype.startsWith('image/')) {
+                    try {
+                        fileBuffer = await addWatermark(file.buffer);
+                    } catch (err) {
+                        console.error('Watermarking failed for RFI photo:', err);
+                    }
+                }
+
                 const ext = file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
                 const key = `projects/${project_id}/rfis/${Date.now()}_${Math.random().toString(36).substr(2, 5)}${ext}`;
                 await s3Client.send(new PutObjectCommand({
                     Bucket: BUCKET,
                     Key: key,
                     ContentType: file.mimetype,
-                    Body: file.buffer,
+                    Body: fileBuffer,
                 }));
                 uploadedPhotos.push(key);
             }
