@@ -87,8 +87,9 @@ export const superadminVerifyOtp = async (req: Request, res: Response) => {
         const token = jwt.sign(
             {
                 user_id: newUser.id,
+                name: newUser.name,
                 role: newUser.role,
-                organization_id: newUser.organization_id // 1
+                organization_id: newUser.organization_id
             },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
@@ -252,6 +253,7 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
         const token = jwt.sign(
             {
                 user_id: newUser.id,
+                name: newUser.name,
                 role: newUser.role,
                 organization_id: newUser.organization_id
             },

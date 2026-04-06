@@ -14,6 +14,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import * as Haptics from 'expo-haptics';
 import ChatCameraModal from '@/components/chat/ChatCameraModal';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 
@@ -110,8 +112,11 @@ export default function ChatDetailScreen() {
             const handleStatusChange = ({ userId, status }: { userId: string | number; status: 'online' | 'offline' }) => {
                 setOnlineUsers(prev => {
                     const next = new Set(prev);
-                    if (status === 'online') next.add(String(userId));
-                    else next.delete(String(userId));
+                    if (status === 'online') {
+                        next.add(String(userId));
+                    } else {
+                        next.delete(String(userId));
+                    }
                     return next;
                 });
             };
@@ -161,16 +166,33 @@ export default function ChatDetailScreen() {
             };
         }
     }, [id, socket, user?.id]);
+
+    const isInitialLoadRef = useRef(true);
+
+    useEffect(() => {
+        if (!loading && messages.length > 0 && isInitialLoadRef.current) {
+            // Give it a tiny bit of time to ensure layout is ready
+            const timer = setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: false });
+                isInitialLoadRef.current = false;
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, messages.length]);
 // Removed room?.id from dependencies as it's for status check below
 
     // Active status check when room members are loaded
     useEffect(() => {
         if (socket && isConnected && room?.room_members) {
-            room.room_members.forEach((m: any) => {
-                if (m.user?.id && String(m.user.id) !== String(user?.id)) {
-                    socket.emit('check-user-status', m.user.id);
-                }
-            });
+            const timer = setTimeout(() => {
+                room.room_members.forEach((m: any) => {
+                    const strangerId = m.user?.id || m.userId;
+                    if (strangerId && String(strangerId) !== String(user?.id)) {
+                        socket.emit('check-user-status', strangerId);
+                    }
+                });
+            }, 500);
+            return () => clearTimeout(timer);
         }
     }, [socket, isConnected, room?.id, user?.id]);
 
@@ -298,6 +320,166 @@ export default function ChatDetailScreen() {
         }
     };
 
+    const MessageItem = React.memo(({ item, isMe, time, setReplyTo, scrollToMessage, setFullScreenImage, handleDownload, isDownloading, colors, isDark }: any) => {
+        const swipeableRef = useRef<any>(null);
+
+        const renderLeftActions = () => {
+            return (
+                <View style={{ width: 50, justifyContent: 'center', alignItems: 'center' }}>
+                    <Feather name="corner-up-left" size={22} color={colors.primary} />
+                </View>
+            );
+        };
+
+        return (
+            <ReanimatedSwipeable
+                ref={swipeableRef}
+                renderLeftActions={renderLeftActions}
+                onSwipeableWillOpen={() => {
+                    setReplyTo(item);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTimeout(() => {
+                        swipeableRef.current?.close();
+                    }, 0);
+                }}
+                friction={1.5}
+                enableTrackpadTwoFingerGesture
+                leftThreshold={20}
+            >
+                <View 
+                    style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}
+                >
+                    <View style={{
+                        maxWidth: '80%',
+                        backgroundColor: isMe ? colors.primary : colors.surface,
+                        borderWidth: isMe ? 0 : 1,
+                        borderColor: colors.border,
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        marginHorizontal: 8,
+                        borderRadius: 18,
+                        borderBottomRightRadius: isMe ? 4 : 18,
+                        borderBottomLeftRadius: isMe ? 18 : 4,
+                        overflow: 'visible',
+                        elevation: 1,
+                    }}>
+                        {!isMe && (
+                            <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
+                        )}
+
+                        {item.parent && (
+                            <TouchableOpacity 
+                                onPress={() => scrollToMessage(item.parent_id)}
+                                style={{
+                                    backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
+                                    padding: 8,
+                                    borderRadius: 8,
+                                    borderLeftWidth: 4,
+                                    borderLeftColor: colors.primary,
+                                    marginBottom: 8
+                                }}
+                            >
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>{item.parent.sender?.name}</Text>
+                                <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : colors.textMuted }}>
+                                    {item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {item.type === 'image' && item.downloadUrl && (
+                            <View>
+                                <TouchableOpacity
+                                    onPress={() => setFullScreenImage(item.downloadUrl)}
+                                    style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
+                                >
+                                    <Image
+                                        source={{ uri: item.downloadUrl }}
+                                        style={{ width: 240, height: 240, borderRadius: 12 }}
+                                        resizeMode="cover"
+                                    />
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    onPress={() => handleDownload(item)}
+                                    disabled={isDownloading === String(item.id)}
+                                    style={{ position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 15 }}
+                                >
+                                    {isDownloading === String(item.id) ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Feather name="download" size={16} color="#fff" />
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {item.type === 'file' && item.downloadUrl && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                <TouchableOpacity
+                                    onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                        padding: 12,
+                                        borderRadius: 12,
+                                        gap: 12,
+                                        flex: 1
+                                    }}
+                                >
+                                    <View style={{ width: 44, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name="file-text" size={20} color="#fff" />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
+                                        <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    onPress={() => handleDownload(item)}
+                                    disabled={isDownloading === String(item.id)}
+                                    style={{ padding: 10, borderRadius: 12, backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+                                >
+                                    {isDownloading === String(item.id) ? (
+                                        <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
+                                    ) : (
+                                        <Feather name="download" size={20} color={isMe ? '#fff' : colors.primary} />
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {item.text ? (
+                            <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
+                                {item.text}
+                            </Text>
+                        ) : null}
+                        
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
+                                    {time}
+                                </Text>
+                                {isMe && (
+                                    <Ionicons
+                                        name="checkmark-done"
+                                        size={14}
+                                        color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
+                                    />
+                                )}
+                                <TouchableOpacity onPress={() => {
+                                    setReplyTo(item);
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                }}>
+                                    <Feather name="corner-up-left" size={14} color={isMe ? "rgba(255,255,255,0.7)" : colors.primary} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </ReanimatedSwipeable>
+        );
+    });
+
     const renderMessage = ({ item }: { item: any }) => {
         if (item.type === 'system') {
             return (
@@ -315,137 +497,18 @@ export default function ChatDetailScreen() {
         const time = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return (
-            <TouchableOpacity 
-                activeOpacity={0.9}
-                onLongPress={() => setReplyTo(item)}
-                style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}
-            >
-                <View style={{
-                    maxWidth: '80%',
-                    backgroundColor: isMe ? colors.primary : colors.surface,
-                    borderWidth: isMe ? 0 : 1,
-                    borderColor: colors.border,
-                    paddingVertical: 10,
-                    paddingHorizontal: 14,
-                    marginHorizontal: 8,
-                    borderRadius: 18,
-                    borderBottomRightRadius: isMe ? 4 : 18,
-                    borderBottomLeftRadius: isMe ? 18 : 4,
-                    overflow: 'visible', // Ensure no cropping on Android
-                    elevation: 1, // Subtle shadow for depth
-                }}>
-                    {!isMe && (
-                        <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
-                    )}
-
-                    {item.parent && (
-                        <TouchableOpacity 
-                            onPress={() => scrollToMessage(item.parent_id)}
-                            style={{
-                                backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
-                                padding: 8,
-                                borderRadius: 8,
-                                borderLeftWidth: 4,
-                                borderLeftColor: colors.primary,
-                                marginBottom: 8
-                            }}
-                        >
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>{item.parent.sender?.name}</Text>
-                            <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : colors.textMuted }}>
-                                {item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {item.type === 'image' && item.downloadUrl && (
-                        <View>
-                            <TouchableOpacity
-                                onPress={() => setFullScreenImage(item.downloadUrl)}
-                                style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
-                            >
-                                <Image
-                                    source={{ uri: item.downloadUrl }}
-                                    style={{ width: 240, height: 240, borderRadius: 12 }}
-                                    resizeMode="cover"
-                                />
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={() => handleDownload(item)}
-                                disabled={isDownloading === String(item.id)}
-                                style={{ position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 15 }}
-                            >
-                                {isDownloading === String(item.id) ? (
-                                    <ActivityIndicator size="small" color="#fff" />
-                                ) : (
-                                    <Feather name="download" size={16} color="#fff" />
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {item.type === 'file' && item.downloadUrl && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                            <TouchableOpacity
-                                onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                                    padding: 12,
-                                    borderRadius: 12,
-                                    gap: 12,
-                                    flex: 1
-                                }}
-                            >
-                                <View style={{ width: 44, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Feather name="file-text" size={20} color="#fff" />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
-                                    <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
-                                </View>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={() => handleDownload(item)}
-                                disabled={isDownloading === String(item.id)}
-                                style={{ padding: 10, borderRadius: 12, backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
-                            >
-                                {isDownloading === String(item.id) ? (
-                                    <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
-                                ) : (
-                                    <Feather name="download" size={20} color={isMe ? '#fff' : colors.primary} />
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {item.text ? (
-                        <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
-                            {item.text}
-                        </Text>
-                    ) : null}
-                    
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
-                                {time}
-                            </Text>
-                            {isMe && (
-                                <Ionicons
-                                    name="checkmark-done"
-                                    size={14}
-                                    color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
-                                />
-                            )}
-                            {!isMe && (
-                                <TouchableOpacity onPress={() => setReplyTo(item)}>
-                                    <Feather name="corner-up-left" size={14} color={colors.primary} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-                </View>
-            </TouchableOpacity>
+            <MessageItem 
+                item={item}
+                isMe={isMe}
+                time={time}
+                setReplyTo={setReplyTo}
+                scrollToMessage={scrollToMessage}
+                setFullScreenImage={setFullScreenImage}
+                handleDownload={handleDownload}
+                isDownloading={isDownloading}
+                colors={colors}
+                isDark={isDark}
+            />
         );
     };
 
@@ -455,16 +518,18 @@ export default function ChatDetailScreen() {
 
             {/* Header */}
             <View style={{ 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                paddingHorizontal: 8, 
-                paddingBottom: 10, 
-                paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
                 backgroundColor: colors.surface, 
                 borderBottomWidth: 1, 
                 borderBottomColor: colors.border,
-                minHeight: 52 + (Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0)
+                paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
             }}>
+                <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    paddingHorizontal: 8, 
+                    paddingBottom: 10, 
+                    minHeight: 52
+                }}>
                 <TouchableOpacity onPress={() => router.back()} style={{ padding: 8, flexDirection: 'row', alignItems: 'center' }}>
                     <Feather name="chevron-left" size={28} color={colors.primary} style={{ marginLeft: -8 }} />
                     {room?.type === 'group' ? (
@@ -497,6 +562,7 @@ export default function ChatDetailScreen() {
                     {/* Call icons removed as requested */}
                 </View>
             </View>
+        </View>
 
             {/* Chat Area */}
             <KeyboardAvoidingView

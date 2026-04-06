@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5002/api';
 
 console.log(API_URL)
 

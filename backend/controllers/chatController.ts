@@ -169,7 +169,11 @@ export const sendChatMessage = async (req: Request, res: Response) => {
         // 2. Trigger Notifications
         const otherMembers = await room_members.findAll({
             where: { room_id: roomId, user_id: { [Op.ne]: authUser.user_id } },
-            include: [{ model: users, attributes: ['id', 'fcm_token'] }]
+            include: [{ 
+                model: users, 
+                attributes: ['id', 'fcm_token'],
+                where: { organization_id: authUser.organization_id } // Ensure only org members notified
+            }]
         });
 
         const allMembers = await room_members.findAll({
@@ -349,7 +353,7 @@ export const createRoom = async (req: Request, res: Response) => {
 
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        const actualOrgId = organization_id || authUser.organization_id;
+        const actualOrgId = authUser.organization_id;
 
         if (type === 'direct') {
             if (!memberIds || memberIds.length !== 1) {
@@ -357,6 +361,14 @@ export const createRoom = async (req: Request, res: Response) => {
             }
 
             const targetUserId = memberIds[0];
+
+            // VALIDATION: Ensure recipient belongs to the same organization
+            const targetUser = await users.findOne({ 
+                where: { id: targetUserId, organization_id: actualOrgId } 
+            });
+            if (!targetUser) {
+                return res.status(404).json({ error: 'User not found in your organization' });
+            }
 
             // Check if direct room already exists
             const existingRoom = await rooms.findOne({
@@ -395,12 +407,23 @@ export const createRoom = async (req: Request, res: Response) => {
 
             return res.status(201).json({ room: roomWithMembers });
         } else if (type === 'group') {
-            if (authUser.role !== 'admin') {
-                return res.status(403).json({ error: 'Only admins can create group chats' });
+            if (authUser.role !== 'admin' && authUser.role !== 'contributor') {
+                return res.status(403).json({ error: 'Only admins and contributors can create group chats' });
             }
             if (!name) return res.status(400).json({ error: 'Group name is required' });
-            if (!memberIds || memberIds.length === 0) {
-                return res.status(400).json({ error: 'Group chat requires at least one other member' });
+            const allMemberIds = [...new Set([...memberIds, authUser.user_id])];
+
+            // VALIDATION: Ensure all members belong to the same organization
+            const validUsers = await users.findAll({
+                where: {
+                    id: { [Op.in]: allMemberIds },
+                    organization_id: actualOrgId
+                },
+                attributes: ['id']
+            });
+
+            if (validUsers.length !== allMemberIds.length) {
+                return res.status(400).json({ error: 'Some selected users do not belong to your organization' });
             }
 
             const newRoom = await rooms.create({
@@ -410,7 +433,6 @@ export const createRoom = async (req: Request, res: Response) => {
                 project_id: project_id || null
             });
 
-            const allMemberIds = [...new Set([...memberIds, authUser.user_id])];
             await room_members.bulkCreate(
                 allMemberIds.map(uid => ({ room_id: newRoom.id, user_id: uid }))
             );
@@ -426,7 +448,7 @@ export const createRoom = async (req: Request, res: Response) => {
                     await sendNotification({
                         userId: uid,
                         title: 'New Group',
-                        body: `${authUser.name} added you to a group: ${name}`,
+                        body: `${authUser.name || 'Someone'} added you to a group: ${name}`,
                         type: 'group_creation',
                         data: { roomId: String(newRoom.id) }
                     });

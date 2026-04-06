@@ -52,9 +52,8 @@ const Login = () => {
                 setQrSessionId(sessionId);
 
                 // 2. Connect to the socket server
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-                const backendUrl = apiUrl.endsWith('/api') ? apiUrl.slice(0, -4) : apiUrl;
-                socket = io(backendUrl);
+                const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5002';
+                socket = io(socketUrl);
 
                 socket.on('connect', () => {
                     // 3. Join the room specific to our UUID

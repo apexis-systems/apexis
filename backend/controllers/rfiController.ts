@@ -130,7 +130,12 @@ export const createRFI = async (req: Request | any, res: Response) => {
             });
             const projectContributors = await project_members.findAll({
                 where: { project_id: Number(project_id), role: 'contributor' },
-                include: [{ model: users, as: 'user', attributes: ['id'] }]
+                include: [{ 
+                    model: users, 
+                    as: 'user', 
+                    attributes: ['id'],
+                    where: { organization_id: authUser.organization_id }
+                }]
             });
 
             const notifyUserIds = new Set<number>();
@@ -156,16 +161,19 @@ export const createRFI = async (req: Request | any, res: Response) => {
         } else {
             // Admin/Contributor created it
             if (assigned_to) {
-                const sender = await users.findByPk(authUser.user_id);
-                const senderName = sender?.name || 'Someone';
-
-                await sendNotification({
-                    userId: Number(assigned_to),
-                    title: 'New RFI Assigned',
-                    body: `${senderName} assigned an RFI to you: ${title}`,
-                    type: 'rfi_assigned',
-                    data: { rfiId: String(rfi.id), projectId: String(project_id) }
+                const recipient = await users.findOne({ 
+                    where: { id: Number(assigned_to), organization_id: authUser.organization_id } 
                 });
+                if (recipient) {
+                    const senderName = authUser.name || 'Someone';
+                    await sendNotification({
+                        userId: recipient.id,
+                        title: 'New RFI Assigned',
+                        body: `${senderName} assigned an RFI to you: ${title}`,
+                        type: 'rfi_assigned',
+                        data: { rfiId: String(rfi.id), projectId: String(project_id) }
+                    });
+                }
             }
         }
 
@@ -229,19 +237,24 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         if (rfi.created_by && rfi.created_by !== authUser.user_id) notifyIds.add(rfi.created_by);
 
         if (notifyIds.size > 0) {
-            const sender = await users.findByPk(authUser.user_id);
-            const senderName = sender?.name || 'Someone';
-            
+            const validRecipients = await users.findAll({
+                where: { 
+                    id: { [Op.in]: Array.from(notifyIds) },
+                    organization_id: authUser.organization_id
+                }
+            });
+
+            const senderName = authUser.name || 'Someone';
             const statusLabels: Record<string, string> = {
                 open: 'Open',
                 closed: 'Closed',
                 overdue: 'Overdue'
             };
-            const friendlyStatus = statusLabels[status] || status;
+            const friendlyStatus = statusLabels[(status as string)] || status;
 
-            for (const uid of notifyIds) {
+            for (const recipient of validRecipients) {
                 await sendNotification({
-                    userId: uid,
+                    userId: recipient.id,
                     title: 'RFI Status Updated',
                     body: `${senderName} updated RFI status to ${friendlyStatus}: ${rfi.title}`,
                     type: 'rfi_status_update',

@@ -79,9 +79,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isLoggedIn && typeof window !== 'undefined') {
             const qrSessionId = localStorage.getItem('qrSessionId');
             if (qrSessionId) {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-                const backendUrl = apiUrl.endsWith('/api') ? apiUrl.slice(0, -4) : apiUrl;
-                socket = io(backendUrl);
+                const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5002';
+                socket = io(socketUrl);
 
                 socket.on('connect', () => {
                     socket?.emit('join-qr-room', qrSessionId);

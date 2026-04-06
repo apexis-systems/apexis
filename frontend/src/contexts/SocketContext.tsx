@@ -74,12 +74,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let newSocket: Socket | null = null;
 
         if (isLoggedIn) {
+            const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5002';
 
-            // 2. Connect to the socket server
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-            const backendUrl = apiUrl.endsWith('/api') ? apiUrl.slice(0, -4) : apiUrl;
-
-            newSocket = io(backendUrl);
+            newSocket = io(socketUrl, {
+                transports: ['polling', 'websocket'],
+                reconnection: true,
+            });
 
             newSocket.on('connect', () => {
                 setIsConnected(true);

@@ -150,9 +150,18 @@ export default function ChatDetail() {
         };
     }, [socket, isConnected, roomId, user?.id, room?.id]);
 
+    const isInitialLoadRef = useRef(true);
+    // Scroll to bottom when messages change or loading finishes
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        if (!loading && messages.length > 0) {
+            if (isInitialLoadRef.current) {
+                bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+                isInitialLoadRef.current = false;
+            } else {
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    }, [messages, loading]);
 
     const handleSend = async () => {
         if ((!message.trim() && !selectedFile) || !roomId) return;
@@ -361,7 +370,7 @@ export default function ChatDetail() {
                                         )}
                                         <button 
                                             onClick={() => setReplyTo(msg)}
-                                            className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-orange-100' : 'text-muted-foreground'}`}
+                                            className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}
                                         >
                                             <CornerUpLeft className="h-3 w-3" />
                                         </button>

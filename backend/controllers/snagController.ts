@@ -148,18 +148,22 @@ export const createSnag = async (req: Request, res: Response) => {
             description: `Added snag "${title.trim()}"`
         });
 
-        // Notify assignee
+        // Notify assignee (if in same organization)
         if (assigned_to) {
-            const sender = await users.findByPk(authUser.user_id);
-            const senderName = sender?.name || 'Someone';
-
-            await sendNotification({
-                userId: Number(assigned_to),
-                title: 'New Snag Assigned',
-                body: `${senderName} assigned a new snag to you: ${title}`,
-                type: 'snag_assigned',
-                data: { snagId: String(snag.id), projectId: String(project_id) }
+            const recipient = await users.findOne({ 
+                where: { id: Number(assigned_to), organization_id: authUser.organization_id } 
             });
+            
+            if (recipient) {
+                const senderName = authUser.name || 'Someone';
+                await sendNotification({
+                    userId: recipient.id,
+                    title: 'New Snag Assigned',
+                    body: `${senderName} assigned a new snag to you: ${title}`,
+                    type: 'snag_assigned',
+                    data: { snagId: String(snag.id), projectId: String(project_id) }
+                });
+            }
         }
 
         // Notify Admins in the organization (except creator and assignee)
@@ -229,9 +233,14 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
         if (snag.created_by && snag.created_by !== authUser.user_id) notifyIds.add(snag.created_by);
 
         if (notifyIds.size > 0) {
-            const sender = await users.findByPk(authUser.user_id);
-            const senderName = sender?.name || 'Someone';
-            
+            const validRecipients = await users.findAll({
+                where: { 
+                    id: { [Op.in]: Array.from(notifyIds) },
+                    organization_id: authUser.organization_id
+                }
+            });
+
+            const senderName = authUser.name || 'Someone';
             const statusLabels: Record<string, string> = {
                 amber: 'Waiting for Clearance',
                 green: 'Completed',
@@ -239,9 +248,9 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
             };
             const friendlyStatus = statusLabels[status] || status;
 
-            for (const uid of notifyIds) {
+            for (const recipient of validRecipients) {
                 await sendNotification({
-                    userId: uid,
+                    userId: recipient.id,
                     title: 'Snag Status Updated',
                     body: `${senderName} updated status to ${friendlyStatus} for snag: ${snag.title}`,
                     type: 'snag_status_update',
@@ -286,7 +295,10 @@ export const getAssignees = async (req: Request, res: Response) => {
                 {
                     model: users,
                     attributes: ['id', 'name', 'email', 'role'],
-                    where: { role: { [Op.ne]: 'client' } },
+                    where: { 
+                        role: { [Op.ne]: 'client' },
+                        organization_id: (req as any).user.organization_id
+                    },
                     required: true,
                 },
             ],

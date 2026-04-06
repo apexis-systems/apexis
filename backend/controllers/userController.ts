@@ -49,13 +49,16 @@ export const inviteUser = async (req: Request, res: Response) => {
             });
             isNewUser = true;
         } else {
-            // User exists. If they are invited to a project, we'll add the association below.
-            // If they are invited as an 'admin' but are already an 'admin' elsewhere, 
-            // the current schema only supports one organization_id in the User table.
-            
-            if (role === 'admin' && user.organization_id && user.organization_id !== authUser.organization_id) {
-                // Return a specific error if they are already an admin of another org
-                return res.status(400).json({ error: "User is already an administrator for another organization." });
+            // User exists.
+            if (user.organization_id && user.organization_id !== authUser.organization_id) {
+                return res.status(400).json({ 
+                    error: "User is already registered with another organization. Cross-organization invitations are not permitted for security reasons." 
+                });
+            }
+
+            // If user exists but has no organization (invited but not registered), assign current one
+            if (!user.organization_id) {
+                await user.update({ organization_id: authUser.organization_id });
             }
         }
 
@@ -246,6 +249,15 @@ export const updatePushToken = async (req: Request, res: Response) => {
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
         if (!token) return res.status(400).json({ error: "Token is required" });
 
+        // 1. Remove this token from any other users to prevent cross-account notifications on shared devices
+        await users.update({ fcm_token: null }, { 
+            where: { 
+                fcm_token: token, 
+                id: { [Op.ne]: authUser.user_id } 
+            } 
+        });
+
+        // 2. Set the token for the current user
         await users.update({ fcm_token: token }, { where: { id: authUser.user_id } });
 
         res.status(200).json({ message: "Push token updated successfully" });

@@ -50,8 +50,8 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
     }, [open, authUser?.id]);
 
     const filteredUsers = users.filter(u =>
-        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchQuery.toLowerCase())
+        (u.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+        (u.email?.toLowerCase() || "").includes(searchQuery.toLowerCase())
     );
 
     const toggleUser = (userId: number) => {
@@ -68,7 +68,10 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
 
     const handleCreate = async () => {
         if (selectedUsers.length === 0) return;
-        if (type === 'group' && !groupName.trim()) return;
+        if (type === 'group' && !groupName.trim()) {
+            alert('Please enter a group name');
+            return;
+        }
 
         setSubmitting(true);
         try {
@@ -79,8 +82,9 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
             });
             onSuccess(room);
             onOpenChange(false);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to create chat", err);
+            alert(err?.response?.data?.error || err.message || "Failed to create chat");
         } finally {
             setSubmitting(false);
         }
@@ -89,8 +93,10 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md p-0 overflow-hidden gap-0">
-                <DialogHeader className="p-6 pb-4 border-b">
-                    <DialogTitle className="text-xl font-bold">New Chat</DialogTitle>
+                <DialogHeader className="p-6 pb-4 border-b space-y-0">
+                    <DialogTitle className="text-xl font-bold">
+                        {type === 'group' ? 'New Group' : 'New Direct Chat'}
+                    </DialogTitle>
                 </DialogHeader>
 
                 <div className="flex border-b">
@@ -100,7 +106,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                     >
                         Direct Message
                     </button>
-                    {authUser?.role === 'admin' && (
+                    {(authUser?.role === 'admin' || authUser?.role === 'contributor') && (
                         <button
                             onClick={() => { setType('group'); setSelectedUsers([]); }}
                             className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'group' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
@@ -176,10 +182,16 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                         </Button>
                         <Button
                             onClick={handleCreate}
-                            disabled={submitting || selectedUsers.length === 0 || (type === 'group' && !groupName.trim())}
-                            className="bg-primary hover:bg-[#ea580c] text-white"
+                            disabled={submitting || selectedUsers.length === 0}
+                            className="bg-primary hover:bg-primary/90 text-white px-6 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Chat'}
+                            {submitting ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : type === 'group' ? (
+                                `Create Group (${selectedUsers.length})`
+                            ) : (
+                                'Create Chat'
+                            )}
                         </Button>
                     </div>
                 </div>

@@ -48,6 +48,13 @@ export const adminLogin = async (req: Request, res: Response) => {
         );
 
 
+        // Optional FCM Token registration during login
+        const { fcmToken } = req.body;
+        if (fcmToken) {
+            await users.update({ fcm_token: null }, { where: { fcm_token: fcmToken, id: { [Op.ne]: user.id } } });
+            await user.update({ fcm_token: fcmToken });
+        }
+
         res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: user.role } });
     } catch (error) {
         console.error("Admin Login Error:", error);
@@ -136,7 +143,13 @@ export const projectLogin = async (req: Request, res: Response) => {
             // Notify all existing members (admin, contributors, clients) of this project
             try {
                 const existingMembers = await project_members.findAll({
-                    where: { project_id: project.id, user_id: { [Op.ne]: user.id } }
+                    where: { project_id: project.id, user_id: { [Op.ne]: user.id } },
+                    include: [{
+                        model: users,
+                        as: 'user',
+                        attributes: ['id'],
+                        where: { organization_id: project.organization_id }
+                    }]
                 });
                 const joinerName = user.name && user.name !== 'Pending' ? user.name : (email || phone || 'Someone');
                 const roleLabel = roleForCode === 'contributor' ? 'Contributor' : 'Client';
@@ -175,12 +188,19 @@ export const projectLogin = async (req: Request, res: Response) => {
                 user_id: user.id, 
                 name: user.name, 
                 role: roleForCode, // Use the role associated with the login code
-                organization_id: user.organization_id || project.organization_id, 
+                organization_id: project.organization_id, // Active org context
                 project_id: project.id 
             },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
         );
+
+        // Optional FCM Token registration during login
+        const { fcmToken } = req.body;
+        if (fcmToken) {
+            await users.update({ fcm_token: null }, { where: { fcm_token: fcmToken, id: { [Op.ne]: user.id } } });
+            await user.update({ fcm_token: fcmToken });
+        }
 
         res.status(200).json({ 
             token, 
@@ -217,6 +237,13 @@ export const superadminLogin = async (req: Request, res: Response) => {
         );
 
 
+        // Optional FCM Token registration during login
+        const { fcmToken } = req.body;
+        if (fcmToken) {
+            await users.update({ fcm_token: null }, { where: { fcm_token: fcmToken, id: { [Op.ne]: user.id } } });
+            await user.update({ fcm_token: fcmToken });
+        }
+
         res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: "superadmin" } });
     } catch (error) {
         console.error("Superadmin Login Error:", error);
@@ -233,7 +260,8 @@ export const me = async (req: Request, res: Response) => {
 
         if (!dbUser) return res.status(404).json({ error: "User not found" });
 
-        const organization = dbUser.organization_id ? await organizations.findByPk(dbUser.organization_id) : null;
+        const activeOrgId = authUser.organization_id || dbUser.organization_id;
+        const organization = activeOrgId ? await organizations.findByPk(activeOrgId) : null;
 
         // Override the role from the database with the role from the JWT session
         // This ensures multi-role users see their current active role in the UI
@@ -367,7 +395,13 @@ export const completePublicSignup = async (req: Request, res: Response) => {
         // Notify all existing project members
         try {
             const existingMembers = await project_members.findAll({
-                where: { project_id: project.id, user_id: { [Op.ne]: user.id } }
+                where: { project_id: project.id, user_id: { [Op.ne]: user.id } },
+                include: [{
+                    model: users,
+                    as: 'user',
+                    attributes: ['id'],
+                    where: { organization_id: project.organization_id } // Boundary check
+                }]
             });
             const roleLabel = decoded.role === 'contributor' ? 'Contributor' : 'Client';
             const joinerName = user.name && user.name !== 'Pending' ? user.name : (name || email || phone || 'Someone');

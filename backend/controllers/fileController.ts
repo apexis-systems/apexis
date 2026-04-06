@@ -155,9 +155,17 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
         });
 
-        // Send notifications to project members
+        // Send notifications only to project members in the SAME organization
         const members = await project_members.findAll({
-            where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
+            where: { 
+                project_id: parseInt(project_id, 10), 
+                user_id: { [Op.ne]: authUser.user_id } 
+            },
+            include: [{
+                model: UsersModel,
+                where: { organization_id: authUser.organization_id },
+                attributes: ['id', 'name']
+            }]
         });
 
         // Fallback for name if missing from token
@@ -672,10 +680,18 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             file: isSeparate ? createdFiles[0] : createdFiles[0]
         });
 
-        // Notifications for Scans
+        // Notifications for Scans only to members in the same organization
         try {
             const members = await project_members.findAll({
-                where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
+                where: { 
+                    project_id: parseInt(project_id, 10), 
+                    user_id: { [Op.ne]: authUser.user_id } 
+                },
+                include: [{
+                    model: UsersModel,
+                    where: { organization_id: authUser.organization_id },
+                    attributes: ['id', 'name']
+                }]
             });
 
             let senderName = authUser.name;
