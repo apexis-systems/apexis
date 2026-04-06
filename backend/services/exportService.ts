@@ -665,7 +665,7 @@ const drawStyledTable = (doc: any, title: string, headers: { text: string, w: nu
     const ensureSpace = (h: number) => {
         if (doc.y + h > contentBottom) {
             doc.addPage();
-            doc.y = 85; // Reserve space for compact header (rule ends at 70, +15px gap)
+            doc.y = 85; // Reserve space for header
             return true;
         }
         return false;
@@ -680,7 +680,7 @@ const drawStyledTable = (doc: any, title: string, headers: { text: string, w: nu
     doc.moveDown(0.5);
 
     // Header
-    ensureSpace(20);
+    ensureSpace(25);
     const headY = doc.y;
     doc.save().roundedRect(left, headY, r - left, 20, 4).fill(BRAND.tableHeader).restore();
     let currX = left;
@@ -697,21 +697,37 @@ const drawStyledTable = (doc: any, title: string, headers: { text: string, w: nu
         doc.y += 20;
     } else {
         rows.forEach((row, i) => {
-            const rowH = 20;
-            doc.y += 3.5; // Top margin 2
-            if (ensureSpace(rowH)) {
-                // Redraw table header on new page if needed (simplified here)
+            // Calculate height needed for this row
+            const cellVerticalPadding = 6;
+            const textOptions = (width: number) => ({ width: width - 12, lineBreak: true });
+            
+            let maxRowH = 20; // fallback min
+            let startRowX = left;
+            row.forEach((cell, j) => {
+                const h = doc.heightOfString(String(cell || ' '), textOptions(headers[j].w)) + (cellVerticalPadding * 2);
+                if (h > maxRowH) maxRowH = h;
+            });
+
+            if (ensureSpace(maxRowH + 4)) {
+                // After page break, we might want to redraw header, but for now just continue
             }
+
             const y = doc.y;
             if (i % 2 !== 1) {
-                doc.save().roundedRect(left, y, r - left, rowH, 4).fill(BRAND.tableRowAlt).restore();
+                doc.save().roundedRect(left, y, r - left, maxRowH, 4).fill(BRAND.tableRowAlt).restore();
             }
+
             let rowX = left;
             row.forEach((cell, j) => {
-                doc.font('Helvetica').fontSize(8.5).fillColor(BRAND.ink).text(String(cell || ' '), rowX + 6, y + 6, { width: headers[j].w - 12, lineBreak: false });
+                doc.font('Helvetica').fontSize(8.5).fillColor(BRAND.ink).text(
+                    String(cell || ' '), 
+                    rowX + 6, 
+                    y + cellVerticalPadding, 
+                    textOptions(headers[j].w)
+                );
                 rowX += headers[j].w;
             });
-            doc.y = y + rowH;
+            doc.y = y + maxRowH + 2; // small gap between rows
         });
     }
     doc.moveDown(1);
@@ -797,11 +813,16 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
         const summary = (report.summary || {}) as any;
 
         // 1. Files
-        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
+            i + 1, 
+            d.folder ? `${d.folder}/${d.title}` : d.title, 
+            d.user || ' ', 
+            d.date || ' '
+        ]);
         const fileW = r - left;
-        drawStyledTable(doc, 'SECTION 1 - FILES UPLOADED THIS WEEK', [
+        drawStyledTable(doc, 'SECTION 1 - FILES UPLOADED TODAY', [
             { text: '#', w: fileW * 0.08 },
-            { text: 'File Name', w: fileW * 0.52 },
+            { text: 'File Path', w: fileW * 0.52 },
             { text: 'Uploaded By', w: fileW * 0.2 },
             { text: 'Date', w: fileW * 0.16 }
         ], fileRows);
@@ -896,11 +917,16 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
 
         // Section 2 - Files
         const summary = (report.summary || {}) as any;
-        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
+            i + 1, 
+            d.folder ? `${d.folder}/${d.title}` : d.title, 
+            d.user || ' ', 
+            d.date || ' '
+        ]);
         const fileW = r - left;
         drawStyledTable(doc, 'SECTION 2 - FILES UPLOADED THIS WEEK', [
             { text: '#', w: fileW * 0.08 },
-            { text: 'File Name', w: fileW * 0.52 },
+            { text: 'File Path', w: fileW * 0.52 },
             { text: 'Uploaded By', w: fileW * 0.2 },
             { text: 'Date', w: fileW * 0.16 }
         ], fileRows);
@@ -1024,10 +1050,15 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         const tblW = r - left;
         // Section 2 - Files
         const summary = (report.summary || {}) as any;
-        const fileRows = (summary.document_titles || []).slice(0, 10).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        const fileRows = (summary.document_titles || []).slice(0, 50).map((d: any, i: number) => [
+            i + 1, 
+            d.folder ? `${d.folder}/${d.title}` : d.title, 
+            d.user || ' ', 
+            d.date || ' '
+        ]);
         drawStyledTable(doc, 'SECTION 2 — FILES UPLOADED THIS MONTH', [
             { text: '#', w: tblW * 0.08 },
-            { text: 'File Name', w: tblW * 0.52 },
+            { text: 'File Path', w: tblW * 0.52 },
             { text: 'Uploaded By', w: tblW * 0.24 },
             { text: 'Date', w: tblW * 0.16 }
         ], fileRows);
