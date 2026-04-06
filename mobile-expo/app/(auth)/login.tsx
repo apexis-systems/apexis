@@ -45,18 +45,20 @@ export default function LoginScreen() {
 
     useEffect(() => {
         if (params.code) {
-            // Force logout if user is already logged in and enters via deep link 
-            if (isLoggedIn) {
-                logout();
-            }
             setProjectCode(params.code);
             if (params.role === 'contributor' || params.role === 'client') {
                 setSelectedRole(params.role as UserRole);
             } else {
                 setSelectedRole('contributor');
             }
+
+            // If user is already logged in, we logout to allow switching
+            // but we stay on this page because of the isInvitation guard in _layout.tsx
+            if (isLoggedIn) {
+                logout();
+            }
         }
-    }, [params.code, params.role, isLoggedIn]);
+    }, [params.code, params.role, isLoggedIn, logout]);
 
     useEffect(() => {
         loadStoredCredentials();
@@ -79,7 +81,10 @@ export default function LoginScreen() {
                 if (selectedRole === 'admin') {
                     setPassword(data.secret || '');
                 } else {
-                    if (!params.code) setProjectCode(data.secret || '');
+                    // Only fill stored project code if there's NO deep link code currently active
+                    if (!projectCode && !params.code) {
+                        setProjectCode(data.secret || '');
+                    }
                 }
                 setRememberMe(true);
             }

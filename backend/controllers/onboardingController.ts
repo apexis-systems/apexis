@@ -6,7 +6,8 @@ import redis from "../config/redis.ts";
 import { users, organizations, plans } from "../models/index.ts";
 import { Op } from "sequelize";
 import { sendEmail } from "../utils/email.ts";
-import { normalizePhone, isValidPhone } from "../utils/sms.ts";
+import { normalizePhone, isValidPhone, isIndianPhone } from "../utils/sms.ts";
+
 
 const OTP_TTL = 300; // 5 minutes
 
@@ -113,7 +114,7 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
         }
 
         if (phone && !isValidPhone(phone)) {
-            return res.status(400).json({ error: "Invalid phone number. Please enter a 10-digit number." });
+            return res.status(400).json({ error: "Invalid phone number. Please include your country code (e.g. +971501234567)." });
         }
 
         const normalizedPhone = phone ? normalizePhone(phone) : null;
@@ -138,7 +139,7 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
         console.log("OTP", otp);
         const otpHash = await bcrypt.hash(otp, 10);
 
-        const identifier = (verification_method === 'phone' && phone) ? phone : (email || phone);
+        const identifier = (verification_method === 'phone' && normalizedPhone) ? normalizedPhone : (normalizedEmail || normalizedPhone);
         const redisKey = `otp:signup:admin:${identifier}`;
         await redis.set(
             redisKey,
@@ -157,6 +158,13 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
         const method = verification_method || (phone ? 'phone' : 'email');
 
         if (method === 'phone' && normalizedPhone) {
+            // Guard: phone OTP (Fast2SMS) only works for Indian numbers
+            if (!isIndianPhone(normalizedPhone)) {
+                await redis.del(redisKey);
+                return res.status(400).json({
+                    error: "Phone OTP is only supported for Indian numbers. Please use email verification."
+                });
+            }
             const { sendOTP } = await import("../utils/sms.ts");
             await sendOTP(normalizedPhone, otp);
         } else if (method === 'email' && email) {

@@ -6,8 +6,10 @@
  */
 
 /**
- * Normalizes phone numbers to +91XXXXXXXXXX format for database consistency.
- * If 10 digits are provided, prepends +91.
+ * Normalizes phone numbers for database consistency.
+ * - If exactly 10 digits are provided (Indian format), prepends +91.
+ * - If already in E.164 format (e.g. +971XXXXXXXXX), returns as-is.
+ * - Otherwise returns trimmed value.
  */
 export const normalizePhone = (phone: string): string => {
     const cleaned = phone.trim();
@@ -18,13 +20,28 @@ export const normalizePhone = (phone: string): string => {
 };
 
 /**
- * Validates if the phone number is a valid 10-digit Indian number.
- * Accepts "9876543210" or "+919876543210".
+ * Validates any phone number in E.164 format (e.g. +91XXXXXXXXXX, +971XXXXXXXXX).
+ * Accepts: "+<countrycode><subscriber>" with 7–15 total digits after the +.
+ * Also accepts plain 10-digit Indian numbers for backwards compatibility.
  */
 export const isValidPhone = (phone: string): boolean => {
-    const cleaned = phone.trim().replace("+91", "");
-    return /^\d{10}$/.test(cleaned);
+    const cleaned = phone.trim();
+    // Plain 10-digit Indian number
+    if (/^\d{10}$/.test(cleaned)) return true;
+    // E.164 format: + followed by 7 to 15 digits
+    if (/^\+\d{7,15}$/.test(cleaned)) return true;
+    return false;
 };
+
+/**
+ * Returns true only if the phone number belongs to India (+91).
+ * Phone OTP via Fast2SMS is only supported for Indian numbers.
+ */
+export const isIndianPhone = (phone: string): boolean => {
+    const cleaned = phone.trim();
+    return cleaned.startsWith('+91') || /^\d{10}$/.test(cleaned);
+};
+
 
 export const sendSMS = async (phone: string, message: string) => {
     try {

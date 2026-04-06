@@ -15,20 +15,25 @@ export interface Country {
     name: string;
     code: string;
     flag: string;
+    /** Number of digits in the subscriber number (excluding country code) */
+    phoneDigits: number;
 }
 
 export const countries: Country[] = [
-    { name: 'India', code: '+91', flag: '🇮🇳' },
-    { name: 'United States', code: '+1', flag: '🇺🇸' },
-    { name: 'United Kingdom', code: '+44', flag: '🇬🇧' },
-    { name: 'United Arab Emirates', code: '+971', flag: '🇦🇪' },
-    { name: 'Saudi Arabia', code: '+966', flag: '🇸🇦' },
-    { name: 'Australia', code: '+61', flag: '🇦🇺' },
-    { name: 'Canada', code: '+1', flag: '🇨🇦' },
-    { name: 'Singapore', code: '+65', flag: '🇸🇬' },
-    { name: 'Germany', code: '+49', flag: '🇩🇪' },
-    { name: 'France', code: '+33', flag: '🇫🇷' },
+    { name: 'India',                code: '+91',  flag: '🇮🇳', phoneDigits: 10 },
+    { name: 'United States',        code: '+1',   flag: '🇺🇸', phoneDigits: 10 },
+    { name: 'United Kingdom',       code: '+44',  flag: '🇬🇧', phoneDigits: 10 },
+    { name: 'United Arab Emirates', code: '+971', flag: '🇦🇪', phoneDigits: 9  },
+    { name: 'Saudi Arabia',         code: '+966', flag: '🇸🇦', phoneDigits: 9  },
+    { name: 'Australia',            code: '+61',  flag: '🇦🇺', phoneDigits: 9  },
+    { name: 'Canada',               code: '+1',   flag: '🇨🇦', phoneDigits: 10 },
+    { name: 'Singapore',            code: '+65',  flag: '🇸🇬', phoneDigits: 8  },
+    { name: 'Germany',              code: '+49',  flag: '🇩🇪', phoneDigits: 10 },
+    { name: 'France',               code: '+33',  flag: '🇫🇷', phoneDigits: 9  },
 ];
+
+/** Returns true only for Indian numbers (phone OTP is only supported for +91) */
+export const isIndianCountry = (country: Country): boolean => country.code === '+91';
 
 interface CountryCodePickerProps {
     selectedCountry: Country;
