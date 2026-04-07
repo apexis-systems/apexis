@@ -41,3 +41,27 @@ export const bulkUpdateFolders = async (data: { ids: (string | number)[], parent
         throw error;
     }
 };
+
+export const updateFolder = async (folderId: string | number, name: string) => {
+    try {
+        const response = await PrivateAxios.put(`/folders/${folderId}`, { name });
+        return response.data;
+    } catch (error) {
+        console.error("updateFolder Error", error);
+        throw error;
+    }
+};
+
+export const deleteFolder = async (folderId: string | number, forceDelete: boolean = false) => {
+    try {
+        const response = await (PrivateAxios as any).request({
+            method: 'delete',
+            url: `/folders/${folderId}`,
+            data: { forceDelete }
+        });
+        return response.data;
+    } catch (error) {
+        console.error("deleteFolder Error", error);
+        throw error;
+    }
+};

@@ -23,7 +23,7 @@ interface MulterFile {
 
 
 
-const s3Client = new S3Client({
+export const s3Client = new S3Client({
     region: process.env.AWS_REGION || "ap-south-2",
     credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
@@ -31,7 +31,7 @@ const s3Client = new S3Client({
     }
 });
 
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
+export const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
 
 // Helper to check access
 const checkProjectAccess = async (userId: number, projectId: number) => {
