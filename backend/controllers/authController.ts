@@ -7,6 +7,7 @@ import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
 import { normalizePhone, isValidPhone } from "../utils/sms.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
+import { getIO } from "../socket.ts";
 
 export const adminLogin = async (req: Request, res: Response) => {
     try {
@@ -104,6 +105,10 @@ export const projectLogin = async (req: Request, res: Response) => {
                 ].filter(Boolean) as any[]
             }
         });
+        
+        if (user && user.organization_id && user.organization_id !== project.organization_id && user.role !== 'superadmin') {
+            return res.status(403).json({ error: "You are already a member of another organization and cannot join projects in this one." });
+        }
 
         const roleForCode = project.contributor_code === code ? 'contributor' : 'client';
         let isNewUser = false;
@@ -177,6 +182,13 @@ export const projectLogin = async (req: Request, res: Response) => {
                         type: 'member_joined',
                         data: { projectId: String(project.id) }
                     });
+                }
+                
+                // Emit socket event to refresh project stats (counts) in real-time
+                try {
+                    getIO().to(`project-${project.id}`).emit('project-stats-updated', { projectId: String(project.id) });
+                } catch (ioErr) {
+                    console.error('Socket emit error (non-fatal):', ioErr);
                 }
             } catch (notifErr) {
                 console.error('Member join notification error (non-fatal):', notifErr);
@@ -364,6 +376,10 @@ export const completePublicSignup = async (req: Request, res: Response) => {
             }
         });
 
+        if (user && user.organization_id && user.organization_id !== decoded.organization_id && user.role !== 'superadmin') {
+            return res.status(403).json({ error: "You are already a member of another organization and cannot join projects in this one." });
+        }
+
         if (!user) {
             // Create user only if they don't exist globally
             user = await users.create({
@@ -429,6 +445,13 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                     type: 'member_joined',
                     data: { projectId: String(project.id) }
                 });
+            }
+            
+            // Emit socket event to refresh project stats (counts) in real-time
+            try {
+                getIO().to(`project-${project.id}`).emit('project-stats-updated', { projectId: String(project.id) });
+            } catch (ioErr) {
+                console.error('Socket emit error (non-fatal):', ioErr);
             }
         } catch (notifErr) {
             console.error('Member join notification error (non-fatal):', notifErr);

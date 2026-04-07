@@ -141,11 +141,11 @@ export const getProjects = async (req: Request, res: Response) => {
                         'totalFolders'
                     ],
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor' AND u."role" != 'admin')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor')`),
                         'totalContributors'
                     ],
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client' AND u."role" != 'admin')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client')`),
                         'totalClients'
                     ],
                 ],
@@ -202,11 +202,11 @@ export const getProjectById = async (req: Request, res: Response) => {
             attributes: {
                 include: [
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor' AND u."role" != 'admin')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor')`),
                         'totalContributors'
                     ],
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client' AND u."role" != 'admin')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client')`),
                         'totalClients'
                     ]
                 ]
@@ -391,7 +391,6 @@ export const getProjectMembers = async (req: Request, res: Response) => {
             where: { project_id: id },
             include: [{
                 model: users,
-                where: { role: { [Op.ne]: 'admin' } },
                 attributes: ['id', 'name', 'email', 'phone_number', 'role', 'profile_pic', 'createdAt']
             }],
             order: [['createdAt', 'DESC']]

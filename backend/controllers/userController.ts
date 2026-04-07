@@ -15,6 +15,7 @@ import { sendEmail } from "../utils/email.ts";
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { Op } from "sequelize";
+import { getIO } from "../socket.ts";
 
 export const inviteUser = async (req: Request, res: Response) => {
     try {
@@ -80,6 +81,13 @@ export const inviteUser = async (req: Request, res: Response) => {
                 // Already a member with different role, update it or leave it?
                 // For now, let's allow updating to the new invited role
                 await existingMembership.update({ role });
+            }
+
+            // Emit socket event to refresh project stats (counts) in real-time
+            try {
+                getIO().to(`project-${actualProjectId}`).emit('project-stats-updated', { projectId: String(actualProjectId) });
+            } catch (ioErr) {
+                console.error('Socket emit error (non-fatal):', ioErr);
             }
         }
 

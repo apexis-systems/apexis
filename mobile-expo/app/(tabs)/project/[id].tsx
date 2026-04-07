@@ -83,19 +83,20 @@ export default function ProjectWorkspaceScreen() {
         }
     }, [tab]);
 
-    useEffect(() => {
-        const fetchProject = async () => {
-            try {
-                const res = await PrivateAxios.get(`/projects/${id}`);
-                setProject(res.data.project);
-            } catch (error) {
-                console.error("Failed to fetch project:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchProject();
+    const fetchProject = useCallback(async () => {
+        try {
+            const res = await PrivateAxios.get(`/projects/${id}`);
+            setProject(res.data.project);
+        } catch (error) {
+            console.error("Failed to fetch project:", error);
+        } finally {
+            setLoading(false);
+        }
     }, [id]);
+
+    useEffect(() => {
+        fetchProject();
+    }, [fetchProject]);
 
     const checkRFIs = useCallback(async () => {
         if (!id || !user?.id) return;
@@ -130,6 +131,7 @@ export default function ProjectWorkspaceScreen() {
             };
 
             socket.on('rfi-updated', handleRfiUpdate);
+            socket.on('project-stats-updated', fetchProject);
             socket.on('new-notification', (notif: any) => {
                 if (notif.type?.startsWith('rfi_')) {
                     handleRfiUpdate();
@@ -138,6 +140,7 @@ export default function ProjectWorkspaceScreen() {
 
             return () => {
                 socket.off('rfi-updated', handleRfiUpdate);
+                socket.off('project-stats-updated', fetchProject);
                 socket.off('new-notification', handleRfiUpdate);
             };
         }
