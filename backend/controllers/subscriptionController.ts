@@ -9,12 +9,23 @@ import { transactions, organizations, plans } from "../models/index.ts";
 
 export const createOrder = async (req: Request, res: Response) => {
     try {
-        console.log("Creating order with Key ID starting with:", process.env.RAZORPAY_KEY_ID?.substring(0, 8));
-        const { amount, currency, plan_name, plan_cycle } = req.body;
         const { organization_id, user_id } = (req as any).user;
+        const { amount, currency, plan_name, plan_cycle } = req.body;
 
         if (!amount || !currency || !plan_name || !plan_cycle) {
             return res.status(400).json({ message: "Missing required fields" });
+        }
+
+        // Check if organization already has this plan active
+        const org = await organizations.findByPk(organization_id);
+        if (org && org.plan_name === plan_name) {
+            const now = new Date();
+            const endDate = new Date(org.plan_end_date);
+            if (endDate > now) {
+                return res.status(400).json({ 
+                    message: `You already have an active ${plan_name} subscription until ${endDate.toLocaleDateString()}.` 
+                });
+            }
         }
 
         const razorpay = new Razorpay({

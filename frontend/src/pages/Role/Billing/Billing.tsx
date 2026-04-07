@@ -291,18 +291,28 @@ const Billing = () => {
                                     ))}
                                 </ul>
 
-                                <Button
-                                    onClick={() => handlePayment(plan)}
-                                    disabled={loading !== null}
-                                    className={cn(
-                                        'w-full h-12 rounded-xl font-bold transition-all',
-                                        plan.key === 'enterprise'
-                                            ? 'bg-transparent border border-muted-foreground/30 text-foreground hover:bg-secondary'
-                                            : 'bg-[#FF8A3D] text-white hover:bg-[#FF8A3D]/90'
-                                    )}
-                                >
-                                    {loading === plan.key ? "Processing..." : plan.buttonText}
-                                </Button>
+                                {(() => {
+                                    const isCurrentPlan = user?.organization?.plan_name === plan.name;
+                                    const isNotExpired = user?.organization?.plan_end_date ? new Date(user.organization.plan_end_date) > new Date() : false;
+                                    const isActive = isCurrentPlan && isNotExpired;
+
+                                    return (
+                                        <Button
+                                            onClick={() => handlePayment(plan)}
+                                            disabled={loading !== null || isActive}
+                                            className={cn(
+                                                'w-full h-12 rounded-xl font-bold transition-all',
+                                                isActive 
+                                                    ? 'bg-green-100 text-green-700 hover:bg-green-100 border border-green-200' 
+                                                    : plan.key === 'enterprise'
+                                                        ? 'bg-transparent border border-muted-foreground/30 text-foreground hover:bg-secondary'
+                                                        : 'bg-[#FF8A3D] text-white hover:bg-[#FF8A3D]/90'
+                                            )}
+                                        >
+                                            {loading === plan.key ? "Processing..." : isActive ? "Current Plan" : plan.buttonText}
+                                        </Button>
+                                    );
+                                })()}
                             </div>
                         ))}
                     </div>
