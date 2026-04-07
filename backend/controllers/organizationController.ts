@@ -1,16 +1,7 @@
 import type { Request, Response } from "express";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { organizations } from "../models/index.ts";
-
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || "ap-south-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    },
-});
-
-const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME || "apexis-bucket";
 
 export const uploadLogo = async (req: Request | any, res: Response | any) => {
     try {

@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { sequelize } from './models/index.ts';
 import onboardingRoutes from "./routes/onboardingRoutes.ts";
 import authRoutes from "./routes/authRoutes.ts";
@@ -40,7 +41,8 @@ const corsOptions = {
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 };
 
-// Apply CORS middleware
+// Apply security and parsing middleware
+app.use(helmet());
 app.use(cors(corsOptions));
 app.use(express.json());
 
@@ -68,6 +70,20 @@ app.use("/api/chats", chatRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/subscription", subscriptionRoutes);
+
+// Global Error Handler
+app.use((err: any, req: Request, res: Response, next: any) => {
+    console.error("Unhandled Error:", err);
+    
+    // Default to 500 Internal Server Error
+    const status = err.status || 500;
+    const message = err.message || "Internal Server Error";
+    
+    res.status(status).json({
+        error: message,
+        details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+});
 
 // Test DB Connection and Start Server
 const startServer = async () => {

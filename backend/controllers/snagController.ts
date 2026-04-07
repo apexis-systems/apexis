@@ -1,27 +1,19 @@
 import type { Request, Response } from 'express';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Op } from 'sequelize';
 import sharp from 'sharp';
 import { addWatermark } from '../utils/watermark.ts';
 import { snags, users, project_members, activities } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
 
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'ap-south-2',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    },
-});
-const BUCKET = process.env.S3_BUCKET_NAME || 'apexis-bucket';
-
 // Helper: generate presigned URL for a snag photo
 const withPresignedUrl = async (snag: any) => {
     const json = snag.toJSON ? snag.toJSON() : { ...snag };
     if (json.photo_url) {
         try {
-            const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: json.photo_url });
+            const cmd = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: json.photo_url });
             json.photoDownloadUrl = await getSignedUrl(s3Client, cmd, { expiresIn: 3600 });
         } catch { json.photoDownloadUrl = null; }
     }
@@ -78,7 +70,7 @@ export const createSnag = async (req: Request, res: Response) => {
 
             const key = `projects/${project_id}/snags/${Date.now()}${ext}`;
             await s3Client.send(new PutObjectCommand({
-                Bucket: BUCKET, Key: key,
+                Bucket: BUCKET_NAME, Key: key,
                 ContentType: (req as any).file.mimetype, Body: fileBuffer,
             }));
             photo_url = key;

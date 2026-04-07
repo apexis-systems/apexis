@@ -12,7 +12,8 @@ import {
 } from "../models/index.ts";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import sharp from 'sharp';
 import { Op } from "sequelize";
 import { getIO } from "../socket.ts";
@@ -240,14 +241,7 @@ export const deleteUser = async (req: Request, res: Response) => {
 };
 
 
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'ap-south-2',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    },
-});
-const BUCKET = process.env.S3_BUCKET_NAME || 'apexis-bucket';
+
 
 export const updatePushToken = async (req: Request, res: Response) => {
     try {
@@ -290,7 +284,7 @@ export const updateProfilePic = async (req: Request, res: Response) => {
         const key = `profiles/${authUser.user_id}/${Date.now()}.jpg`;
 
         await s3Client.send(new PutObjectCommand({
-            Bucket: BUCKET,
+            Bucket: BUCKET_NAME,
             Key: key,
             ContentType: 'image/jpeg',
             Body: fileBuffer,

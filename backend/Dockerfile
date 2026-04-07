@@ -18,5 +18,5 @@ COPY . .
 
 EXPOSE 5001
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["sh", "./docker-entrypoint.sh"]
 CMD ["npm", "run", "dev"]

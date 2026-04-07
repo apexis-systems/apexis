@@ -2,7 +2,8 @@ import { getIO } from '../socket.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import db from '../models/index.ts';
 import PDFDocument from 'pdfkit';
@@ -13,16 +14,6 @@ import { sendNotification } from '../utils/notificationUtils.ts';
 export const activeExports = new Map<number, { startTime: number, statusText: string, etaMs?: number }>();
 
 const { projects, folders, files, organizations } = db;
-
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || "ap-south-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    }
-});
-
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

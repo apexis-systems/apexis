@@ -5,7 +5,8 @@ import db from "../models/index.ts";
 const { files, folders, project_members, activities, users } = db;
 
 import { Op } from "sequelize";
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from 'sharp';
 import { addWatermark } from "../utils/watermark.ts";
@@ -20,18 +21,6 @@ interface MulterFile {
     mimetype: string;
     size: number;
 }
-
-
-
-export const s3Client = new S3Client({
-    region: process.env.AWS_REGION || "ap-south-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    }
-});
-
-export const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
 
 // Helper to check access
 const checkProjectAccess = async (userId: number, projectId: number) => {

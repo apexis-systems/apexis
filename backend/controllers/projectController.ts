@@ -1,17 +1,9 @@
 import type { Request, Response } from "express";
 import crypto from "crypto";
 import { startExportProcess, activeExports } from "../services/exportService.ts";
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || "ap-south-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    }
-});
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { projects, users, folders, files, organizations, project_members, Sequelize } from "../models/index.ts";
 import { Op, fn, col, literal } from "sequelize";
 

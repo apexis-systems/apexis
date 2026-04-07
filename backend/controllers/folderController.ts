@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { folders, files, project_members, activities, users as UsersModel } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { Op } from "sequelize";
-import { s3Client, BUCKET_NAME } from "./fileController.ts";
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 export const createFolder = async (req: Request, res: Response) => {
