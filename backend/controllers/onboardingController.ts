@@ -207,24 +207,40 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
 
         const now = new Date();
         const endDate = new Date();
-        endDate.setDate(now.getDate() + 14);
+        endDate.setDate(now.getDate() + 60);
 
-        const [plan] = await plans.findOrCreate({
-            where: { id: 1 },
-            defaults: {
-                name: "Free Plan",
-                price: 0,
-                storage_limit_mb: 100,
-                duration_days: 14
-            }
+        // Find the Freemium plan (synced from our seeds)
+        let plan = await plans.findOne({ 
+            where: { name: "Freemium" } 
         });
+
+        // Fallback: create it if it somehow doesn't exist yet
+        if (!plan) {
+            plan = await plans.create({
+                name: "Freemium",
+                price: 0,
+                storage_limit_mb: 500,
+                duration_days: 60,
+                project_limit: 1,
+                contributor_limit: 2,
+                client_limit: 1,
+                max_snags: 15,
+                max_rfis: 15,
+                can_export_reports: false,
+                can_share_media: false,
+                can_export_handover: false
+            });
+        }
 
         const [organization] = await organizations.findOrCreate({
             where: { name: organization_name },
             defaults: {
-                plan_id: plan.id, // Default Free Plan ID
+                plan_id: plan.id,
+                plan_name: plan.name,
+                plan_price: plan.price,
                 plan_start_date: now,
-                plan_end_date: endDate
+                plan_end_date: endDate,
+                storage_limit_mb: plan.storage_limit_mb
             }
         });
 
