@@ -111,17 +111,13 @@ export const getProjects = async (req: Request, res: Response) => {
         } else if (authUser.role === 'admin') {
             whereCondition.organization_id = authUser.organization_id;
         } else if (authUser.role === 'contributor' || authUser.role === 'client') {
-            if (authUser.project_id) {
-                // User logged in with a specific project code, restrict to ONLY that project
-                whereCondition.id = authUser.project_id;
-            } else {
-                const userMemberships = await project_members.findAll({
-                    where: { user_id: authUser.user_id },
-                    attributes: ['project_id']
-                });
-                const projectIds = userMemberships.map((pm: any) => pm.project_id);
-                whereCondition.id = { [Op.in]: projectIds };
-            }
+            // Fetch all projects where the user has an explicit membership record
+            const userMemberships = await project_members.findAll({
+                where: { user_id: authUser.user_id },
+                attributes: ['project_id']
+            });
+            const projectIds = userMemberships.map((pm: any) => pm.project_id);
+            whereCondition.id = { [Op.in]: projectIds };
         }
 
         const result = await projects.findAll({
@@ -221,8 +217,14 @@ export const getProjectById = async (req: Request, res: Response) => {
         if (authUser.role === "admin" && project.organization_id !== authUser.organization_id) {
             return res.status(403).json({ error: "Forbidden: Not part of organization" });
         }
-        if ((authUser.role === "contributor" || authUser.role === "client") && authUser.project_id !== project.id) {
-            return res.status(403).json({ error: "Forbidden: Not assigned to this project" });
+        if (authUser.role === "contributor" || authUser.role === "client") {
+            // Check if user is a member of this project in the database
+            const membership = await project_members.findOne({
+                where: { project_id: project.id, user_id: authUser.user_id, role: authUser.role }
+            });
+            if (!membership) {
+                return res.status(403).json({ error: "Forbidden: Not assigned to this project" });
+            }
         }
 
         let projectOutput = project.toJSON ? project.toJSON() : project;

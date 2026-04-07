@@ -538,6 +538,8 @@ export const changePassword = async (req: Request, res: Response) => {
 export const getMyMemberships = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
+        const dbUser = await users.findByPk(authUser.user_id, { attributes: ['id', 'role', 'organization_id'] });
+        
         const memberships = await project_members.findAll({
             where: { user_id: authUser.user_id },
             include: [{ 
@@ -546,7 +548,49 @@ export const getMyMemberships = async (req: Request, res: Response) => {
                 include: [{ model: organizations, attributes: ['name'] }]
             }]
         });
-        res.status(200).json({ memberships });
+
+        const results = memberships.map((m: any) => m.toJSON ? m.toJSON() : m);
+
+        // If the user's primary role is admin or superadmin, they should be able to switch back to that role 
+        // for any project they are a member of (or currently viewing), even if not explicitly in project_members with that role.
+        if (dbUser && (dbUser.role === 'admin' || dbUser.role === 'superadmin')) {
+            const primaryRole = dbUser.role;
+
+            // 1. Ensure primary role is available for all existing memberships
+            results.forEach((m: any) => {
+                const hasPrimary = results.some((sm: any) => sm.project_id === m.project_id && sm.role === primaryRole);
+                if (!hasPrimary) {
+                    results.push({
+                        project_id: m.project_id,
+                        user_id: dbUser.id,
+                        role: primaryRole,
+                        project: m.project
+                    });
+                }
+            });
+
+            // 2. Also ensure it's available for the current active project if not already in results
+            const currentProjectId = authUser.project_id;
+            if (currentProjectId) {
+                const alreadyInResults = results.some((m: any) => Number(m.project_id) === Number(currentProjectId) && m.role === primaryRole);
+                if (!alreadyInResults) {
+                    const project = await projects.findByPk(currentProjectId, {
+                        include: [{ model: organizations, as: 'organization', attributes: ['name'] }]
+                    });
+                    // For admins, check org match. Superadmins can switch anywhere.
+                    if (project && (primaryRole === 'superadmin' || project.organization_id === dbUser.organization_id)) {
+                        results.push({
+                            project_id: project.id,
+                            user_id: dbUser.id,
+                            role: primaryRole,
+                            project: project.toJSON()
+                        });
+                    }
+                }
+            }
+        }
+
+        res.status(200).json({ memberships: results });
     } catch (error) {
         console.error("Get My Memberships Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -562,19 +606,32 @@ export const switchContext = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Project ID and role are required" });
         }
 
-        const membership = await project_members.findOne({
-            where: { user_id: authUser.user_id, project_id, role }
-        });
-
-        if (!membership) {
-            return res.status(403).json({ error: "No such membership found" });
-        }
-
         const user = await users.findByPk(authUser.user_id);
         const project = await projects.findByPk(project_id);
 
         if (!user || !project) {
             return res.status(404).json({ error: "User or project not found" });
+        }
+
+        // PERMISSION CHECK: 
+        // 1. Is user a Superadmin? (Can switch to any role for any project)
+        // 2. Is user an Admin of the organization? (Can switch to 'admin' role for any project in their org)
+        const isPrimaryRoleSwitch = (
+            (user.role === 'admin' && role === 'admin' && project.organization_id === user.organization_id) ||
+            (user.role === 'superadmin')
+        );
+
+        let membership = null;
+        if (!isPrimaryRoleSwitch) {
+            // Only query project_members if it's NOT a primary role switch or superadmin switch
+            // This avoids invalid ENUM input errors for 'admin' role which isn't in the enum.
+            membership = await project_members.findOne({
+                where: { user_id: authUser.user_id, project_id, role }
+            });
+        }
+
+        if (!membership && !isPrimaryRoleSwitch) {
+            return res.status(403).json({ error: "No such membership found" });
         }
 
         const token = jwt.sign(
