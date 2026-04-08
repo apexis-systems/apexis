@@ -47,12 +47,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await SecureStore.deleteItemAsync('token');
     }, []);
 
-    const fetchUser = useCallback(async () => {
-        setIsLoading(true);
+    const fetchUser = useCallback(async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         try {
             const token = await SecureStore.getItemAsync('token');
             if (!token) {
-                setIsLoading(false);
+                if (showLoading) setIsLoading(false);
                 return;
             }
             const res = await getMe();
@@ -65,12 +65,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             logout();
         } finally {
-            setIsLoading(false);
+            if (showLoading) setIsLoading(false);
         }
     }, [logout]);
 
     useEffect(() => {
-        fetchUser();
+        fetchUser(true);
     }, [fetchUser]);
 
     const login = useCallback(async (token: string) => {

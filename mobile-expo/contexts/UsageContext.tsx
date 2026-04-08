@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getUsage } from '@/services/subscriptionService';
 import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext';
 
 export interface UsageData {
     plan: {
@@ -37,6 +38,7 @@ const UsageContext = createContext<UsageContextType | undefined>(undefined);
 
 export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user } = useAuth() as any;
+    const { socket } = useSocket();
     const [usageData, setUsageData] = useState<UsageData | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -60,6 +62,21 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setUsageData(null);
         }
     }, [user, refreshUsage]);
+
+    useEffect(() => {
+        if (!socket || !user || user.role === 'superadmin') return;
+
+        const onSubscriptionUpdated = (payload: any) => {
+            if (!payload?.organization_id || payload.organization_id === user.organization_id) {
+                refreshUsage();
+            }
+        };
+
+        socket.on('subscription-updated', onSubscriptionUpdated);
+        return () => {
+            socket.off('subscription-updated', onSubscriptionUpdated);
+        };
+    }, [socket, user, refreshUsage]);
 
     const checkLimit = (type: any): boolean => {
         if (!usageData) return true;

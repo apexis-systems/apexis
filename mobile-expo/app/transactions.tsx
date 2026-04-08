@@ -56,7 +56,12 @@ export default function TransactionsScreen() {
                     </View>
                     
                     <View style={styles.footer}>
-                        <Text style={[styles.orderId, { color: colors.textMuted }]}>ID: {item.payment_order_id}</Text>
+                        <View>
+                            <Text style={[styles.orderId, { color: colors.textMuted }]}>ID: {item.payment_order_id}</Text>
+                            <Text style={[styles.orderId, { color: colors.textMuted, marginTop: 2 }]}>
+                                Invoice: {item.invoice_number || '-'}
+                            </Text>
+                        </View>
                         <View style={[styles.statusBadge, { backgroundColor: isSuccess ? 'rgba(34,197,94,0.1)' : 'rgba(234,179,8,0.1)' }]}>
                             <Text style={[styles.statusText, { color: isSuccess ? '#22c55e' : '#eab308' }]}>
                                 {item.payment_status.toUpperCase()}

@@ -47,6 +47,11 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING,
                 defaultValue: "pending",
             },
+            invoice_number: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                unique: true,
+            },
         },
         {
             tableName: "transactions",

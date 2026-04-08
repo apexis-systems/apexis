@@ -12,6 +12,7 @@ import { getMe } from '@/services/authService';
 import RazorpayCheckout from 'react-native-razorpay';
 
 const PLAN_ORDER = ['One-Time Buy', 'Starter', 'Professional', 'Enterprise'];
+const GST_RATE = 0.18;
 const PLAN_PERIOD_MAP: Record<string, string> = {
     'One-Time Buy': '',
     'Starter': '/mo',
@@ -23,6 +24,9 @@ const isEnterprisePlan = (plan: any): boolean => {
     const name = String(plan?.name || '').trim().toLowerCase();
     return name === 'enterprise' || Number(plan?.price) >= 999999;
 };
+
+const gstAmount = (baseAmount: number): number => Number((baseAmount * GST_RATE).toFixed(2));
+const payableAmount = (baseAmount: number): number => Number((baseAmount + gstAmount(baseAmount)).toFixed(2));
 
 export default function SubscriptionScreen() {
     const { colors } = useTheme();
@@ -232,7 +236,8 @@ export default function SubscriptionScreen() {
                 <View style={styles.plansList}>
                     {availablePlans.map((p) => {
                         const isCurrent = p.name === plan.name;
-                        const price = Number(p.price) || 0;
+                        const basePrice = Number(p.price) || 0;
+                        const price = basePrice;
                         const isEnterprise = isEnterprisePlan(p);
                         const period = PLAN_PERIOD_MAP[p.name] || '';
                         const buttonLabel = isCurrent ? 'Current' : isEnterprise ? 'Contact Sales' : 'Upgrade';
@@ -247,6 +252,16 @@ export default function SubscriptionScreen() {
                                         </Text>
                                         {!!period && <Text style={{ fontSize: 12, color: colors.textMuted, marginLeft: 4 }}>{period}</Text>}
                                     </View>
+                                    {!isEnterprise && (
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                                            ₹{basePrice.toLocaleString('en-IN')} + 18% GST
+                                        </Text>
+                                    )}
+                                    {!isEnterprise && (
+                                        <Text style={{ fontSize: 11, color: colors.text, marginTop: 2, fontWeight: '700' }}>
+                                            Payable: ₹{payableAmount(basePrice).toLocaleString('en-IN')}
+                                        </Text>
+                                    )}
                                 </View>
                                 
                                 <TouchableOpacity 
