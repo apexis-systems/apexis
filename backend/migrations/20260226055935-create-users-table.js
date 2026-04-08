@@ -54,6 +54,24 @@ export default {
         allowNull: false,
         defaultValue: false
       },
+      phone_number: {
+        type: Sequelize.STRING,
+        allowNull: true,
+        unique: true,
+      },
+      phone_verified: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      fcm_token: {
+        type: Sequelize.STRING,
+        allowNull: true,
+      },
+      profile_pic: {
+        type: Sequelize.STRING,
+        allowNull: true,
+      },
       createdAt: {
         type: Sequelize.DATE,
         allowNull: false,

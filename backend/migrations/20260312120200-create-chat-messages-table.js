@@ -13,20 +13,43 @@ export default {
                 type: Sequelize.INTEGER,
                 allowNull: false,
                 references: { model: 'users', key: 'id' },
-                onDelete: 'SET NULL'
+                onDelete: 'CASCADE'
             },
             text: {
                 type: Sequelize.TEXT,
-                allowNull: false
+                allowNull: true
             },
             type: {
-                type: Sequelize.ENUM('text', 'image', 'system'),
+                type: Sequelize.ENUM('text', 'image', 'file', 'system'),
                 defaultValue: 'text',
                 allowNull: false,
+            },
+            file_url: {
+                type: Sequelize.TEXT,
+                allowNull: true,
+            },
+            file_name: {
+                type: Sequelize.STRING,
+                allowNull: true,
+            },
+            file_type: {
+                type: Sequelize.STRING,
+                allowNull: true,
+            },
+            file_size: {
+                type: Sequelize.STRING,
+                allowNull: true,
             },
             seen: {
                 type: Sequelize.BOOLEAN,
                 defaultValue: false
+            },
+            parent_id: {
+                type: Sequelize.INTEGER,
+                allowNull: true,
+                references: { model: 'chat_messages', key: 'id' },
+                onDelete: 'SET NULL',
+                onUpdate: 'CASCADE',
             },
             createdAt: {
                 type: Sequelize.DATE,
