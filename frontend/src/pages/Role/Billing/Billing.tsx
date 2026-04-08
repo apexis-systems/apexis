@@ -2,12 +2,15 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Check, Clock, CreditCard, History } from 'lucide-react';
+import { Check, Clock, CreditCard, History, LayoutGrid, HardDrive, Users, AlertCircle, FileText } from 'lucide-react';
+import { useUsage } from '@/contexts/UsageContext';
+import { Progress } from "@/components/ui/progress";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import * as subscriptionService from '@/services/subscriptionService';
+import { getMe } from '@/services/authService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const plans = [
@@ -18,15 +21,13 @@ const plans = [
         validity: 'Valid for 90 days',
         trial: '14 Day Free Trial',
         monthlyPrice: '₹10,000',
-        yearlyPrice: '₹10,000',
         monthlyValue: 10000,
-        yearlyValue: 10000,
         isSubscription: false,
         recommended: false,
         buttonText: 'Buy Now',
         features: [
-            'Single Project Access', 'Client Viewership', 'Basic Reporting', '5GB Cloud Storage', 
-            'One-time purchase', 'Snag List Feature', 'Drawings Release to Site', 
+            'Single Project Access', 'Client Viewership', 'Basic Reporting', '5GB Cloud Storage',
+            'One-time purchase', 'Snag List Feature', 'Drawings Release to Site',
             'Multi-lingual Support (English, Hindi & Telugu)', '14-Day Free Trial', 'Secure Data Storage'
         ],
     },
@@ -36,15 +37,13 @@ const plans = [
         subtitle: 'Up to 5 projects',
         trial: '14 Day Free Trial',
         monthlyPrice: '₹40,000',
-        yearlyPrice: '₹32,000',
         monthlyValue: 40000,
-        yearlyValue: 32000 * 12,
         period: '/month',
         recommended: false,
         buttonText: 'Get Started',
         features: [
-            'Up to 5 Projects', 'Client Viewership', 'Structured Reporting', '25GB Cloud Storage', 
-            'Basic Project Dashboard', 'Snag List Feature', 'Drawings Release to Site', 
+            'Up to 5 Projects', 'Client Viewership', 'Structured Reporting', '25GB Cloud Storage',
+            'Basic Project Dashboard', 'Snag List Feature', 'Drawings Release to Site',
             'Multi-lingual Support (English, Hindi & Telugu)', '14-Day Free Trial', 'Secure Data Storage'
         ],
     },
@@ -54,16 +53,14 @@ const plans = [
         subtitle: 'Up to 10 projects',
         trial: '14 Day Free Trial',
         monthlyPrice: '₹60,000',
-        yearlyPrice: '₹48,000',
         monthlyValue: 60000,
-        yearlyValue: 48000 * 12,
         period: '/month',
         recommended: true,
         buttonText: 'Upgrade to Pro',
         features: [
-            'Up to 10 Projects', 'Client Viewership', 'AI-Assisted Reports', 'Role-Based Access', 
-            '100GB Cloud Storage', 'Media Documentation', 'Priority Support', 'Snag List Feature', 
-            'Drawings Release to Site', 'Multi-lingual Support (English, Hindi & Telugu)', 
+            'Up to 10 Projects', 'Client Viewership', 'AI-Assisted Reports', 'Role-Based Access',
+            '100GB Cloud Storage', 'Media Documentation', 'Priority Support', 'Snag List Feature',
+            'Drawings Release to Site', 'Multi-lingual Support (English, Hindi & Telugu)',
             '14-Day Free Trial', 'Secure Data Storage'
         ],
     },
@@ -73,26 +70,24 @@ const plans = [
         subtitle: 'Above 10 projects',
         trial: '14 Day Free Trial',
         monthlyPrice: 'Custom',
-        yearlyPrice: 'Custom',
         monthlyValue: 0,
-        yearlyValue: 0,
         recommended: false,
         buttonText: 'Contact Sales',
         features: [
-            'Above 10 Projects', 'Client Viewership', 'Custom Workflows', 'Custom Onboarding', 
-            'Dedicated Support', 'Custom Integrations', 'Above 100GB Cloud Storage', 
-            'Snag List Feature', 'Drawings Release to Site', 'Multi-lingual Support (English, Hindi & Telugu)', 
+            'Above 10 Projects', 'Client Viewership', 'Custom Workflows', 'Custom Onboarding',
+            'Dedicated Support', 'Custom Integrations', 'Above 100GB Cloud Storage',
+            'Snag List Feature', 'Drawings Release to Site', 'Multi-lingual Support (English, Hindi & Telugu)',
             '14-Day Free Trial', 'Secure Data Storage'
         ],
     },
 ];
 
 const Billing = () => {
-    const { user } = useAuth();
+    const { user, setUser } = useAuth();
     const { t } = useLanguage();
+    const { usageData, refreshUsage } = useUsage();
     const [loading, setLoading] = useState<string | null>(null);
     const [transactions, setTransactions] = useState<any[]>([]);
-    const [isYearly, setIsYearly] = useState(false);
 
     useEffect(() => {
         if (user && (user.role === 'admin' || user.role === 'superadmin')) {
@@ -122,7 +117,7 @@ const Billing = () => {
 
     const handlePayment = async (plan: any) => {
         if (plan.key === 'enterprise') {
-            window.location.href = "mailto:sales@apexis.in?subject=Enterprise Plan Inquiry";
+            window.location.href = "mailto:support@apexis.in?subject=Enterprise Plan Inquiry";
             return;
         }
 
@@ -136,16 +131,22 @@ const Billing = () => {
             }
 
             const orderData = await subscriptionService.createOrder({
-                amount: isYearly ? plan.yearlyValue : plan.monthlyValue,
+                amount: plan.monthlyValue,
                 currency: "INR",
                 plan_name: plan.name,
-                plan_cycle: (isYearly ? "annual" : "monthly") as 'monthly' | 'annual'
+                plan_cycle: 'monthly'
             });
 
             const { order } = orderData;
+            if (!order?.id || !order?.amount || !order?.currency) {
+                throw new Error("Invalid payment order received from server.");
+            }
+
+            const appIconUrl = `${window.location.origin}/app-icon.png`;
 
             const options = {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+                image: appIconUrl,
                 amount: order.amount,
                 currency: order.currency,
                 name: "Apexis",
@@ -153,16 +154,24 @@ const Billing = () => {
                 order_id: order.id,
                 handler: async (response: any) => {
                     try {
-                        const verifyData = {
+                        await subscriptionService.verifyPayment({
                             razorpay_order_id: response.razorpay_order_id,
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_signature: response.razorpay_signature,
                             plan_name: plan.name,
-                            plan_cycle: (isYearly ? 'annual' : 'monthly') as 'monthly' | 'annual'
-                        };
-                        await subscriptionService.verifyPayment(verifyData);
+                            plan_cycle: 'monthly'
+                        });
                         toast.success("Payment successful! Your plan has been upgraded.");
                         loadTransactions();
+                        await refreshUsage();
+                        try {
+                            const refreshed = await getMe();
+                            if (refreshed?.user) {
+                                setUser({ ...refreshed.user, organization: refreshed.organization, project_id: refreshed.project_id });
+                            }
+                        } catch (refreshError) {
+                            console.error("Failed to refresh user after payment:", refreshError);
+                        }
                     } catch (error) {
                         toast.error("Payment verification failed. Please contact support.");
                     }
@@ -178,7 +187,8 @@ const Billing = () => {
 
             const rzp = new (window as any).Razorpay(options);
             rzp.on("payment.failed", (response: any) => {
-                toast.error(`Payment failed: ${response.error.description}`);
+                const message = response?.error?.description || "Payment failed. Please try again.";
+                toast.error(`Payment failed: ${message}`);
             });
             rzp.open();
         } catch (error: any) {
@@ -203,35 +213,15 @@ const Billing = () => {
                 <h1 className="text-2xl font-bold text-foreground">{t('billing')}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">Choose the plan that fits your team</p>
             </div>
-
-            {/* Monthly/Yearly Toggle */}
-            <div className="flex items-center justify-center gap-4 mb-10">
-                <span className={cn("text-sm transition-colors", !isYearly ? "text-foreground font-bold" : "text-muted-foreground")}>Monthly</span>
-                <button
-                    onClick={() => setIsYearly(!isYearly)}
-                    className="relative w-12 h-6 rounded-full bg-secondary transition-colors focus:outline-none"
-                    aria-label="Toggle billing cycle"
-                >
-                    <div className={cn(
-                        "absolute top-1 left-1 w-4 h-4 rounded-full bg-foreground transition-transform duration-200 ease-in-out shadow-sm",
-                        isYearly ? "translate-x-6" : "translate-x-0"
-                    )} />
-                </button>
-                <div className="flex items-center gap-2">
-                    <span className={cn("text-sm transition-colors", isYearly ? "text-foreground font-bold" : "text-muted-foreground")}>Yearly</span>
-                    {isYearly && (
-                        <span className="bg-orange-100 text-orange-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                            Save 20%
-                        </span>
-                    )}
-                </div>
-            </div>
-
             <Tabs defaultValue="plans" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-[400px] mx-auto mb-10 text-foreground">
+                <TabsList className="grid w-full grid-cols-3 max-w-[450px] mx-auto mb-10 text-foreground">
                     <TabsTrigger value="plans" className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4" />
                         Plans
+                    </TabsTrigger>
+                    <TabsTrigger value="usage" className="flex items-center gap-2">
+                        <LayoutGrid className="h-4 w-4" />
+                        Usage
                     </TabsTrigger>
                     <TabsTrigger value="history" className="flex items-center gap-2">
                         <History className="h-4 w-4" />
@@ -260,7 +250,7 @@ const Billing = () => {
                                 <div className="text-center mb-6">
                                     <h3 className="text-xl font-bold text-foreground mb-1">{plan.name}</h3>
                                     <p className="text-xs text-muted-foreground mb-3">{plan.subtitle}</p>
-                                    
+
                                     {plan.validity && (
                                         <p className="text-[11px] text-orange-500 font-semibold mb-1">{plan.validity}</p>
                                     )}
@@ -268,18 +258,12 @@ const Billing = () => {
 
                                     <div className="flex items-baseline justify-center gap-1">
                                         <span className="text-3xl font-black text-foreground">
-                                            {isYearly ? plan.yearlyPrice : plan.monthlyPrice}
+                                            {plan.monthlyPrice}
                                         </span>
                                         {plan.period && (
                                             <span className="text-xs text-muted-foreground">{plan.period}</span>
                                         )}
                                     </div>
-                                    
-                                    {isYearly && plan.key !== 'enterprise' && plan.key !== 'onetime' && (
-                                        <p className="text-[10px] text-muted-foreground mt-1">
-                                            Billed ₹{(plan.yearlyValue).toLocaleString('en-IN')} annually
-                                        </p>
-                                    )}
                                 </div>
 
                                 <ul className="space-y-4 flex-1 mb-8">
@@ -302,8 +286,8 @@ const Billing = () => {
                                             disabled={loading !== null || isActive}
                                             className={cn(
                                                 'w-full h-12 rounded-xl font-bold transition-all',
-                                                isActive 
-                                                    ? 'bg-green-100 text-green-700 hover:bg-green-100 border border-green-200' 
+                                                isActive
+                                                    ? 'bg-green-100 text-green-700 hover:bg-green-100 border border-green-200'
                                                     : plan.key === 'enterprise'
                                                         ? 'bg-transparent border border-muted-foreground/30 text-foreground hover:bg-secondary'
                                                         : 'bg-[#FF8A3D] text-white hover:bg-[#FF8A3D]/90'
@@ -316,6 +300,99 @@ const Billing = () => {
                             </div>
                         ))}
                     </div>
+                </TabsContent>
+
+                <TabsContent value="usage">
+                    {usageData && (
+                        <div className="space-y-8">
+                            <div className="p-8 rounded-3xl border border-border bg-card/50 backdrop-blur-md">
+                                <div className="flex items-center justify-between mb-8">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 rounded-2xl bg-orange-100 dark:bg-orange-500/10 text-orange-600">
+                                            <LayoutGrid className="h-6 w-6" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-bold">Resource Consumption</h2>
+                                            <p className="text-sm text-muted-foreground">Detailed breakdown of your organization's resource usage</p>
+                                        </div>
+                                    </div>
+                                    <div className="px-5 py-2 rounded-2xl bg-muted/50 border border-border">
+                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">Plan Validity</span>
+                                        <span className="text-sm font-bold">{new Date(usageData.plan.endDate).toLocaleDateString()}</span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                                    {/* Projects */}
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-end">
+                                            <div className="space-y-1">
+                                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Active Projects</span>
+                                                <p className="text-2xl font-black">{usageData.usage.projects}</p>
+                                            </div>
+                                            <span className="text-xs font-medium text-muted-foreground">Limit: {usageData.plan.limits.project_limit}</span>
+                                        </div>
+                                        <Progress value={(usageData.usage.projects / usageData.plan.limits.project_limit) * 100} className="h-2" />
+                                    </div>
+
+                                    {/* Storage */}
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-end">
+                                            <div className="space-y-1">
+                                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Cloud Storage</span>
+                                                <p className="text-2xl font-black">{usageData.usage.storage_mb} <span className="text-sm font-normal">MB</span></p>
+                                            </div>
+                                            <span className="text-xs font-medium text-muted-foreground">Limit: {usageData.plan.limits.storage_limit_mb}MB</span>
+                                        </div>
+                                        <Progress value={usageData.usage.storage_percent} className="h-2" />
+                                    </div>
+
+                                    {/* Contributors */}
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-end">
+                                            <div className="space-y-1">
+                                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Team Members</span>
+                                                <p className="text-2xl font-black">{usageData.usage.contributors}</p>
+                                            </div>
+                                            <span className="text-xs font-medium text-muted-foreground">Limit: {usageData.plan.limits.contributor_limit}</span>
+                                        </div>
+                                        <Progress value={(usageData.usage.contributors / usageData.plan.limits.contributor_limit) * 100} className="h-2" />
+                                    </div>
+                                </div>
+
+                                <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="p-4 rounded-2xl bg-muted/30 border border-border/50 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Users className="h-4 w-4 text-muted-foreground" />
+                                            <span className="text-xs font-bold text-muted-foreground">Clients</span>
+                                        </div>
+                                        <span className="text-sm font-black">{usageData.usage.clients} / {usageData.plan.limits.client_limit}</span>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-muted/30 border border-border/50 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                                            <span className="text-xs font-bold text-muted-foreground">Snags</span>
+                                        </div>
+                                        <span className="text-sm font-black">{usageData.usage.snags} / {usageData.plan.limits.max_snags}</span>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-muted/30 border border-border/50 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <FileText className="h-4 w-4 text-muted-foreground" />
+                                            <span className="text-xs font-bold text-muted-foreground">RFIs</span>
+                                        </div>
+                                        <span className="text-sm font-black">{usageData.usage.rfis} / {usageData.plan.limits.max_rfis}</span>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Clock className="h-4 w-4 text-primary" />
+                                            <span className="text-xs font-bold text-primary">Status</span>
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase text-primary">Active</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </TabsContent>
 
                 <TabsContent value="history">
@@ -347,9 +424,9 @@ const Billing = () => {
                                                 <td className="p-4">
                                                     <span className={cn(
                                                         "px-2 py-1 rounded-full text-xs font-bold",
-                                                        tx.payment_status === 'success' ? "bg-green-100 text-green-700" : 
-                                                        tx.payment_status === 'pending' ? "bg-yellow-100 text-yellow-700" : 
-                                                        "bg-red-100 text-red-700"
+                                                        tx.payment_status === 'success' ? "bg-green-100 text-green-700" :
+                                                            tx.payment_status === 'pending' ? "bg-yellow-100 text-yellow-700" :
+                                                                "bg-red-100 text-red-700"
                                                     )}>
                                                         {tx.payment_status}
                                                     </span>

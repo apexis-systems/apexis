@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { transactions, organizations, plans } from "../models/index.ts";
+import { transactions, organizations, plans, projects, users, snags, rfis, Sequelize } from "../models/index.ts";
+import { Op } from "sequelize";
 
 /**
  * Razorpay controller for handling subscriptions
@@ -11,9 +12,19 @@ export const createOrder = async (req: Request, res: Response) => {
     try {
         const { organization_id, user_id } = (req as any).user;
         const { amount, currency, plan_name, plan_cycle } = req.body;
+        const normalizedAmount = Number(amount);
+        const RAZORPAY_MAX_ORDER_AMOUNT_INR = 500000;
 
         if (!amount || !currency || !plan_name || !plan_cycle) {
             return res.status(400).json({ message: "Missing required fields" });
+        }
+        if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+            return res.status(400).json({ message: "Invalid amount" });
+        }
+        if (normalizedAmount > RAZORPAY_MAX_ORDER_AMOUNT_INR) {
+            return res.status(400).json({
+                message: `Amount exceeds Razorpay maximum allowed per order (INR ${RAZORPAY_MAX_ORDER_AMOUNT_INR.toLocaleString("en-IN")}).`,
+            });
         }
 
         // Check if organization already has this plan active
@@ -34,7 +45,7 @@ export const createOrder = async (req: Request, res: Response) => {
         });
 
         const options = {
-            amount: Math.round(Number(amount) * 100), // convert to paise
+            amount: Math.round(normalizedAmount * 100), // convert to paise
             currency,
             receipt: `receipt_org_${organization_id}_${Date.now()}`,
         };
@@ -47,7 +58,7 @@ export const createOrder = async (req: Request, res: Response) => {
             user_id: user_id,
             subscription_tier: plan_name,
             subscription_cycle: plan_cycle,
-            payment_amount: amount,
+            payment_amount: normalizedAmount,
             payment_order_id: order.id,
             payment_status: "pending",
         });
@@ -55,7 +66,12 @@ export const createOrder = async (req: Request, res: Response) => {
         res.status(201).json({ order });
     } catch (error: any) {
         console.error("Error creating order:", error);
-        res.status(500).json({ message: "Internal server error", error: error.message });
+        const statusCode = error?.statusCode || error?.status || 500;
+        const message = error?.error?.description || error?.description || error?.message || "Internal server error";
+        return res.status(statusCode >= 400 && statusCode < 600 ? statusCode : 500).json({
+            message,
+            details: error?.error || undefined
+        });
     }
 };
 
@@ -146,5 +162,114 @@ export const getTransactions = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error("Error fetching transactions:", error);
         res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
+
+export const getUsage = async (req: Request, res: Response) => {
+    try {
+        const { organization_id } = (req as any).user;
+
+        const org = await organizations.findByPk(organization_id, {
+            include: [{ model: plans }]
+        });
+
+        if (!org) {
+            return res.status(404).json({ error: "Organization not found" });
+        }
+
+        const plan = org.plan;
+        
+        // 1. Calculate Project Usage
+        const projectCount = await projects.count({ where: { organization_id: org.id } });
+
+        // 2. Calculate Member Usage
+        const contributorCount = await users.count({ where: { organization_id: org.id, role: 'contributor' } });
+        const clientCount = await users.count({ where: { organization_id: org.id, role: 'client' } });
+
+        // 3. Calculate Snag & RFI Usage (across all projects)
+        const projectIds = (await projects.findAll({ 
+            where: { organization_id: org.id }, 
+            attributes: ['id'] 
+        })).map((p: any) => p.id);
+
+        const snagCount = await snags.count({ where: { project_id: { [Op.in]: projectIds } } });
+        const rfiCount = await rfis.count({ where: { project_id: { [Op.in]: projectIds } } });
+
+        // 4. Proactive Alert Logic (Expiry & Storage)
+        const now = new Date();
+        const expiryDate = new Date(org.plan_end_date);
+        const diffDays = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+        
+        const storageUsagePercent = (org.storage_used_mb / org.storage_limit_mb) * 100;
+
+        let alert = null;
+        
+        // Prioritize whichever limit is closer
+        // 10 days for expiry, 90% for storage
+        if (diffDays <= 10 || storageUsagePercent >= 90) {
+            if (diffDays <= 0) {
+                 alert = {
+                    type: "expiry",
+                    severity: "error",
+                    message: "Your plan has expired. Please upgrade now to restore full access."
+                };
+            } else if (storageUsagePercent >= 100) {
+                alert = {
+                    type: "storage",
+                    severity: "error",
+                    message: "Storage limit reached. Delete files or upgrade to upload more."
+                };
+            } else if (diffDays <= 10 && (storageUsagePercent < 90 || diffDays < (100 - storageUsagePercent))) {
+                // If expiry is closer or storage isn't critical yet
+                alert = {
+                    type: "expiry",
+                    severity: "warning",
+                    message: `Your plan expires in ${diffDays} days. Upgrade now to avoid service interruption.`
+                };
+            } else {
+                alert = {
+                    type: "storage",
+                    severity: "warning",
+                    message: `You have used ${Math.round(storageUsagePercent)}% of your storage. Consider upgrading soon.`
+                };
+            }
+        }
+
+        res.status(200).json({
+            plan: {
+                name: org.plan_name,
+                startDate: org.plan_start_date,
+                endDate: org.plan_end_date,
+                daysRemaining: Math.max(0, diffDays),
+                limits: plan
+            },
+            usage: {
+                projects: projectCount,
+                contributors: contributorCount,
+                clients: clientCount,
+                snags: snagCount,
+                rfis: rfiCount,
+                storage_mb: org.storage_used_mb,
+                storage_percent: Math.round(storageUsagePercent)
+            },
+            alert
+        });
+
+    } catch (error) {
+        console.error("Error fetching usage:", error);
+        res.status(500).json({ error: "Internal server error fetching usage" });
+    }
+};
+
+export const getPlans = async (req: Request, res: Response) => {
+    try {
+        const activePlans = await plans.findAll({
+            where: { is_active: true },
+            order: [["price", "ASC"]]
+        });
+        res.status(200).json(activePlans);
+    } catch (error) {
+        console.error("Error fetching plans:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 };

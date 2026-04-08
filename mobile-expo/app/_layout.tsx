@@ -118,6 +118,7 @@ function RootLayoutNav() {
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { TourProvider } from '@/contexts/TourContext';
+import { UsageProvider } from '@/contexts/UsageContext';
 import TourOverlay from '@/components/tour/TourOverlay';
 
 function ThemedLayout() {
@@ -127,8 +128,10 @@ function ThemedLayout() {
       <AuthProvider>
         <SocketProvider>
           <TourProvider>
-            <RootLayoutNav />
-            <TourOverlay />
+            <UsageProvider>
+              <RootLayoutNav />
+              <TourOverlay />
+            </UsageProvider>
           </TourProvider>
         </SocketProvider>
         <StatusBar style={isDark ? "light" : "dark"} />

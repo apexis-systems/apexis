@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import 'multer';
 
 import db from "../models/index.ts";
-const { files, folders, project_members, activities, users } = db;
+const { files, folders, project_members, activities, users, organizations } = db;
 
 import { Op } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
@@ -27,6 +27,18 @@ const checkProjectAccess = async (userId: number, projectId: number) => {
     return await project_members.findOne({
         where: { user_id: userId, project_id: projectId }
     });
+};
+
+// Helper to update organization storage usage
+const updateOrganizationStorage = async (organizationId: number, sizeMb: number) => {
+    try {
+        await organizations.increment('storage_used_mb', {
+            by: sizeMb,
+            where: { id: organizationId }
+        });
+    } catch (err) {
+        console.error("Error updating organization storage:", err);
+    }
 };
 
 export const uploadFile = async (req: Request | any, res: Response) => {
@@ -166,6 +178,9 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             message: "File uploaded successfully",
             file: newFile
         });
+
+        // Update organization storage usage
+        await updateOrganizationStorage(authUser.organization_id, file_size_mb);
     } catch (error) {
         console.error("Upload File Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -277,6 +292,9 @@ export const deleteFile = async (req: Request, res: Response) => {
         });
 
         await file.destroy();
+
+        // Update organization storage usage (decrement)
+        await updateOrganizationStorage(authUser.organization_id, -file.file_size_mb);
 
         res.status(200).json({ message: "File deleted successfully" });
     } catch (error) {
@@ -620,6 +638,10 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             files: createdFiles,
             file: isSeparate ? createdFiles[0] : createdFiles[0]
         });
+
+        // Update organization storage usage
+        const totalSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
+        await updateOrganizationStorage(authUser.organization_id, totalSizeMb);
 
         // Notifications for Scans only to members in the same organization
         try {

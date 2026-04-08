@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView, Alert } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -26,6 +26,8 @@ import SecureAvatar from '@/components/shared/SecureAvatar';
 import { getSecureFileUrl } from '@/services/fileService';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
 import { handleNotificationNavigation } from '@/utils/navigation';
+import { UsageAlert } from '@/components/shared/UsageAlert';
+import { useUsage } from '@/contexts/UsageContext';
 
 export default function DashboardScreen() {
   const { user, updateUser } = useAuth();
@@ -34,6 +36,7 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { isTourActive, startTour, hasSeenTour, registerSpotlight } = useTour();
+  const { checkLimit } = useUsage();
 
   const [projects, setProjects] = useState<any[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -197,13 +200,13 @@ export default function DashboardScreen() {
       setIsCreating(false);
       setNewProject({ name: '', description: '', start_date: '', end_date: '' });
       fetchProjects();
-    } catch (e) {
-      console.error("Failed to create project:", e);
+    } catch (e: any) {
+      const message = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Failed to create project';
+      Alert.alert('Create Project Failed', message);
     } finally {
       setIsSubmitting(false);
     }
   };
-
 
   const handleLogoUpload = async () => {
     if (user?.role !== 'admin') return;
@@ -255,6 +258,7 @@ export default function DashboardScreen() {
   return (
     <>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+        <UsageAlert />
         <MainHeader
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search projects by name..."
@@ -464,7 +468,13 @@ export default function DashboardScreen() {
             {/* Add Create Project card — admin only, but show for everyone during tour */}
             {(user.role === 'admin' || isTourActive) && (
               <TouchableOpacity
-                onPress={() => setIsCreating(true)}
+                onPress={() => {
+                    if (!isTourActive && !checkLimit('projects')) {
+                        Alert.alert("Limit Reached", "You have reached your project limit. Please upgrade your plan to create more projects.");
+                        return;
+                    }
+                    setIsCreating(true);
+                }}
                 style={{ width: '22%', alignItems: 'center', gap: 4 }}
               >
                 <View
