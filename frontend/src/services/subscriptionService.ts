@@ -44,3 +44,13 @@ export const getTransactions = async () => {
     throw error;
   }
 };
+
+export const getUsage = async () => {
+  try {
+    const response = await PrivateAxios.get('/subscription/usage');
+    return response.data;
+  } catch (error) {
+    console.error("getUsage Error", error);
+    throw error;
+  }
+};

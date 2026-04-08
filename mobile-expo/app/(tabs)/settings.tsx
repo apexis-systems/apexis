@@ -172,282 +172,332 @@ export default function ProfileScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
             >
-            <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-                {/* Avatar + Info */}
-                <View style={{ alignItems: 'center', marginBottom: 32 }}>
-                    <TouchableOpacity
-                        onPress={() => setIsPreviewOpen(true)}
-                        style={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: 40,
-                            backgroundColor: colors.surface,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: 12,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            position: 'relative'
-                        }}
-                    >
-                        {isUploading ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
-                        ) : profilePicUri ? (
-                            <Image source={{ uri: profilePicUri }} style={{ width: '100%', height: '100%', borderRadius: 40 }} />
-                        ) : (
-                            <Feather name="user" size={40} color={colors.textMuted} />
-                        )}
-                        <View style={{
-                            position: 'absolute', bottom: 0, right: 0,
-                            width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary,
-                            alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.background
-                        }}>
-                            <Feather name="camera" size={12} color="#fff" />
-                        </View>
-                    </TouchableOpacity>
+                <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+                    {/* Avatar + Info */}
+                    <View style={{ alignItems: 'center', marginBottom: 32 }}>
+                        <TouchableOpacity
+                            onPress={() => setIsPreviewOpen(true)}
+                            style={{
+                                width: 80,
+                                height: 80,
+                                borderRadius: 40,
+                                backgroundColor: colors.surface,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: 12,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                position: 'relative'
+                            }}
+                        >
+                            {isUploading ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            ) : profilePicUri ? (
+                                <Image source={{ uri: profilePicUri }} style={{ width: '100%', height: '100%', borderRadius: 40 }} />
+                            ) : (
+                                <Feather name="user" size={40} color={colors.textMuted} />
+                            )}
+                            <View style={{
+                                position: 'absolute', bottom: 0, right: 0,
+                                width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary,
+                                alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.background
+                            }}>
+                                <Feather name="camera" size={12} color="#fff" />
+                            </View>
+                        </TouchableOpacity>
 
-                    {isEditingName ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                            <TextInput
-                                value={editNameValue}
-                                onChangeText={setEditNameValue}
-                                autoFocus
+                        {isEditingName ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                <TextInput
+                                    value={editNameValue}
+                                    onChangeText={setEditNameValue}
+                                    autoFocus
+                                    style={{
+                                        height: 40,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        borderRadius: 8,
+                                        paddingHorizontal: 16,
+                                        color: colors.text,
+                                        fontSize: 18,
+                                        minWidth: 150,
+                                        textAlign: 'center'
+                                    }}
+                                />
+                                <TouchableOpacity onPress={handleSaveName} disabled={nameLoading} style={{ padding: 8, backgroundColor: 'rgba(34,197,94,0.1)', borderRadius: 20 }}>
+                                    {nameLoading ? <ActivityIndicator size="small" color="#22c55e" /> : <Feather name="check" size={20} color="#22c55e" />}
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => { setIsEditingName(false); setEditNameValue(user?.name); }} style={{ padding: 8, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 20 }}>
+                                    <Feather name="x" size={20} color="#ef4444" />
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <TouchableOpacity onPress={() => setIsEditingName(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text }}>{user.name}</Text>
+                                <Feather name="edit-2" size={16} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        )}
+
+                        <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 2 }}>{user.email || user.phone_number}</Text>
+                        <View
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                marginTop: 12,
+                                borderRadius: 20,
+                                backgroundColor: badge.bg,
+                                paddingHorizontal: 14,
+                                paddingVertical: 6,
+                            }}
+                        >
+                            <Feather name="shield" size={12} color={badge.text} />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: badge.text }}>{roleLabel}</Text>
+                        </View>
+                    </View>
+
+                    {/* Navigation Group */}
+                    <View style={{ gap: 12, marginBottom: 24 }}>
+                        {user.role === 'admin' && (
+                            <TouchableOpacity
+                                onPress={() => router.push('/company-settings')}
                                 style={{
-                                    height: 40,
+                                    borderRadius: 16,
                                     backgroundColor: colors.surface,
                                     borderWidth: 1,
                                     borderColor: colors.border,
-                                    borderRadius: 8,
-                                    paddingHorizontal: 16,
-                                    color: colors.text,
-                                    fontSize: 18,
-                                    minWidth: 150,
-                                    textAlign: 'center'
+                                    padding: 16,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 14
                                 }}
-                            />
-                            <TouchableOpacity onPress={handleSaveName} disabled={nameLoading} style={{ padding: 8, backgroundColor: 'rgba(34,197,94,0.1)', borderRadius: 20 }}>
-                                {nameLoading ? <ActivityIndicator size="small" color="#22c55e" /> : <Feather name="check" size={20} color="#22c55e" />}
+                            >
+                                <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Feather name="briefcase" size={20} color={colors.text} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Company Settings</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Manage logo and branding</Text>
+                                </View>
+                                <Feather name="chevron-right" size={18} color={colors.textMuted} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => { setIsEditingName(false); setEditNameValue(user?.name); }} style={{ padding: 8, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 20 }}>
-                                <Feather name="x" size={20} color="#ef4444" />
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <TouchableOpacity onPress={() => setIsEditingName(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                            <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text }}>{user.name}</Text>
-                            <Feather name="edit-2" size={16} color={colors.textMuted} />
-                        </TouchableOpacity>
-                    )}
+                        )}
 
-                    <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 2 }}>{user.email || user.phone_number}</Text>
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            marginTop: 12,
-                            borderRadius: 20,
-                            backgroundColor: badge.bg,
-                            paddingHorizontal: 14,
-                            paddingVertical: 6,
-                        }}
-                    >
-                        <Feather name="shield" size={12} color={badge.text} />
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: badge.text }}>{roleLabel}</Text>
-                    </View>
-                </View>
-
-                {/* Navigation Group */}
-                <View style={{ gap: 12, marginBottom: 24 }}>
-                    {user.role === 'admin' && (
-                        <TouchableOpacity
-                            onPress={() => router.push('/company-settings')}
-                            style={{
-                                borderRadius: 16,
-                                backgroundColor: colors.surface,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                padding: 16,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 14
-                            }}
-                        >
-                            <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                                <Feather name="briefcase" size={20} color={colors.text} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Company Settings</Text>
-                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Manage logo and branding</Text>
-                            </View>
-                            <Feather name="chevron-right" size={18} color={colors.textMuted} />
-                        </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                        onPress={() => router.push('/linked-devices')}
-                        style={{
-                            borderRadius: 16,
-                            backgroundColor: colors.surface,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            padding: 16,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 14
-                        }}
-                    >
-                        <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                            <Feather name="smartphone" size={20} color={colors.text} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Linked Devices</Text>
-                            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Scan QR to log in on Web</Text>
-                        </View>
-                        <Feather name="chevron-right" size={18} color={colors.textMuted} />
-                    </TouchableOpacity>
-
-                    {(user.role === 'admin' || user.role === 'superadmin') && (
-                        <TouchableOpacity
-                            onPress={() => router.push('/change-password')}
-                            style={{
-                                borderRadius: 16,
-                                backgroundColor: colors.surface,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                padding: 16,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 14
-                            }}
-                        >
-                            <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                                <Feather name="lock" size={20} color={colors.text} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Change Password</Text>
-                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Update your account security</Text>
-                            </View>
-                            <Feather name="chevron-right" size={18} color={colors.textMuted} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-
-                {/* Switch Project / Role Section */}
-                {(() => {
-                    const filtered = memberships.filter(m => !(Number(m.project_id) === Number(user.project_id) && m.role === user.role));
-                    if (filtered.length === 0) return null;
-
-                    // Group by project_id
-                    const groups: Record<number, any> = {};
-                    filtered.forEach(m => {
-                        if (!groups[m.project_id]) {
-                            groups[m.project_id] = {
-                                project: m.project,
-                                roles: []
-                            };
-                        }
-                        groups[m.project_id].roles.push(m.role);
-                    });
-
-                    return (
-                        <View style={{ marginBottom: 24 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textMuted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 4 }}>Switch Project / Role</Text>
-                            <View style={{ gap: 12 }}>
-                                {Object.values(groups).map((group: any, idx) => (
-                                    <View
-                                        key={idx}
-                                        style={{
-                                            borderRadius: 24,
-                                            backgroundColor: colors.surface,
-                                            borderWidth: 1,
-                                            borderColor: colors.border,
-                                            padding: 16,
-                                            shadowColor: '#000',
-                                            shadowOffset: { width: 0, height: 4 },
-                                            shadowOpacity: 0.05,
-                                            shadowRadius: 10,
-                                            elevation: 3
-                                        }}
-                                    >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-                                            <View style={{ 
-                                                backgroundColor: 'rgba(249,115,22,0.1)', 
-                                                width: 44, 
-                                                height: 44, 
-                                                borderRadius: 14, 
-                                                alignItems: 'center', 
-                                                justifyContent: 'center',
-                                                borderWidth: 1,
-                                                borderColor: 'rgba(249,115,22,0.2)'
-                                            }}>
-                                                <Feather name="layers" size={22} color="#f97316" />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }} numberOfLines={1}>{group.project?.name || 'Project'}</Text>
-                                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>{group.project?.organization?.name}</Text>
-                                            </View>
-                                        </View>
-
-                                        <View style={{ gap: 8 }}>
-                                            {group.roles.map((r: string, rIdx: number) => (
-                                                <TouchableOpacity
-                                                    key={rIdx}
-                                                    onPress={() => handleSwitchContext(group.project.id, r)}
-                                                    disabled={isSwitching}
-                                                    activeOpacity={0.7}
-                                                    style={{
-                                                        backgroundColor: r === 'admin' ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                                        borderWidth: 1,
-                                                        borderColor: r === 'admin' ? '#f97316' : colors.border,
-                                                        paddingHorizontal: 16,
-                                                        paddingVertical: 12,
-                                                        borderRadius: 14,
-                                                        flexDirection: 'row',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between'
-                                                    }}
-                                                >
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                                        <View style={{ backgroundColor: roleBadgeColor[r as UserRole]?.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                                                            <Text style={{ fontSize: 9, fontWeight: '900', color: '#fff', textTransform: 'uppercase' }}>{r}</Text>
-                                                        </View>
-                                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Switch Role</Text>
-                                                    </View>
-                                                    {isSwitching ? (
-                                                        <ActivityIndicator size={16} color="#f97316" />
-                                                    ) : (
-                                                        <Feather name="refresh-cw" size={16} color={r === 'admin' ? '#f97316' : colors.textMuted} />
-                                                    )}
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
+                        {(user.role === 'admin' || user.role === 'superadmin') && (
+                            <>
+                                <TouchableOpacity
+                                    onPress={() => router.push('/usage')}
+                                    style={{
+                                        borderRadius: 16,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        padding: 16,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 14
+                                    }}
+                                >
+                                    <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name="activity" size={20} color={colors.text} />
                                     </View>
-                                ))}
-                            </View>
-                        </View>
-                    );
-                })()}
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Resource Usage</Text>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Monitor storage and limits</Text>
+                                    </View>
+                                    <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                                </TouchableOpacity>
 
-                {/* Sign Out */}
-                <TouchableOpacity
-                    onPress={handleLogout}
-                    style={{
-                        height: 52,
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: 'rgba(239,68,68,0.3)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexDirection: 'row',
-                        gap: 8,
-                        backgroundColor: 'rgba(239,68,68,0.05)'
-                    }}
-                >
-                    <Feather name="log-out" size={18} color="#ef4444" />
-                    <Text style={{ fontSize: 15, color: '#ef4444', fontWeight: '700' }}>Sign Out</Text>
-                </TouchableOpacity>
-            </ScrollView>
+                                <TouchableOpacity
+                                    onPress={() => router.push('/subscription')}
+                                    style={{
+                                        borderRadius: 16,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        padding: 16,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 14
+                                    }}
+                                >
+                                    <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name="credit-card" size={20} color={colors.text} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Manage Subscription</Text>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Upgrade your plan</Text>
+                                    </View>
+                                    <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </>
+                        )}
+
+                        <TouchableOpacity
+                            onPress={() => router.push('/linked-devices')}
+                            style={{
+                                borderRadius: 16,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: 16,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 14
+                            }}
+                        >
+                            <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                <Feather name="smartphone" size={20} color={colors.text} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Linked Devices</Text>
+                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Scan QR to log in on Web</Text>
+                            </View>
+                            <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                        </TouchableOpacity>
+
+                        {(user.role === 'admin' || user.role === 'superadmin') && (
+                            <TouchableOpacity
+                                onPress={() => router.push('/change-password')}
+                                style={{
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 16,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 14
+                                }}
+                            >
+                                <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Feather name="lock" size={20} color={colors.text} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Change Password</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Update your account security</Text>
+                                </View>
+                                <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Switch Project / Role Section */}
+                    {(() => {
+                        const filtered = memberships.filter(m => !(Number(m.project_id) === Number(user.project_id) && m.role === user.role));
+                        if (filtered.length === 0) return null;
+
+                        // Group by project_id
+                        const groups: Record<number, any> = {};
+                        filtered.forEach(m => {
+                            if (!groups[m.project_id]) {
+                                groups[m.project_id] = {
+                                    project: m.project,
+                                    roles: []
+                                };
+                            }
+                            groups[m.project_id].roles.push(m.role);
+                        });
+
+                        return (
+                            <View style={{ marginBottom: 24 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textMuted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 4 }}>Switch Project / Role</Text>
+                                <View style={{ gap: 12 }}>
+                                    {Object.values(groups).map((group: any, idx) => (
+                                        <View
+                                            key={idx}
+                                            style={{
+                                                borderRadius: 24,
+                                                backgroundColor: colors.surface,
+                                                borderWidth: 1,
+                                                borderColor: colors.border,
+                                                padding: 16,
+                                                shadowColor: '#000',
+                                                shadowOffset: { width: 0, height: 4 },
+                                                shadowOpacity: 0.05,
+                                                shadowRadius: 10,
+                                                elevation: 3
+                                            }}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+                                                <View style={{
+                                                    backgroundColor: 'rgba(249,115,22,0.1)',
+                                                    width: 44,
+                                                    height: 44,
+                                                    borderRadius: 14,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    borderWidth: 1,
+                                                    borderColor: 'rgba(249,115,22,0.2)'
+                                                }}>
+                                                    <Feather name="layers" size={22} color="#f97316" />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }} numberOfLines={1}>{group.project?.name || 'Project'}</Text>
+                                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>{group.project?.organization?.name}</Text>
+                                                </View>
+                                            </View>
+
+                                            <View style={{ gap: 8 }}>
+                                                {group.roles.map((r: string, rIdx: number) => (
+                                                    <TouchableOpacity
+                                                        key={rIdx}
+                                                        onPress={() => handleSwitchContext(group.project.id, r)}
+                                                        disabled={isSwitching}
+                                                        activeOpacity={0.7}
+                                                        style={{
+                                                            backgroundColor: r === 'admin' ? 'rgba(249,115,22,0.1)' : colors.surface,
+                                                            borderWidth: 1,
+                                                            borderColor: r === 'admin' ? '#f97316' : colors.border,
+                                                            paddingHorizontal: 16,
+                                                            paddingVertical: 12,
+                                                            borderRadius: 14,
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between'
+                                                        }}
+                                                    >
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                            <View style={{ backgroundColor: roleBadgeColor[r as UserRole]?.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#fff', textTransform: 'uppercase' }}>{r}</Text>
+                                                            </View>
+                                                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Switch Role</Text>
+                                                        </View>
+                                                        {isSwitching ? (
+                                                            <ActivityIndicator size={16} color="#f97316" />
+                                                        ) : (
+                                                            <Feather name="refresh-cw" size={16} color={r === 'admin' ? '#f97316' : colors.textMuted} />
+                                                        )}
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        );
+                    })()}
+
+                    {/* Sign Out */}
+                    <TouchableOpacity
+                        onPress={handleLogout}
+                        style={{
+                            height: 52,
+                            borderRadius: 16,
+                            borderWidth: 1,
+                            borderColor: 'rgba(239,68,68,0.3)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'row',
+                            gap: 8,
+                            backgroundColor: 'rgba(239,68,68,0.05)'
+                        }}
+                    >
+                        <Feather name="log-out" size={18} color="#ef4444" />
+                        <Text style={{ fontSize: 15, color: '#ef4444', fontWeight: '700' }}>Sign Out</Text>
+                    </TouchableOpacity>
+                </ScrollView>
             </KeyboardAvoidingView>
 
             <LogoPreviewModal

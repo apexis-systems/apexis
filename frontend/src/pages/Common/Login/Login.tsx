@@ -179,7 +179,7 @@ const Login = () => {
                                         </div>
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">2</div>
-                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Go to <span className="font-semibold text-foreground">Profile &gt; Linked Devices &gt; Link a Device</span></p>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Go to <span className="font-semibold text-foreground">Settings &gt; Linked Devices &gt; Link a Device</span></p>
                                         </div>
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">3</div>

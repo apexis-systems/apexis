@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import MainSidebar from '@/components/Navigation/MainSidebar/MainSidebar';
 import SiteHeader from '@/components/Navigation/SiteHeader/SiteHeader';
+import { UsageAlert } from '@/components/shared/UsageAlert';
 
 interface RoleLayoutProps {
     children: ReactNode;
@@ -11,6 +12,7 @@ interface RoleLayoutProps {
 const RoleLayout = ({ children }: RoleLayoutProps) => {
     return (
         <div className="flex h-screen flex-col bg-background overflow-hidden">
+            <UsageAlert />
             <SiteHeader />
             <div className="flex flex-1 overflow-hidden">
                 <MainSidebar />

@@ -501,10 +501,11 @@ export default function UploadScreen() {
 
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Upload error:', error);
             setFileQueue(prev => prev.map(it => it.status === 'done' ? it : { ...it, status: 'error' }));
-            Alert.alert('Upload Failed', 'Some files could not be uploaded.');
+            const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Some files could not be uploaded.';
+            Alert.alert('Upload Failed', message);
         }
     };
 

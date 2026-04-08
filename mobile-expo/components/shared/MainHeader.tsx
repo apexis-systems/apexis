@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TouchableOpacity, Image, Modal, TextInput } from 'react-native';
+import { View, TouchableOpacity, Image, Modal, TextInput, Linking } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -234,7 +234,8 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
+                            // onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
+                            onPress={() => Linking.openURL('mailto:support@apexis.in')}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
                         >
                             <Feather name="message-square" size={16} color={colors.textMuted} />
