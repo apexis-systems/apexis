@@ -15,6 +15,7 @@ import { getSecureFileUrl } from '@/services/fileService';
 
 import { useSocket } from '@/contexts/SocketContext';
 import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers } from '@/services/projectService';
+import { parseApiError } from '@/helpers/apiError';
 
 interface Props {
     project: Project;
@@ -241,7 +242,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             setIsCountingDown(false);
             await exportHandoverPackage(projectId);
         } catch (e: any) {
-            Alert.alert("Error", 'Failed to trigger export');
+            const { message, code } = parseApiError(e, 'Failed to trigger export');
+            Alert.alert(code === 'FEATURE_RESTRICTED' ? 'Feature Restricted' : code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
             setIsExporting(false);
         }
     };
@@ -606,4 +608,3 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         </ScrollView>
     );
 };
-

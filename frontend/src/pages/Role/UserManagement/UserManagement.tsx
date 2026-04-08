@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getOrgUsers, inviteUser, getOnboardingLinks, deleteUser } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
+import { getApiErrorMessage } from '@/helpers/apiError';
 
 const UserManagement = () => {
     const { user } = useAuth();
@@ -108,7 +109,7 @@ const UserManagement = () => {
             fetchUsers();
         } catch (error: any) {
             console.error("Invite Error", error);
-            toast.error(error.response?.data?.error || 'Failed to send invitation');
+            toast.error(getApiErrorMessage(error, 'Failed to send invitation'));
         } finally {
             setInviting(false);
         }
@@ -125,7 +126,7 @@ const UserManagement = () => {
             setDeleteUserObj(null);
             fetchUsers();
         } catch (error: any) {
-            toast.error(error.response?.data?.error || "Failed to remove user");
+            toast.error(getApiErrorMessage(error, "Failed to remove user"));
         } finally {
             setDeleting(false);
         }

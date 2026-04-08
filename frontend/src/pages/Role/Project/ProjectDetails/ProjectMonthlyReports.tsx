@@ -5,6 +5,8 @@ import { Project, UserRole } from '@/types';
 import { FileText, Calendar, Loader2, Image, TrendingUp, ChevronDown, ChevronUp, FileCheck, Download } from 'lucide-react';
 
 import { getReports, Report, triggerReport, downloadReport } from '@/services/reportService';
+import { getApiErrorMessage } from '@/helpers/apiError';
+import { toast } from 'sonner';
 
 
 interface Props { project: Project; userRole: UserRole; }
@@ -37,7 +39,7 @@ const ProjectMonthlyReports = ({ project, userRole }: Props) => {
       await triggerReport(project.id, 'monthly');
       fetchReports();
     } catch (e) {
-      console.error(e);
+      toast.error(getApiErrorMessage(e, "Failed to generate monthly report"));
     } finally {
       setGenerating(false);
     }

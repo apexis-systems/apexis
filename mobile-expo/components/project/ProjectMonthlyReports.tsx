@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ActivityIndicator, ScrollView, BackHandler } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, ScrollView, BackHandler, Alert } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -9,6 +9,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import * as SecureStore from 'expo-secure-store';
+import { parseApiError } from '@/helpers/apiError';
 
 
 interface Props {
@@ -100,6 +101,8 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
             await fetchReports();
         } catch (e) {
             console.error('triggerReport monthly error:', e);
+            const { message, code } = parseApiError(e, 'Failed to generate monthly report');
+            Alert.alert(code === 'FEATURE_RESTRICTED' ? 'Feature Restricted' : code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
         } finally {
             setGenerating(false);
         }

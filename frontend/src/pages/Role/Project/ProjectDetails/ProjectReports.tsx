@@ -5,6 +5,8 @@ import { Project, UserRole } from '@/types';
 import { FileText, Calendar, Loader2, Image, ClipboardList, ChevronDown, ChevronUp, FileCheck, Download, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getReports, Report, triggerReport, downloadReport } from '@/services/reportService';
+import { getApiErrorMessage } from '@/helpers/apiError';
+import { toast } from 'sonner';
 
 interface Props { project: Project; userRole: UserRole; }
 
@@ -39,7 +41,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
       await triggerReport(project.id, activeType);
       fetchReports();
     } catch (e) {
-      console.error(e);
+      toast.error(getApiErrorMessage(e, `Failed to generate ${activeType} report`));
     } finally {
       setGenerating(false);
     }

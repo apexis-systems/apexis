@@ -21,6 +21,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { getAssignees, Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
+import { parseApiError } from '@/helpers/apiError';
 
 interface Props {
   project: Project;
@@ -238,7 +239,8 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleCreateRFI error', err);
-      Alert.alert('Error', 'Failed to create RFI');
+      const { message, code } = parseApiError(err, 'Failed to create RFI');
+      Alert.alert(code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
     } finally {
       setSubmitting(false);
     }

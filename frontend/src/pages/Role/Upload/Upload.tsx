@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { createActivity } from '@/services/activityService';
 import CreateFolderDialog from '../Project/ProjectDetails/CreateFolderDialog';
+import { getApiErrorMessage } from '@/helpers/apiError';
 
 function UploadInner() {
     const { user } = useAuth();
@@ -229,7 +230,7 @@ function UploadInner() {
             toast.success('Files uploaded successfully!');
         } catch (error) {
             console.error('Upload Error', error);
-            toast.error('Failed to upload files');
+            toast.error(getApiErrorMessage(error, 'Failed to upload files'));
         } finally {
             setIsUploading(false);
         }
