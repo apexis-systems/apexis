@@ -63,6 +63,14 @@ export default {
           onDelete: "CASCADE"
         }
       },
+      last_export_url: {
+        type: Sequelize.STRING,
+        allowNull: true,
+      },
+      last_export_date: {
+        type: Sequelize.DATE,
+        allowNull: true,
+      },
       createdAt: {
         type: Sequelize.DATE,
         allowNull: false,

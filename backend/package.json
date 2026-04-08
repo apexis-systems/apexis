@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --experimental-strip-types --watch app.ts",
-    "start": "node --experimental-strip-types app.ts"
+    "start": "node --experimental-strip-types app.ts",
+    "create:superadmin": "node --experimental-strip-types scripts/createPrimarySuperadmin.ts"
   },
   "keywords": [],
   "author": "",

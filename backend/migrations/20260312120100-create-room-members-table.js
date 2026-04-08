@@ -19,6 +19,11 @@ export default {
                 references: { model: 'users', key: 'id' },
                 onDelete: 'CASCADE'
             },
+            last_read_at: {
+                type: Sequelize.DATE,
+                allowNull: false,
+                defaultValue: Sequelize.fn('now'),
+            },
             createdAt: {
                 type: Sequelize.DATE,
                 defaultValue: Sequelize.fn('now')

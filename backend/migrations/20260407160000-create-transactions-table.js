@@ -58,6 +58,11 @@ export default {
         type: Sequelize.STRING,
         defaultValue: 'pending',
       },
+      invoice_number: {
+        type: Sequelize.STRING,
+        allowNull: true,
+        unique: true,
+      },
       created_at: {
         type: Sequelize.DATE,
         allowNull: false,

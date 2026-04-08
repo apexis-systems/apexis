@@ -35,6 +35,46 @@ export default {
         allowNull: false,
         defaultValue: 30
       },
+      project_limit: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+      },
+      contributor_limit: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        defaultValue: 2,
+      },
+      client_limit: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+      },
+      max_snags: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        defaultValue: 15,
+      },
+      max_rfis: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        defaultValue: 15,
+      },
+      can_export_reports: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      can_share_media: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      can_export_handover: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       is_active: {
         type: Sequelize.BOOLEAN,
         allowNull: false,

@@ -50,6 +50,15 @@ export default {
           onDelete: "CASCADE"
         }
       },
+      client_visible: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      folder_type: {
+        type: Sequelize.STRING,
+        allowNull: true,
+      },
       createdAt: {
         type: Sequelize.DATE,
         allowNull: false,

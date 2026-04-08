@@ -22,8 +22,9 @@ export default {
                 type: Sequelize.TEXT
             },
             status: {
-                type: Sequelize.STRING(20),
-                defaultValue: 'open' // open | closed | overdue
+                type: Sequelize.ENUM('open', 'closed', 'overdue'),
+                allowNull: false,
+                defaultValue: 'open'
             },
             assigned_to: {
                 type: Sequelize.INTEGER,
@@ -31,15 +32,25 @@ export default {
             },
             created_by: {
                 type: Sequelize.INTEGER,
+                allowNull: false,
                 references: { model: 'users', key: 'id' }
             },
             is_client_visible: {
                 type: Sequelize.BOOLEAN,
-                defaultValue: true
+                allowNull: false,
+                defaultValue: false
             },
             photos: {
                 type: Sequelize.JSON,
                 allowNull: true
+            },
+            expiry_date: {
+                type: Sequelize.DATE,
+                allowNull: true,
+            },
+            response: {
+                type: Sequelize.TEXT,
+                allowNull: true,
             },
             createdAt: {
                 type: Sequelize.DATE,

@@ -20,6 +20,16 @@ export default {
                 onUpdate: 'CASCADE',
                 onDelete: 'CASCADE'
             },
+            project_id: {
+                type: Sequelize.INTEGER,
+                allowNull: true,
+                references: {
+                    model: 'projects',
+                    key: 'id'
+                },
+                onUpdate: 'CASCADE',
+                onDelete: 'CASCADE'
+            },
             title: {
                 type: Sequelize.STRING,
                 allowNull: false
@@ -43,11 +53,13 @@ export default {
             },
             createdAt: {
                 allowNull: false,
-                type: Sequelize.DATE
+                type: Sequelize.DATE,
+                defaultValue: Sequelize.fn('now')
             },
             updatedAt: {
                 allowNull: false,
-                type: Sequelize.DATE
+                type: Sequelize.DATE,
+                defaultValue: Sequelize.fn('now')
             }
         });
     },
