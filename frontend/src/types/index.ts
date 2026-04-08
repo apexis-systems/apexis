@@ -15,6 +15,8 @@ export interface User {
         id: string;
         name: string;
         logo: string;
+        plan_name: string;
+        plan_end_date: string;
     };
 }
 

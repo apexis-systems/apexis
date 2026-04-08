@@ -66,17 +66,22 @@ export const addComment = async (req: Request, res: Response) => {
                 // 2. Send Notification to File Uploader
                 // Only if uploader is NOT the commenter
                 if (file.created_by !== authUser.user_id) {
-                    await sendNotification({
-                        userId: file.created_by,
-                        title: 'New Photo Comment',
-                        body: `${authUser.name} commented on your photo: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
-                        type: 'photo_comment',
-                        data: {
-                            fileId: String(file.id),
-                            projectId: String(file.project_id),
-                            commentId: String(comment.id)
-                        }
+                    const uploader = await users.findOne({ 
+                        where: { id: file.created_by, organization_id: authUser.organization_id } 
                     });
+                    if (uploader) {
+                        await sendNotification({
+                            userId: file.created_by,
+                            title: 'New Photo Comment',
+                            body: `${authUser.name} commented on your photo: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
+                            type: 'photo_comment',
+                            data: {
+                                fileId: String(file.id),
+                                projectId: String(file.project_id),
+                                commentId: String(comment.id)
+                            }
+                        });
+                    }
                 }
             } catch (err) {
                 console.error('Comment notification/activity error:', err);

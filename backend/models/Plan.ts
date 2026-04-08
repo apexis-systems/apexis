@@ -27,6 +27,51 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: false,
             },
+            project_limit: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 1,
+            },
+            contributor_limit: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 2,
+            },
+            client_limit: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 1,
+            },
+            max_snags: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 15,
+            },
+            max_rfis: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 15,
+            },
+            can_export_reports: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            can_share_media: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            can_export_handover: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            is_active: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: true,
+            },
         },
         {
             tableName: "plans",

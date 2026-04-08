@@ -7,12 +7,12 @@ import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
+import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
@@ -33,6 +33,9 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     const [newFolderName, setNewFolderName] = useState('');
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [showEditFolder, setShowEditFolder] = useState(false);
+    const [editingFolderId, setEditingFolderId] = useState<number | null>(null);
+    const [editFolderName, setEditFolderName] = useState('');
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
@@ -43,6 +46,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     const [selectedFiles, setSelectedFiles] = useState<Set<string | number>>(new Set());
     const [showMoveDialog, setShowMoveDialog] = useState(false);
     const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
+    const [movingContentsOf, setMovingContentsOf] = useState<any | null>(null);
 
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
@@ -332,6 +336,84 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         }
     };
 
+    const handleUpdateFolder = async () => {
+        if (!editFolderName.trim() || !editingFolderId) return;
+        setSubmitting(true);
+        try {
+            const data = await updateFolder(editingFolderId, editFolderName.trim());
+            if (data.folder) {
+                setFolders(prev => prev.map(f => f.id === editingFolderId ? data.folder : f));
+                setShowEditFolder(false);
+                setEditFolderName('');
+                setEditingFolderId(null);
+            }
+        } catch {
+            Alert.alert('Error', 'Failed to rename folder');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDelete = async (folder: any, force = false) => {
+        try {
+            await deleteFolder(folder.id, force);
+            setFolders(prev => prev.filter(f => f.id !== folder.id));
+            if (selectedFolder === String(folder.id)) {
+                setSelectedFolder(folder.parent_id ? String(folder.parent_id) : null);
+            }
+        } catch (e: any) {
+            const data = e.response?.data;
+            if (data?.hasContent) {
+                Alert.alert(
+                    'Folder Not Empty',
+                    `"${folder.name}" contains files or subfolders. How would you like to proceed?`,
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Move Contents',
+                            onPress: () => {
+                                const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
+                                const childFiles = photos.filter(p => String(p.folder_id) === String(folder.id));
+                                
+                                if (childFolders.length === 0 && childFiles.length === 0) {
+                                    Alert.alert("Info", "Folder is already empty");
+                                    return;
+                                }
+
+                                setMovingContentsOf(folder);
+                                setMovingItem(null);
+                                setShowMoveDialog(true);
+                            }
+                        },
+                        {
+                            text: 'Delete Everything',
+                            style: 'destructive',
+                            onPress: () => handleDelete(folder, true)
+                        }
+                    ]
+                );
+            } else {
+                const msg = data?.error || 'Failed to delete folder';
+                Alert.alert('Error', msg);
+            }
+        }
+    };
+
+    const confirmDeleteFolder = (folder: any) => {
+        Alert.alert(
+            'Delete Folder',
+            `Are you sure you want to delete "${folder.name}"?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => handleDelete(folder)
+                }
+            ]
+        );
+    };
+
     const toggleSelection = (type: 'folder' | 'file', id: string | number) => {
         if (type === 'folder') {
             const newSet = new Set(selectedFolders);
@@ -521,7 +603,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                     <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
                                 </TouchableOpacity>
                         </View>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                             {sortedFolders.map((folder) => {
                                 const count = photos.filter((p) => p.folder_id === folder.id).length;
                                 const subcount = folders.filter((f) => f.parent_id === folder.id).length;
@@ -530,7 +612,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                     <View
                                         key={folder.id}
                                         style={{
-                                            width: '31.5%',
+                                            width: '24%',
                                             aspectRatio: 1,
                                             alignItems: 'center',
                                             justifyContent: 'center',
@@ -538,7 +620,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
                                             borderWidth: 1,
                                             borderColor: isSelected ? colors.primary : colors.border,
-                                            padding: 12,
+                                            padding: 8,
                                             shadowColor: '#000',
                                             shadowOffset: { width: 0, height: 2 },
                                             shadowOpacity: 0.05,
@@ -571,14 +653,34 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                             {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
                                         </Text>
-
-                                        {(user.role === 'admin' || user.role === 'superadmin') && !isSelectionMode && (
-                                            <TouchableOpacity
-                                                onPress={() => toggleFolderVis(folder)}
-                                                style={{ position: 'absolute', bottom: 6, right: 6, padding: 4, zIndex: 10 }}
-                                            >
-                                                <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? colors.primary : colors.textMuted} />
-                                            </TouchableOpacity>
+                                        {/* Folder Actions Overlay */}
+                                        {!isSelectionMode && (
+                                            <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 1, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 2 }}>
+                                                {(user.role === 'admin' || user.role === 'superadmin') && (
+                                                    <TouchableOpacity
+                                                        onPress={() => toggleFolderVis(folder)}
+                                                        style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
+                                                    >
+                                                        <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={11} color={folder.client_visible !== false ? colors.primary : '#fff'} />
+                                                    </TouchableOpacity>
+                                                )}
+                                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                    <>
+                                                        <TouchableOpacity
+                                                            onPress={() => { setEditingFolderId(folder.id); setEditFolderName(folder.name); setShowEditFolder(true); }}
+                                                            style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
+                                                        >
+                                                            <Feather name="edit-2" size={11} color="#fff" />
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity
+                                                            onPress={() => confirmDeleteFolder(folder)}
+                                                            style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
+                                                        >
+                                                            <Feather name="trash-2" size={11} color="#ef4444" />
+                                                        </TouchableOpacity>
+                                                    </>
+                                                )}
+                                            </View>
                                         )}
                                     </View>
                                 );
@@ -594,7 +696,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                     </View>
                 )}
 
-                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 6 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 4 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
                     {sortedPhotos.map((photo, index) => {
                         const isSelected = selectedFiles.has(photo.id);
                         if (viewMode === 'grid') {
@@ -602,7 +704,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                 <View
                                     key={photo.id}
                                     style={{
-                                        width: '23%',
+                                        width: '24%',
                                         aspectRatio: 1,
                                         backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
                                         borderRadius: 10,
@@ -629,7 +731,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
-                                    <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 4, zIndex: 10 }}>
+                                    <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 1, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 2 }}>
                                         {!isSelectionMode && (
                                             <>
                                                 <TouchableOpacity
@@ -649,14 +751,14 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                             }
                                                         } catch { }
                                                     }}
-                                                    style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
+                                                    style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
                                                 >
                                                     <Feather name="share-2" size={12} color="#fff" />
                                                 </TouchableOpacity>
                                                 {(user.role === 'admin' || user.role === 'superadmin') && (
                                                     <TouchableOpacity
                                                         onPress={() => togglePhotoVisibility(photo)}
-                                                        style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
+                                                        style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
                                                     >
                                                         <Feather name={photo.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={photo.client_visible !== false ? colors.primary : '#fff'} />
                                                     </TouchableOpacity>
@@ -664,7 +766,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                                 {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
                                                     <TouchableOpacity
                                                         onPress={() => confirmDeletePhoto(photo)}
-                                                        style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
+                                                        style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
                                                     >
                                                         <Feather name="trash-2" size={12} color="#ef4444" />
                                                     </TouchableOpacity>
@@ -851,11 +953,29 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
 
             <MobileMoveToFolderDialog
                 visible={showMoveDialog}
-                onClose={() => setShowMoveDialog(false)}
+                onClose={() => {
+                    setShowMoveDialog(false);
+                    setMovingContentsOf(null);
+                    setMovingItem(null);
+                }}
                 project={project}
                 item={movingItem}
-                selectedItems={{ folders: Array.from(selectedFolders), files: Array.from(selectedFiles) }}
-                onMoveComplete={() => {
+                selectedItems={movingContentsOf ? {
+                    folders: folders.filter(f => String(f.parent_id) === String(movingContentsOf.id)).map(f => f.id),
+                    files: photos.filter(p => String(p.folder_id) === String(movingContentsOf.id)).map(p => p.id)
+                } : {
+                    folders: Array.from(selectedFolders),
+                    files: Array.from(selectedFiles)
+                }}
+                onMoveComplete={async () => {
+                    if (movingContentsOf) {
+                        try {
+                            await deleteFolder(movingContentsOf.id, false);
+                            Alert.alert("Success", `Folder "${movingContentsOf.name}" deleted after moving contents`);
+                        } catch (err) {
+                            Alert.alert("Error", "Contents moved, but failed to delete empty folder");
+                        }
+                    }
                     getProjectFiles(project.id, 'photo')
                         .then((data) => {
                             if (data.folderData) setFolders(data.folderData);
@@ -864,6 +984,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                             }
                         });
                     clearSelection();
+                    setMovingContentsOf(null);
                 }}
                 type="photo"
             />
@@ -1028,6 +1149,30 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                     </KeyboardAvoidingView>
                 </View>
                 </GestureHandlerRootView>
+            </Modal>
+
+            {/* Rename Folder Modal */}
+            <Modal visible={showEditFolder} transparent animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
+                    <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename Folder</Text>
+                        <TextInput
+                            value={editFolderName}
+                            onChangeText={setEditFolderName}
+                            placeholder="Folder name"
+                            placeholderTextColor={colors.textMuted}
+                            style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={() => setShowEditFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleUpdateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
             </Modal>
         </View>
     );

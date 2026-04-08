@@ -1,17 +1,9 @@
 import type { Request, Response } from "express";
 import crypto from "crypto";
 import { startExportProcess, activeExports } from "../services/exportService.ts";
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || "ap-south-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    }
-});
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { projects, users, folders, files, organizations, project_members, Sequelize } from "../models/index.ts";
 import { Op, fn, col, literal } from "sequelize";
 
@@ -56,22 +48,35 @@ export const createProject = async (req: Request, res: Response) => {
             created_by: authUser.user_id,
         });
 
-        // Create default folders
-        const defaultFolders = [
-            { name: "Drawings", type: "document" },
-            { name: "Photos", type: "photo" }
+        // Create default folders (Photo & Doc types)
+        const folderNames = [
+            "3D files", "3D images", "Architectural", "Automation",
+            "Brick marking", "Carpentry", "Electrical", "Fabrication",
+            "Flooring", "HVAC", "Interiors", "Landscape",
+            "Permit", "Plumbing", "Structural"
         ];
-        await Promise.all(
-            defaultFolders.map((f) =>
-                folders.create({
-                    project_id: newProject.id,
-                    name: f.name,
-                    created_by: authUser.user_id,
-                    client_visible: true,
-                    folder_type: f.type,
-                })
-            )
-        );
+
+        const folderCreationTasks: any[] = [];
+        folderNames.forEach((name) => {
+            // Create for Photos
+            folderCreationTasks.push(folders.create({
+                project_id: newProject.id,
+                name,
+                created_by: authUser.user_id,
+                client_visible: true,
+                folder_type: "photo",
+            }));
+            // Create for Docs
+            folderCreationTasks.push(folders.create({
+                project_id: newProject.id,
+                name,
+                created_by: authUser.user_id,
+                client_visible: true,
+                folder_type: "document",
+            }));
+        });
+
+        await Promise.all(folderCreationTasks);
 
         res.status(201).json({ message: "Project created successfully", project: newProject });
     } catch (error) {
@@ -98,17 +103,13 @@ export const getProjects = async (req: Request, res: Response) => {
         } else if (authUser.role === 'admin') {
             whereCondition.organization_id = authUser.organization_id;
         } else if (authUser.role === 'contributor' || authUser.role === 'client') {
-            if (authUser.project_id) {
-                // User logged in with a specific project code, restrict to ONLY that project
-                whereCondition.id = authUser.project_id;
-            } else {
-                const userMemberships = await project_members.findAll({
-                    where: { user_id: authUser.user_id },
-                    attributes: ['project_id']
-                });
-                const projectIds = userMemberships.map((pm: any) => pm.project_id);
-                whereCondition.id = { [Op.in]: projectIds };
-            }
+            // Fetch all projects where the user has an explicit membership record
+            const userMemberships = await project_members.findAll({
+                where: { user_id: authUser.user_id },
+                attributes: ['project_id']
+            });
+            const projectIds = userMemberships.map((pm: any) => pm.project_id);
+            whereCondition.id = { [Op.in]: projectIds };
         }
 
         const result = await projects.findAll({
@@ -128,11 +129,11 @@ export const getProjects = async (req: Request, res: Response) => {
                         'totalFolders'
                     ],
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor' AND u."role" != 'admin')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor')`),
                         'totalContributors'
                     ],
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client' AND u."role" != 'admin')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client')`),
                         'totalClients'
                     ],
                 ],
@@ -189,11 +190,11 @@ export const getProjectById = async (req: Request, res: Response) => {
             attributes: {
                 include: [
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor' AND u."role" != 'admin')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor')`),
                         'totalContributors'
                     ],
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm JOIN "users" u ON pm.user_id = u.id WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client' AND u."role" != 'admin')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'client')`),
                         'totalClients'
                     ]
                 ]
@@ -208,8 +209,14 @@ export const getProjectById = async (req: Request, res: Response) => {
         if (authUser.role === "admin" && project.organization_id !== authUser.organization_id) {
             return res.status(403).json({ error: "Forbidden: Not part of organization" });
         }
-        if ((authUser.role === "contributor" || authUser.role === "client") && authUser.project_id !== project.id) {
-            return res.status(403).json({ error: "Forbidden: Not assigned to this project" });
+        if (authUser.role === "contributor" || authUser.role === "client") {
+            // Check if user is a member of this project in the database
+            const membership = await project_members.findOne({
+                where: { project_id: project.id, user_id: authUser.user_id, role: authUser.role }
+            });
+            if (!membership) {
+                return res.status(403).json({ error: "Forbidden: Not assigned to this project" });
+            }
         }
 
         let projectOutput = project.toJSON ? project.toJSON() : project;
@@ -378,7 +385,6 @@ export const getProjectMembers = async (req: Request, res: Response) => {
             where: { project_id: id },
             include: [{
                 model: users,
-                where: { role: { [Op.ne]: 'admin' } },
                 attributes: ['id', 'name', 'email', 'phone_number', 'role', 'profile_pic', 'createdAt']
             }],
             order: [['createdAt', 'DESC']]

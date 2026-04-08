@@ -85,7 +85,10 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
 
     const handleCreate = async () => {
         if (selectedUsers.length === 0) return;
-        if (type === 'group' && !groupName.trim()) return;
+        if (type === 'group' && !groupName.trim()) {
+            alert('Please enter a group name');
+            return;
+        }
 
         setSubmitting(true);
         try {
@@ -96,8 +99,9 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             });
             onSuccess(room);
             onClose();
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to create chat", err);
+            alert(err?.response?.data?.message || err.message || "Failed to create chat");
         } finally {
             setSubmitting(false);
         }
@@ -138,37 +142,36 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 >
                     {/* Header */}
-                    <View style={[
-                        styles.header, 
-                        { 
-                            backgroundColor: colors.surface, 
-                            borderBottomColor: colors.border,
-                            paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
-                            height: 56 + (Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0)
-                        }
-                    ]}>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <Feather name="x" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                        <Text style={[styles.headerTitle, { color: colors.text }]}>{type === 'group' ? 'New Group' : 'New Direct Chat'}</Text>
-                        
-                        {type === 'group' ? (
-                            <TouchableOpacity
-                                onPress={handleCreate}
-                                disabled={submitting || selectedUsers.length === 0 || !groupName.trim()}
-                                style={{
-                                    opacity: (submitting || selectedUsers.length === 0 || !groupName.trim()) ? 0.4 : 1,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 6
-                                }}
-                            >
-                                {submitting && <ActivityIndicator size="small" color={colors.primary} />}
-                                <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
+                    <View style={{ 
+                        backgroundColor: colors.surface, 
+                        borderBottomColor: colors.border,
+                        borderBottomWidth: 1,
+                        paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
+                    }}>
+                        <View style={[styles.header, { borderBottomWidth: 0 }]}>
+                            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                                <Feather name="x" size={24} color={colors.text} />
                             </TouchableOpacity>
-                        ) : (
-                            <View style={{ width: 40 }} />
-                        )}
+                            <Text style={[styles.headerTitle, { color: colors.text }]}>{type === 'group' ? 'New Group' : 'New Direct Chat'}</Text>
+                            
+                            {type === 'group' ? (
+                                <TouchableOpacity
+                                    onPress={handleCreate}
+                                    disabled={submitting || selectedUsers.length === 0}
+                                    style={{
+                                        opacity: (submitting || selectedUsers.length === 0) ? 0.4 : 1,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 6
+                                    }}
+                                >
+                                    {submitting && <ActivityIndicator size="small" color={colors.primary} />}
+                                    <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <View style={{ width: 40 }} />
+                            )}
+                        </View>
                     </View>
 
                 {/* Type Selector */}

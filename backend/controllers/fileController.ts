@@ -5,9 +5,11 @@ import db from "../models/index.ts";
 const { files, folders, project_members, activities, users } = db;
 
 import { Op } from "sequelize";
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from 'sharp';
+import { addWatermark } from "../utils/watermark.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { users as UsersModel } from "../models/index.ts";
 import { PDFDocument } from 'pdf-lib';
@@ -19,18 +21,6 @@ interface MulterFile {
     mimetype: string;
     size: number;
 }
-
-
-
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || "ap-south-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    }
-});
-
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
 
 // Helper to check access
 const checkProjectAccess = async (userId: number, projectId: number) => {
@@ -77,61 +67,12 @@ export const uploadFile = async (req: Request | any, res: Response) => {
 
         // Apply compression and watermarking only to images
         if (file_type.startsWith('image/')) {
-            const timestamp = new Date().toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata',
-                dateStyle: 'medium',
-                timeStyle: 'short'
-            });
-
             try {
-                const image = sharp((req as any).file.buffer);
-                const metadata = await image.metadata();
-                const originalWidth = metadata.width || 1280;
-                const finalWidth = Math.min(originalWidth, 1280);
-
-                // Dynamically adjust font size to width
-                const fontSize = Math.max(12, Math.min(22, Math.round(finalWidth * 0.02)));
-                const bandHeight = Math.round(fontSize * 4);
-                const svgWidth = finalWidth;
-                const svgHeight = bandHeight;
-
-                // Professional formatting
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
-                const timeStr = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase();
-
-                const yPos1 = Math.round(fontSize * 1.5); // Primary line
-                const yPos2 = Math.round(fontSize * 3.0); // Secondary line (reserved)
-
-                const svgOverlay = `
-                    <svg width="${svgWidth}" height="${svgHeight}">
-                        <style>
-                            .text { fill: #1a1a1a; font-size: ${fontSize}px; font-family: sans-serif; font-weight: 800; letter-spacing: 0.5px; }
-                            .sub { fill: #999; font-size: ${Math.round(fontSize * 0.7)}px; font-family: sans-serif; }
-                        </style>
-                        <text x="20" y="${yPos1}" class="text">${dateStr}   |   ${timeStr}</text>
-                        <text x="20" y="${yPos2}" class="sub"></text>
-                    </svg>
-                `;
-
-                fileBuffer = await image
-                    .resize({ width: 1280, withoutEnlargement: true })
-                    .extend({
-                        bottom: bandHeight,
-                        background: { r: 255, g: 255, b: 255, alpha: 1 }
-                    })
-                    .composite([{
-                        input: Buffer.from(svgOverlay),
-                        gravity: 'southwest'
-                    }])
-                    .jpeg({ quality: 85 })
-                    .toBuffer();
-
+                fileBuffer = await addWatermark(req.file.buffer);
                 // Force extension to jpg since we are converting
                 finalFileName = file_name.replace(/\.[^/.]+$/, "") + ".jpg";
             } catch (sharpErr) {
-                console.error("Sharp processing failed, falling back to original", sharpErr);
-                // Fallback to original buffer if sharp fails
+                console.error("Watermarking failed, falling back to original", sharpErr);
             }
         }
 
@@ -155,9 +96,17 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
         });
 
-        // Send notifications to project members
+        // Send notifications only to project members in the SAME organization
         const members = await project_members.findAll({
-            where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
+            where: { 
+                project_id: parseInt(project_id, 10), 
+                user_id: { [Op.ne]: authUser.user_id } 
+            },
+            include: [{
+                model: UsersModel,
+                where: { organization_id: authUser.organization_id },
+                attributes: ['id', 'name']
+            }]
         });
 
         // Fallback for name if missing from token
@@ -672,10 +621,18 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             file: isSeparate ? createdFiles[0] : createdFiles[0]
         });
 
-        // Notifications for Scans
+        // Notifications for Scans only to members in the same organization
         try {
             const members = await project_members.findAll({
-                where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
+                where: { 
+                    project_id: parseInt(project_id, 10), 
+                    user_id: { [Op.ne]: authUser.user_id } 
+                },
+                include: [{
+                    model: UsersModel,
+                    where: { organization_id: authUser.organization_id },
+                    attributes: ['id', 'name']
+                }]
             });
 
             let senderName = authUser.name;

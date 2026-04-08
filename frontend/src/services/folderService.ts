@@ -52,3 +52,17 @@ export const updateFolder = async (folderId: string | number, data: { name: stri
     }
 };
 
+export const deleteFolder = async (folderId: string | number, forceDelete: boolean = false) => {
+    try {
+        const response = await PrivateAxios.request({
+            method: 'delete',
+            url: `/folders/${folderId}`,
+            data: { forceDelete }
+        });
+        return response.data;
+    } catch (error) {
+        console.error("deleteFolder Error", error);
+        throw error;
+    }
+};
+

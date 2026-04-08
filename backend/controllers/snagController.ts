@@ -1,26 +1,19 @@
 import type { Request, Response } from 'express';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Op } from 'sequelize';
 import sharp from 'sharp';
+import { addWatermark } from '../utils/watermark.ts';
 import { snags, users, project_members, activities } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
-
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'ap-south-2',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    },
-});
-const BUCKET = process.env.S3_BUCKET_NAME || 'apexis-bucket';
 
 // Helper: generate presigned URL for a snag photo
 const withPresignedUrl = async (snag: any) => {
     const json = snag.toJSON ? snag.toJSON() : { ...snag };
     if (json.photo_url) {
         try {
-            const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: json.photo_url });
+            const cmd = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: json.photo_url });
             json.photoDownloadUrl = await getSignedUrl(s3Client, cmd, { expiresIn: 3600 });
         } catch { json.photoDownloadUrl = null; }
     }
@@ -67,56 +60,8 @@ export const createSnag = async (req: Request, res: Response) => {
             let ext = (req as any).file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
 
             if ((req as any).file.mimetype.startsWith('image/')) {
-                const timestamp = new Date().toLocaleString('en-IN', {
-                    timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short'
-                });
                 try {
-                    const image = sharp((req as any).file.buffer);
-                    const metadata = await image.metadata();
-                    const originalWidth = metadata.width || 1280;
-                    const finalWidth = Math.min(originalWidth, 1280);
-
-                    // Dynamically adjust font size to width
-                    const fontSize = Math.max(12, Math.min(22, Math.round(finalWidth * 0.02)));
-                    const bandHeight = Math.round(fontSize * 4);
-                    const svgWidth = finalWidth;
-                    const svgHeight = bandHeight;
-
-                    // Professional formatting
-                    const now = new Date();
-                    const dateStr = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
-                    const timeStr = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase();
-
-                    const yPos1 = Math.round(fontSize * 1.5); // Primary line
-                    const yPos2 = Math.round(fontSize * 3.0); // Secondary line (reserved)
-
-                    const svgOverlay = `
-                        <svg width="${svgWidth}" height="${svgHeight}">
-                            <style>
-                                .label { fill: #ea8c0a; font-size: ${fontSize}px; font-family: sans-serif; font-weight: 900; letter-spacing: 0.5px; }
-                                .text { fill: #1a1a1a; font-size: ${fontSize}px; font-family: sans-serif; font-weight: 800; letter-spacing: 0.5px; }
-                                .sub { fill: #999; font-size: ${Math.round(fontSize * 0.7)}px; font-family: sans-serif; }
-                            </style>
-                            <text x="20" y="${yPos1}">
-                                <tspan class="label">BEFORE</tspan>
-                                <tspan class="text" dx="15">${dateStr}   |   ${timeStr}</tspan>
-                            </text>
-                            <text x="20" y="${yPos2}" class="sub"></text>
-                        </svg>
-                    `;
-
-                    fileBuffer = await image
-                        .resize({ width: 1280, withoutEnlargement: true })
-                        .extend({
-                            bottom: bandHeight,
-                            background: { r: 255, g: 255, b: 255, alpha: 1 }
-                        })
-                        .composite([{
-                            input: Buffer.from(svgOverlay),
-                            gravity: 'southwest'
-                        }])
-                        .jpeg({ quality: 85 })
-                        .toBuffer();
+                    fileBuffer = await addWatermark((req as any).file.buffer);
                     ext = '.jpg';
                 } catch (e) {
                     console.error('Sharp error in snag', e);
@@ -125,7 +70,7 @@ export const createSnag = async (req: Request, res: Response) => {
 
             const key = `projects/${project_id}/snags/${Date.now()}${ext}`;
             await s3Client.send(new PutObjectCommand({
-                Bucket: BUCKET, Key: key,
+                Bucket: BUCKET_NAME, Key: key,
                 ContentType: (req as any).file.mimetype, Body: fileBuffer,
             }));
             photo_url = key;
@@ -148,18 +93,22 @@ export const createSnag = async (req: Request, res: Response) => {
             description: `Added snag "${title.trim()}"`
         });
 
-        // Notify assignee
+        // Notify assignee (if in same organization)
         if (assigned_to) {
-            const sender = await users.findByPk(authUser.user_id);
-            const senderName = sender?.name || 'Someone';
-
-            await sendNotification({
-                userId: Number(assigned_to),
-                title: 'New Snag Assigned',
-                body: `${senderName} assigned a new snag to you: ${title}`,
-                type: 'snag_assigned',
-                data: { snagId: String(snag.id), projectId: String(project_id) }
+            const recipient = await users.findOne({ 
+                where: { id: Number(assigned_to), organization_id: authUser.organization_id } 
             });
+            
+            if (recipient) {
+                const senderName = authUser.name || 'Someone';
+                await sendNotification({
+                    userId: recipient.id,
+                    title: 'New Snag Assigned',
+                    body: `${senderName} assigned a new snag to you: ${title}`,
+                    type: 'snag_assigned',
+                    data: { snagId: String(snag.id), projectId: String(project_id) }
+                });
+            }
         }
 
         // Notify Admins in the organization (except creator and assignee)
@@ -229,9 +178,14 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
         if (snag.created_by && snag.created_by !== authUser.user_id) notifyIds.add(snag.created_by);
 
         if (notifyIds.size > 0) {
-            const sender = await users.findByPk(authUser.user_id);
-            const senderName = sender?.name || 'Someone';
-            
+            const validRecipients = await users.findAll({
+                where: { 
+                    id: { [Op.in]: Array.from(notifyIds) },
+                    organization_id: authUser.organization_id
+                }
+            });
+
+            const senderName = authUser.name || 'Someone';
             const statusLabels: Record<string, string> = {
                 amber: 'Waiting for Clearance',
                 green: 'Completed',
@@ -239,9 +193,9 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
             };
             const friendlyStatus = statusLabels[status] || status;
 
-            for (const uid of notifyIds) {
+            for (const recipient of validRecipients) {
                 await sendNotification({
-                    userId: uid,
+                    userId: recipient.id,
                     title: 'Snag Status Updated',
                     body: `${senderName} updated status to ${friendlyStatus} for snag: ${snag.title}`,
                     type: 'snag_status_update',
@@ -286,7 +240,10 @@ export const getAssignees = async (req: Request, res: Response) => {
                 {
                     model: users,
                     attributes: ['id', 'name', 'email', 'role'],
-                    where: { role: { [Op.ne]: 'client' } },
+                    where: { 
+                        role: { [Op.ne]: 'client' },
+                        organization_id: (req as any).user.organization_id
+                    },
                     required: true,
                 },
             ],

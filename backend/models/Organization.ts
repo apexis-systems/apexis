@@ -19,6 +19,16 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING,
                 allowNull: true,
             },
+            plan_name: {
+                type: DataTypes.STRING,
+                allowNull: false,
+                defaultValue: "Free",
+            },
+            plan_price: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+            },
             plan_id: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
@@ -35,6 +45,11 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: false,
                 defaultValue: 0,
+            },
+            storage_limit_mb: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 100,
             },
         },
         {

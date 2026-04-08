@@ -62,19 +62,20 @@ export default function Project({ id }: ProjectProps) {
         if (urlTab && urlTab !== activeTab) setActiveTab(urlTab);
     }, [urlTab]);
 
-    useEffect(() => {
-        const fetchProject = async () => {
-            try {
-                const data = await getProjectById(id);
-                setProject(data);
-            } catch (error) {
-                console.error("Failed to fetch project:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchProject();
+    const fetchProject = useCallback(async () => {
+        try {
+            const data = await getProjectById(id);
+            setProject(data);
+        } catch (error) {
+            console.error("Failed to fetch project:", error);
+        } finally {
+            setLoading(false);
+        }
     }, [id]);
+
+    useEffect(() => {
+        fetchProject();
+    }, [fetchProject]);
 
     const checkRFIs = useCallback(async () => {
         if (!id || !user?.id) return;
@@ -109,6 +110,7 @@ export default function Project({ id }: ProjectProps) {
             };
 
             socket.on('rfi-updated', handleRfiUpdate);
+            socket.on('project-stats-updated', fetchProject);
             socket.on('new-notification', (notif: any) => {
                 // If the notification is RFI related, refresh the check
                 if (notif.type?.startsWith('rfi_')) {
@@ -118,6 +120,7 @@ export default function Project({ id }: ProjectProps) {
 
             return () => {
                 socket.off('rfi-updated', handleRfiUpdate);
+                socket.off('project-stats-updated', fetchProject);
                 socket.off('new-notification', handleRfiUpdate); // Using same handler to refresh
             };
         }

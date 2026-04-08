@@ -9,9 +9,14 @@ RUN apk add --no-cache ttf-dejavu fontconfig
 COPY package*.json ./
 RUN npm install
 
+# Copy the entrypoint script
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
 # Copy the rest of the source code
 COPY . .
 
 EXPOSE 5001
 
+ENTRYPOINT ["sh", "./docker-entrypoint.sh"]
 CMD ["npm", "run", "dev"]

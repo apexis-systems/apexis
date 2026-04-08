@@ -61,7 +61,7 @@ function RootLayoutNav() {
     }
   }, [isLoggedIn, user]);
 
-  const { code } = useGlobalSearchParams();
+  const { code, role } = useGlobalSearchParams();
 
   useEffect(() => {
     const checkAndRedirect = async () => {
@@ -88,7 +88,10 @@ function RootLayoutNav() {
       }
 
       if (!isLoggedIn && !inAuthGroup && !isOnboarding) {
-        router.replace('/(auth)/login');
+        router.replace({
+          pathname: '/(auth)/login',
+          params: code ? { code, role } : {}
+        });
       } else if (isLoggedIn && isPendingName && !isSetupName) {
         router.replace('/(auth)/setup-name');
       } else if (isLoggedIn && inAuthGroup && !isSignupWithToken && !isSetupName && !isInvitation) {

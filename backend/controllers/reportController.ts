@@ -208,6 +208,30 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
     });
 
     // --- Build summary breakdown ---
+    const projectName = targetProject?.name || 'Project';
+    const folderMap = new Map(projectFolders.map((f: any) => [Number(f.id), f]));
+    const folderPathCache = new Map<number, string>();
+    
+    const getFullPath = (folderId: number | null): string => {
+        if (!folderId) return projectName;
+        const id = Number(folderId);
+        if (folderPathCache.has(id)) return folderPathCache.get(id)!;
+        
+        const f = folderMap.get(id) as any;
+        if (!f) return projectName;
+        
+        let path = f.name;
+        if (f.parent_id) {
+            const parentPath = getFullPath(f.parent_id);
+            path = `${parentPath}/${f.name}`;
+        } else {
+            path = `${projectName}/${f.name}`;
+        }
+        
+        folderPathCache.set(id, path);
+        return path;
+    };
+
     const photosByDetails: Record<string, { count: number; user: string; folder: string }> = {};
     photos.forEach((f: any) => {
         const key = `${f.created_by}_${f.folder_id}`;
@@ -215,7 +239,7 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
             photosByDetails[key] = {
                 count: 0,
                 user: f.creator?.name || 'Unknown',
-                folder: f.folder?.name || 'Unknown',
+                folder: getFullPath(f.folder_id) || 'Unknown',
             };
         }
         photosByDetails[key].count++;
@@ -228,7 +252,7 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
         document_titles: docs.map((f: any) => ({
             title: f.file_name,
             user: f.creator?.name || 'Unknown',
-            folder: f.folder?.name || 'Unknown',
+            folder: getFullPath(f.folder_id) || 'Unknown',
             date: f.createdAt.toISOString().split('T')[0]
         })),
         photo_summary: Object.values(photosByDetails),
