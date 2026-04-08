@@ -13,14 +13,19 @@
                 "documents": "Documents",
                 "photos": "Photos"
             },
+            "adminAnalyticsTitle": "Admin Analytics",
+            "adminAnalyticsSubtitle": "Company-wide project intelligence",
+            "createProject": "Create Project",
             "yourProjects": "Your Projects",
-            "noProjects": "No projects available"
+            "noProjects": "No projects available",
+            "noProjectsSearch": "No projects match your search."
         },
         "tabs": {
             "home": "Home",
             "scan": "Scan",
             "upload": "Upload",
             "activity": "Activity",
+            "chat": "Chat",
             "settings": "Settings"
         }
     }
