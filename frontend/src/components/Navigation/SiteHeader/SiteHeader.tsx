@@ -133,10 +133,14 @@ const SiteHeader = () => {
 
             {user && (
               <div className="ml-2 flex items-center gap-3 border-l border-border pl-4">
-                <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/${user?.role || 'admin'}/profile`)}
+                  className="text-right cursor-pointer hover:opacity-80 transition-opacity"
+                >
                   <div className="text-xs font-semibold text-foreground">{user.name}</div>
                   <div className="text-[10px] text-muted-foreground">{user.email || user.phone_number || user.role}</div>
-                </div>
+                </button>
                 <button onClick={handleLogout} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
                   <LogOut className="h-4 w-4 text-muted-foreground" />
                 </button>

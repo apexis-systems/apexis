@@ -381,8 +381,8 @@ export default function DashboardScreen() {
                 <Feather name="bar-chart-2" size={18} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Admin Analytics</Text>
-                <Text style={{ fontSize: 10, color: colors.textMuted }}>Company-wide project intelligence</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('dashboard.adminAnalyticsTitle')}</Text>
+                <Text style={{ fontSize: 10, color: colors.textMuted }}>{t('dashboard.adminAnalyticsSubtitle')}</Text>
               </View>
               <Feather name="chevron-right" size={16} color={colors.primary} />
             </TouchableOpacity>
@@ -509,7 +509,7 @@ export default function DashboardScreen() {
                     lineHeight: 13,
                   }}
                 >
-                  Create Project
+                  {t('dashboard.createProject')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -518,7 +518,7 @@ export default function DashboardScreen() {
           {filteredProjects.length === 0 && (
             <View style={{ marginTop: 40, alignItems: 'center' }}>
               <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                {searchQuery ? 'No projects match your search.' : t('dashboard.noProjects')}
+                {searchQuery ? t('dashboard.noProjectsSearch') : t('dashboard.noProjects')}
               </Text>
             </View>
           )}

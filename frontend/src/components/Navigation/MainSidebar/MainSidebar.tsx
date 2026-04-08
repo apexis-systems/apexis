@@ -18,15 +18,15 @@ const MainSidebar = () => {
   const navItems = [
     { icon: Home, label: t('dashboard'), path: `${basePath}/dashboard` },
     ...((user?.role === 'admin' || user?.role === 'superadmin') ? [
-      { icon: BarChart2, label: 'Analytics', path: `${basePath}/analytics` }
+      { icon: BarChart2, label: t('analytics'), path: `${basePath}/analytics` }
     ] : []),
     { icon: Clock, label: t('activity'), path: `${basePath}/activity` },
-    { icon: Bell, label: 'Notifications', path: `${basePath}/notifications` },
-    { icon: MessageSquare, label: 'Chats', path: `${basePath}/chats` },
-    { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },
+    { icon: Bell, label: t('notifications_label'), path: `${basePath}/notifications` },
+    { icon: MessageSquare, label: t('chats'), path: `${basePath}/chats` },
+    // { icon: AlertTriangle, label: t('snag_list'), path: `${basePath}/snags` },
     { icon: Settings, label: t('settings'), path: `${basePath}/profile` },
     ...(user?.role === 'superadmin' ? [
-      { icon: Shield, label: t('teams') || 'Teams', path: `${basePath}/teams` },
+      { icon: Shield, label: t('teams'), path: `${basePath}/teams` },
     ] : []),
     ...(user?.role === 'admin' ? [
       { icon: Users, label: t('user_mgmt') || 'Users', path: `${basePath}/users` },

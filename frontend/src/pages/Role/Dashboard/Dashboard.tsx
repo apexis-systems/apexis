@@ -248,11 +248,11 @@ export default function Dashboard() {
                     {user.role === 'superadmin' && orgData && (
                         <>
                             <div className="rounded-xl bg-card border border-border p-5">
-                                <div className="text-sm text-muted-foreground">Org Users</div>
+                                <div className="text-sm text-muted-foreground">{t('org_users')}</div>
                                 <div className="mt-1 text-3xl font-bold text-foreground">{orgData.users?.length || 0}</div>
                             </div>
                             <div className="rounded-xl bg-card border border-border p-5">
-                                <div className="text-sm text-muted-foreground">All Projects</div>
+                                <div className="text-sm text-muted-foreground">{t('all_projects')}</div>
                                 <div className="mt-1 text-3xl font-bold text-foreground">{orgData.projects?.length || 0}</div>
                             </div>
                         </>
@@ -278,7 +278,7 @@ export default function Dashboard() {
 
             <div id="projects-list-header" className="flex items-center justify-between gap-4 mb-4">
                 <h2 className="text-lg font-bold text-foreground">
-                    {user.role === 'superadmin' ? "Organization Projects" : t('your_projects')}
+                    {user.role === 'superadmin' ? t('organization_projects') : t('your_projects')}
                 </h2>
                 <div className="flex items-center gap-3">
                     {user.role === 'superadmin' && (
@@ -287,7 +287,7 @@ export default function Dashboard() {
                             value={selectedOrgId}
                             onChange={(e) => setSelectedOrgId(e.target.value)}
                         >
-                            <option value="">All Organizations</option>
+                            <option value="">{t('all_organizations')}</option>
                             {organizations.map(org => (
                                 <option key={org.id} value={org.id}>{org.name}</option>
                             ))}
@@ -298,7 +298,7 @@ export default function Dashboard() {
                             onClick={() => setIsCreating(!isCreating)}
                             className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                         >
-                            <Plus className="h-4 w-4" /> Create Project
+                            <Plus className="h-4 w-4" /> {t('create_project')}
                         </button>
                     )}
                 </div>

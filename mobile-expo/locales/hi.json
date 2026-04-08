@@ -9,17 +9,24 @@
             },
             "stats": {
                 "projects": "प्रोजेक्ट्स",
+                "folders": "फोल्डर्स",
                 "documents": "दस्तावेज़",
                 "photos": "तस्वीरें"
             },
+            "adminAnalyticsTitle": "एडमिन एनालिटिक्स",
+            "adminAnalyticsSubtitle": "कंपनी-व्यापी प्रोजेक्ट इंटेलिजेंस",
+            "createProject": "प्रोजेक्ट बनाएं",
             "yourProjects": "आपके प्रोजेक्ट्स",
-            "noProjects": "कोई प्रोजेक्ट उपलब्ध नहीं है"
+            "noProjects": "कोई प्रोजेक्ट उपलब्ध नहीं है",
+            "noProjectsSearch": "आपकी खोज से मेल खाने वाला कोई प्रोजेक्ट नहीं मिला।"
         },
         "tabs": {
             "home": "होम",
             "scan": "स्कैन",
             "upload": "अपलोड",
             "activity": "गतिविधि",
+            "chat": "चैट",
+            "settings": "सेटिंग्स",
             "profile": "प्रोफ़ाइल"
         }
     }

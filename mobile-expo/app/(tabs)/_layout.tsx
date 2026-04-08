@@ -116,7 +116,7 @@ export default function TabLayout() {
         name="chat"
         options={{
           href: user?.role === 'superadmin' ? null : '/(tabs)/chat',
-          title: 'Chat',
+          title: t('tabs.chat'),
           tabBarIcon: ({ color }) => <TabBarIcon name="message-circle" color={color} spotlightId="chatTab" />,
           tabBarBadge: unreadChatCount > 0 ? unreadChatCount : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.primary },
