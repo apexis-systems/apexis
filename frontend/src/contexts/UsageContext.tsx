@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getUsage } from '@/services/subscriptionService';
-import { useAuth } from './AuthContext';
-import { useSocket } from './SocketContext';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import { getUsage } from "@/services/subscriptionService";
+import { useAuth } from "./AuthContext";
+import { useSocket } from "./SocketContext";
 
 export interface UsageData {
   plan: {
@@ -10,6 +16,13 @@ export interface UsageData {
     endDate: string;
     daysRemaining: number;
     limits: any;
+    access?: {
+      isExpired: boolean;
+      isInGracePeriod: boolean;
+      isLocked: boolean;
+      graceEndDate: string | null;
+      graceDaysRemaining: number;
+    };
   };
   usage: {
     projects: number;
@@ -21,8 +34,8 @@ export interface UsageData {
     storage_percent: number;
   };
   alert: {
-    type: 'expiry' | 'storage';
-    severity: 'warning' | 'error';
+    type: "expiry" | "storage";
+    severity: "warning" | "error";
     message: string;
   } | null;
 }
@@ -31,19 +44,26 @@ interface UsageContextType {
   usageData: UsageData | null;
   loading: boolean;
   refreshUsage: () => Promise<void>;
-  checkLimit: (type: keyof UsageData['usage'] | 'can_export_reports' | 'can_export_handover') => boolean;
+  checkLimit: (
+    type:
+      | keyof UsageData["usage"]
+      | "can_export_reports"
+      | "can_export_handover",
+  ) => boolean;
 }
 
 const UsageContext = createContext<UsageContextType | undefined>(undefined);
 
-export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { user } = useAuth();
   const { socket } = useSocket();
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refreshUsage = useCallback(async () => {
-    if (!user || user.role === 'superadmin') return;
+    if (!user || user.role === "superadmin") return;
     setLoading(true);
     try {
       const data = await getUsage();
@@ -56,7 +76,7 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [user]);
 
   useEffect(() => {
-    if (user && user.role !== 'superadmin') {
+    if (user && user.role !== "superadmin") {
       refreshUsage();
     } else {
       setUsageData(null);
@@ -64,17 +84,20 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [user, refreshUsage]);
 
   useEffect(() => {
-    if (!socket || !user || user.role === 'superadmin') return;
+    if (!socket || !user || user.role === "superadmin") return;
 
     const onSubscriptionUpdated = (payload: any) => {
-      if (!payload?.organization_id || payload.organization_id === user.organization?.id) {
+      if (
+        !payload?.organization_id ||
+        payload.organization_id === user.organization?.id
+      ) {
         refreshUsage();
       }
     };
 
-    socket.on('subscription-updated', onSubscriptionUpdated);
+    socket.on("subscription-updated", onSubscriptionUpdated);
     return () => {
-      socket.off('subscription-updated', onSubscriptionUpdated);
+      socket.off("subscription-updated", onSubscriptionUpdated);
     };
   }, [socket, user, refreshUsage]);
 
@@ -85,21 +108,21 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const limits = plan.limits;
 
     switch (type) {
-      case 'projects':
+      case "projects":
         return usage.projects < limits.project_limit;
-      case 'contributors':
+      case "contributors":
         return usage.contributors < limits.contributor_limit;
-      case 'clients':
+      case "clients":
         return usage.clients < limits.client_limit;
-      case 'snags':
+      case "snags":
         return usage.snags < limits.max_snags;
-      case 'rfis':
+      case "rfis":
         return usage.rfis < limits.max_rfis;
-      case 'can_export_reports':
+      case "can_export_reports":
         return !!limits.can_export_reports;
-      case 'can_export_handover':
+      case "can_export_handover":
         return !!limits.can_export_handover;
-      case 'storage':
+      case "storage":
         return usage.storage_percent < 100;
       default:
         return true;
@@ -107,7 +130,8 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   return (
-    <UsageContext.Provider value={{ usageData, loading, refreshUsage, checkLimit }}>
+    <UsageContext.Provider
+      value={{ usageData, loading, refreshUsage, checkLimit }}>
       {children}
     </UsageContext.Provider>
   );
@@ -116,7 +140,7 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 export const useUsage = () => {
   const context = useContext(UsageContext);
   if (context === undefined) {
-    throw new Error('useUsage must be used within a UsageProvider');
+    throw new Error("useUsage must be used within a UsageProvider");
   }
   return context;
 };

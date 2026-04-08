@@ -8,6 +8,10 @@ import { sendEmail } from "../utils/email.ts";
 import { normalizePhone, isValidPhone } from "../utils/sms.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { getIO } from "../socket.ts";
+import {
+    checkMemberLimit,
+    getSubscriptionAccessState,
+} from "../utils/subscriptionAccess.ts";
 
 export const adminLogin = async (req: Request, res: Response) => {
     try {
@@ -114,6 +118,17 @@ export const projectLogin = async (req: Request, res: Response) => {
         let isNewUser = false;
 
         if (!user) {
+            if (roleForCode === "contributor" || roleForCode === "client") {
+                const memberLimit = await checkMemberLimit(project.organization_id, roleForCode);
+                if (!memberLimit.allowed) {
+                    return res.status(memberLimit.status).json({
+                        error: "Limit Reached",
+                        message: memberLimit.message,
+                        code: memberLimit.code,
+                    });
+                }
+            }
+
             // Auto-create user because they have valid project code and no signup is required
             user = await users.create({
                 organization_id: project.organization_id, // Default to this project's org
@@ -274,6 +289,11 @@ export const me = async (req: Request, res: Response) => {
 
         const activeOrgId = authUser.organization_id || dbUser.organization_id;
         const organization = activeOrgId ? await organizations.findByPk(activeOrgId) : null;
+        const orgJson = organization ? (organization.toJSON() as any) : null;
+        const access =
+            organization && authUser.role !== "superadmin"
+                ? getSubscriptionAccessState((organization as any).plan_end_date)
+                : null;
 
         // Override the role from the database with the role from the JWT session
         // This ensures multi-role users see their current active role in the UI
@@ -284,7 +304,16 @@ export const me = async (req: Request, res: Response) => {
 
         res.status(200).json({
             user: userData,
-            organization,
+            organization: orgJson
+                ? {
+                    ...orgJson,
+                    subscription_locked: !!access?.isLocked,
+                    subscription_in_grace_period: !!access?.isInGracePeriod,
+                    subscription_plan_end_date: access?.planEndDate || null,
+                    subscription_grace_end_date: access?.graceEndDate || null,
+                    subscription_grace_days_remaining: access?.graceDaysRemaining ?? null,
+                }
+                : null,
             project_id: authUser.project_id || null
         });
     } catch (error) {
@@ -381,6 +410,17 @@ export const completePublicSignup = async (req: Request, res: Response) => {
         }
 
         if (!user) {
+            if (decoded.role === "contributor" || decoded.role === "client") {
+                const memberLimit = await checkMemberLimit(decoded.organization_id, decoded.role);
+                if (!memberLimit.allowed) {
+                    return res.status(memberLimit.status).json({
+                        error: "Limit Reached",
+                        message: memberLimit.message,
+                        code: memberLimit.code,
+                    });
+                }
+            }
+
             // Create user only if they don't exist globally
             user = await users.create({
                 organization_id: decoded.organization_id,

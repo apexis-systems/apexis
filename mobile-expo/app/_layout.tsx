@@ -3,7 +3,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
-import { LogBox, TextInput } from 'react-native';
+import { DeviceEventEmitter, LogBox, TextInput } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -25,12 +25,16 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { useUsage } from '@/contexts/UsageContext';
 
 function RootLayoutNav() {
   const { isLoggedIn, isLoading: isAuthLoading, user, isPendingName } = useAuth();
+  const { usageData } = useUsage();
   const segments = useSegments();
   const router = useRouter();
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
+  const [subscriptionLocked, setSubscriptionLocked] = useState(false);
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -56,6 +60,33 @@ function RootLayoutNav() {
   }, [fontsLoaded, fontError]);
 
   useEffect(() => {
+    const loadSubscriptionLock = async () => {
+      const value = await SecureStore.getItemAsync('subscriptionLocked');
+      setSubscriptionLocked(value === 'true');
+    };
+    loadSubscriptionLock();
+  }, []);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('subscription-locked', () => {
+      setSubscriptionLocked(true);
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    const fromProfile = !!user?.organization?.subscription_locked;
+    const fromUsage = !!usageData?.plan?.access?.isLocked;
+    const nextLocked = fromProfile || fromUsage;
+    setSubscriptionLocked(nextLocked);
+    if (nextLocked) {
+      SecureStore.setItemAsync('subscriptionLocked', 'true').catch(() => {});
+    } else {
+      SecureStore.deleteItemAsync('subscriptionLocked').catch(() => {});
+    }
+  }, [user?.organization?.subscription_locked, usageData?.plan?.access?.isLocked]);
+
+  useEffect(() => {
     if (isLoggedIn && user) {
       // Notification registration moved to Dashboard (index.tsx) to ensure it triggers on home screen
     }
@@ -72,6 +103,7 @@ function RootLayoutNav() {
       const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup';
       const isSetupName = segments[0] === '(auth)' && segments[1] === 'setup-name';
       const isOnboarding = segments[0] === 'onboarding';
+      const isSubscription = segments[0] === 'subscription';
       const isInvitation = !!code;
 
       // Double-check storage if state says false, to avoid race conditions during transitions
@@ -84,6 +116,11 @@ function RootLayoutNav() {
 
       if (!currentOnboardingDone && !isOnboarding) {
         router.replace('/onboarding');
+        return;
+      }
+
+      if (isLoggedIn && subscriptionLocked && !isSubscription) {
+        router.replace('/subscription');
         return;
       }
 
@@ -100,7 +137,7 @@ function RootLayoutNav() {
     };
 
     checkAndRedirect();
-  }, [isLoggedIn, isAuthLoading, isPendingName, segments, code, hasSeenOnboarding]);
+  }, [isLoggedIn, isAuthLoading, isPendingName, segments, code, hasSeenOnboarding, subscriptionLocked]);
 
   if (isAuthLoading || !fontsLoaded) {
     return null;
@@ -111,6 +148,7 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="subscription" options={{ headerShown: false }} />
     </Stack>
   );
 }

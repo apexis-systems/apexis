@@ -32,3 +32,22 @@ PrivateAxios.interceptors.request.use(
         return Promise.reject(error);
     }
 );
+
+PrivateAxios.interceptors.response.use(
+    function (response) {
+        return response;
+    },
+    function (error) {
+        const code = error?.response?.data?.code;
+        if (typeof window !== "undefined" && code === "SUBSCRIPTION_LOCKED") {
+            const path = window.location.pathname || "";
+            const parts = path.split("/").filter(Boolean);
+            const role = parts[0] || "admin";
+            const billingPath = `/${role}/billing`;
+            if (path !== billingPath) {
+                window.location.href = billingPath;
+            }
+        }
+        return Promise.reject(error);
+    }
+);

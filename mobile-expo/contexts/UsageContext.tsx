@@ -10,6 +10,13 @@ export interface UsageData {
         endDate: string;
         daysRemaining: number;
         limits: any;
+        access?: {
+            isExpired: boolean;
+            isInGracePeriod: boolean;
+            isLocked: boolean;
+            graceEndDate: string | null;
+            graceDaysRemaining: number;
+        };
     };
     usage: {
         projects: number;
