@@ -170,7 +170,7 @@ const Login = () => {
                             <div className="flex flex-col md:flex-row min-h-[500px]">
                                 {/* Left Side: Scan Instructions */}
                                 <div className="flex-1 p-8 sm:p-14 border-b md:border-b-0 md:border-r border-border/40 flex flex-col">
-                                <h2 className="text-[28px] font-bold text-foreground mb-10 tracking-tight uppercase text-center md:text-left font-montserrat">Scan to log in</h2>
+                                    <h2 className="text-[28px] font-bold text-foreground mb-10 tracking-tight uppercase text-center md:text-left font-montserrat">Scan to log in</h2>
 
                                     <div className="space-y-8 flex-1">
                                         <div className="flex items-start gap-5">
