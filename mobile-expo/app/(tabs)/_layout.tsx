@@ -16,7 +16,7 @@ const INACTIVE = '#666666';
 const TabBarIcon = ({ name, color, spotlightId, size = 22 }: any) => {
   const { registerSpotlight, isTourActive } = useTour();
   const ref = useRef<View>(null);
-  
+
   useEffect(() => {
     if (isTourActive) {
       const timer = setTimeout(() => {

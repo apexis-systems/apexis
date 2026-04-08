@@ -5,6 +5,8 @@ interface SpotlightPosition {
     x: number;
     y: number;
     r: number;
+    w?: number;
+    h?: number;
 }
 
 interface TourContextType {
