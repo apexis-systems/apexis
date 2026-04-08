@@ -12,6 +12,8 @@ import {
   Users,
   AlertCircle,
   FileText,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { useUsage } from "@/contexts/UsageContext";
 import { Progress } from "@/components/ui/progress";
@@ -131,6 +133,7 @@ const Billing = () => {
   const { t } = useLanguage();
   const { usageData, refreshUsage } = useUsage();
   const [loading, setLoading] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const gstAmount = (base: number) => Number((base * 0.18).toFixed(2));
   const payableAmount = (base: number) => Number((base + gstAmount(base)).toFixed(2));
@@ -258,6 +261,17 @@ const Billing = () => {
       );
     } finally {
       setLoading(null);
+    }
+  };
+  
+  const handleDownloadInvoice = async (tx: any) => {
+    setDownloadingId(tx.id);
+    try {
+      await subscriptionService.downloadInvoice(tx.id, `Invoice_${tx.invoice_number || tx.id}.pdf`);
+    } catch (error) {
+      toast.error("Failed to download invoice");
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -568,6 +582,7 @@ const Billing = () => {
                     <th className="p-4 text-left font-medium">Amount</th>
                     <th className="p-4 text-left font-medium">Status</th>
                     <th className="p-4 text-left font-medium">Date</th>
+                    <th className="p-4 text-left font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -609,6 +624,24 @@ const Billing = () => {
                         </td>
                         <td className="p-4 text-muted-foreground">
                           {new Date(tx.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="p-4">
+                          {tx.payment_status === "success" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-accent/10 text-accent transition-colors disabled:opacity-50"
+                              onClick={() => handleDownloadInvoice(tx)}
+                              disabled={downloadingId === tx.id}
+                              title="Download PDF"
+                            >
+                              {downloadingId === tx.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))

@@ -13,6 +13,7 @@ import {
 } from "../models/index.ts";
 import { Op } from "sequelize";
 import { getIO } from "../socket.ts";
+import { generateInvoice } from "../services/invoiceService.ts";
 
 /**
  * Razorpay controller for handling subscriptions
@@ -396,6 +397,30 @@ export const getPlans = async (req: Request, res: Response) => {
     res.status(200).json(activePlans);
   } catch (error) {
     console.error("Error fetching plans:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
+export const getInvoice = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { organization_id } = (req as any).user;
+
+    const transaction = await transactions.findOne({
+      where: { id, organization_id },
+    });
+    if (!transaction) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+
+    const buffer = await generateInvoice(Number(id));
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Invoice_${transaction.invoice_number || id}.pdf`);
+    res.send(buffer);
+  } catch (error) {
+    console.error("Error fetching invoice:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };

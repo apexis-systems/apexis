@@ -67,7 +67,7 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!socket || !user || user.role === 'superadmin') return;
 
     const onSubscriptionUpdated = (payload: any) => {
-      if (!payload?.organization_id || payload.organization_id === user.organization_id) {
+      if (!payload?.organization_id || payload.organization_id === user.organization?.id) {
         refreshUsage();
       }
     };
@@ -80,7 +80,7 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const checkLimit = (type: any): boolean => {
     if (!usageData) return true; // Default allow if not loaded
-    
+
     const { usage, plan } = usageData;
     const limits = plan.limits;
 

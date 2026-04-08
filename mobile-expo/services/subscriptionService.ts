@@ -49,3 +49,7 @@ export const verifyPayment = async (data: any) => {
         throw error;
     }
 };
+
+export const getInvoiceDownloadUrl = (id: number) => {
+    return `${PrivateAxios.defaults.baseURL}/subscription/invoice/${id}`;
+};
