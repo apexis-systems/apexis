@@ -14,6 +14,7 @@ import {
 import { Op } from "sequelize";
 import { getIO } from "../socket.ts";
 import { generateInvoice } from "../services/invoiceService.ts";
+import { getSubscriptionAccessState } from "../utils/subscriptionAccess.ts";
 
 /**
  * Razorpay controller for handling subscriptions
@@ -321,6 +322,7 @@ export const getUsage = async (req: Request, res: Response) => {
     const diffDays = Math.ceil(
       (expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24),
     );
+    const access = getSubscriptionAccessState(org.plan_end_date, now);
 
     const storageUsagePercent =
       (org.storage_used_mb / org.storage_limit_mb) * 100;
@@ -330,12 +332,19 @@ export const getUsage = async (req: Request, res: Response) => {
     // Prioritize whichever limit is closer
     // 10 days for expiry, 90% for storage
     if (diffDays <= 10 || storageUsagePercent >= 90) {
-      if (diffDays <= 0) {
+      if (access.isLocked) {
         alert = {
           type: "expiry",
           severity: "error",
           message:
-            "Your plan has expired. Please upgrade now to restore full access.",
+            "Your grace period has ended. Please renew now to restore full access.",
+        };
+      } else if (diffDays <= 0) {
+        alert = {
+          type: "expiry",
+          severity: "warning",
+          message:
+            `Your plan has expired. Grace period: ${access.graceDaysRemaining} day(s) remaining.`,
         };
       } else if (storageUsagePercent >= 100) {
         alert = {
@@ -370,6 +379,13 @@ export const getUsage = async (req: Request, res: Response) => {
         endDate: org.plan_end_date,
         daysRemaining: Math.max(0, diffDays),
         limits: plan,
+        access: {
+          isExpired: access.isExpired,
+          isInGracePeriod: access.isInGracePeriod,
+          isLocked: access.isLocked,
+          graceEndDate: access.graceEndDate,
+          graceDaysRemaining: access.graceDaysRemaining,
+        },
       },
       usage: {
         projects: projectCount,

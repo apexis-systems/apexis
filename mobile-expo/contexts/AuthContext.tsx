@@ -45,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const logout = useCallback(async () => {
         setUser(null);
         await SecureStore.deleteItemAsync('token');
+        await SecureStore.deleteItemAsync('subscriptionLocked');
     }, []);
 
     const fetchUser = useCallback(async (showLoading = true) => {
@@ -57,6 +58,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             const res = await getMe();
             if (res?.user) {
+                const isLocked = !!res?.organization?.subscription_locked;
+                if (isLocked) {
+                    await SecureStore.setItemAsync('subscriptionLocked', 'true');
+                } else {
+                    await SecureStore.deleteItemAsync('subscriptionLocked');
+                }
                 setUser({ ...res.user, organization: res.organization, project_id: res.project_id });
             }
         } catch (e: any) {
@@ -78,6 +85,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const res = await getMe();
             if (res?.user) {
+                const isLocked = !!res?.organization?.subscription_locked;
+                if (isLocked) {
+                    await SecureStore.setItemAsync('subscriptionLocked', 'true');
+                } else {
+                    await SecureStore.deleteItemAsync('subscriptionLocked');
+                }
                 const fullUser = { ...res.user, organization: res.organization, project_id: res.project_id };
                 setUser(fullUser);  // isPendingName derives from this automatically
                 return fullUser as User;

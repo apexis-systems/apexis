@@ -39,7 +39,6 @@ export default function UsageScreen() {
 
     const renderUsageItem = (label: string, current: number, limit: number, unit: string = '') => {
         const percent = Math.min(100, Math.round((current / limit) * 100));
-        const isCritical = percent >= 90;
 
         return (
             <View style={styles.usageItem} key={label}>
@@ -55,7 +54,7 @@ export default function UsageScreen() {
                             styles.progressBarFill, 
                             { 
                                 width: `${percent}%`, 
-                                backgroundColor: isCritical ? '#ef4444' : colors.primary 
+                                backgroundColor: colors.primary 
                             }
                         ]} 
                     />
@@ -101,7 +100,7 @@ export default function UsageScreen() {
                 </View>
 
                 {/* Main Usage Grid */}
-                <Text style={styles.sectionTitle}>CONSUMPTION BREAKDOWN</Text>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>CONSUMPTION BREAKDOWN</Text>
                 <View style={[styles.usageGrid, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     {renderUsageItem('Projects', usage.projects, plan.limits.project_limit)}
                     {renderUsageItem('Cloud Storage', usage.storage_mb, plan.limits.storage_limit_mb, ' MB')}

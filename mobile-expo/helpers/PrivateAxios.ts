@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { DeviceEventEmitter } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5002/api';
 
@@ -32,6 +33,22 @@ PrivateAxios.interceptors.request.use(
         return config;
     },
     (error) => {
+        return Promise.reject(error);
+    }
+);
+
+PrivateAxios.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const code = error?.response?.data?.code;
+        if (code === 'SUBSCRIPTION_LOCKED') {
+            try {
+                await SecureStore.setItemAsync('subscriptionLocked', 'true');
+            } catch (secureStoreError) {
+                console.error('Failed to persist subscription lock state', secureStoreError);
+            }
+            DeviceEventEmitter.emit('subscription-locked');
+        }
         return Promise.reject(error);
     }
 );
