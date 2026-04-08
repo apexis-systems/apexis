@@ -67,17 +67,24 @@ export default function DashboardScreen() {
     // We need a small delay to ensure the layout is settled
     setTimeout(() => {
       headerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('dashboardHeader', { x: x + w / 2, y: y + h - 20, r: 100 });
+        registerSpotlight('dashboardHeader', { x: x + w / 2, y: y + h / 2 + 43, w: w + 10, h: h + 100, r: 16 });
       });
-      statsRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('dashboardStats', { x: x + w / 2, y: y + h / 2, r: 160 });
-      });
+      // statsRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+      //   registerSpotlight('dashboardStats', { x: x + w / 2, y: y + h / 2, w: w + 4, h: h + 10, r: 12 });
+      // });
       projectListRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        // Spotlight the first project card
-        registerSpotlight('projectCard', { x: x + (Platform.OS === 'ios' ? 50 : 58), y: y + (Platform.OS === 'ios' ? 40 : 45), r: 60 });
+        // Shifting left (decreasing offset) and increasing w/h
+        registerSpotlight('projectCard', { 
+            x: x + (Platform.OS === 'ios' ? 30 : 40), 
+            y: y + (Platform.OS === 'ios' ? 40 : 50), 
+            w: 90, 
+            h: 120, 
+            r: 16 
+        });
       });
       createButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('createProjectButton', { x: x + w / 2, y: y + h / 2, r: 45 });
+        // Also adding dimensions for the create button
+        registerSpotlight('createProjectButton', { x: x + w / 2, y: y + h / 2, w: w, h: h, r: 14 });
       });
     }, 500);
   }, [registerSpotlight]);

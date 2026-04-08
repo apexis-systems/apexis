@@ -35,9 +35,9 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
         if (isTourActive) {
             setTimeout(() => {
                 bellRef.current?.measureInWindow((x, y, w, h) => {
-                    registerSpotlight('notificationsIcon', { x: x + w / 2, y: y + h / 2, r: 35 });
+                    registerSpotlight('notificationsIcon', { x: w + 145, y: h, r: 35 });
                 });
-            }, 1000);
+            }, 50);
         }
     }, [isTourActive, registerSpotlight]);
 
