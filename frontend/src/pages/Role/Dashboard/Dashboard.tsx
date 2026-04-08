@@ -10,6 +10,7 @@ import { getOrgOverview, uploadOrgLogo, getSecureFileUrl, getOrganizations } fro
 import { toast } from 'sonner';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import { getApiErrorMessage } from '@/helpers/apiError';
 
 export default function Dashboard() {
     const auth = useAuth() || {};
@@ -109,7 +110,7 @@ export default function Dashboard() {
             toast.success('Project created successfully');
         } catch (e: any) {
             console.error("Failed to create project", e);
-            toast.error(e.response?.data?.error || 'Failed to create project');
+            toast.error(getApiErrorMessage(e, 'Failed to create project'));
         } finally {
             setIsSubmitting(false);
         }

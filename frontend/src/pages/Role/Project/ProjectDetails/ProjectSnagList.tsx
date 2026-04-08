@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/helpers/apiError';
 import {
   Snag, SnagStatus, Assignee,
   getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees,
@@ -119,8 +120,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       setNewPhoto(null); setPhotoPreview(null);
       setShowAdd(false);
       toast.success('Snag added');
-    } catch {
-      toast.error('Failed to add snag');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to add snag'));
     } finally {
       setSubmitting(false);
     }

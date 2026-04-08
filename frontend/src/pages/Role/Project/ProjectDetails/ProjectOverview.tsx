@@ -12,6 +12,7 @@ import { getReports, Report } from '@/services/reportService';
 import { getFiles, getSecureFileUrl } from '@/services/fileService';
 import ShareDialog from '@/components/shared/ShareDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { getApiErrorMessage } from '@/helpers/apiError';
 
 
 interface ProjectOverviewProps {
@@ -175,7 +176,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       setIsCountingDown(false);
       await exportHandoverPackage(project.id);
     } catch (e: any) {
-      toast.error('Failed to trigger export');
+      toast.error(getApiErrorMessage(e, 'Failed to trigger export'));
       setIsExporting(false);
     }
   };

@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/helpers/apiError';
 import {
     RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse
 } from '@/services/rfiService';
@@ -153,8 +154,8 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             resetForm();
             load();
             if (onUpdate) onUpdate();
-        } catch {
-            toast.error('Failed to create RFI');
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, 'Failed to create RFI'));
         } finally {
             setSubmitting(false);
         }

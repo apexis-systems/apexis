@@ -16,6 +16,7 @@ import { createSnag, getAssignees, Assignee } from '@/services/snagService';
 import { useEffect, useCallback, useLayoutEffect } from 'react';
 import { Modal, BackHandler } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
+import { parseApiError } from '@/helpers/apiError';
 
 type Step = 'camera' | 'details';
 
@@ -157,8 +158,9 @@ export default function SnagCreateScreen() {
             } else {
                 router.back();
             }
-        } catch {
-            Alert.alert('Error', 'Failed to create snag. Please try again.');
+        } catch (error) {
+            const { message, code } = parseApiError(error, 'Failed to create snag. Please try again.');
+            Alert.alert(code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
         } finally {
             setSubmitting(false);
         }
