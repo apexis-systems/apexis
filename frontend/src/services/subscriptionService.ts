@@ -54,3 +54,22 @@ export const getUsage = async () => {
     throw error;
   }
 };
+
+export const downloadInvoice = async (id: number, fileName?: string) => {
+  try {
+    const res = await PrivateAxios.get(`/subscription/invoice/${id}`, {
+      responseType: 'blob'
+    });
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName || `Invoice_${id}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("downloadInvoice Error", error);
+    throw error;
+  }
+};

@@ -4,14 +4,18 @@ import { Stack, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getTransactions } from '@/services/subscriptionService';
+import { getTransactions, getInvoiceDownloadUrl } from '@/services/subscriptionService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as SecureStore from 'expo-secure-store';
 
 export default function TransactionsScreen() {
     const { colors } = useTheme();
     const router = useRouter();
     const [transactions, setTransactions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [sharingId, setSharingId] = useState<number | null>(null);
 
     useEffect(() => {
         fetchTransactions();
@@ -25,6 +29,34 @@ export default function TransactionsScreen() {
             console.error("Failed to fetch transactions:", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleShareInvoice = async (item: any) => {
+        setSharingId(item.id);
+        try {
+            const token = await SecureStore.getItemAsync('token');
+            const url = getInvoiceDownloadUrl(item.id);
+            const fileName = `Invoice_${item.invoice_number || item.id}.pdf`;
+            const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+            const { uri } = await FileSystem.downloadAsync(
+                url,
+                fileUri,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri);
+            }
+        } catch (error) {
+            console.error("handleShareInvoice Error", error);
+        } finally {
+            setSharingId(null);
         }
     };
 
@@ -62,10 +94,24 @@ export default function TransactionsScreen() {
                                 Invoice: {item.invoice_number || '-'}
                             </Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: isSuccess ? 'rgba(34,197,94,0.1)' : 'rgba(234,179,8,0.1)' }]}>
-                            <Text style={[styles.statusText, { color: isSuccess ? '#22c55e' : '#eab308' }]}>
-                                {item.payment_status.toUpperCase()}
-                            </Text>
+                        <View style={styles.actionRow}>
+                            {isSuccess && (
+                                <TouchableOpacity
+                                    onPress={() => handleShareInvoice(item)}
+                                    disabled={sharingId === item.id}
+                                    style={[styles.shareButton, { backgroundColor: colors.primary + '15' }]}
+                                >
+                                    {sharingId === item.id
+                                        ? <ActivityIndicator size="small" color={colors.primary} />
+                                        : <Feather name="share-2" size={14} color={colors.primary} />
+                                    }
+                                </TouchableOpacity>
+                            )}
+                            <View style={[styles.statusBadge, { backgroundColor: isSuccess ? 'rgba(34,197,94,0.1)' : 'rgba(234,179,8,0.1)' }]}>
+                                <Text style={[styles.statusText, { color: isSuccess ? '#22c55e' : '#eab308' }]}>
+                                    {item.payment_status.toUpperCase()}
+                                </Text>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -182,6 +228,18 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 10,
         fontWeight: '900',
+    },
+    actionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    shareButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     empty: {
         paddingTop: 100,
