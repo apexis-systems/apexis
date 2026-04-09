@@ -20,6 +20,7 @@ import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
 
 import { Checkbox } from '@/components/ui/Checkbox';
+import FileViewer from '@/components/shared/FileViewer';
 
 interface ProjectPhotosProps {
   project: Project;
@@ -36,7 +37,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [shareItem, setShareItem] = useState<any | null>(null);
-  const [expandedPhoto, setExpandedPhoto] = useState<string | null>(null);
+  const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
 
   // Selection state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -532,7 +533,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   onClick={(e) => {
                     if (!isSelectionMode) {
                       e.stopPropagation();
-                      window.open(photo.downloadUrl, '_blank');
+                      setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
                     }
                   }}
                 >
@@ -591,7 +592,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     e.stopPropagation();
                     toggleSelection('file', photo.id);
                   } else {
-                    window.open(photo.downloadUrl, '_blank');
+                    setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
                   }
                 }}
                 className="absolute inset-0 flex items-center justify-center overflow-hidden"
@@ -647,17 +648,13 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         })}
       </div>
 
-      {/* Expanded photo comment */}
-      {
-        expandedPhoto && (
-          <div className="mt-2 rounded-lg border border-border bg-card p-3">
-            <p className="text-xs font-medium text-foreground mb-1">
-              {visiblePhotos.find((p) => p.id === expandedPhoto)?.file_name}
-            </p>
-            <CommentThread targetId={expandedPhoto} targetType="photo" />
-          </div>
-        )
-      }
+      <FileViewer
+        files={sortedPhotos}
+        initialIndex={viewerState.index}
+        open={viewerState.open}
+        onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
+        user={user}
+      />
 
       {
         currentFolders.length === 0 && visiblePhotos.length === 0 && (

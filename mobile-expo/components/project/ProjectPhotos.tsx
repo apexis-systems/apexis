@@ -52,6 +52,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [isViewerZoomed, setIsViewerZoomed] = useState(false);
+    const [showViewerUI, setShowViewerUI] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
@@ -181,6 +182,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         setReplyTo(null);
         setCommentText('');
         setIsViewerZoomed(false);
+        setShowViewerUI(false);
         setViewerOpen(true);
     };
 
@@ -998,35 +1000,37 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                 <GestureHandlerRootView style={{ flex: 1 }}>
                     <View style={{ flex: 1, backgroundColor: '#000' }}>
                         {/* Top bar */}
-                        <View style={{
-                            position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-                            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                            paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
-                            backgroundColor: 'rgba(0,0,0,0.5)',
-                        }}>
-                            <TouchableOpacity onPress={closeViewer} style={{ padding: 8 }}>
-                                <Feather name="x" size={22} color="#fff" />
-                            </TouchableOpacity>
-                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                                {viewerIndex + 1} / {sortedPhotos.length}
-                            </Text>
-                            <View style={{ flexDirection: 'row', gap: 4 }}>
-                                <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
-                                    <Feather name="share-2" size={20} color="#fff" />
+                        {showViewerUI && (
+                            <View style={{
+                                position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+                                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
+                                backgroundColor: 'rgba(0,0,0,0.5)',
+                            }}>
+                                <TouchableOpacity onPress={closeViewer} style={{ padding: 8 }}>
+                                    <Feather name="x" size={22} color="#fff" />
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
-                                    {downloading
-                                        ? <ActivityIndicator size="small" color={colors.primary} />
-                                        : <Feather name="download" size={20} color={colors.primary} />
-                                    }
-                                </TouchableOpacity>
-                                {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
-                                    <TouchableOpacity onPress={handleDeletePhoto} style={{ padding: 8 }}>
-                                        <Feather name="trash-2" size={20} color="#ef4444" />
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                                    {viewerIndex + 1} / {sortedPhotos.length}
+                                </Text>
+                                <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
+                                        <Feather name="share-2" size={20} color="#fff" />
                                     </TouchableOpacity>
-                                )}
+                                    <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
+                                        {downloading
+                                            ? <ActivityIndicator size="small" color={colors.primary} />
+                                            : <Feather name="download" size={20} color={colors.primary} />
+                                        }
+                                    </TouchableOpacity>
+                                    {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
+                                        <TouchableOpacity onPress={handleDeletePhoto} style={{ padding: 8 }}>
+                                            <Feather name="trash-2" size={20} color="#ef4444" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </View>
-                        </View>
+                        )}
 
                         {/* Photo pager */}
                         <FlatList
@@ -1049,13 +1053,14 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         width={SCREEN_W}
                                         height={SCREEN_H}
                                         onZoomStateChange={setIsViewerZoomed}
+                                        onTap={() => setShowViewerUI(prev => !prev)}
                                     />
                                 </View>
                             )}
                         />
 
                         {/* Prev / Next arrows */}
-                        {viewerIndex > 0 && (
+                        {showViewerUI && viewerIndex > 0 && (
                             <TouchableOpacity
                                 onPress={goPrev}
                                 style={{ position: 'absolute', left: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
@@ -1063,7 +1068,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                 <Feather name="chevron-left" size={26} color="#fff" />
                             </TouchableOpacity>
                         )}
-                        {viewerIndex < sortedPhotos.length - 1 && (
+                        {showViewerUI && viewerIndex < sortedPhotos.length - 1 && (
                             <TouchableOpacity
                                 onPress={goNext}
                                 style={{ position: 'absolute', right: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
@@ -1073,11 +1078,12 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                         )}
 
                         {/* Bottom panel: info + comments */}
-                        <KeyboardAvoidingView
-                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                            style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
-                        >
-                            <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
+                        {showViewerUI && (
+                            <KeyboardAvoidingView
+                                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                                style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+                            >
+                                <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
                                 <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
                                     <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
                                         {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
@@ -1148,8 +1154,9 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         </TouchableOpacity>
                                     </View>
                                 </View>
-                            </View>
-                        </KeyboardAvoidingView>
+                                </View>
+                            </KeyboardAvoidingView>
+                        )}
                     </View>
                 </GestureHandlerRootView>
             </Modal>
