@@ -100,7 +100,7 @@ export const projectLogin = async (req: Request, res: Response) => {
         const normalizedPhone = phone ? normalizePhone(phone) : null;
         const normalizedEmail = email ? email.toLowerCase() : null;
 
-        // GLOBAL SEARCH: Look for user across all organizations to support multi-org/project access
+        // Reuse the existing user record so members can join multiple projects across organizations.
         let user = await users.findOne({
             where: {
                 [Op.or]: [
@@ -109,10 +109,6 @@ export const projectLogin = async (req: Request, res: Response) => {
                 ].filter(Boolean) as any[]
             }
         });
-        
-        if (user && user.organization_id && user.organization_id !== project.organization_id && user.role !== 'superadmin') {
-            return res.status(403).json({ error: "You are already a member of another organization and cannot join projects in this one." });
-        }
 
         const roleForCode = project.contributor_code === code ? 'contributor' : 'client';
         let isNewUser = false;
@@ -167,8 +163,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                     include: [{
                         model: users,
                         as: 'user',
-                        attributes: ['id'],
-                        where: { organization_id: project.organization_id }
+                        attributes: ['id']
                     }]
                 });
                 const joinerName = user.name && user.name !== 'Pending' ? user.name : (email || phone || 'Someone');
@@ -395,7 +390,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
         const normalizedEmail = email?.toLowerCase() || null;
         const normalizedPhone = phone ? normalizePhone(phone) : null;
 
-        // GLOBAL SEARCH: Look for existing user to support multi-org/project enrollment
+        // Reuse the existing user record so members can join multiple projects across organizations.
         let user = await users.findOne({
             where: {
                 [Op.or]: [
@@ -404,10 +399,6 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                 ].filter(Boolean) as any[]
             }
         });
-
-        if (user && user.organization_id && user.organization_id !== decoded.organization_id && user.role !== 'superadmin') {
-            return res.status(403).json({ error: "You are already a member of another organization and cannot join projects in this one." });
-        }
 
         if (!user) {
             if (decoded.role === "contributor" || decoded.role === "client") {
@@ -446,55 +437,54 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                 user_id: user.id,
                 role: decoded.role
             });
-        }
 
-        // Notify all existing project members
-        try {
-            const existingMembers = await project_members.findAll({
-                where: { project_id: project.id, user_id: { [Op.ne]: user.id } },
-                include: [{
-                    model: users,
-                    as: 'user',
-                    attributes: ['id'],
-                    where: { organization_id: project.organization_id } // Boundary check
-                }]
-            });
-            const roleLabel = decoded.role === 'contributor' ? 'Contributor' : 'Client';
-            const joinerName = user.name && user.name !== 'Pending' ? user.name : (name || email || phone || 'Someone');
-            for (const member of existingMembers) {
-                await sendNotification({
-                    userId: member.user_id,
-                    title: `New ${roleLabel} Joined`,
-                    body: `${joinerName} joined the project as a ${roleLabel}.`,
-                    type: 'member_joined',
-                    data: { projectId: String(project.id) }
-                });
-            }
-            const orgAdmins = await users.findAll({
-                where: {
-                    organization_id: decoded.organization_id,
-                    role: 'admin',
-                    id: { [Op.notIn]: [user.id, ...existingMembers.map((m: any) => m.user_id)] }
-                }
-            });
-            for (const admin of orgAdmins) {
-                await sendNotification({
-                    userId: admin.id,
-                    title: `New ${roleLabel} Joined`,
-                    body: `${joinerName} joined the project as a ${roleLabel}.`,
-                    type: 'member_joined',
-                    data: { projectId: String(project.id) }
-                });
-            }
-            
-            // Emit socket event to refresh project stats (counts) in real-time
+            // Notify only the relevant project members and admins in the same organization.
             try {
-                getIO().to(`project-${project.id}`).emit('project-stats-updated', { projectId: String(project.id) });
-            } catch (ioErr) {
-                console.error('Socket emit error (non-fatal):', ioErr);
+                const existingMembers = await project_members.findAll({
+                    where: { project_id: project.id, user_id: { [Op.ne]: user.id } },
+                    include: [{
+                        model: users,
+                        as: 'user',
+                        attributes: ['id']
+                    }]
+                });
+                const roleLabel = decoded.role === 'contributor' ? 'Contributor' : 'Client';
+                const joinerName = user.name && user.name !== 'Pending' ? user.name : (name || email || phone || 'Someone');
+                for (const member of existingMembers) {
+                    await sendNotification({
+                        userId: member.user_id,
+                        title: `New ${roleLabel} Joined`,
+                        body: `${joinerName} joined the project as a ${roleLabel}.`,
+                        type: 'member_joined',
+                        data: { projectId: String(project.id) }
+                    });
+                }
+                const orgAdmins = await users.findAll({
+                    where: {
+                        organization_id: decoded.organization_id,
+                        role: 'admin',
+                        id: { [Op.notIn]: [user.id, ...existingMembers.map((m: any) => m.user_id)] }
+                    }
+                });
+                for (const admin of orgAdmins) {
+                    await sendNotification({
+                        userId: admin.id,
+                        title: `New ${roleLabel} Joined`,
+                        body: `${joinerName} joined the project as a ${roleLabel}.`,
+                        type: 'member_joined',
+                        data: { projectId: String(project.id) }
+                    });
+                }
+                
+                // Emit socket event to refresh project stats (counts) in real-time
+                try {
+                    getIO().to(`project-${project.id}`).emit('project-stats-updated', { projectId: String(project.id) });
+                } catch (ioErr) {
+                    console.error('Socket emit error (non-fatal):', ioErr);
+                }
+            } catch (notifErr) {
+                console.error('Member join notification error (non-fatal):', notifErr);
             }
-        } catch (notifErr) {
-            console.error('Member join notification error (non-fatal):', notifErr);
         }
 
         res.status(201).json({ message: "Signup complete" });
@@ -592,43 +582,45 @@ export const getMyMemberships = async (req: Request, res: Response) => {
         const results = memberships.map((m: any) => m.toJSON ? m.toJSON() : m);
 
         // If the user's primary role is admin or superadmin, they should be able to switch back to that role 
-        // for any project they are a member of (or currently viewing), even if not explicitly in project_members with that role.
+        // at the organization level even if they are currently in a project-specific context.
         if (dbUser && (dbUser.role === 'admin' || dbUser.role === 'superadmin')) {
             const primaryRole = dbUser.role;
 
-            // 1. Ensure primary role is available for all existing memberships
-            results.forEach((m: any) => {
-                const hasPrimary = results.some((sm: any) => sm.project_id === m.project_id && sm.role === primaryRole);
-                if (!hasPrimary) {
+            const primaryOrganizationId = dbUser.organization_id || authUser.organization_id || null;
+            if (primaryOrganizationId) {
+                const primaryOrganization = await organizations.findByPk(primaryOrganizationId, {
+                    attributes: ['id', 'name']
+                });
+
+                const hasOrganizationLevelPrimary = results.some((m: any) =>
+                    m.role === primaryRole &&
+                    !m.project_id &&
+                    Number(m.organization_id) === Number(primaryOrganizationId)
+                );
+
+                if (!hasOrganizationLevelPrimary && primaryOrganization) {
                     results.push({
-                        project_id: m.project_id,
+                        project_id: null,
+                        organization_id: primaryOrganization.id,
                         user_id: dbUser.id,
                         role: primaryRole,
-                        project: m.project
+                        organization: primaryOrganization.toJSON ? primaryOrganization.toJSON() : primaryOrganization,
+                        project: null,
+                        context_type: 'organization'
                     });
-                }
-            });
-
-            // 2. Also ensure it's available for the current active project if not already in results
-            const currentProjectId = authUser.project_id;
-            if (currentProjectId) {
-                const alreadyInResults = results.some((m: any) => Number(m.project_id) === Number(currentProjectId) && m.role === primaryRole);
-                if (!alreadyInResults) {
-                    const project = await projects.findByPk(currentProjectId, {
-                        include: [{ model: organizations, as: 'organization', attributes: ['name'] }]
-                    });
-                    // For admins, check org match. Superadmins can switch anywhere.
-                    if (project && (primaryRole === 'superadmin' || project.organization_id === dbUser.organization_id)) {
-                        results.push({
-                            project_id: project.id,
-                            user_id: dbUser.id,
-                            role: primaryRole,
-                            project: project.toJSON()
-                        });
-                    }
                 }
             }
         }
+
+        results.forEach((entry: any) => {
+            if (entry.project) {
+                entry.organization_id = entry.organization_id ?? entry.project.organization_id ?? null;
+                entry.organization = entry.organization ?? entry.project.organization ?? null;
+                entry.context_type = entry.context_type || 'project';
+            } else {
+                entry.context_type = entry.context_type || 'organization';
+            }
+        });
 
         res.status(200).json({ memberships: results });
     } catch (error) {
@@ -640,37 +632,39 @@ export const getMyMemberships = async (req: Request, res: Response) => {
 export const switchContext = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        const { project_id, role } = req.body;
+        const { project_id, organization_id, role } = req.body;
+        const normalizedRole = typeof role === "string" ? role.trim().toLowerCase() : "";
 
-        if (!project_id || !role) {
-            return res.status(400).json({ error: "Project ID and role are required" });
+        if ((!project_id && !organization_id) || !normalizedRole) {
+            return res.status(400).json({ error: "Project ID or Organization ID and role are required" });
+        }
+        if (!["superadmin", "admin", "contributor", "client"].includes(normalizedRole)) {
+            return res.status(400).json({ error: "Invalid role" });
         }
 
         const user = await users.findByPk(authUser.user_id);
-        const project = await projects.findByPk(project_id);
+        const project = project_id ? await projects.findByPk(project_id) : null;
+        const targetOrganizationId = project?.organization_id || organization_id || null;
+        const organization = targetOrganizationId ? await organizations.findByPk(targetOrganizationId) : null;
 
-        if (!user || !project) {
-            return res.status(404).json({ error: "User or project not found" });
+        if (!user || !organization || (project_id && !project)) {
+            return res.status(404).json({ error: "User, organization, or project not found" });
         }
 
-        // PERMISSION CHECK: 
-        // 1. Is user a Superadmin? (Can switch to any role for any project)
-        // 2. Is user an Admin of the organization? (Can switch to 'admin' role for any project in their org)
-        const isPrimaryRoleSwitch = (
-            (user.role === 'admin' && role === 'admin' && project.organization_id === user.organization_id) ||
-            (user.role === 'superadmin')
-        );
+        const isSuperadminSwitch = user.role === 'superadmin';
+        const isAdminSwitch =
+            normalizedRole === 'admin' &&
+            (user.role === 'superadmin' || (user.role === 'admin' && Number(targetOrganizationId) === Number(user.organization_id)));
+        const isSuperadminRoleSwitch = normalizedRole === 'superadmin' && user.role === 'superadmin';
 
         let membership = null;
-        if (!isPrimaryRoleSwitch) {
-            // Only query project_members if it's NOT a primary role switch or superadmin switch
-            // This avoids invalid ENUM input errors for 'admin' role which isn't in the enum.
+        if (!isAdminSwitch && !isSuperadminRoleSwitch && !isSuperadminSwitch) {
             membership = await project_members.findOne({
-                where: { user_id: authUser.user_id, project_id, role }
+                where: { user_id: authUser.user_id, project_id, role: normalizedRole }
             });
         }
 
-        if (!membership && !isPrimaryRoleSwitch) {
+        if (!membership && !isAdminSwitch && !isSuperadminRoleSwitch && !isSuperadminSwitch) {
             return res.status(403).json({ error: "No such membership found" });
         }
 
@@ -678,9 +672,9 @@ export const switchContext = async (req: Request, res: Response) => {
             {
                 user_id: user.id,
                 name: user.name,
-                role: role,
-                organization_id: project.organization_id,
-                project_id: project.id
+                role: normalizedRole,
+                organization_id: Number(targetOrganizationId),
+                project_id: project ? project.id : null
             },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
@@ -688,7 +682,7 @@ export const switchContext = async (req: Request, res: Response) => {
 
         res.status(200).json({ 
             token, 
-            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: role }
+            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: normalizedRole }
         });
     } catch (error) {
         console.error("Switch Context Error:", error);

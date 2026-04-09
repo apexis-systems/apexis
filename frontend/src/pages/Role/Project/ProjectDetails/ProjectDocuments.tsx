@@ -18,6 +18,7 @@ import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
 
 import { Checkbox } from '@/components/ui/Checkbox';
+import FileViewer from '@/components/shared/FileViewer';
 
 interface ProjectDocumentsProps {
   project: Project;
@@ -34,7 +35,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [shareItem, setShareItem] = useState<any | null>(null);
-  const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
+  const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
 
   // Selection state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -531,7 +532,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-colors cursor-pointer group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
                 onClick={() => {
                   if (isSelectionMode) toggleSelection('file', doc.id);
-                  else window.open(doc.downloadUrl, '_blank');
+                  else setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
                 }}
               >
                 {isSelectionMode && (
@@ -598,7 +599,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       e.stopPropagation();
                       toggleSelection('file', doc.id);
                     } else {
-                      window.open(doc.downloadUrl, '_blank');
+                      setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
                     }
                   }}
                   className="flex-1 min-w-0 text-left hover:underline"
@@ -649,11 +650,13 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   </div>
                 )}
               </div>
-              {expandedDoc === doc.id && (
-                <div className="ml-2 mr-2">
-                  <CommentThread targetId={doc.id} targetType="document" />
-                </div>
-              )}
+      <FileViewer
+        files={sortedDocs}
+        initialIndex={viewerState.index}
+        open={viewerState.open}
+        onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
+        user={user}
+      />
             </div>
           );
         })}

@@ -8,6 +8,7 @@ import {
   Alert,
   Linking,
   Image,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -43,6 +44,86 @@ const isEnterprisePlan = (plan: any): boolean => {
   return name === "enterprise" || Number(plan?.price) >= 999999;
 };
 
+const PLAN_DETAILS: Record<
+  string,
+  {
+    subtitle: string;
+    validity?: string;
+    trial?: string;
+    features: string[];
+  }
+> = {
+  "One-Time Buy": {
+    subtitle: "Single project access",
+    validity: "Valid for 90 days",
+    trial: "14 Day Free Trial",
+    features: [
+      "Single Project Access",
+      "Client Viewership",
+      "Basic Reporting",
+      "5GB Cloud Storage",
+      "One-time purchase",
+      "Snag List Feature",
+      "Drawings Release to Site",
+      "Multi-lingual Support (English, Hindi & Telugu)",
+      "14-Day Free Trial",
+      "Secure Data Storage",
+    ],
+  },
+  Starter: {
+    subtitle: "Up to 5 projects",
+    trial: "14 Day Free Trial",
+    features: [
+      "Up to 5 Projects",
+      "Client Viewership",
+      "Structured Reporting",
+      "25GB Cloud Storage",
+      "Basic Project Dashboard",
+      "Snag List Feature",
+      "Drawings Release to Site",
+      "Multi-lingual Support (English, Hindi & Telugu)",
+      "14-Day Free Trial",
+      "Secure Data Storage",
+    ],
+  },
+  Professional: {
+    subtitle: "Up to 10 projects",
+    trial: "14 Day Free Trial",
+    features: [
+      "Up to 10 Projects",
+      "Client Viewership",
+      "AI-Assisted Reports",
+      "Role-Based Access",
+      "100GB Cloud Storage",
+      "Media Documentation",
+      "Priority Support",
+      "Snag List Feature",
+      "Drawings Release to Site",
+      "Multi-lingual Support (English, Hindi & Telugu)",
+      "14-Day Free Trial",
+      "Secure Data Storage",
+    ],
+  },
+  Enterprise: {
+    subtitle: "Above 10 projects",
+    trial: "14 Day Free Trial",
+    features: [
+      "Above 10 Projects",
+      "Client Viewership",
+      "Custom Workflows",
+      "Custom Onboarding",
+      "Dedicated Support",
+      "Custom Integrations",
+      "Above 100GB Cloud Storage",
+      "Snag List Feature",
+      "Drawings Release to Site",
+      "Multi-lingual Support (English, Hindi & Telugu)",
+      "14-Day Free Trial",
+      "Secure Data Storage",
+    ],
+  },
+};
+
 const gstAmount = (baseAmount: number): number =>
   Number((baseAmount * GST_RATE).toFixed(2));
 const payableAmount = (baseAmount: number): number =>
@@ -58,6 +139,7 @@ export default function SubscriptionScreen() {
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const appIconUri = Image.resolveAssetSource(
     require("../assets/images/app-icon.png"),
   ).uri;
@@ -228,6 +310,12 @@ export default function SubscriptionScreen() {
   }
 
   const { plan, usage } = usageData;
+  const selectedPlanDetails = selectedPlan
+    ? PLAN_DETAILS[selectedPlan.name] || {
+        subtitle: "Subscription plan",
+        features: [],
+      }
+    : null;
 
   return (
     <SafeAreaView
@@ -327,11 +415,13 @@ export default function SubscriptionScreen() {
               ? "Current"
               : isEnterprise
                 ? "Contact Sales"
-                : "Upgrade";
+                : "View Details";
 
             return (
-              <View
+              <TouchableOpacity
                 key={p.id}
+                activeOpacity={0.9}
+                onPress={() => setSelectedPlan(p)}
                 style={[
                   styles.availablePlanCard,
                   {
@@ -343,6 +433,13 @@ export default function SubscriptionScreen() {
                   <Text
                     style={[styles.availablePlanName, { color: colors.text }]}>
                     {p.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.availablePlanSubtitle,
+                      { color: colors.textMuted },
+                    ]}>
+                    {PLAN_DETAILS[p.name]?.subtitle || "Tap to view benefits"}
                   </Text>
                   <View
                     style={{ flexDirection: "row", alignItems: "baseline" }}>
@@ -390,7 +487,7 @@ export default function SubscriptionScreen() {
                   )}
                 </View>
 
-                <TouchableOpacity
+                <View
                   style={[
                     styles.selectBtn,
                     {
@@ -400,22 +497,16 @@ export default function SubscriptionScreen() {
                       borderColor: colors.primary,
                       borderWidth: 1,
                     },
-                  ]}
-                  disabled={(isCurrent && !isEnterprise) || processingPayment}
-                  onPress={() => handleUpgrade(p)}>
-                  {processingPayment ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.selectBtnText,
-                        { color: isCurrent ? colors.primary : "white" },
-                      ]}>
-                      {buttonLabel}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+                  ]}>
+                  <Text
+                    style={[
+                      styles.selectBtnText,
+                      { color: isCurrent ? colors.primary : "white" },
+                    ]}>
+                    {buttonLabel}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -430,6 +521,203 @@ export default function SubscriptionScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal
+        transparent
+        animationType="slide"
+        visible={!!selectedPlan}
+        onRequestClose={() => setSelectedPlan(null)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setSelectedPlan(null)}
+          />
+          <View
+            style={[
+              styles.modalSheet,
+              { backgroundColor: colors.background, borderColor: colors.border },
+            ]}>
+            {selectedPlan && selectedPlanDetails && (
+              <>
+                <View style={styles.modalHandle} />
+                <View style={styles.modalHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[styles.modalPlanName, { color: colors.text }]}>
+                      {selectedPlan.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.modalPlanSubtitle,
+                        { color: colors.textMuted },
+                      ]}>
+                      {selectedPlanDetails.subtitle}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setSelectedPlan(null)}
+                    style={[
+                      styles.modalCloseBtn,
+                      { backgroundColor: colors.surface },
+                    ]}>
+                    <Feather name="x" size={18} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  style={styles.modalContent}
+                  contentContainerStyle={styles.modalContentInner}
+                  showsVerticalScrollIndicator={false}>
+                  <View
+                    style={[
+                      styles.modalPriceCard,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: `${colors.primary}33`,
+                      },
+                    ]}>
+                    <View style={styles.modalPriceRow}>
+                      <Text
+                        style={[
+                          styles.modalPrice,
+                          { color: colors.primary },
+                        ]}>
+                        {isEnterprisePlan(selectedPlan)
+                          ? "Custom Pricing"
+                          : `₹${Number(selectedPlan.price || 0).toLocaleString("en-IN")}`}
+                      </Text>
+                      {!!PLAN_PERIOD_MAP[selectedPlan.name] &&
+                        !isEnterprisePlan(selectedPlan) && (
+                          <Text
+                            style={[
+                              styles.modalPeriod,
+                              { color: colors.textMuted },
+                            ]}>
+                            {PLAN_PERIOD_MAP[selectedPlan.name]}
+                          </Text>
+                        )}
+                    </View>
+                    {!!selectedPlanDetails.validity && (
+                      <Text
+                        style={[
+                          styles.modalMetaText,
+                          { color: colors.textMuted },
+                        ]}>
+                        {selectedPlanDetails.validity}
+                      </Text>
+                    )}
+                    {!!selectedPlanDetails.trial && (
+                      <Text
+                        style={[
+                          styles.modalMetaText,
+                          { color: colors.textMuted },
+                        ]}>
+                        {selectedPlanDetails.trial}
+                      </Text>
+                    )}
+                    {!isEnterprisePlan(selectedPlan) && (
+                      <>
+                        <Text
+                          style={[
+                            styles.modalMetaText,
+                            { color: colors.textMuted },
+                          ]}>
+                          Base: ₹
+                          {Number(selectedPlan.price || 0).toLocaleString(
+                            "en-IN",
+                          )}{" "}
+                          + 18% GST
+                        </Text>
+                        <Text
+                          style={[styles.modalPayable, { color: colors.text }]}>
+                          Payable: ₹
+                          {payableAmount(
+                            Number(selectedPlan.price || 0),
+                          ).toLocaleString("en-IN")}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+
+                  <View
+                    style={[
+                      styles.featureCard,
+                      { backgroundColor: colors.surface },
+                    ]}>
+                    <Text
+                      style={[styles.featureTitle, { color: colors.text }]}>
+                      What you get
+                    </Text>
+                    {selectedPlanDetails.features.map((feature) => (
+                      <View key={feature} style={styles.featureRow}>
+                        <View
+                          style={[
+                            styles.featureIconWrap,
+                            { backgroundColor: `${colors.primary}18` },
+                          ]}>
+                          <Feather
+                            name="check"
+                            size={14}
+                            color={colors.primary}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.featureText,
+                            { color: colors.textMuted },
+                          ]}>
+                          {feature}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalActionBtn,
+                    {
+                      backgroundColor:
+                        selectedPlan.name === plan.name
+                          ? colors.surface
+                          : colors.primary,
+                      borderColor: colors.primary,
+                    },
+                  ]}
+                  disabled={
+                    processingPayment || selectedPlan.name === plan.name
+                  }
+                  onPress={() => handleUpgrade(selectedPlan)}>
+                  {processingPayment ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={selectedPlan.name === plan.name ? colors.primary : "white"}
+                    />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.modalActionText,
+                        {
+                          color:
+                            selectedPlan.name === plan.name
+                              ? colors.primary
+                              : "white",
+                        },
+                      ]}>
+                      {selectedPlan.name === plan.name
+                        ? "Current Plan"
+                        : isEnterprisePlan(selectedPlan)
+                          ? "Contact Sales"
+                          : "Buy Plan"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -592,6 +880,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
   },
+  availablePlanSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 6,
+  },
   availablePlanPrice: {
     fontSize: 20,
     fontWeight: "900",
@@ -617,5 +910,129 @@ const styles = StyleSheet.create({
   },
   supportText: {
     fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  modalSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 24,
+    maxHeight: "82%",
+  },
+  modalHandle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(127,127,127,0.35)",
+    marginBottom: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 18,
+  },
+  modalPlanName: {
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  modalPlanSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalContent: {
+    flexGrow: 0,
+  },
+  modalContentInner: {
+    paddingBottom: 12,
+    gap: 14,
+  },
+  modalPriceCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 18,
+  },
+  modalPriceRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 6,
+    marginBottom: 8,
+  },
+  modalPrice: {
+    fontSize: 28,
+    fontWeight: "900",
+  },
+  modalPeriod: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  modalMetaText: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  modalPayable: {
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 6,
+  },
+  featureCard: {
+    borderRadius: 20,
+    padding: 18,
+  },
+  featureTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 14,
+  },
+  featureRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
+  },
+  featureIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  featureText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
+  modalActionBtn: {
+    marginTop: 8,
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  modalActionText: {
+    fontSize: 15,
+    fontWeight: "800",
   },
 });

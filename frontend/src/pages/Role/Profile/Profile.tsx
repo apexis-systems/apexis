@@ -103,23 +103,23 @@ const Profile = () => {
     const imgRef = useRef<HTMLImageElement>(null);
 
     useEffect(() => {
-        if (user && user.role !== 'superadmin') {
+        if (user) {
             getMyMemberships().then(res => {
                 if (res.memberships) setMemberships(res.memberships);
             }).catch(err => console.error("Load memberships error:", err));
         }
-    }, [user?.id]);
+    }, [user?.id, user?.project_id, user?.role]);
 
-    const handleSwitchContext = async (projectId: number, role: string) => {
+    const handleSwitchContext = async ({ projectId, organizationId, role }: { projectId?: number | null; organizationId?: number | null; role: string }) => {
         if (isSwitching) return;
         setIsSwitching(true);
         try {
-            const res = await switchContext(projectId, role);
+            const res = await switchContext({ project_id: projectId ?? null, organization_id: organizationId ?? null, role });
             if (res.token) {
-                await login(res.token);
+                const loggedInUser = await login(res.token);
                 toast.success(`Switched to ${role} role.`);
-                // Force a hard reload or redirect to dashboard to ensure all states are clean
-                window.location.href = '/dashboard';
+                const nextRole = loggedInUser?.role || role;
+                window.location.href = `/${nextRole}/dashboard`;
             }
         } catch (error) {
             toast.error("Failed to switch project context.");
@@ -129,6 +129,54 @@ const Profile = () => {
     };
 
     if (!user) return null;
+
+    const groupMembershipsByOrganization = (items: any[]) => {
+        const organizationMap = new Map<number | string, any>();
+
+        items.forEach((membership) => {
+            const organizationId = membership.organization_id ?? membership.project?.organization_id ?? 'unknown';
+            const organizationName = membership.organization?.name || membership.project?.organization?.name || 'Organization';
+            const projectId = membership.project_id ?? `org-${organizationId}`;
+
+            if (!organizationMap.has(organizationId)) {
+                organizationMap.set(organizationId, {
+                    organizationId,
+                    organizationName,
+                    projects: new Map<number | string, any>(),
+                });
+            }
+
+            const organizationGroup = organizationMap.get(organizationId);
+            if (!organizationGroup.projects.has(projectId)) {
+                organizationGroup.projects.set(projectId, {
+                    project: membership.project,
+                    organization: membership.organization || membership.project?.organization || null,
+                    organization_id: organizationId,
+                    context_type: membership.context_type || (membership.project ? 'project' : 'organization'),
+                    roles: [],
+                });
+            }
+
+            const projectGroup = organizationGroup.projects.get(projectId);
+            if (!projectGroup.roles.includes(membership.role)) {
+                projectGroup.roles.push(membership.role);
+            }
+        });
+
+        const roleOrder = ['admin', 'contributor', 'client', 'superadmin'];
+
+        return Array.from(organizationMap.values())
+            .map((organizationGroup) => ({
+                ...organizationGroup,
+                projects: Array.from(organizationGroup.projects.values())
+                    .map((projectGroup: any) => ({
+                        ...projectGroup,
+                        roles: projectGroup.roles.sort((a: string, b: string) => roleOrder.indexOf(a) - roleOrder.indexOf(b)),
+                    }))
+                    .sort((a: any, b: any) => (a.project?.name || a.organization?.name || '').localeCompare(b.project?.name || b.organization?.name || '')),
+            }))
+            .sort((a, b) => a.organizationName.localeCompare(b.organizationName));
+    };
 
     const handleLogout = () => {
         logout();
@@ -483,65 +531,102 @@ const Profile = () => {
 
                 {/* Switch Project / Role Section */}
                 {(() => {
-                    const filtered = memberships.filter(m => !(Number(m.project_id) === Number(user.project_id) && m.role === user.role));
-                    if (filtered.length === 0) return null;
-
-                    const groups: Record<number, any> = {};
-                    filtered.forEach(m => {
-                        if (!groups[m.project_id]) {
-                            groups[m.project_id] = { project: m.project, roles: [] };
-                        }
-                        groups[m.project_id].roles.push(m.role);
-                    });
+                    if (memberships.length === 0) return null;
+                    const organizationGroups = groupMembershipsByOrganization(memberships);
 
                     return (
                         <div className="border border-border rounded-3xl overflow-hidden bg-secondary/5 backdrop-blur-sm">
                             <div className="p-5 border-b border-border/50 bg-secondary/10">
                                 <h3 className="font-bold text-xs uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
                                     <Layers className="h-4 w-4 text-primary" />
-                                    Available Projects & Roles
+                                    Switch By Organization And Project
                                 </h3>
                             </div>
                             <div className="p-4 space-y-4">
-                                {Object.values(groups).map((group: any, idx) => (
-                                    <div key={idx} className="bg-background/50 border border-border/50 rounded-2xl p-6 transition-all hover:border-primary/30 group/project">
-                                        <div className="flex items-center gap-4 mb-6">
-                                            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover/project:bg-primary group-hover/project:border-primary transition-all duration-500">
-                                                <Building className="h-6 w-6 text-primary group-hover/project:text-white transition-colors" />
+                                {organizationGroups.map((organizationGroup: any) => (
+                                    <div key={organizationGroup.organizationId} className="rounded-2xl border border-border/50 bg-background/40 p-4">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                                                <Building className="h-5 w-5 text-primary" />
                                             </div>
                                             <div>
-                                                <p className="text-base font-bold text-foreground group-hover/project:text-primary transition-colors">{group.project?.name || 'Project'}</p>
-                                                <p className="text-[11px] text-muted-foreground uppercase font-black tracking-widest opacity-60">
-                                                    {group.project?.organization?.name}
-                                                </p>
+                                                <p className="text-sm font-black uppercase tracking-[0.18em] text-muted-foreground">Organization</p>
+                                                <p className="text-base font-bold text-foreground">{organizationGroup.organizationName}</p>
                                             </div>
                                         </div>
 
                                         <div className="space-y-3">
-                                            {group.roles.map((r: string, rIdx: number) => (
-                                                <button
-                                                    key={rIdx}
-                                                    onClick={() => handleSwitchContext(group.project.id, r)}
-                                                    disabled={isSwitching}
-                                                    className="w-full flex items-center justify-between p-4 bg-secondary/30 hover:bg-primary hover:text-white rounded-2xl transition-all duration-300 group/role border border-transparent hover:border-primary-foreground/20 hover:shadow-lg hover:shadow-primary/20"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <span className={cn(
-                                                            "text-[10px] uppercase font-black tracking-widest px-2.5 py-1 rounded-lg transition-colors",
-                                                            r === 'admin' ? "bg-orange-500/20 text-orange-600 group-hover/role:bg-white/20 group-hover/role:text-white" : "bg-blue-500/20 text-blue-600 group-hover/role:bg-white/20 group-hover/role:text-white"
-                                                        )}>
-                                                            {r}
-                                                        </span>
-                                                        <span className="text-sm font-bold opacity-80 group-hover/role:opacity-100 italic">Switch to this role</span>
-                                                    </div>
-                                                    {isSwitching ? (
-                                                        <Loader2 className="h-5 w-5 animate-spin" />
-                                                    ) : (
-                                                        <div className="h-8 w-8 rounded-xl bg-background/50 flex items-center justify-center group-hover/role:bg-white group-hover/role:text-primary transition-all">
-                                                            <RefreshCw className="h-4 w-4 opacity-40 group-hover/role:opacity-100 group-hover/role:rotate-180 transition-all duration-500" />
+                                            {organizationGroup.projects.map((group: any) => (
+                                                <div key={group.project?.id ?? `org-${group.organization_id}`} className="bg-background/60 border border-border/50 rounded-2xl p-5 transition-all hover:border-primary/30 group/project">
+                                                    <div className="flex items-center gap-4 mb-4">
+                                                        <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover/project:bg-primary group-hover/project:border-primary transition-all duration-500">
+                                                            <Layers className="h-6 w-6 text-primary group-hover/project:text-white transition-colors" />
                                                         </div>
-                                                    )}
-                                                </button>
+                                                        <div>
+                                                            <p className="text-base font-bold text-foreground group-hover/project:text-primary transition-colors">{group.project?.name || group.organization?.name || 'Organization'}</p>
+                                                            <p className="text-[11px] text-muted-foreground uppercase font-black tracking-widest opacity-60">
+                                                                {group.context_type === 'organization' ? 'Organization Role' : 'Project Roles'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        {group.roles.map((r: string, rIdx: number) => {
+                                                            const isCurrent =
+                                                                r === user.role &&
+                                                                (
+                                                                    (group.context_type === 'project' && Number(group.project?.id) === Number(user.project_id)) ||
+                                                                    (group.context_type === 'organization' && !user.project_id && Number(group.organization_id) === Number(user.organization?.id))
+                                                                );
+
+                                                            return (
+                                                                <button
+                                                                    key={rIdx}
+                                                                    onClick={() => handleSwitchContext({
+                                                                        projectId: group.project?.id ?? null,
+                                                                        organizationId: group.organization_id ?? group.organization?.id ?? null,
+                                                                        role: r
+                                                                    })}
+                                                                    disabled={isSwitching || isCurrent}
+                                                                    className={cn(
+                                                                        "w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 border",
+                                                                        isCurrent
+                                                                            ? "bg-primary/10 text-foreground border-primary/30 cursor-default"
+                                                                            : "bg-secondary/30 hover:bg-primary hover:text-white border-transparent hover:border-primary-foreground/20 hover:shadow-lg hover:shadow-primary/20 group/role"
+                                                                    )}
+                                                                >
+                                                                    <div className="flex items-center gap-3">
+                                                                    <span className={cn(
+                                                                        "text-[10px] uppercase font-black tracking-widest px-2.5 py-1 rounded-lg transition-colors",
+                                                                        isCurrent
+                                                                            ? "bg-primary/15 text-primary"
+                                                                            : "bg-muted text-muted-foreground group-hover/role:bg-white/20 group-hover/role:text-white"
+                                                                    )}>
+                                                                        {r}
+                                                                    </span>
+                                                                        <span className={cn(
+                                                                            "text-sm font-bold italic",
+                                                                            isCurrent ? "text-primary" : "opacity-80 group-hover/role:opacity-100"
+                                                                        )}>
+                                                                            {isCurrent ? "Current role" : "Switch to this role"}
+                                                                        </span>
+                                                                    </div>
+                                                                    {isCurrent ? (
+                                                                        <div className="h-8 px-3 rounded-xl bg-primary/15 text-primary text-xs font-black uppercase tracking-wider flex items-center justify-center">
+                                                                            Current
+                                                                        </div>
+                                                                    ) : isSwitching ? (
+                                                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                                                    ) : (
+                                                                        <div className="h-8 w-8 rounded-xl bg-background/50 flex items-center justify-center group-hover/role:bg-white group-hover/role:text-primary transition-all">
+                                                                            <RefreshCw className="h-4 w-4 opacity-40 group-hover/role:opacity-100 group-hover/role:rotate-180 transition-all duration-500" />
+                                                                        </div>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>

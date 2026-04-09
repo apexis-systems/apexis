@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import 'multer';
 
 import db from "../models/index.ts";
-const { files, folders, project_members, activities, users, organizations } = db;
+const { files, folders, project_members, activities, users, organizations, projects } = db;
 
 import { Op } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
@@ -47,9 +47,13 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
         const { folder_id, project_id, skipActivity } = req.body;
+        const project = await projects.findByPk(project_id);
 
         if (!(req as any).file) {
             return res.status(400).json({ error: "No file uploaded" });
+        }
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
         }
 
         const file_name = (req as any).file.originalname;
@@ -108,7 +112,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
         });
 
-        // Send notifications only to project members in the SAME organization
+        // Notify project members based on project membership, not the user's home organization.
         const members = await project_members.findAll({
             where: { 
                 project_id: parseInt(project_id, 10), 
@@ -116,7 +120,6 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             },
             include: [{
                 model: UsersModel,
-                where: { organization_id: authUser.organization_id },
                 attributes: ['id', 'name']
             }]
         });
@@ -146,7 +149,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         try {
             const admins = await UsersModel.findAll({
                 where: {
-                    organization_id: authUser.organization_id,
+                    organization_id: project.organization_id,
                     role: 'admin',
                     id: { [Op.notIn]: Array.from(notifiedUserIds).concat(authUser.user_id) }
                 }
@@ -180,7 +183,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         });
 
         // Update organization storage usage
-        await updateOrganizationStorage(authUser.organization_id, file_size_mb);
+        await updateOrganizationStorage(project.organization_id, file_size_mb);
     } catch (error) {
         console.error("Upload File Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -319,19 +322,24 @@ export const toggleFileVisibility = async (req: Request, res: Response) => {
         if (!file) {
             return res.status(404).json({ error: "File not found" });
         }
+        const project = await projects.findByPk(file.project_id);
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
 
         file.client_visible = client_visible;
         await file.save();
 
         if (client_visible) {
-            // Notify clients in the organization
-            const clients = await UsersModel.findAll({
-                where: { organization_id: authUser.organization_id, role: 'client' }
+            // Notify clients who actually belong to this project.
+            const clients = await project_members.findAll({
+                where: { project_id: file.project_id, role: 'client' },
+                attributes: ['user_id']
             });
 
             for (const client of clients) {
                 await sendNotification({
-                    userId: (client as any).id,
+                    userId: Number((client as any).user_id),
                     title: 'New File Available',
                     body: `A new file "${file.file_name}" is now visible to you.`,
                     type: 'file_visibility',
@@ -487,6 +495,10 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
         const { project_id, folder_id, mode, file_name, location, tags, is_doc_mode } = req.body;
+        const project = await projects.findByPk(project_id);
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
 
 
         const scanFiles = (req as any).files as MulterFile[];
@@ -641,9 +653,9 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
         // Update organization storage usage
         const totalSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
-        await updateOrganizationStorage(authUser.organization_id, totalSizeMb);
+        await updateOrganizationStorage(project.organization_id, totalSizeMb);
 
-        // Notifications for Scans only to members in the same organization
+        // Notify project members based on project membership, not the user's home organization.
         try {
             const members = await project_members.findAll({
                 where: { 
@@ -652,7 +664,6 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 },
                 include: [{
                     model: UsersModel,
-                    where: { organization_id: authUser.organization_id },
                     attributes: ['id', 'name']
                 }]
             });
@@ -683,7 +694,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             // Also notify organization admins (if they are not project members)
             const orgAdmins = await users.findAll({
                 where: {
-                    organization_id: authUser.organization_id,
+                    organization_id: project.organization_id,
                     role: 'admin',
                     id: { [Op.ne]: authUser.user_id }
                 }

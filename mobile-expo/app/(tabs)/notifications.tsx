@@ -39,7 +39,23 @@ export default function NotificationsScreen() {
         { label: 'Photos', value: 'photo' },
         { label: 'Snags', value: 'snag' },
         { label: 'RFI', value: 'rfi' },
+        { label: 'Members', value: 'member' },
     ];
+
+    const matchesTypeFilter = (notif: Notification, type: string | 'all') => {
+        if (type === 'all') return true;
+
+        const categories: Record<string, string[]> = {
+            chat: ['chat', 'group_creation'],
+            file: ['file_upload', 'file_upload_admin', 'file_visibility', 'folder_visibility'],
+            photo: ['photo_upload', 'photo_comment'],
+            snag: ['snag_assigned', 'snag_creation_admin', 'snag_status_update'],
+            rfi: ['rfi_created', 'rfi_assigned', 'rfi_status_update', 'rfi_comment'],
+            member: ['member_joined'],
+        };
+
+        return (categories[type] || [type]).includes(notif.type);
+    };
 
     useFocusEffect(
         useCallback(() => {
@@ -129,7 +145,7 @@ export default function NotificationsScreen() {
         if (socket) {
             const handleNewNotif = (notif: Notification) => {
                 const matchesProject = selectedProjectId === 'all' || notif.data?.projectId == selectedProjectId;
-                const matchesType = selectedType === 'all' || notif.type === selectedType;
+                const matchesType = matchesTypeFilter(notif, selectedType);
                 
                 if (matchesProject && matchesType) {
                     setNotifications(prev => [notif, ...prev]);
@@ -201,6 +217,7 @@ export default function NotificationsScreen() {
             case 'group_creation': return 'people';
             case 'file_upload':
             case 'file_visibility':
+            case 'folder_visibility':
             case 'file_upload_admin': return 'document-text';
             case 'photo_upload':
             case 'photo_comment': return 'camera';
@@ -209,7 +226,9 @@ export default function NotificationsScreen() {
             case 'snag_status_update': return 'checkmark-circle';
             case 'rfi_created':
             case 'rfi_assigned':
-            case 'rfi_status_update': return 'help-circle';
+            case 'rfi_status_update':
+            case 'rfi_comment': return 'help-circle';
+            case 'member_joined': return 'person-add';
             default: return 'notifications';
         }
     };

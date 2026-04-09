@@ -35,7 +35,23 @@ const NotificationsPage = () => {
         { label: 'Photos', value: 'photo' },
         { label: 'Snags', value: 'snag' },
         { label: 'RFI', value: 'rfi' },
+        { label: 'Members', value: 'member' },
     ];
+
+    const matchesTypeFilter = (notif: any, type: string) => {
+        if (type === 'all') return true;
+
+        const categories: Record<string, string[]> = {
+            chat: ['chat', 'group_creation'],
+            file: ['file_upload', 'file_upload_admin', 'file_visibility', 'folder_visibility'],
+            photo: ['photo_upload', 'photo_comment'],
+            snag: ['snag_assigned', 'snag_creation_admin', 'snag_status_update'],
+            rfi: ['rfi_created', 'rfi_assigned', 'rfi_status_update', 'rfi_comment'],
+            member: ['member_joined'],
+        };
+
+        return (categories[type] || [type]).includes(notif.type);
+    };
 
     useEffect(() => {
         if (user?.role === 'superadmin') {
@@ -68,7 +84,7 @@ const NotificationsPage = () => {
             // Only show unread notifications based on user request "delete the seen notification"
             // Actually, the backend still returns all. We filter here.
             const all = res.data.notifications || [];
-            setNotifications(all.filter((n: any) => !n.is_read));
+            setNotifications(all.filter((n: any) => !n.is_read && matchesTypeFilter(n, selectedType)));
             
             // Sync unread count globally if we are viewing "all"
             if (selectedProjectId === 'all' && selectedType === 'all') {

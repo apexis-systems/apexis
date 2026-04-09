@@ -477,7 +477,14 @@ export default function DashboardScreen() {
               <TouchableOpacity
                 onPress={() => {
                     if (!isTourActive && !checkLimit('projects')) {
-                        Alert.alert("Limit Reached", "You have reached your project limit. Please upgrade your plan to create more projects.");
+                        Alert.alert(
+                            "Limit Reached", 
+                            "You have reached your project limit. Please upgrade your plan to create more projects.",
+                            [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Upgrade", onPress: () => router.push('/subscription') }
+                            ]
+                        );
                         return;
                     }
                     setIsCreating(true);

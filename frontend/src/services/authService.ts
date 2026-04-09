@@ -205,9 +205,9 @@ export const getMyMemberships = async () => {
     }
 };
 
-export const switchContext = async (project_id: number, role: string) => {
+export const switchContext = async (params: { role: string; project_id?: number | null; organization_id?: number | null }) => {
     try {
-        const response = await PrivateAxios.post("/auth/switch-context", { project_id, role });
+        const response = await PrivateAxios.post("/auth/switch-context", params);
         return response.data; // { token, user: { ... } }
     } catch (error) {
         console.error("switchContext Error", error);

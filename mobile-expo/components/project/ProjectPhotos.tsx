@@ -52,6 +52,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [isViewerZoomed, setIsViewerZoomed] = useState(false);
+    const [showViewerUI, setShowViewerUI] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
@@ -181,6 +182,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         setReplyTo(null);
         setCommentText('');
         setIsViewerZoomed(false);
+        setShowViewerUI(false);
         setViewerOpen(true);
     };
 
@@ -374,7 +376,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                             onPress: () => {
                                 const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
                                 const childFiles = photos.filter(p => String(p.folder_id) === String(folder.id));
-                                
+
                                 if (childFolders.length === 0 && childFiles.length === 0) {
                                     Alert.alert("Info", "Folder is already empty");
                                     return;
@@ -582,26 +584,26 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                 </TouchableOpacity>
                             )}
 
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
-                                        setSortBy(next);
-                                    }}
-                                    style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        paddingHorizontal: 8,
-                                        paddingVertical: 6,
-                                        borderRadius: 8,
-                                        backgroundColor: colors.surface,
-                                        borderWidth: 1,
-                                        borderColor: colors.border
-                                    }}
-                                >
-                                    <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
-                                </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
+                                    setSortBy(next);
+                                }}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 6,
+                                    borderRadius: 8,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border
+                                }}
+                            >
+                                <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
+                            </TouchableOpacity>
                         </View>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                             {sortedFolders.map((folder) => {
@@ -653,33 +655,19 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                             {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
                                         </Text>
-                                        {/* Folder Actions Overlay */}
+                                        {/* Folder Visibility Icon - Indicator/Toggle */}
                                         {!isSelectionMode && (
-                                            <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 1, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 2 }}>
-                                                {(user.role === 'admin' || user.role === 'superadmin') && (
-                                                    <TouchableOpacity
-                                                        onPress={() => toggleFolderVis(folder)}
-                                                        style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
-                                                    >
-                                                        <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={11} color={folder.client_visible !== false ? colors.primary : '#fff'} />
-                                                    </TouchableOpacity>
-                                                )}
-                                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                                    <>
-                                                        <TouchableOpacity
-                                                            onPress={() => { setEditingFolderId(folder.id); setEditFolderName(folder.name); setShowEditFolder(true); }}
-                                                            style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
-                                                        >
-                                                            <Feather name="edit-2" size={11} color="#fff" />
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity
-                                                            onPress={() => confirmDeleteFolder(folder)}
-                                                            style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
-                                                        >
-                                                            <Feather name="trash-2" size={11} color="#ef4444" />
-                                                        </TouchableOpacity>
-                                                    </>
-                                                )}
+                                            <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
+                                                <TouchableOpacity
+                                                    onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? toggleFolderVis(folder) : null}
+                                                    disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                                >
+                                                    <Feather 
+                                                        name={folder.client_visible !== false ? 'eye' : 'eye-off'} 
+                                                        size={14} 
+                                                        color={folder.client_visible !== false ? colors.primary : colors.textMuted} 
+                                                    />
+                                                </TouchableOpacity>
                                             </View>
                                         )}
                                     </View>
@@ -731,49 +719,20 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
-                                    <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 1, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 2 }}>
-                                        {!isSelectionMode && (
-                                            <>
-                                                <TouchableOpacity
-                                                    onPress={async () => {
-                                                        try {
-                                                            const ext = photo.file_name?.split('.').pop() || 'jpg';
-                                                            const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
-                                                            const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
-                                                            if (await Sharing.isAvailableAsync()) {
-                                                                await Sharing.shareAsync(uri);
-                                                            } else {
-                                                                await RNShare.share({
-                                                                    title: photo.file_name || 'Site Photo',
-                                                                    message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
-                                                                    url: photo.downloadUrl,
-                                                                });
-                                                            }
-                                                        } catch { }
-                                                    }}
-                                                    style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
-                                                >
-                                                    <Feather name="share-2" size={12} color="#fff" />
-                                                </TouchableOpacity>
-                                                {(user.role === 'admin' || user.role === 'superadmin') && (
-                                                    <TouchableOpacity
-                                                        onPress={() => togglePhotoVisibility(photo)}
-                                                        style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
-                                                    >
-                                                        <Feather name={photo.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={photo.client_visible !== false ? colors.primary : '#fff'} />
-                                                    </TouchableOpacity>
-                                                )}
-                                                {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
-                                                    <TouchableOpacity
-                                                        onPress={() => confirmDeletePhoto(photo)}
-                                                        style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
-                                                    >
-                                                        <Feather name="trash-2" size={12} color="#ef4444" />
-                                                    </TouchableOpacity>
-                                                )}
-                                            </>
-                                        )}
-                                    </View>
+                                    {!isSelectionMode && (
+                                        <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
+                                            <TouchableOpacity
+                                                onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? togglePhotoVisibility(photo) : null}
+                                                disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                            >
+                                                <Feather 
+                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'} 
+                                                    size={14} 
+                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted} 
+                                                />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
                                     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 6 }}>
                                         <Text numberOfLines={1} style={{ fontSize: 9, color: '#fff', textAlign: 'center' }}>{photo.file_name}</Text>
                                     </View>
@@ -822,45 +781,17 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                     </View>
                                     <View style={{ flexDirection: 'row', gap: 6, zIndex: 10 }}>
                                         {!isSelectionMode && (
-                                            <>
-                                                <TouchableOpacity
-                                                    onPress={async () => {
-                                                        try {
-                                                            const ext = photo.file_name?.split('.').pop() || 'jpg';
-                                                            const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
-                                                            const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
-                                                            if (await Sharing.isAvailableAsync()) {
-                                                                await Sharing.shareAsync(uri);
-                                                            } else {
-                                                                await RNShare.share({
-                                                                    title: photo.file_name || 'Site Photo',
-                                                                    message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
-                                                                    url: photo.downloadUrl,
-                                                                 });
-                                                            }
-                                                        } catch { }
-                                                    }}
-                                                    style={{ padding: 6 }}
-                                                >
-                                                    <Feather name="share-2" size={16} color="#666" />
-                                                </TouchableOpacity>
-                                                {(user.role === 'admin' || user.role === 'superadmin') && (
-                                                    <TouchableOpacity
-                                                        onPress={() => togglePhotoVisibility(photo)}
-                                                        style={{ padding: 6 }}
-                                                    >
-                                                        <Feather name={photo.client_visible !== false ? 'eye' : 'eye-off'} size={16} color={photo.client_visible !== false ? colors.primary : colors.textMuted} />
-                                                    </TouchableOpacity>
-                                                )}
-                                                {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
-                                                    <TouchableOpacity
-                                                        onPress={() => confirmDeletePhoto(photo)}
-                                                        style={{ padding: 6 }}
-                                                    >
-                                                        <Feather name="trash-2" size={16} color="#ef4444" />
-                                                    </TouchableOpacity>
-                                                )}
-                                            </>
+                                            <TouchableOpacity
+                                                onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? togglePhotoVisibility(photo) : null}
+                                                disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                                style={{ padding: 6 }}
+                                            >
+                                                <Feather 
+                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'} 
+                                                    size={16} 
+                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted} 
+                                                />
+                                            </TouchableOpacity>
                                         )}
                                     </View>
                                 </View>
@@ -930,23 +861,97 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                         </TouchableOpacity>
                         <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{selectedFolders.size + selectedFiles.size} selected</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 20 }}>
-                        <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
-                            <Feather name="share-2" size={20} color={colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
-                            <Feather name="move" size={20} color={colors.primary} />
-                        </TouchableOpacity>
-                        {user.role === 'admin' && (
-                            <View style={{ flexDirection: 'row', gap: 20 }}>
-                                <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
-                                    <Feather name="eye" size={20} color={colors.primary} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 15, alignItems: 'center', paddingRight: 15 }}>
+                            {/* Share - Only if files selected */}
+                            {selectedFiles.size > 0 && (
+                                <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
+                                    <Feather name="share-2" size={20} color={colors.primary} />
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
-                                    <Feather name="eye-off" size={20} color={colors.primary} />
+                            )}
+
+                            {/* Edit - Only if single folder selected */}
+                            {selectedFolders.size === 1 && selectedFiles.size === 0 && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        const folderId = Array.from(selectedFolders)[0];
+                                        const folder = folders.find(f => f.id === folderId);
+                                        if (folder) {
+                                            setEditingFolderId(folder.id);
+                                            setEditFolderName(folder.name);
+                                            setShowEditFolder(true);
+                                        }
+                                    }}
+                                    style={{ padding: 4 }}
+                                >
+                                    <Feather name="edit-2" size={20} color={colors.primary} />
                                 </TouchableOpacity>
-                            </View>
-                        )}
+                            )}
+
+                            {/* Delete - Context aware */}
+                            {(() => {
+                                let canDelete = false;
+                                if (selectedFolders.size > 0) canDelete = true; // Admin/Contrib can delete folders
+                                if (selectedFiles.size === 1 && selectedFolders.size === 0) {
+                                    const fileId = Array.from(selectedFiles)[0];
+                                    const file = photos.find(p => p.id === fileId);
+                                    if (file && (String(file.created_by) === String(user.id) || String(file.creator?.id) === String(user.id) || user.role === 'admin' || user.role === 'superadmin')) {
+                                        canDelete = true;
+                                    }
+                                } else if (selectedFiles.size > 1) {
+                                    canDelete = user.role === 'admin' || user.role === 'superadmin';
+                                }
+
+                                if (canDelete) {
+                                    return (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (selectedFolders.size === 1 && selectedFiles.size === 0) {
+                                                    const folderId = Array.from(selectedFolders)[0];
+                                                    const folder = folders.find(f => f.id === folderId);
+                                                    if (folder) confirmDeleteFolder(folder);
+                                                } else if (selectedFiles.size === 1 && selectedFolders.size === 0) {
+                                                    const fileId = Array.from(selectedFiles)[0];
+                                                    const file = photos.find(p => p.id === fileId);
+                                                    if (file) confirmDeletePhoto(file);
+                                                } else {
+                                                    // Bulk delete not implemented as a single service call, but could be added
+                                                    Alert.alert("Bulk Delete", "Delete selected items?", [
+                                                        { text: "Cancel", style: "cancel" },
+                                                        {
+                                                            text: "Delete", style: "destructive", onPress: () => {
+                                                                // Fallback to existing single delete logic for now or tell user to delete one by one
+                                                                Alert.alert("Note", "Please delete items individually for now or use the web interface for bulk deletion.");
+                                                            }
+                                                        }
+                                                    ]);
+                                                }
+                                            }}
+                                            style={{ padding: 4 }}
+                                        >
+                                            <Feather name="trash-2" size={20} color="#ef4444" />
+                                        </TouchableOpacity>
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
+                                <Feather name="move" size={20} color={colors.primary} />
+                            </TouchableOpacity>
+
+                            {user.role === 'admin' || user.role === 'superadmin' ? (
+                                <>
+                                    <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
+                                    <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
+                                        <Feather name="eye" size={20} color={colors.primary} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
+                                        <Feather name="eye-off" size={20} color={colors.textMuted} />
+                                    </TouchableOpacity>
+                                </>
+                            ) : null}
+                        </ScrollView>
                     </View>
                 </View>
             )}
@@ -995,159 +1000,164 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                 <GestureHandlerRootView style={{ flex: 1 }}>
                     <View style={{ flex: 1, backgroundColor: '#000' }}>
                         {/* Top bar */}
-                        <View style={{
-                        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                        paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
-                        backgroundColor: 'rgba(0,0,0,0.5)',
-                    }}>
-                        <TouchableOpacity onPress={closeViewer} style={{ padding: 8 }}>
-                            <Feather name="x" size={22} color="#fff" />
-                        </TouchableOpacity>
-                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                            {viewerIndex + 1} / {sortedPhotos.length}
-                        </Text>
-                        <View style={{ flexDirection: 'row', gap: 4 }}>
-                            <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
-                                <Feather name="share-2" size={20} color="#fff" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
-                                {downloading
-                                    ? <ActivityIndicator size="small" color={colors.primary} />
-                                    : <Feather name="download" size={20} color={colors.primary} />
-                                }
-                            </TouchableOpacity>
-                            {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
-                                <TouchableOpacity onPress={handleDeletePhoto} style={{ padding: 8 }}>
-                                    <Feather name="trash-2" size={20} color="#ef4444" />
+                        {showViewerUI && (
+                            <View style={{
+                                position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+                                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
+                                backgroundColor: 'rgba(0,0,0,0.5)',
+                            }}>
+                                <TouchableOpacity onPress={closeViewer} style={{ padding: 8 }}>
+                                    <Feather name="x" size={22} color="#fff" />
                                 </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-
-                    {/* Photo pager */}
-                    <FlatList
-                        ref={flatListRef}
-                        data={sortedPhotos}
-                        horizontal
-                        pagingEnabled
-                        scrollEnabled={!isViewerZoomed}
-                        showsHorizontalScrollIndicator={false}
-                        keyExtractor={(item) => item.id.toString()}
-                        getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
-                        onMomentumScrollEnd={(e) => {
-                            const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-                            if (idx !== viewerIndex) setViewerIndex(idx);
-                        }}
-                        renderItem={({ item }) => (
-                            <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-                                <ZoomableImage
-                                    uri={item.downloadUrl}
-                                    width={SCREEN_W}
-                                    height={SCREEN_H}
-                                    onZoomStateChange={setIsViewerZoomed}
-                                />
-                            </View>
-                        )}
-                    />
-
-                    {/* Prev / Next arrows */}
-                    {viewerIndex > 0 && (
-                        <TouchableOpacity
-                            onPress={goPrev}
-                            style={{ position: 'absolute', left: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
-                        >
-                            <Feather name="chevron-left" size={26} color="#fff" />
-                        </TouchableOpacity>
-                    )}
-                    {viewerIndex < sortedPhotos.length - 1 && (
-                        <TouchableOpacity
-                            onPress={goNext}
-                            style={{ position: 'absolute', right: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
-                        >
-                            <Feather name="chevron-right" size={26} color="#fff" />
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Bottom panel: info + comments */}
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                        style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
-                    >
-                        <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
-                            <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
-                                    {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                                    {viewerIndex + 1} / {sortedPhotos.length}
                                 </Text>
-                                {sortedPhotos[viewerIndex]?.location
-                                    ? <Text style={{ color: '#aaa', fontSize: 10, marginTop: 2 }}>📍 {sortedPhotos[viewerIndex].location}</Text>
-                                    : null
-                                }
-                            </View>
-
-                            <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
-                                <Text style={{ color: '#aaa', fontSize: 10, fontWeight: '700', marginBottom: 6 }}>
-                                    💬 COMMENTS ({photoComments.length})
-                                </Text>
-                                {commentLoading ? (
-                                    <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
-                                ) : (
-                                    <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
-                                        {photoComments.length === 0 && (
-                                            <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>No comments yet. Be the first!</Text>
-                                        )}
-                                        {photoComments.map((c: any) => (
-                                            <View key={c.id} style={{ marginBottom: 8 }}>
-                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
-                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
-                                                        <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                            <Text style={{ color: '#888', fontSize: 9 }}>↩ Reply</Text>
-                                                        </TouchableOpacity>
-                                                    </View>
-                                                    <Text style={{ color: '#ddd', fontSize: 11 }}>{c.text}</Text>
-                                                </View>
-                                                {c.replies?.map((r: any) => (
-                                                    <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || 'User'}</Text>
-                                                        <Text style={{ color: '#ccc', fontSize: 10 }}>{r.text}</Text>
-                                                    </View>
-                                                ))}
-                                            </View>
-                                        ))}
-                                    </ScrollView>
-                                )}
-                                {replyTo && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                        <Text style={{ color: colors.primary, fontSize: 9 }}>Replying to comment</Text>
-                                        <TouchableOpacity onPress={() => setReplyTo(null)}>
-                                            <Text style={{ color: '#888', fontSize: 9 }}>✕ Cancel</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-                                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: Platform.OS === 'android' ? 16 : 32, marginTop: 6 }}>
-                                    <TextInput
-                                        value={commentText}
-                                        onChangeText={setCommentText}
-                                        placeholder="Add a comment…"
-                                        placeholderTextColor="#555"
-                                        style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
-                                    />
-                                    <TouchableOpacity
-                                        onPress={handleAddComment}
-                                        disabled={addingComment || !commentText.trim()}
-                                        style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                        {addingComment
-                                            ? <ActivityIndicator size="small" color="#fff" />
-                                            : <Feather name="send" size={14} color="#fff" />
+                                <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
+                                        <Feather name="share-2" size={20} color="#fff" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
+                                        {downloading
+                                            ? <ActivityIndicator size="small" color={colors.primary} />
+                                            : <Feather name="download" size={20} color={colors.primary} />
                                         }
                                     </TouchableOpacity>
+                                    {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
+                                        <TouchableOpacity onPress={handleDeletePhoto} style={{ padding: 8 }}>
+                                            <Feather name="trash-2" size={20} color="#ef4444" />
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             </View>
-                        </View>
-                    </KeyboardAvoidingView>
-                </View>
+                        )}
+
+                        {/* Photo pager */}
+                        <FlatList
+                            ref={flatListRef}
+                            data={sortedPhotos}
+                            horizontal
+                            pagingEnabled
+                            scrollEnabled={!isViewerZoomed}
+                            showsHorizontalScrollIndicator={false}
+                            keyExtractor={(item) => item.id.toString()}
+                            getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
+                            onMomentumScrollEnd={(e) => {
+                                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                                if (idx !== viewerIndex) setViewerIndex(idx);
+                            }}
+                            renderItem={({ item }) => (
+                                <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                                    <ZoomableImage
+                                        uri={item.downloadUrl}
+                                        width={SCREEN_W}
+                                        height={SCREEN_H}
+                                        onZoomStateChange={setIsViewerZoomed}
+                                        onTap={() => setShowViewerUI(prev => !prev)}
+                                    />
+                                </View>
+                            )}
+                        />
+
+                        {/* Prev / Next arrows */}
+                        {showViewerUI && viewerIndex > 0 && (
+                            <TouchableOpacity
+                                onPress={goPrev}
+                                style={{ position: 'absolute', left: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
+                            >
+                                <Feather name="chevron-left" size={26} color="#fff" />
+                            </TouchableOpacity>
+                        )}
+                        {showViewerUI && viewerIndex < sortedPhotos.length - 1 && (
+                            <TouchableOpacity
+                                onPress={goNext}
+                                style={{ position: 'absolute', right: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
+                            >
+                                <Feather name="chevron-right" size={26} color="#fff" />
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Bottom panel: info + comments */}
+                        {showViewerUI && (
+                            <KeyboardAvoidingView
+                                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                                style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+                            >
+                                <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
+                                <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                                        {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
+                                    </Text>
+                                    {sortedPhotos[viewerIndex]?.location
+                                        ? <Text style={{ color: '#aaa', fontSize: 10, marginTop: 2 }}>📍 {sortedPhotos[viewerIndex].location}</Text>
+                                        : null
+                                    }
+                                </View>
+
+                                <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
+                                    <Text style={{ color: '#aaa', fontSize: 10, fontWeight: '700', marginBottom: 6 }}>
+                                        💬 COMMENTS ({photoComments.length})
+                                    </Text>
+                                    {commentLoading ? (
+                                        <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
+                                    ) : (
+                                        <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
+                                            {photoComments.length === 0 && (
+                                                <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>No comments yet. Be the first!</Text>
+                                            )}
+                                            {photoComments.map((c: any) => (
+                                                <View key={c.id} style={{ marginBottom: 8 }}>
+                                                    <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
+                                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                                                            <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
+                                                            <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                                                                <Text style={{ color: '#888', fontSize: 9 }}>↩ Reply</Text>
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                        <Text style={{ color: '#ddd', fontSize: 11 }}>{c.text}</Text>
+                                                    </View>
+                                                    {c.replies?.map((r: any) => (
+                                                        <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
+                                                            <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || 'User'}</Text>
+                                                            <Text style={{ color: '#ccc', fontSize: 10 }}>{r.text}</Text>
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            ))}
+                                        </ScrollView>
+                                    )}
+                                    {replyTo && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                            <Text style={{ color: colors.primary, fontSize: 9 }}>Replying to comment</Text>
+                                            <TouchableOpacity onPress={() => setReplyTo(null)}>
+                                                <Text style={{ color: '#888', fontSize: 9 }}>✕ Cancel</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+                                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: Platform.OS === 'android' ? 16 : 32, marginTop: 6 }}>
+                                        <TextInput
+                                            value={commentText}
+                                            onChangeText={setCommentText}
+                                            placeholder="Add a comment…"
+                                            placeholderTextColor="#555"
+                                            style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
+                                        />
+                                        <TouchableOpacity
+                                            onPress={handleAddComment}
+                                            disabled={addingComment || !commentText.trim()}
+                                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                            {addingComment
+                                                ? <ActivityIndicator size="small" color="#fff" />
+                                                : <Feather name="send" size={14} color="#fff" />
+                                            }
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                                </View>
+                            </KeyboardAvoidingView>
+                        )}
+                    </View>
                 </GestureHandlerRootView>
             </Modal>
 

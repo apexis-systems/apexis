@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useUsage } from '@/contexts/UsageContext';
 import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X, Copy, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getProjects, createProject } from '@/services/projectService';
@@ -17,6 +18,7 @@ export default function Dashboard() {
     const user = auth.user;
     const router = useRouter();
     const { t } = useLanguage();
+    const { checkLimit } = useUsage();
 
     const [projects, setProjects] = useState<any[]>([]);
     const [isCreating, setIsCreating] = useState(false);
@@ -101,6 +103,18 @@ export default function Dashboard() {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!checkLimit('projects')) {
+            toast.error("Limit Reached: You have reached your project limit. Please upgrade your plan to create more projects.", {
+                action: {
+                    label: 'Upgrade',
+                    onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
+                },
+                duration: 5000,
+            });
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             await createProject(newProject);
