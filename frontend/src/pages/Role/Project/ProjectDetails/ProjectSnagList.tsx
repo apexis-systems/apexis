@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUsage } from '@/contexts/UsageContext';
+import { useRouter } from 'next/navigation';
 import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +33,8 @@ const STATUS_CYCLE: SnagStatus[] = ['amber', 'green', 'red'];
 
 const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => {
   const { user } = useAuth();
+  const { checkLimit } = useUsage();
+  const router = useRouter();
   if (!project) return null;
 
   const [snags, setSnags] = useState<Snag[]>([]);
@@ -105,6 +109,18 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     if (!newTitle.trim()) { toast.error('Title is required'); return; }
     if (!newAssignee) { toast.error('Assignee is required'); return; }
     if (!newPhoto) { toast.error('Photo is required'); return; }
+
+    if (!checkLimit('snags')) {
+      toast.error("Limit Reached: You have reached your snag limit. Please upgrade your plan to add more snags.", {
+        action: {
+          label: 'Upgrade',
+          onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
+        },
+        duration: 5000,
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const form = new FormData();

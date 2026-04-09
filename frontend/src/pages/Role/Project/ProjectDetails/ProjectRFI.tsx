@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useUsage } from '@/contexts/UsageContext';
+import { useRouter } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2,
     AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera
@@ -36,6 +38,8 @@ const STATUS_CONFIG: Record<RFIStatus, { icon: any; color: string; bg: string; l
 export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const { user } = useAuth();
     const { t } = useLanguage();
+    const { checkLimit } = useUsage();
+    const router = useRouter();
 
     const [rfis, setRfis] = useState<RFI[]>([]);
     const [assignees, setAssignees] = useState<Assignee[]>([]);
@@ -138,6 +142,18 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
     const addRFI = async () => {
         if (!newTitle.trim()) { toast.error('Title is required'); return; }
+
+        if (!checkLimit('rfis')) {
+            toast.error("Limit Reached: You have reached your RFI limit. Please upgrade your plan to create more RFIs.", {
+                action: {
+                    label: 'Upgrade',
+                    onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
+                },
+                duration: 5000,
+            });
+            return;
+        }
+
         setSubmitting(true);
         try {
             const form = new FormData();

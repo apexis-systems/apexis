@@ -176,12 +176,25 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
     }
     setIsCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
-      if (photo?.uri) {
-        setSelectedImages([...selectedImages, photo.uri]);
-      }
-    } catch (e) {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+        exif: true,
+      });
+
+      if (!photo?.uri) return;
+
+      // Fix orientation and format for iOS compatibility
+      const manipulated = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      setSelectedImages([...selectedImages, manipulated.uri]);
+    } catch (e: any) {
       console.error('capturePhoto error', e);
+      Alert.alert('Camera Error', e?.message || 'Failed to capture photo');
     } finally {
       setIsCapturing(false);
     }
@@ -284,8 +297,8 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
   const filteredRfis = rfis.filter(r => {
     const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
     const matchesCreator = creatorFilter === 'all' || String(r.created_by) === creatorFilter;
-    const matchesAssignee = assigneeFilter === 'all' || 
-                           (assigneeFilter === 'null' ? !r.assigned_to : String(r.assigned_to) === assigneeFilter);
+    const matchesAssignee = assigneeFilter === 'all' ||
+      (assigneeFilter === 'null' ? !r.assigned_to : String(r.assigned_to) === assigneeFilter);
     return matchesStatus && matchesCreator && matchesAssignee;
   });
 
@@ -436,9 +449,9 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       )}
 
       {/* Detail Modal */}
-      <Modal 
-        visible={detailModalVisible} 
-        animationType="slide" 
+      <Modal
+        visible={detailModalVisible}
+        animationType="slide"
         transparent
         onRequestClose={() => setDetailModalVisible(false)}
       >
@@ -597,9 +610,9 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       </Modal>
 
       {/* Create Modal */}
-      <Modal 
-        visible={createModalVisible} 
-        animationType="slide" 
+      <Modal
+        visible={createModalVisible}
+        animationType="slide"
         transparent
         onRequestClose={() => setCreateModalVisible(false)}
       >
@@ -791,7 +804,7 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       </Modal>
       {/* Filter Options Modal */}
       <Modal visible={filterModalVisible} animationType="fade" transparent onRequestClose={() => setFilterModalVisible(false)}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}
           onPress={() => setFilterModalVisible(false)}
         >
@@ -886,10 +899,10 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
         />
       )}
       {/* High-Fidelity Camera Modal */}
-      <Modal 
-        visible={cameraVisible} 
-        animationType="slide" 
-        transparent={false} 
+      <Modal
+        visible={cameraVisible}
+        animationType="slide"
+        transparent={false}
         presentationStyle="fullScreen"
         statusBarTranslucent={true}
         onRequestClose={() => setCameraVisible(false)}
@@ -899,7 +912,7 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
             {cameraPermission?.granted ? (
               <>
                 <CameraView style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
-                
+
                 {/* Header Overlay */}
                 <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
                   <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
@@ -914,15 +927,15 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
                   {/* Preview row */}
                   {selectedImages.length > 0 && (
                     <View style={cameraStyles.previewContainer}>
-                      <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false} 
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
                         contentContainerStyle={{ gap: 14, paddingHorizontal: 20, paddingTop: 10, paddingRight: 30 }}
                       >
                         {selectedImages.map((uri, idx) => (
                           <View key={idx} style={cameraStyles.previewWrapper}>
                             <Image source={{ uri }} style={cameraStyles.previewThumb} />
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
                               style={cameraStyles.removeBtn}
                             >
@@ -933,7 +946,7 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
                       </ScrollView>
                     </View>
                   )}
-                  
+
                   <View style={cameraStyles.shutterRow}>
                     <TouchableOpacity onPress={pickFromGallery} style={cameraStyles.sideBtn}>
                       <View style={cameraStyles.iconCircle}>
@@ -941,14 +954,14 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
                       </View>
                       <Text style={cameraStyles.btnLabel}>Gallery</Text>
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
                       <View style={cameraStyles.shutterOuter}>
                         <View style={cameraStyles.shutterInner} />
                       </View>
                       <Text style={cameraStyles.btnLabel}>Photo</Text>
                     </TouchableOpacity>
-                    
+
                     <View style={{ width: 70 }} />
                   </View>
                 </View>

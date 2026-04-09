@@ -160,7 +160,14 @@ export default function SnagCreateScreen() {
             }
         } catch (error) {
             const { message, code } = parseApiError(error, 'Failed to create snag. Please try again.');
-            Alert.alert(code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
+            Alert.alert(
+                code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', 
+                message,
+                code === 'LIMIT_REACHED' ? [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Upgrade', onPress: () => router.push('/subscription') }
+                ] : undefined
+            );
         } finally {
             setSubmitting(false);
         }

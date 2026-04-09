@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import Constants from 'expo-constants';
+import { parseApiError } from '@/helpers/apiError';
 
 let DocumentScanner: any;
 try {
@@ -504,8 +505,15 @@ export default function UploadScreen() {
         } catch (error: any) {
             console.error('Upload error:', error);
             setFileQueue(prev => prev.map(it => it.status === 'done' ? it : { ...it, status: 'error' }));
-            const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Some files could not be uploaded.';
-            Alert.alert('Upload Failed', message);
+            const { message, code } = parseApiError(error, 'Some files could not be uploaded.');
+            Alert.alert(
+                code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Upload Failed', 
+                message,
+                code === 'LIMIT_REACHED' ? [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Upgrade', onPress: () => router.push('/subscription') }
+                ] : undefined
+            );
         }
     };
 
