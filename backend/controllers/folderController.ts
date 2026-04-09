@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { folders, files, project_members, activities, users as UsersModel } from "../models/index.ts";
+import { folders, files, project_members, activities, users as UsersModel, projects } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { Op } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
@@ -104,19 +104,24 @@ export const toggleFolderVisibility = async (req: Request, res: Response) => {
         if (!folder) {
             return res.status(404).json({ error: "Folder not found" });
         }
+        const project = await projects.findByPk(folder.project_id);
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
 
         folder.client_visible = client_visible;
         await folder.save();
 
         if (client_visible) {
-            // Notify clients in the organization
-            const clients = await UsersModel.findAll({
-                where: { organization_id: authUser.organization_id, role: 'client' }
+            // Notify clients who actually belong to this project.
+            const clients = await project_members.findAll({
+                where: { project_id: folder.project_id, role: 'client' },
+                attributes: ['user_id']
             });
 
             for (const client of clients) {
                 await sendNotification({
-                    userId: (client as any).id,
+                    userId: Number((client as any).user_id),
                     title: 'New Folder Available',
                     body: `A new folder "${folder.name}" is now visible to you.`,
                     type: 'folder_visibility',
@@ -323,4 +328,3 @@ export const deleteFolder = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
-

@@ -73,6 +73,8 @@ export const createRFI = async (req: Request | any, res: Response) => {
 
         const { project_id, title, description, assigned_to, expiry_date } = req.body;
         if (!project_id || !title) return res.status(400).json({ error: 'project_id and title are required' });
+        const project = await projects.findByPk(project_id);
+        if (!project) return res.status(404).json({ error: 'Project not found' });
 
         // Photo Upload Logic
         const uploadedPhotos: string[] = [];
@@ -134,17 +136,16 @@ export const createRFI = async (req: Request | any, res: Response) => {
 
         // Notification Logic
         if (authUser.role === 'client') {
-            // Notify all Admins in org and Contributors in project
+            // Notify all admins in the project's organization and contributors in the project.
             const admins = await users.findAll({
-                where: { organization_id: authUser.organization_id, role: 'admin' }
+                where: { organization_id: project.organization_id, role: 'admin' }
             });
             const projectContributors = await project_members.findAll({
                 where: { project_id: Number(project_id), role: 'contributor' },
                 include: [{ 
                     model: users, 
                     as: 'user', 
-                    attributes: ['id'],
-                    where: { organization_id: authUser.organization_id }
+                    attributes: ['id']
                 }]
             });
 
@@ -171,13 +172,13 @@ export const createRFI = async (req: Request | any, res: Response) => {
         } else {
             // Admin/Contributor created it
             if (assigned_to) {
-                const recipient = await users.findOne({ 
-                    where: { id: Number(assigned_to), organization_id: authUser.organization_id } 
+                const recipient = await project_members.findOne({
+                    where: { project_id: Number(project_id), user_id: Number(assigned_to) }
                 });
                 if (recipient) {
                     const senderName = authUser.name || 'Someone';
                     await sendNotification({
-                        userId: recipient.id,
+                        userId: Number(assigned_to),
                         title: 'New RFI Assigned',
                         body: `${senderName} assigned an RFI to you: ${title}`,
                         type: 'rfi_assigned',
@@ -247,11 +248,12 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         if (rfi.created_by && rfi.created_by !== authUser.user_id) notifyIds.add(rfi.created_by);
 
         if (notifyIds.size > 0) {
-            const validRecipients = await users.findAll({
-                where: { 
-                    id: { [Op.in]: Array.from(notifyIds) },
-                    organization_id: authUser.organization_id
-                }
+            const validRecipients = await project_members.findAll({
+                where: {
+                    project_id: Number(rfi.project_id),
+                    user_id: { [Op.in]: Array.from(notifyIds) }
+                },
+                attributes: ['user_id']
             });
 
             const senderName = authUser.name || 'Someone';
@@ -264,7 +266,7 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
 
             for (const recipient of validRecipients) {
                 await sendNotification({
-                    userId: recipient.id,
+                    userId: Number((recipient as any).user_id),
                     title: 'RFI Status Updated',
                     body: `${senderName} updated RFI status to ${friendlyStatus}: ${rfi.title}`,
                     type: 'rfi_status_update',
@@ -305,16 +307,36 @@ export const getRFIById = async (req: Request, res: Response) => {
     }
 };
 
-// GET /rfis/assignees?project_id=X  — all users in the organization
+// GET /rfis/assignees?project_id=X  — project members plus project admins
 export const getRFIAssignees = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        if (!authUser || !authUser.organization_id) {
-            return res.status(400).json({ error: 'organization_id missing from token' });
+        const { project_id } = req.query;
+        if (!authUser) {
+            return res.status(401).json({ error: 'Unauthorized' });
         }
+        if (!project_id) return res.status(400).json({ error: 'project_id is required' });
+
+        const project = await projects.findByPk(Number(project_id));
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        const projectAssigneeIds = await project_members.findAll({
+            where: { project_id: Number(project_id) },
+            attributes: ['user_id']
+        });
+        const projectAdminIds = await users.findAll({
+            where: { organization_id: project.organization_id, role: 'admin' },
+            attributes: ['id']
+        });
+        const allowedUserIds = [
+            ...new Set([
+                ...projectAssigneeIds.map((member: any) => Number(member.user_id)),
+                ...projectAdminIds.map((admin: any) => Number(admin.id))
+            ])
+        ];
 
         const assignees = await users.findAll({
-            where: { organization_id: authUser.organization_id },
+            where: { id: { [Op.in]: allowedUserIds } },
             attributes: ['id', 'name', 'email', 'role', 'profile_pic'],
             order: [['name', 'ASC']],
         });

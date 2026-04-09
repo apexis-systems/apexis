@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { comments, users, files, activities } from '../models/index.ts';
+import { comments, users, files, activities, project_members } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
 
 export const getComments = async (req: Request, res: Response) => {
@@ -66,10 +66,10 @@ export const addComment = async (req: Request, res: Response) => {
                 // 2. Send Notification to File Uploader
                 // Only if uploader is NOT the commenter
                 if (file.created_by !== authUser.user_id) {
-                    const uploader = await users.findOne({ 
-                        where: { id: file.created_by, organization_id: authUser.organization_id } 
+                    const uploaderMembership = await project_members.findOne({
+                        where: { project_id: file.project_id, user_id: file.created_by }
                     });
-                    if (uploader) {
+                    if (uploaderMembership) {
                         await sendNotification({
                             userId: file.created_by,
                             title: 'New Photo Comment',

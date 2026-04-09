@@ -1,11 +1,51 @@
 import type { Request, Response } from 'express';
 import { messaging } from '../config/firebase.ts';
-import { users, rooms, room_members, chat_messages, sequelize, notifications } from '../models/index.ts';
+import { users, rooms, room_members, chat_messages, sequelize, notifications, projects, project_members } from '../models/index.ts';
 import { Op } from 'sequelize';
 import { getIO, isUserOnline } from '../socket.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+const getProjectScopedChatContext = async (authUser: any, projectId?: number | null) => {
+    if (!projectId) {
+        return { actualOrgId: authUser.organization_id, project: null, allowedUserIds: null as Set<number> | null };
+    }
+
+    const project = await projects.findByPk(projectId);
+    if (!project) {
+        throw new Error('PROJECT_NOT_FOUND');
+    }
+
+    const isProjectMember = await project_members.findOne({
+        where: { project_id: projectId, user_id: authUser.user_id }
+    });
+    const isProjectAdmin = authUser.role === 'admin' && authUser.organization_id === project.organization_id;
+    const isSuperadmin = authUser.role === 'superadmin';
+
+    if (!isProjectMember && !isProjectAdmin && !isSuperadmin) {
+        throw new Error('PROJECT_ACCESS_DENIED');
+    }
+
+    const memberRows = await project_members.findAll({
+        where: { project_id: projectId },
+        attributes: ['user_id']
+    });
+    const adminRows = await users.findAll({
+        where: {
+            organization_id: project.organization_id,
+            role: 'admin'
+        },
+        attributes: ['id']
+    });
+
+    const allowedUserIds = new Set<number>([
+        ...memberRows.map((member: any) => Number(member.user_id)),
+        ...adminRows.map((admin: any) => Number(admin.id))
+    ]);
+
+    return { actualOrgId: project.organization_id, project, allowedUserIds };
+};
 
 /**
  * List all chat rooms for the current user
@@ -174,8 +214,7 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             where: { room_id: roomId, user_id: { [Op.ne]: authUser.user_id } },
             include: [{ 
                 model: users, 
-                attributes: ['id', 'fcm_token'],
-                where: { organization_id: authUser.organization_id } // Ensure only org members notified
+                attributes: ['id', 'fcm_token']
             }]
         });
 
@@ -356,7 +395,22 @@ export const createRoom = async (req: Request, res: Response) => {
 
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        const actualOrgId = authUser.organization_id;
+        let actualOrgId = authUser.organization_id;
+        let allowedUserIds: Set<number> | null = null;
+
+        try {
+            const context = await getProjectScopedChatContext(authUser, project_id ? Number(project_id) : null);
+            actualOrgId = context.actualOrgId;
+            allowedUserIds = context.allowedUserIds;
+        } catch (error: any) {
+            if (error.message === 'PROJECT_NOT_FOUND') {
+                return res.status(404).json({ error: 'Project not found' });
+            }
+            if (error.message === 'PROJECT_ACCESS_DENIED') {
+                return res.status(403).json({ error: 'You do not have access to this project chat' });
+            }
+            throw error;
+        }
 
         if (type === 'direct') {
             if (!memberIds || memberIds.length !== 1) {
@@ -365,12 +419,11 @@ export const createRoom = async (req: Request, res: Response) => {
 
             const targetUserId = memberIds[0];
 
-            // VALIDATION: Ensure recipient belongs to the same organization
-            const targetUser = await users.findOne({ 
-                where: { id: targetUserId, organization_id: actualOrgId } 
-            });
+            const targetUser = allowedUserIds
+                ? (allowedUserIds.has(Number(targetUserId)) ? await users.findByPk(targetUserId) : null)
+                : await users.findOne({ where: { id: targetUserId, organization_id: actualOrgId } });
             if (!targetUser) {
-                return res.status(404).json({ error: 'User not found in your organization' });
+                return res.status(404).json({ error: project_id ? 'User is not part of this project organization' : 'User not found in your organization' });
             }
 
             // Check if direct room already exists
@@ -421,17 +474,23 @@ export const createRoom = async (req: Request, res: Response) => {
             if (!name) return res.status(400).json({ error: 'Group name is required' });
             const allMemberIds = [...new Set([...memberIds, authUser.user_id])];
 
-            // VALIDATION: Ensure all members belong to the same organization
-            const validUsers = await users.findAll({
-                where: {
-                    id: { [Op.in]: allMemberIds },
-                    organization_id: actualOrgId
-                },
-                attributes: ['id']
-            });
+            if (allowedUserIds) {
+                const hasInvalidUser = allMemberIds.some(uid => !allowedUserIds?.has(Number(uid)));
+                if (hasInvalidUser) {
+                    return res.status(400).json({ error: 'Some selected users are not part of this project organization' });
+                }
+            } else {
+                const validUsers = await users.findAll({
+                    where: {
+                        id: { [Op.in]: allMemberIds },
+                        organization_id: actualOrgId
+                    },
+                    attributes: ['id']
+                });
 
-            if (validUsers.length !== allMemberIds.length) {
-                return res.status(400).json({ error: 'Some selected users do not belong to your organization' });
+                if (validUsers.length !== allMemberIds.length) {
+                    return res.status(400).json({ error: 'Some selected users do not belong to your organization' });
+                }
             }
 
             const newRoom = await rooms.create({

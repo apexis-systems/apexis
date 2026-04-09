@@ -18,10 +18,11 @@ export const listNotifications = async (req: Request, res: Response) => {
         if (type && type !== 'all') {
             const categories: Record<string, string[]> = {
                 chat: ['chat'],
-                file: ['file_upload', 'file_upload_admin', 'file_visibility'],
+                file: ['file_upload', 'file_upload_admin', 'file_visibility', 'folder_visibility'],
                 photo: ['photo_upload', 'photo_comment'],
                 snag: ['snag_assigned', 'snag_creation_admin', 'snag_status_update'],
                 rfi: ['rfi_created', 'rfi_assigned', 'rfi_status_update', 'rfi_comment'],
+                member: ['member_joined'],
             };
 
             if (categories[type as string]) {
