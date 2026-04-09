@@ -58,11 +58,11 @@ export default function ProfileScreen() {
         }
     }, [user?.id, user?.project_id, user?.role]);
 
-    const handleSwitchContext = async (projectId: number, role: string) => {
+    const handleSwitchContext = async ({ projectId, organizationId, role }: { projectId?: number | null; organizationId?: number | null; role: string }) => {
         if (isSwitching) return;
         setIsSwitching(true);
         try {
-            const res = await switchContext(projectId, role);
+            const res = await switchContext({ project_id: projectId ?? null, organization_id: organizationId ?? null, role });
             if (res.token) {
                 await login(res.token);
                 Alert.alert('Success', `Switched to ${role} role.`);
@@ -91,9 +91,9 @@ export default function ProfileScreen() {
         const organizationMap = new Map<number | string, any>();
 
         items.forEach((membership) => {
-            const organizationId = membership.project?.organization_id ?? 'unknown';
-            const organizationName = membership.project?.organization?.name || 'Organization';
-            const projectId = membership.project_id;
+            const organizationId = membership.organization_id ?? membership.project?.organization_id ?? 'unknown';
+            const organizationName = membership.organization?.name || membership.project?.organization?.name || 'Organization';
+            const projectId = membership.project_id ?? `org-${organizationId}`;
 
             if (!organizationMap.has(organizationId)) {
                 organizationMap.set(organizationId, {
@@ -107,6 +107,9 @@ export default function ProfileScreen() {
             if (!organizationGroup.projects.has(projectId)) {
                 organizationGroup.projects.set(projectId, {
                     project: membership.project,
+                    organization: membership.organization || membership.project?.organization || null,
+                    organization_id: organizationId,
+                    context_type: membership.context_type || (membership.project ? 'project' : 'organization'),
                     roles: [],
                 });
             }
@@ -127,7 +130,7 @@ export default function ProfileScreen() {
                         ...projectGroup,
                         roles: projectGroup.roles.sort((a: string, b: string) => roleOrder.indexOf(a) - roleOrder.indexOf(b)),
                     }))
-                    .sort((a: any, b: any) => (a.project?.name || '').localeCompare(b.project?.name || '')),
+                    .sort((a: any, b: any) => (a.project?.name || a.organization?.name || '').localeCompare(b.project?.name || b.organization?.name || '')),
             }))
             .sort((a, b) => a.organizationName.localeCompare(b.organizationName));
     };
@@ -430,9 +433,8 @@ export default function ProfileScreen() {
 
                     {/* Switch Project / Role Section */}
                     {(() => {
-                        const filtered = memberships.filter(m => !(Number(m.project_id) === Number(user.project_id) && m.role === user.role));
-                        if (filtered.length === 0) return null;
-                        const organizationGroups = groupMembershipsByOrganization(filtered);
+                        if (memberships.length === 0) return null;
+                        const organizationGroups = groupMembershipsByOrganization(memberships);
 
                         return (
                             <View style={{ marginBottom: 24 }}>
@@ -476,7 +478,7 @@ export default function ProfileScreen() {
                                             <View style={{ gap: 8 }}>
                                                 {organizationGroup.projects.map((group: any) => (
                                                     <View
-                                                        key={group.project?.id}
+                                                        key={group.project?.id ?? `org-${group.organization_id}`}
                                                         style={{
                                                             borderRadius: 18,
                                                             backgroundColor: colors.background,
@@ -497,43 +499,66 @@ export default function ProfileScreen() {
                                                                 <Feather name="layers" size={18} color="#f97316" />
                                                             </View>
                                                             <View style={{ flex: 1 }}>
-                                                                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }} numberOfLines={1}>{group.project?.name || 'Project'}</Text>
-                                                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Project Roles</Text>
+                                                                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }} numberOfLines={1}>{group.project?.name || group.organization?.name || 'Organization'}</Text>
+                                                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                                                                    {group.context_type === 'organization' ? 'Organization Role' : 'Project Roles'}
+                                                                </Text>
                                                             </View>
                                                         </View>
 
                                                         <View style={{ gap: 8 }}>
-                                                            {group.roles.map((r: string, rIdx: number) => (
-                                                                <TouchableOpacity
-                                                                    key={rIdx}
-                                                                    onPress={() => handleSwitchContext(group.project.id, r)}
-                                                                    disabled={isSwitching}
-                                                                    activeOpacity={0.7}
-                                                                    style={{
-                                                                        backgroundColor: r === 'admin' ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                                                        borderWidth: 1,
-                                                                        borderColor: r === 'admin' ? '#f97316' : colors.border,
-                                                                        paddingHorizontal: 16,
-                                                                        paddingVertical: 12,
-                                                                        borderRadius: 14,
-                                                                        flexDirection: 'row',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'space-between'
-                                                                    }}
-                                                                >
-                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                                                        <View style={{ backgroundColor: roleBadgeColor[r as UserRole]?.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                                                                            <Text style={{ fontSize: 9, fontWeight: '900', color: '#fff', textTransform: 'uppercase' }}>{r}</Text>
+                                                            {group.roles.map((r: string, rIdx: number) => {
+                                                                const isCurrent =
+                                                                    r === user.role &&
+                                                                    (
+                                                                        (group.context_type === 'project' && Number(group.project?.id) === Number(user.project_id)) ||
+                                                                        (group.context_type === 'organization' && !user.project_id && Number(group.organization_id) === Number(user.organization?.id))
+                                                                    );
+                                                                return (
+                                                                    <TouchableOpacity
+                                                                        key={rIdx}
+                                                                        onPress={() => handleSwitchContext({
+                                                                            projectId: group.project?.id ?? null,
+                                                                            organizationId: group.organization_id ?? group.organization?.id ?? null,
+                                                                            role: r
+                                                                        })}
+                                                                        disabled={isSwitching || isCurrent}
+                                                                        activeOpacity={isCurrent ? 1 : 0.7}
+                                                                        style={{
+                                                                            backgroundColor: isCurrent ? 'rgba(249,115,22,0.12)' : colors.surface,
+                                                                            borderWidth: 1,
+                                                                            borderColor: isCurrent ? '#f97316' : colors.border,
+                                                                            paddingHorizontal: 16,
+                                                                            paddingVertical: 12,
+                                                                            borderRadius: 14,
+                                                                            flexDirection: 'row',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'space-between',
+                                                                            opacity: isCurrent ? 0.95 : 1,
+                                                                        }}
+                                                                    >
+                                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                                            <View style={{ backgroundColor: isCurrent ? '#f97316' : colors.border, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                                                                <Text style={{ fontSize: 9, fontWeight: '900', color: isCurrent ? '#fff' : colors.textMuted, textTransform: 'uppercase' }}>{r}</Text>
+                                                                            </View>
+                                                                            {!isCurrent && (
+                                                                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
+                                                                                    Switch Role
+                                                                                </Text>
+                                                                            )}
                                                                         </View>
-                                                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Switch Role</Text>
-                                                                    </View>
-                                                                    {isSwitching ? (
-                                                                        <ActivityIndicator size={16} color="#f97316" />
-                                                                    ) : (
-                                                                        <Feather name="refresh-cw" size={16} color={r === 'admin' ? '#f97316' : colors.textMuted} />
-                                                                    )}
-                                                                </TouchableOpacity>
-                                                            ))}
+                                                                        {isCurrent ? (
+                                                                            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(249,115,22,0.14)' }}>
+                                                                                <Text style={{ fontSize: 10, fontWeight: '900', color: '#f97316', textTransform: 'uppercase' }}>Current</Text>
+                                                                            </View>
+                                                                        ) : isSwitching ? (
+                                                                            <ActivityIndicator size={16} color="#f97316" />
+                                                                        ) : (
+                                                                            <Feather name="refresh-cw" size={16} color={colors.textMuted} />
+                                                                        )}
+                                                                    </TouchableOpacity>
+                                                                );
+                                                            })}
                                                         </View>
                                                     </View>
                                                 ))}

@@ -582,50 +582,45 @@ export const getMyMemberships = async (req: Request, res: Response) => {
         const results = memberships.map((m: any) => m.toJSON ? m.toJSON() : m);
 
         // If the user's primary role is admin or superadmin, they should be able to switch back to that role 
-        // for any project they are a member of (or currently viewing), even if not explicitly in project_members with that role.
+        // at the organization level even if they are currently in a project-specific context.
         if (dbUser && (dbUser.role === 'admin' || dbUser.role === 'superadmin')) {
             const primaryRole = dbUser.role;
-            const canUsePrimaryRoleForProject = (project: any) => {
-                if (!project) return false;
-                if (primaryRole === 'superadmin') return true;
-                return Number(project.organization_id) === Number(dbUser.organization_id);
-            };
 
-            // 1. Ensure primary role is available for all existing memberships
-            results.forEach((m: any) => {
-                if (!canUsePrimaryRoleForProject(m.project)) {
-                    return;
-                }
-                const hasPrimary = results.some((sm: any) => sm.project_id === m.project_id && sm.role === primaryRole);
-                if (!hasPrimary) {
+            const primaryOrganizationId = dbUser.organization_id || authUser.organization_id || null;
+            if (primaryOrganizationId) {
+                const primaryOrganization = await organizations.findByPk(primaryOrganizationId, {
+                    attributes: ['id', 'name']
+                });
+
+                const hasOrganizationLevelPrimary = results.some((m: any) =>
+                    m.role === primaryRole &&
+                    !m.project_id &&
+                    Number(m.organization_id) === Number(primaryOrganizationId)
+                );
+
+                if (!hasOrganizationLevelPrimary && primaryOrganization) {
                     results.push({
-                        project_id: m.project_id,
+                        project_id: null,
+                        organization_id: primaryOrganization.id,
                         user_id: dbUser.id,
                         role: primaryRole,
-                        project: m.project
+                        organization: primaryOrganization.toJSON ? primaryOrganization.toJSON() : primaryOrganization,
+                        project: null,
+                        context_type: 'organization'
                     });
-                }
-            });
-
-            // 2. Also ensure it's available for the current active project if not already in results
-            const currentProjectId = authUser.project_id;
-            if (currentProjectId) {
-                const alreadyInResults = results.some((m: any) => Number(m.project_id) === Number(currentProjectId) && m.role === primaryRole);
-                if (!alreadyInResults) {
-                    const project = await projects.findByPk(currentProjectId, {
-                        include: [{ model: organizations, as: 'organization', attributes: ['name'] }]
-                    });
-                    if (project && canUsePrimaryRoleForProject(project)) {
-                        results.push({
-                            project_id: project.id,
-                            user_id: dbUser.id,
-                            role: primaryRole,
-                            project: project.toJSON()
-                        });
-                    }
                 }
             }
         }
+
+        results.forEach((entry: any) => {
+            if (entry.project) {
+                entry.organization_id = entry.organization_id ?? entry.project.organization_id ?? null;
+                entry.organization = entry.organization ?? entry.project.organization ?? null;
+                entry.context_type = entry.context_type || 'project';
+            } else {
+                entry.context_type = entry.context_type || 'organization';
+            }
+        });
 
         res.status(200).json({ memberships: results });
     } catch (error) {
@@ -637,27 +632,29 @@ export const getMyMemberships = async (req: Request, res: Response) => {
 export const switchContext = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        const { project_id, role } = req.body;
+        const { project_id, organization_id, role } = req.body;
         const normalizedRole = typeof role === "string" ? role.trim().toLowerCase() : "";
 
-        if (!project_id || !normalizedRole) {
-            return res.status(400).json({ error: "Project ID and role are required" });
+        if ((!project_id && !organization_id) || !normalizedRole) {
+            return res.status(400).json({ error: "Project ID or Organization ID and role are required" });
         }
         if (!["superadmin", "admin", "contributor", "client"].includes(normalizedRole)) {
             return res.status(400).json({ error: "Invalid role" });
         }
 
         const user = await users.findByPk(authUser.user_id);
-        const project = await projects.findByPk(project_id);
+        const project = project_id ? await projects.findByPk(project_id) : null;
+        const targetOrganizationId = project?.organization_id || organization_id || null;
+        const organization = targetOrganizationId ? await organizations.findByPk(targetOrganizationId) : null;
 
-        if (!user || !project) {
-            return res.status(404).json({ error: "User or project not found" });
+        if (!user || !organization || (project_id && !project)) {
+            return res.status(404).json({ error: "User, organization, or project not found" });
         }
 
         const isSuperadminSwitch = user.role === 'superadmin';
         const isAdminSwitch =
             normalizedRole === 'admin' &&
-            (user.role === 'superadmin' || (user.role === 'admin' && project.organization_id === user.organization_id));
+            (user.role === 'superadmin' || (user.role === 'admin' && Number(targetOrganizationId) === Number(user.organization_id)));
         const isSuperadminRoleSwitch = normalizedRole === 'superadmin' && user.role === 'superadmin';
 
         let membership = null;
@@ -676,8 +673,8 @@ export const switchContext = async (req: Request, res: Response) => {
                 user_id: user.id,
                 name: user.name,
                 role: normalizedRole,
-                organization_id: project.organization_id,
-                project_id: project.id
+                organization_id: Number(targetOrganizationId),
+                project_id: project ? project.id : null
             },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
