@@ -24,6 +24,7 @@ import { useState, useEffect } from "react";
 import * as subscriptionService from "@/services/subscriptionService";
 import { getMe } from "@/services/authService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatFileSize } from "@/lib/format";
 
 const plans = [
   {
@@ -477,12 +478,11 @@ const Billing = () => {
                           Cloud Storage
                         </span>
                         <p className="text-2xl font-black">
-                          {usageData.usage.storage_mb}{" "}
-                          <span className="text-sm font-normal">MB</span>
+                          {formatFileSize(usageData.usage.storage_mb)}
                         </p>
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">
-                        Limit: {usageData.plan.limits.storage_limit_mb}MB
+                        Limit: {formatFileSize(usageData.plan.limits.storage_limit_mb)}
                       </span>
                     </div>
                     <Progress

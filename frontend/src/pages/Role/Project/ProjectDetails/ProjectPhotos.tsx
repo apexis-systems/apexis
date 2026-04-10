@@ -21,6 +21,7 @@ import EditFolderDialog from './EditFolderDialog';
 
 import { Checkbox } from '@/components/ui/Checkbox';
 import FileViewer from '@/components/shared/FileViewer';
+import { formatFileSize } from '@/lib/format';
 
 interface ProjectPhotosProps {
   project: Project;
@@ -539,7 +540,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 >
                   <p className="text-[10px] font-semibold truncate">{photo.file_name}</p>
                   <p className="text-[9px] text-muted-foreground">
-                    {photo.file_size_mb} MB • {new Date(photo.created_at).toLocaleDateString()}
+                    {formatFileSize(photo.file_size_mb)} • {new Date(photo.created_at).toLocaleDateString()}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">

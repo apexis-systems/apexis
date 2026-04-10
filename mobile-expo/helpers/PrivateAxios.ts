@@ -23,7 +23,12 @@ export const PrivateAxios = axios.create({
 PrivateAxios.interceptors.request.use(
     async (config) => {
         try {
-            const token = await SecureStore.getItemAsync('token');
+            let token = await SecureStore.getItemAsync('token');
+            if (!token) {
+                // Minor retry delay if token was just refreshed or set
+                await new Promise(r => setTimeout(r, 100));
+                token = await SecureStore.getItemAsync('token');
+            }
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }

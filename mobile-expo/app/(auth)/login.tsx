@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import {
     View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image
@@ -11,7 +11,7 @@ import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loginAdmin, loginProject } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useLocalSearchParams } from 'expo-router';
+import { useGlobalSearchParams } from 'expo-router';
 import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
@@ -35,7 +35,7 @@ export default function LoginScreen() {
     const { login, logout, isLoggedIn } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
-    const params = useLocalSearchParams<{ role?: string; code?: string }>();
+    const params = useGlobalSearchParams<{ role?: string; code?: string }>();
 
     const STORAGE_KEYS = {
         admin: 'remembered_admin_v2',
@@ -43,8 +43,9 @@ export default function LoginScreen() {
         client: 'remembered_client_v2'
     };
 
+    const hasLoggedOutForInvitation = useRef(false);
     useEffect(() => {
-        if (params.code) {
+        if (params.code && !hasLoggedOutForInvitation.current) {
             setProjectCode(params.code);
             if (params.role === 'contributor' || params.role === 'client') {
                 setSelectedRole(params.role as UserRole);
@@ -53,10 +54,10 @@ export default function LoginScreen() {
             }
 
             // If user is already logged in, we logout to allow switching
-            // but we stay on this page because of the isInvitation guard in _layout.tsx
             if (isLoggedIn) {
                 logout();
             }
+            hasLoggedOutForInvitation.current = true;
         }
     }, [params.code, params.role, isLoggedIn, logout]);
 
@@ -70,9 +71,12 @@ export default function LoginScreen() {
             const stored = await SecureStore.getItemAsync(key);
 
             // Always reset the fields when switching roles to avoid overlap collision
-            setIdentifier('');
-            if (selectedRole === 'admin') setPassword('');
-            else if (!params.code) setProjectCode('');
+            // EXCEPT if we have deep link params currently active
+            if (!params.code) {
+                setIdentifier('');
+                if (selectedRole === 'admin') setPassword('');
+                else setProjectCode('');
+            }
             setRememberMe(false);
 
             if (stored) {
@@ -232,7 +236,7 @@ export default function LoginScreen() {
                                         style={{ flex: 1, color: colors.text }}
                                     />
                                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                                        <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
+                                        <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} />
                                     </TouchableOpacity>
                                 </View>
                                 <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={{ marginTop: 6 }}>

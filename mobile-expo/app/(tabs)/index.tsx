@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadOrganizationLogo, fetchSecureLogo, getOrganizations } from '@/services/organizationService';
+import { updateUserProfilePic } from '@/services/userService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 import MainHeader from '@/components/shared/MainHeader';
 import SecureAvatar from '@/components/shared/SecureAvatar';
@@ -57,6 +58,7 @@ export default function DashboardScreen() {
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [profileUri, setProfileUri] = useState<string | null>(null);
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -249,6 +251,42 @@ export default function DashboardScreen() {
       console.error("Logo upload error:", e);
     } finally {
       setIsUploadingLogo(false);
+    }
+  };
+  
+  const handleProfilePicUpload = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      setIsUploadingProfile(true);
+      const asset = result.assets[0];
+      const formData = new FormData();
+      formData.append('profile_pic', {
+        uri: asset.uri,
+        type: asset.mimeType || 'image/jpeg',
+        name: asset.fileName || 'profile.jpg',
+      } as any);
+
+      const res = await updateUserProfilePic(formData);
+      if (res.profile_pic) {
+        updateUser({ profile_pic: res.profile_pic });
+        const uri = await getSecureFileUrl(res.profile_pic);
+        setProfileUri(uri);
+      }
+      setIsProfilePreviewOpen(false);
+      Alert.alert('Success', 'Profile picture updated successfully');
+    } catch (e) {
+      console.error("Profile pic upload error:", e);
+      Alert.alert('Error', 'Failed to upload profile picture');
+    } finally {
+      setIsUploadingProfile(false);
     }
   };
 
@@ -653,11 +691,13 @@ export default function DashboardScreen() {
         visible={isProfilePreviewOpen}
         onClose={() => setIsProfilePreviewOpen(false)}
         logoSource={profileUri ? { uri: profileUri } : null}
-        canChange={false}
-        onChangePress={() => { }}
+        canChange={true}
+        onChangePress={handleProfilePicUpload}
+        uploading={isUploadingProfile}
         isCircular={true}
         title="Profile Picture"
         subtitle="This picture helps your team identify you on the platform."
+        buttonText="Change Photo"
       />
 
       {/* Org Selection Modal for Superadmin */}

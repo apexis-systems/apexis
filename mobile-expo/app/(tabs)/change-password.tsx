@@ -94,7 +94,7 @@ export default function ChangePasswordScreen() {
                                             placeholderTextColor={colors.textMuted}
                                         />
                                         <TouchableOpacity onPress={() => setShowCurrent(!showCurrent)} style={{ padding: 4 }}>
-                                            <Feather name={showCurrent ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
+                                            <Feather name={showCurrent ? "eye" : "eye-off"} size={20} color={colors.textMuted} />
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -111,7 +111,7 @@ export default function ChangePasswordScreen() {
                                             placeholderTextColor={colors.textMuted}
                                         />
                                         <TouchableOpacity onPress={() => setShowNew(!showNew)} style={{ padding: 4 }}>
-                                            <Feather name={showNew ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
+                                            <Feather name={showNew ? "eye" : "eye-off"} size={20} color={colors.textMuted} />
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -128,7 +128,7 @@ export default function ChangePasswordScreen() {
                                             placeholderTextColor={colors.textMuted}
                                         />
                                         <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} style={{ padding: 4 }}>
-                                            <Feather name={showConfirm ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
+                                            <Feather name={showConfirm ? "eye" : "eye-off"} size={20} color={colors.textMuted} />
                                         </TouchableOpacity>
                                     </View>
                                 </View>

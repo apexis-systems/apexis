@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import { View, TouchableOpacity, ScrollView, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +25,22 @@ export default function SetupNameScreen() {
 
         setIsLoading(true);
         setError('');
+
+        // Safety check: Ensure token is committed to SecureStore
+        // This helps avoid race conditions where navigation to setup-name
+        // happens faster than SecureStore's async write.
+        let token = await SecureStore.getItemAsync('token');
+        if (!token) {
+            // Short wait and retry
+            await new Promise(r => setTimeout(r, 500));
+            token = await SecureStore.getItemAsync('token');
+        }
+
+        if (!token) {
+            setError('Session sync error. Please try signing in again.');
+            setIsLoading(false);
+            return;
+        }
 
         try {
             await updateUserName({ name: name.trim() });

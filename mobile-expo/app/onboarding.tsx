@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, FlatList, TouchableOpacity, Dimensions, StyleSheet, Platform } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
@@ -40,6 +40,7 @@ const SLIDES = [
 export default function OnboardingScreen() {
     const { colors, isDark } = useTheme();
     const router = useRouter();
+    const { code, role } = useLocalSearchParams<{ code?: string; role?: string }>();
     const [currentIndex, setCurrentIndex] = useState(0);
     const flatListRef = useRef<FlatList>(null);
 
@@ -48,13 +49,19 @@ export default function OnboardingScreen() {
             flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
         } else {
             await AsyncStorage.setItem('hasSeenOnboarding', 'true');
-            router.replace('/(auth)/login');
+            router.replace({
+                pathname: '/(auth)/login',
+                params: code ? { code, role } : {}
+            });
         }
     };
 
     const handleSkip = async () => {
         await AsyncStorage.setItem('hasSeenOnboarding', 'true');
-        router.replace('/(auth)/login');
+        router.replace({
+            pathname: '/(auth)/login',
+            params: code ? { code, role } : {}
+        });
     };
 
     const renderItem = ({ item, index }: { item: typeof SLIDES[0], index: number }) => {

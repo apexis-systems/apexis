@@ -13,6 +13,7 @@ import {
   projects,
 } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
+import { logActivity } from "../utils/activityUtils.ts";
 
 // Helper: generate presigned URL for a snag photo
 const withPresignedUrl = async (snag: any) => {
@@ -112,9 +113,9 @@ export const createSnag = async (req: Request, res: Response) => {
       created_by: authUser.user_id,
     });
 
-    await activities.create({
-      project_id: Number(project_id),
-      user_id: authUser.user_id,
+    await logActivity({
+      projectId: Number(project_id),
+      userId: authUser.user_id,
       type: "edit",
       description: `Added snag "${title.trim()}"`,
     });
@@ -192,9 +193,9 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
     await snag.save();
 
     if (authUser) {
-      await activities.create({
-        project_id: (snag as any).project_id,
-        user_id: authUser.user_id,
+      await logActivity({
+        projectId: (snag as any).project_id,
+        userId: authUser.user_id,
         type: "edit",
         description: `Updated status for snag "${(snag as any).title}"`,
       });

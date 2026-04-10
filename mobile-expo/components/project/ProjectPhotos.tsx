@@ -14,6 +14,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import { setActiveProjectContext } from '@/utils/projectSelection';
+import { formatFileSize } from '@/helpers/format';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -777,7 +778,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                     )}
                                     <View style={{ flex: 1 }}>
                                         <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{photo.file_name}</Text>
-                                        <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{photo.file_size_mb} MB</Text>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(photo.file_size_mb)}</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', gap: 6, zIndex: 10 }}>
                                         {!isSelectionMode && (

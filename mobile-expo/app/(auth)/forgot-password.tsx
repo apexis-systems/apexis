@@ -231,7 +231,7 @@ export default function ForgotPasswordScreen() {
                                         style={{ flex: 1, color: colors.text, fontSize: 15 }}
                                     />
                                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                                        <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
+                                        <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} />
                                     </TouchableOpacity>
                                 </View>
                             </View>

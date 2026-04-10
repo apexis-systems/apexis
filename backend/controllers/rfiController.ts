@@ -3,6 +3,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { rfis, users, activities, projects, project_members } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
+import { logActivity } from "../utils/activityUtils.ts";
 import { addWatermark } from '../utils/watermark.ts';
 import { Op } from 'sequelize';
 import { getIO } from '../socket.ts';
@@ -127,9 +128,9 @@ export const createRFI = async (req: Request | any, res: Response) => {
             expiry_date: expiry_date ? new Date(expiry_date) : null,
         });
 
-        await activities.create({
-            project_id: Number(project_id),
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: Number(project_id),
+            userId: authUser.user_id,
             type: 'edit',
             description: `Created RFI "${title.trim()}"`
         });
@@ -226,9 +227,9 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         await rfi.save();
 
         if (authUser) {
-            await activities.create({
-                project_id: (rfi as any).project_id,
-                user_id: authUser.user_id,
+            await logActivity({
+                projectId: (rfi as any).project_id,
+                userId: authUser.user_id,
                 type: 'edit',
                 description: `Updated status for RFI "${(rfi as any).title}" to ${status}`
             });
@@ -367,9 +368,9 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
         
         await rfi.save();
 
-        await activities.create({
-            project_id: (rfi as any).project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: (rfi as any).project_id,
+            userId: authUser.user_id,
             type: 'edit',
             description: `Updated response for RFI "${(rfi as any).title}"`
         });

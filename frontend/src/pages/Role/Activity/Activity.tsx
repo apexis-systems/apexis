@@ -11,6 +11,7 @@ import { getOrgUsers } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ActivityItem as GlobalActivityItem } from '@/types';
+import { useSocket } from '@/contexts/SocketContext';
 
 interface ActivityItem extends GlobalActivityItem {
     userName?: string;
@@ -28,6 +29,7 @@ const actionTypes = [
 const Activity = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
+    const { socket } = useSocket();
     const searchParams = useSearchParams();
     const initialType = searchParams?.get('type') || 'all';
 
@@ -99,6 +101,37 @@ const Activity = () => {
         };
         load();
     }, [user, selectedOrgId, selectedUserId, selectedType, selectedProjectId]);
+
+    // Real-time Activity Listener
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewActivity = (newActivity: any) => {
+            // Respect active filters
+            if (selectedOrgId !== 'all' && String(newActivity.organizationId) !== selectedOrgId) return;
+            if (selectedProjectId !== 'all' && String(newActivity.projectId) !== selectedProjectId) return;
+            if (selectedUserId !== 'all' && String(newActivity.userId) !== selectedUserId) return;
+            if (selectedType !== 'all' && newActivity.type !== selectedType) return;
+
+            // Format for display
+            const formatted = {
+                ...newActivity,
+                timestamp: new Date(newActivity.timestamp).toLocaleString('en-IN', {
+                    dateStyle: 'medium', timeStyle: 'short'
+                })
+            };
+
+            setActivities(prev => {
+                if (prev.some(a => a.id === formatted.id)) return prev;
+                return [formatted, ...prev];
+            });
+        };
+
+        socket.on('new-activity', handleNewActivity);
+        return () => {
+            socket.off('new-activity', handleNewActivity);
+        };
+    }, [socket, selectedOrgId, selectedUserId, selectedType, selectedProjectId]);
 
     if (!user) return null;
 
