@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import {
     View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image
@@ -43,8 +43,9 @@ export default function LoginScreen() {
         client: 'remembered_client_v2'
     };
 
+    const hasLoggedOutForInvitation = useRef(false);
     useEffect(() => {
-        if (params.code) {
+        if (params.code && !hasLoggedOutForInvitation.current) {
             setProjectCode(params.code);
             if (params.role === 'contributor' || params.role === 'client') {
                 setSelectedRole(params.role as UserRole);
@@ -53,10 +54,10 @@ export default function LoginScreen() {
             }
 
             // If user is already logged in, we logout to allow switching
-            // but we stay on this page because of the isInvitation guard in _layout.tsx
             if (isLoggedIn) {
                 logout();
             }
+            hasLoggedOutForInvitation.current = true;
         }
     }, [params.code, params.role, isLoggedIn, logout]);
 

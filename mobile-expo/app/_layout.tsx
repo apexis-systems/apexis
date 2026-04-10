@@ -115,7 +115,10 @@ function RootLayoutNav() {
       }
 
       if (!currentOnboardingDone && !isOnboarding) {
-        router.replace('/onboarding');
+        router.replace({
+          pathname: '/onboarding',
+          params: code ? { code, role } : {}
+        });
         return;
       }
 
@@ -128,6 +131,13 @@ function RootLayoutNav() {
         router.replace({
           pathname: '/(auth)/login',
           params: code ? { code, role } : {}
+        });
+      } else if (isLoggedIn && code && !inAuthGroup && !isOnboarding) {
+        // If logged in but clicked an invitation link, we redirect to login
+        // login.tsx handles the actual logout to avoid split-second state flickers
+        router.replace({
+          pathname: '/(auth)/login',
+          params: { code, role }
         });
       } else if (isLoggedIn && isPendingName && !isSetupName) {
         router.replace('/(auth)/setup-name');
