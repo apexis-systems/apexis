@@ -285,7 +285,7 @@ export default function SignUpScreen() {
                                     <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Create Password</Text>
                                     <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 }}>
                                         <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} textContentType="newPassword" autoComplete="password-new" style={{ flex: 1, color: colors.text }} />
-                                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
+                                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
                                     </View>
                                 </View>
                             )}
@@ -412,7 +412,7 @@ export default function SignUpScreen() {
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Password</Text>
                                 <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 }}>
                                     <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} textContentType="password" autoComplete="password" style={{ flex: 1, color: colors.text }} />
-                                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
                                 </View>
                             </View>
                             {error ? <Text style={{ color: '#ef4444', textAlign: 'center', fontSize: 13 }}>{error}</Text> : null}
