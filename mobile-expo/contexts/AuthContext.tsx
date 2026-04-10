@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, UserRole } from '@/types';
 import * as SecureStore from 'expo-secure-store';
-import { getMe } from '@/services/authService';
+import { getMe, revokeAllWebSessions } from '@/services/authService';
 
 interface AuthContextType {
     user: User | null;
@@ -43,6 +43,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isPendingName = isNamePending(user);
 
     const logout = useCallback(async () => {
+        try {
+            // Attempt to revoke all web sessions before clearing local state
+            await revokeAllWebSessions().catch(err => console.warn("Failed to revoke web sessions on logout:", err));
+        } catch (e) {
+            // Silently fail if revocation fails, we still want to log out locally
+        }
         setUser(null);
         await SecureStore.deleteItemAsync('token');
         await SecureStore.deleteItemAsync('subscriptionLocked');

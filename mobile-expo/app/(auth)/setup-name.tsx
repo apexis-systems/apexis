@@ -29,11 +29,11 @@ export default function SetupNameScreen() {
         // Safety check: Ensure token is committed to SecureStore
         // This helps avoid race conditions where navigation to setup-name
         // happens faster than SecureStore's async write.
-        let token = await SecureStore.getItemAsync('token');
-        if (!token) {
-            // Short wait and retry
-            await new Promise(r => setTimeout(r, 500));
+        let token = null;
+        for (let i = 0; i < 5; i++) {
             token = await SecureStore.getItemAsync('token');
+            if (token) break;
+            await new Promise(r => setTimeout(r, 300)); // 300ms * 5 = 1.5s total wait if needed
         }
 
         if (!token) {

@@ -180,3 +180,45 @@ export const revokeQrSession = async (req: AuthRequest, res: Response) => {
         return res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const revokeAllUserQrSessions = async (req: AuthRequest, res: Response) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        const userId = user.id || user.user_id;
+
+        // Find all qr_session keys
+        const keys = await redisClient.keys('qr_session:*');
+        const io = getIO();
+        let revokedCount = 0;
+
+        for (const key of keys) {
+            const dataString = await redisClient.get(key);
+            if (dataString) {
+                const sessionData = JSON.parse(dataString);
+                if (sessionData.token) {
+                    try {
+                        const decoded = jwt.decode(sessionData.token) as any;
+                        if (decoded && (decoded.id === userId || decoded.user_id === userId)) {
+                            // Match! Remove and notify
+                            await redisClient.del(key);
+                            const sessionId = key.replace('qr_session:', '');
+                            io.to(sessionId).emit('qr-revoked', { message: "Global logout from mobile device" });
+                            revokedCount++;
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+            }
+        }
+
+        return res.status(200).json({ message: `Successfully revoked ${revokedCount} sessions` });
+    } catch (error) {
+        console.error("Error revoking all user sessions:", error);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};

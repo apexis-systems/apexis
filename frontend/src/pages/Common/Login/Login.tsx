@@ -88,11 +88,13 @@ const Login = () => {
         }
 
         return () => {
-            if (socket) {
-                socket.disconnect();
-            }
             if (expiryTimer) {
                 clearTimeout(expiryTimer);
+            }
+            if (socket) {
+                socket.off('connect');
+                socket.off('qr-authorized');
+                socket.disconnect();
             }
         };
     }, [loginMode, qrRefreshTrigger]);
