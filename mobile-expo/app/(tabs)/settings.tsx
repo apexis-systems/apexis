@@ -65,8 +65,11 @@ export default function ProfileScreen() {
             const res = await switchContext({ project_id: projectId ?? null, organization_id: organizationId ?? null, role });
             if (res.token) {
                 await login(res.token);
-                Alert.alert('Success', `Switched to ${role} role.`);
-                router.replace('/(tabs)');
+                Alert.alert(
+                    'Success',
+                    `Switched to ${role} role.`,
+                    [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+                );
             }
         } catch (error) {
             Alert.alert('Error', 'Failed to switch project context.');
