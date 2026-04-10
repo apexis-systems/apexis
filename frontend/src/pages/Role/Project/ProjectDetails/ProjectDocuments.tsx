@@ -19,6 +19,7 @@ import EditFolderDialog from './EditFolderDialog';
 
 import { Checkbox } from '@/components/ui/Checkbox';
 import FileViewer from '@/components/shared/FileViewer';
+import { formatFileSize } from '@/lib/format';
 
 interface ProjectDocumentsProps {
   project: Project;
@@ -547,7 +548,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   {doc.file_name}
                 </span>
                 <span className="text-[9px] text-muted-foreground mt-0.5">
-                  {doc.file_size_mb} MB
+                  {formatFileSize(doc.file_size_mb)}
                 </span>
 
                  <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
@@ -606,7 +607,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 >
                   <p className="text-[10px] font-semibold truncate">{doc.file_name}</p>
                   <p className="text-[9px] text-muted-foreground">
-                    {doc.file_size_mb} MB
+                    {formatFileSize(doc.file_size_mb)}
                   </p>
                 </button>
                 <div className="flex items-center gap-1">

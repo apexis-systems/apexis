@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon } from 'lucide-react';
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
+import { formatFileSize } from '@/lib/format';
 
 interface FileViewerProps {
   files: any[];
@@ -197,7 +198,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user }: FileViewe
                 <div className="flex items-center gap-2.5">
                   <div className="flex flex-col ml-1">
                     <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground leading-none mb-1 ml-0.5">Size</span>
-                    <span className="text-[11px] font-black text-foreground leading-none">{currentFile.file_size_mb} MB</span>
+                    <span className="text-[11px] font-black text-foreground leading-none">{formatFileSize(currentFile.file_size_mb)}</span>
                   </div>
                 </div>
                 {currentFile.location && (

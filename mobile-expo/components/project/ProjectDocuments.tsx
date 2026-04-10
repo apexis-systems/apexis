@@ -14,6 +14,7 @@ import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, tog
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import { WebView } from 'react-native-webview';
+import { formatFileSize } from '@/helpers/format';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -718,7 +719,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                                 </View>
                                             )}
                                         </View>
-                                        <Text style={{ fontSize: 9, color: colors.textMuted }}>{doc.file_size_mb} MB</Text>
+                                        <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
                                         {!isSelectionMode && (
