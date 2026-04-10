@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -62,7 +62,6 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
     const [responseBody, setResponseBody] = useState('');
     const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -410,16 +409,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         </div>
                                     </div>
                                 ))}
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-20 h-20 border-dashed border-2 rounded-lg"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
+                                <label className="w-20 h-20 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
                                     <ImagePlus className="h-6 w-6 text-muted-foreground" />
-                                </Button>
+                                    <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+                                </label>
                             </div>
-                            <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
                         </div>
                     </div>
                     <DialogFooter>

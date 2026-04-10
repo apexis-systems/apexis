@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck, X, FileText, Download, CornerUpLeft } from 'lucide-react';
 import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile } from '@/services/chatService';
+import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
@@ -36,9 +37,30 @@ export default function ChatDetail() {
     const cameraInputRef = useRef<HTMLInputElement>(null);
 
     const [selectedFile, setSelectedFile] = useState<any>(null);
+    const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
+    const [annotatingFile, setAnnotatingFile] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [replyTo, setReplyTo] = useState<any>(null);
+
+    const dataUrlToBlob = (dataUrl: string) => {
+        const arr = dataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        return new Blob([u8arr], { type: mime });
+    };
+
+    const handleAnnotateSave = (annotatedDataUrl: string) => {
+        const blob = dataUrlToBlob(annotatedDataUrl);
+        const fileName = selectedFile?.name || `annotated_${Date.now()}.jpg`;
+        const file = new File([blob], fileName, { type: 'image/jpeg' });
+        setSelectedFile(file);
+        setSelectedFilePreview(annotatedDataUrl);
+        setAnnotatingFile(false);
+    };
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
@@ -171,6 +193,7 @@ export default function ChatDetail() {
 
         setMessage('');
         setSelectedFile(null);
+        setSelectedFilePreview(null);
         setShowEmojiPicker(false);
 
         try {
@@ -214,6 +237,13 @@ export default function ChatDetail() {
         const file = e.target.files?.[0];
         if (file) {
             setSelectedFile(file);
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = () => setSelectedFilePreview(reader.result as string);
+                reader.readAsDataURL(file);
+            } else {
+                setSelectedFilePreview(null);
+            }
         }
     };
 
@@ -413,9 +443,17 @@ export default function ChatDetail() {
                 {/* File Preview */}
                 {selectedFile && (
                     <div className="px-4 py-2 bg-secondary/30 flex items-center gap-3 border-b border-border animate-in slide-in-from-bottom-2">
-                        <div className="h-10 w-10 rounded bg-accent/20 flex items-center justify-center">
-                            {selectedFile.type.startsWith('image/') ? (
-                                <img src={URL.createObjectURL(selectedFile)} className="h-full w-full object-cover rounded" />
+                        <div
+                            className="relative h-10 w-10 rounded bg-accent/20 flex items-center justify-center overflow-hidden group cursor-pointer"
+                            onClick={() => selectedFile.type.startsWith('image/') && setAnnotatingFile(true)}
+                        >
+                            {selectedFile.type.startsWith('image/') && selectedFilePreview ? (
+                                <>
+                                    <img src={selectedFilePreview} className="h-full w-full object-cover rounded" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <Camera className="h-3 w-3 text-white" />
+                                    </div>
+                                </>
                             ) : (
                                 <FileText className="h-6 w-6 text-accent" />
                             )}
@@ -425,7 +463,7 @@ export default function ChatDetail() {
                             <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)} KB</p>
                         </div>
                         <button
-                            onClick={() => setSelectedFile(null)}
+                            onClick={() => { setSelectedFile(null); setSelectedFilePreview(null); }}
                             className="p-1 rounded-full hover:bg-secondary transition-colors"
                         >
                             <X className="h-4 w-4" />
@@ -515,6 +553,14 @@ export default function ChatDetail() {
                     </button>
                 </div>
             </div>
+
+            {annotatingFile && selectedFilePreview && (
+                <ImageAnnotator
+                    imageSrc={selectedFilePreview}
+                    onSave={handleAnnotateSave}
+                    onCancel={() => setAnnotatingFile(false)}
+                />
+            )}
         </div>
     );
 }

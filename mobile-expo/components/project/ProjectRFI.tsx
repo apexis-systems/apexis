@@ -191,7 +191,10 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
         { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
       );
 
-      setSelectedImages([...selectedImages, manipulated.uri]);
+      const newIdx = selectedImages.length;
+      setSelectedImages(prev => [...prev, manipulated.uri]);
+      setCameraVisible(false);
+      setAnnotatingImageIndex(newIdx);
     } catch (e: any) {
       console.error('capturePhoto error', e);
       Alert.alert('Camera Error', e?.message || 'Failed to capture photo');

@@ -26,7 +26,12 @@ import {
   verifyPayment,
 } from "@/services/subscriptionService";
 import { getMe } from "@/services/authService";
-import RazorpayCheckout from "react-native-razorpay";
+let RazorpayCheckout: any = null;
+try {
+    RazorpayCheckout = require("react-native-razorpay").default;
+} catch {
+    // Not available in Expo Go — requires a development build
+}
 
 const PLAN_ORDER = ["One-Time Buy", "Starter", "Professional", "Enterprise"];
 const GST_RATE = 0.18;

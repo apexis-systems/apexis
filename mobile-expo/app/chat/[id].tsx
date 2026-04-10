@@ -18,6 +18,7 @@ import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeabl
 import * as Haptics from 'expo-haptics';
 import ChatCameraModal from '@/components/chat/ChatCameraModal';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
+import ImageAnnotator from '@/components/common/ImageAnnotator';
 
 export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams();
@@ -44,6 +45,7 @@ export default function ChatDetailScreen() {
     const flatListRef = useRef<FlatList>(null);
 
     const [attachment, setAttachment] = useState<any>(null);
+    const [annotatingImage, setAnnotatingImage] = useState<any>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
     const [isCameraVisible, setIsCameraVisible] = useState(false);
@@ -258,7 +260,7 @@ export default function ChatDetailScreen() {
 
         if (!result.canceled) {
             const asset = result.assets[0];
-            setAttachment({
+            setAnnotatingImage({
                 uri: asset.uri,
                 name: asset.fileName || `image_${Date.now()}.jpg`,
                 type: asset.mimeType || 'image/jpeg',
@@ -713,7 +715,7 @@ export default function ChatDetailScreen() {
                     visible={isCameraVisible}
                     onClose={() => setIsCameraVisible(false)}
                     onCapture={(asset) => {
-                        setAttachment(asset);
+                        setAnnotatingImage(asset);
                     }}
                 />
 
@@ -723,6 +725,20 @@ export default function ChatDetailScreen() {
                     uri={fullScreenImage}
                 />
             </KeyboardAvoidingView>
+
+            {annotatingImage && (
+                <ImageAnnotator
+                    uri={annotatingImage.uri}
+                    onSave={(newUri: string) => {
+                        setAttachment({ ...annotatingImage, uri: newUri });
+                        setAnnotatingImage(null);
+                    }}
+                    onCancel={() => {
+                        setAttachment(annotatingImage);
+                        setAnnotatingImage(null);
+                    }}
+                />
+            )}
         </View>
     );
 }
