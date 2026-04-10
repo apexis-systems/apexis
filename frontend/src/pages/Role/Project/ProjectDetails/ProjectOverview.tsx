@@ -227,7 +227,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       const shareUrl = role === 'contributor' ? data.contributorLink : data.clientLink;
       setShareItem({
         file_name: `Project Access (${role === 'contributor' ? 'Contributor' : 'Client'})`,
-        downloadUrl: shareUrl
+        downloadUrl: shareUrl,
+        role: role === 'contributor' ? 'contributor' : 'client'
       });
     } catch (e) {
       toast.error("Failed to generate share link");
@@ -420,6 +421,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           onOpenChange={() => setShareItem(null)}
           itemName={shareItem?.file_name || ''}
           downloadUrl={shareItem.downloadUrl}
+          projectName={project.name}
+          role={shareItem.role}
         />
       )}
 
