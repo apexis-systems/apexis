@@ -5,7 +5,10 @@ import { verifyToken, isNotClient } from "../middleware/verifyToken.ts";
 import { checkLimit } from "../middleware/checkLimit.ts";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+});
 
 // Apply verifyToken to all specific project/file routes below
 router.use(verifyToken);
