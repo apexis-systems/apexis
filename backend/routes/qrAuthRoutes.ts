@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { generateQrSession, authorizeQrSession, getActiveQrSessions, revokeQrSession } from "../controllers/qrAuthController.ts";
+import { generateQrSession, authorizeQrSession, getActiveQrSessions, revokeQrSession, revokeAllUserQrSessions } from "../controllers/qrAuthController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -12,6 +12,9 @@ router.post("/authorize", verifyToken, authorizeQrSession);
 
 // Protected route to list active sessions
 router.get("/sessions", verifyToken, getActiveQrSessions);
+
+// Protected route to revoke ALL active web sessions for the user
+router.delete("/sessions/all", verifyToken, revokeAllUserQrSessions);
 
 // Protected route to revoke an active web session
 router.delete("/sessions/:sessionId", verifyToken, revokeQrSession);

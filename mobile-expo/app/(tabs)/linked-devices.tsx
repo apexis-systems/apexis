@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { View, TouchableOpacity, Alert, Platform, ActivityIndicator, BackHandler } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -20,6 +20,7 @@ export default function LinkedDevices() {
 
     const [activeSessions, setActiveSessions] = useState<{ sessionId: string, device: string }[]>([]);
     const [sessionsLoading, setSessionsLoading] = useState(false);
+    const isHandlingScan = useRef(false);
 
     useFocusEffect(
         useCallback(() => {
@@ -53,29 +54,42 @@ export default function LinkedDevices() {
     };
 
     const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
-        if (scanned || authorizing) return;
+        if (scanned || authorizing || isHandlingScan.current) return;
+        isHandlingScan.current = true;
         setScanned(true);
 
         // A basic UUID check (length 36, contains hyphens)
         if (!data || data.length < 32 || !data.includes('-')) {
-            Alert.alert("Invalid QR Code", "This doesn't look like an APEXIS login code.");
-            setTimeout(() => setScanned(false), 2000);
+            Alert.alert(
+                "Invalid QR Code",
+                "This doesn't look like an APEXIS login code.",
+                [{ text: "OK", onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
+            );
             return;
         }
 
         setAuthorizing(true);
         try {
             await authorizeWebSession(data);
-            Alert.alert("Success", "Web session authorized! Your browser will now log in.");
+            Alert.alert(
+                "Success",
+                "Web session authorized! Your browser will now log in.",
+                [{ text: "OK", onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
+            );
             fetchSessions(); // Refresh list immediately
             setIsScannerOpen(false); // Close scanner on success
         } catch (error: any) {
             console.error("QR Auth Error:", error);
-            Alert.alert("Authentication Failed", error.response?.data?.error || "Could not authorize this session.");
+            const errorMessage = error.response?.data?.error || "Could not authorize this session.";
+            Alert.alert(
+                "Authentication Failed",
+                errorMessage,
+                [{ text: "OK", onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
+            );
         } finally {
             setAuthorizing(false);
-            // Allow scanning again after 3 seconds if they want to
-            setTimeout(() => setScanned(false), 3000);
+            // We no longer use a generic timeout here to reset scanned state, 
+            //, as it is now handled by the Alert callbacks.
         }
     };
 

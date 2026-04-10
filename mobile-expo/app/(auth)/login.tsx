@@ -31,6 +31,7 @@ export default function LoginScreen() {
     const [rememberMe, setRememberMe] = useState(false);
     const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]); // India
     const [error, setError] = useState('');
+    const [isProcessingLink, setIsProcessingLink] = useState(false);
 
     const { login, logout, isLoggedIn } = useAuth();
     const router = useRouter();
@@ -45,20 +46,32 @@ export default function LoginScreen() {
 
     const hasLoggedOutForInvitation = useRef(false);
     useEffect(() => {
-        if (params.code && !hasLoggedOutForInvitation.current) {
-            setProjectCode(params.code);
-            if (params.role === 'contributor' || params.role === 'client') {
-                setSelectedRole(params.role as UserRole);
-            } else {
-                setSelectedRole('contributor');
-            }
+        const handleInvitation = async () => {
+            if (params.code && !hasLoggedOutForInvitation.current) {
+                setIsProcessingLink(true);
+                setProjectCode(params.code);
+                if (params.role === 'contributor' || params.role === 'client') {
+                    setSelectedRole(params.role as UserRole);
+                } else {
+                    setSelectedRole('contributor');
+                }
 
-            // If user is already logged in, we logout to allow switching
-            if (isLoggedIn) {
-                logout();
+                // If user is already logged in, we logout to allow switching
+                if (isLoggedIn) {
+                    try {
+                        await logout();
+                        // Optional: Small delay to let SecureStore sync
+                        await new Promise(r => setTimeout(r, 200));
+                    } catch (e) {
+                        console.error("Deep link logout error:", e);
+                    }
+                }
+                hasLoggedOutForInvitation.current = true;
+                setIsProcessingLink(false);
             }
-            hasLoggedOutForInvitation.current = true;
-        }
+        };
+
+        handleInvitation();
     }, [params.code, params.role, isLoggedIn, logout]);
 
     useEffect(() => {
@@ -269,8 +282,12 @@ export default function LoginScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity onPress={handleLogin} disabled={isLoading} style={{ height: 52, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 20, opacity: isLoading ? 0.7 : 1 }}>
-                        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>}
+                    <TouchableOpacity 
+                        onPress={handleLogin} 
+                        disabled={isLoading || isProcessingLink} 
+                        style={{ height: 52, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 20, opacity: (isLoading || isProcessingLink) ? 0.7 : 1 }}
+                    >
+                        {(isLoading || isProcessingLink) ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>}
                     </TouchableOpacity>
 
                     {selectedRole === 'admin' && (

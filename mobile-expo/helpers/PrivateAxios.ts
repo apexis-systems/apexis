@@ -26,8 +26,14 @@ PrivateAxios.interceptors.request.use(
             let token = await SecureStore.getItemAsync('token');
             if (!token) {
                 // Minor retry delay if token was just refreshed or set
-                await new Promise(r => setTimeout(r, 100));
+                await new Promise(r => setTimeout(r, 250));
                 token = await SecureStore.getItemAsync('token');
+                
+                // One more final attempt if still null, total wait 750ms
+                if (!token) {
+                    await new Promise(r => setTimeout(r, 500));
+                    token = await SecureStore.getItemAsync('token');
+                }
             }
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
