@@ -12,6 +12,7 @@ import { getOrganizations } from '@/services/organizationService';
 import { getOrgUsers } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
 import { ActivityItem } from '@/types';
+import { useSocket } from '@/contexts/SocketContext';
 
 const iconMap: Record<string, keyof typeof Feather.glyphMap> = {
     upload: 'upload',
@@ -44,6 +45,7 @@ export default function ActivityScreen() {
     const { t } = useTranslation();
     const { type } = useLocalSearchParams<{ type?: string }>();
     const { isTourActive } = require('@/contexts/TourContext').useTour();
+    const { socket } = useSocket();
 
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [organizations, setOrganizations] = useState<any[]>([]);
@@ -110,6 +112,38 @@ export default function ActivityScreen() {
         };
         fetchFeed();
     }, [user, selectedOrgId, selectedUserId, selectedProjectId, selectedType]);
+
+    // Handle Real-time updates
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewActivity = (newActivity: any) => {
+            // Check filters
+            if (selectedOrgId && selectedOrgId !== 'all' && String(newActivity.organizationId) !== selectedOrgId) return;
+            if (selectedProjectId && selectedProjectId !== 'all' && String(newActivity.projectId) !== selectedProjectId) return;
+            if (selectedUserId && selectedUserId !== 'all' && String(newActivity.userId) !== selectedUserId) return;
+            if (selectedType && selectedType !== 'all' && newActivity.type !== selectedType) return;
+
+            // Format timestamp for display
+            const formatted = {
+                ...newActivity,
+                timestamp: new Date(newActivity.timestamp).toLocaleString('en-IN', {
+                    dateStyle: 'medium', timeStyle: 'short'
+                })
+            };
+
+            setActivities(prev => {
+                // Avoid duplicates (e.g. if we refetch at the same time)
+                if (prev.some(a => a.id === newActivity.id)) return prev;
+                return [formatted, ...prev];
+            });
+        };
+
+        socket.on('new-activity', handleNewActivity);
+        return () => {
+            socket.off('new-activity', handleNewActivity);
+        };
+    }, [socket, selectedOrgId, selectedUserId, selectedProjectId, selectedType]);
 
     const DUMMY_ACTIVITIES = [
         { id: 'da1', type: 'upload', description: 'uploaded new floor plans', userName: 'John Doe', projectName: 'Project Alpha', timestamp: 'Just now' },

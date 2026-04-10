@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { activities, users, projects, project_members } from '../models/index.ts';
 import { Op } from "sequelize";
+import { logActivity } from "../utils/activityUtils.ts";
 
 export const getActivities = async (req: Request | any, res: Response) => {
     try {
@@ -89,12 +90,12 @@ export const createActivity = async (req: Request | any, res: Response) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        const newActivity = await activities.create({
-            project_id: parseInt(project_id, 10),
-            user_id: userId,
+        const newActivity = await logActivity({
+            projectId: parseInt(project_id, 10),
+            userId,
             type,
             description
-        });
+        } as any);
 
         res.status(201).json({ message: 'Activity logged successfully', activity: newActivity });
     } catch (error) {

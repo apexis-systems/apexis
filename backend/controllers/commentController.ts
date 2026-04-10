@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { comments, users, files, activities, project_members } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
+import { logActivity } from "../utils/activityUtils.ts";
 
 export const getComments = async (req: Request, res: Response) => {
     try {
@@ -56,9 +57,9 @@ export const addComment = async (req: Request, res: Response) => {
         (async () => {
             try {
                 // 1. Log Activity
-                await activities.create({
-                    project_id: file.project_id,
-                    user_id: authUser.user_id,
+                await logActivity({
+                    projectId: file.project_id,
+                    userId: authUser.user_id,
                     type: 'comment',
                     description: `${authUser.name} commented on photo: ${file.file_name}`
                 });

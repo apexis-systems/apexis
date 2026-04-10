@@ -3,11 +3,11 @@
  */
 export const formatFileSize = (mb: number): string => {
   if (!mb || mb < 0) return '0 MB';
-  
-  if (mb < 1024) {
+
+  if (mb < 1000) {
     return `${mb} MB`;
   }
-  
-  const gb = mb / 1024;
+
+  const gb = mb / 1000;
   return `${gb.toFixed(2)} GB`;
 };

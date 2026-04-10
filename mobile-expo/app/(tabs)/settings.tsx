@@ -598,7 +598,7 @@ export default function ProfileScreen() {
                 canChange={true}
                 onChangePress={handleProfilePicUpload}
                 uploading={isUploading}
-                isCircular={false}
+                isCircular={true}
                 title="Profile Picture"
                 subtitle="This photo is visible to your team members and clients."
                 buttonText="Change Photo"

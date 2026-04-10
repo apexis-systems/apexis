@@ -44,8 +44,8 @@ const corsOptions = {
 // Apply security and parsing middleware
 app.use(helmet());
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(express.json({ limit: '5000mb' }));
+app.use(express.urlencoded({ limit: '5000mb', extended: true }));
 
 // Routes
 app.get('/', (req: Request, res: Response) => {

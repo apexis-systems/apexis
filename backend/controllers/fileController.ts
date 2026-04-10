@@ -14,6 +14,7 @@ import { sendNotification } from "../utils/notificationUtils.ts";
 import { users as UsersModel } from "../models/index.ts";
 import { PDFDocument } from 'pdf-lib';
 import { getIO } from '../socket.ts';
+import { logActivity } from "../utils/activityUtils.ts";
 
 interface MulterFile {
     buffer: Buffer;
@@ -110,6 +111,14 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             file_type,
             file_size_mb,
             created_by: authUser.user_id,
+        });
+
+        // Log Activity
+        await logActivity({
+            projectId: parseInt(project_id, 10),
+            userId: authUser.user_id,
+            type: 'upload',
+            description: `Uploaded ${finalFileName}`
         });
 
         // Notify project members based on project membership, not the user's home organization.
@@ -287,9 +296,9 @@ export const deleteFile = async (req: Request, res: Response) => {
 
         await s3Client.send(command);
 
-        await activities.create({
-            project_id: file.project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: file.project_id,
+            userId: authUser.user_id,
             type: 'delete',
             description: `Deleted ${file.file_name}`
         });
@@ -472,9 +481,9 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
         if (ids.length > 0) {
             const firstFile = await files.findByPk(ids[0]);
             if (firstFile) {
-                await activities.create({
-                    project_id: firstFile.project_id,
-                    user_id: authUser.user_id,
+                await logActivity({
+                    projectId: firstFile.project_id,
+                    userId: authUser.user_id,
                     type: 'edit',
                     description: `Bulk updated ${ids.length} files`
                 });
@@ -581,6 +590,14 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 });
 
                 createdFiles.push(newFile);
+
+                // Log Activity for Scan
+                await logActivity({
+                    projectId: parseInt(project_id, 10),
+                    userId: authUser.user_id,
+                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
+                    description: `Uploaded scan: ${individualFileName}`
+                });
             }
         } else {
             // mode === 'single' or empty -> merge all into one PDF
@@ -642,6 +659,14 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             });
 
             createdFiles.push(newFile);
+
+            // Log Activity for Scan
+            await logActivity({
+                projectId: parseInt(project_id, 10),
+                userId: authUser.user_id,
+                type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
+                description: `Uploaded scan: ${finalFileName}`
+            });
         }
 
         res.status(200).json({

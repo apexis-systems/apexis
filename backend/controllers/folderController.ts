@@ -4,6 +4,7 @@ import { sendNotification } from "../utils/notificationUtils.ts";
 import { Op } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { logActivity } from "../utils/activityUtils.ts";
 
 export const createFolder = async (req: Request, res: Response) => {
     try {
@@ -36,9 +37,9 @@ export const createFolder = async (req: Request, res: Response) => {
             folder_type: folder_type || null,
         });
 
-        await activities.create({
-            project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: project_id,
+            userId: authUser.user_id,
             type: 'edit',
             description: `Created folder "${name}"`
         });
@@ -174,9 +175,9 @@ export const bulkUpdateFolders = async (req: Request, res: Response) => {
         if (ids.length > 0) {
             const firstFolder = await folders.findByPk(ids[0]);
             if (firstFolder) {
-                await activities.create({
-                    project_id: firstFolder.project_id,
-                    user_id: authUser.user_id,
+                await logActivity({
+                    projectId: firstFolder.project_id,
+                    userId: authUser.user_id,
                     type: 'edit',
                     description: `Bulk updated ${ids.length} folders`
                 });
@@ -225,9 +226,9 @@ export const updateFolder = async (req: Request, res: Response) => {
         folder.name = name;
         await folder.save();
 
-        await activities.create({
-            project_id: folder.project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: folder.project_id,
+            userId: authUser.user_id,
             type: 'edit',
             description: `Renamed folder from "${oldName}" to "${name}"`
         });
@@ -315,9 +316,9 @@ export const deleteFolder = async (req: Request, res: Response) => {
         const project_id = folder.project_id;
         await folder.destroy();
 
-        await activities.create({
-            project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: project_id,
+            userId: authUser.user_id,
             type: 'edit',
             description: `Deleted folder "${folderName}" ${forceDelete ? '(recursively)' : ''}`
         });

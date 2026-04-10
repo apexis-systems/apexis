@@ -11,7 +11,7 @@ import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loginAdmin, loginProject } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useLocalSearchParams } from 'expo-router';
+import { useGlobalSearchParams } from 'expo-router';
 import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
@@ -35,7 +35,7 @@ export default function LoginScreen() {
     const { login, logout, isLoggedIn } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
-    const params = useLocalSearchParams<{ role?: string; code?: string }>();
+    const params = useGlobalSearchParams<{ role?: string; code?: string }>();
 
     const STORAGE_KEYS = {
         admin: 'remembered_admin_v2',
@@ -71,9 +71,12 @@ export default function LoginScreen() {
             const stored = await SecureStore.getItemAsync(key);
 
             // Always reset the fields when switching roles to avoid overlap collision
-            setIdentifier('');
-            if (selectedRole === 'admin') setPassword('');
-            else if (!params.code) setProjectCode('');
+            // EXCEPT if we have deep link params currently active
+            if (!params.code) {
+                setIdentifier('');
+                if (selectedRole === 'admin') setPassword('');
+                else setProjectCode('');
+            }
             setRememberMe(false);
 
             if (stored) {

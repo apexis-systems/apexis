@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatFileSize } from '@/helpers/format';
 
 const { width } = Dimensions.get('window');
 
@@ -45,7 +46,7 @@ export default function UsageScreen() {
                 <View style={styles.usageHeader}>
                     <Text style={[styles.usageLabel, { color: colors.text }]}>{label}</Text>
                     <Text style={[styles.usageValue, { color: colors.textMuted }]}>
-                        {current}{unit} / {limit}{unit}
+                        {label === 'Cloud Storage' ? formatFileSize(current) : `${current}${unit}`} / {label === 'Cloud Storage' ? formatFileSize(limit) : `${limit}${unit}`}
                     </Text>
                 </View>
                 <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
