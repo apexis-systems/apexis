@@ -131,6 +131,16 @@ export const getQrSession = async () => {
     }
 };
 
+export const revokeQrSession = async (sessionId: string) => {
+    try {
+        const response = await PrivateAxios.delete(`/qr/sessions/${sessionId}`);
+        return response.data;
+    } catch (error) {
+        console.error("revokeQrSession Error", error);
+        throw error;
+    }
+};
+
 export const verifyInvitation = async (token: string) => {
     try {
         const response = await PublicAxios.get(`/auth/verify-invitation?token=${token}`);

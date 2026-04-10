@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, UserRole } from '@/types';
 import Cookies from 'js-cookie';
-import { getMe } from '@/services/authService';
+import { getMe, revokeQrSession } from '@/services/authService';
 import { io, Socket } from 'socket.io-client';
 
 interface AuthContextType {
@@ -33,12 +33,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isLoading, setIsLoading] = useState(true);
     const isLoggedIn = !!user;
 
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
+        if (typeof window !== 'undefined') {
+            const qrSessionId = localStorage.getItem('qrSessionId');
+            if (qrSessionId) {
+                // Notifying the backend that this specific QR session is ending 
+                //, so it drops off the "Linked Devices" list on the mobile app.
+                try {
+                    await revokeQrSession(qrSessionId).catch(err => console.warn("Failed to notify backend of QR logout:", err));
+                } catch (e) {
+                    // Silently fail, we still want to log out locally
+                }
+                localStorage.removeItem('qrSessionId');
+            }
+        }
         setUser(null);
         Cookies.remove('token');
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem('qrSessionId');
-        }
     }, []);
 
     const switchRole = useCallback((role: UserRole) => {
