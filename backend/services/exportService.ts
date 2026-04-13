@@ -443,7 +443,7 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     const logoH = 32;
     const blockTop = 15;
     doc.font(brandFont).fontSize(20);
-    const brandTextW = doc.widthOfString('APEXIS');
+    const brandTextW = doc.widthOfString('APEXISpro');
     doc.font('Helvetica-Bold').fontSize(5.5);
     const tagW = doc.widthOfString(taglineStr);
     const gap = 10;
@@ -459,7 +459,7 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     }
 
     doc.font(brandFont).fontSize(20).fillColor(BRAND.orange);
-    doc.text('APEXIS', textLeft, blockTop + 4, { lineBreak: false });
+    doc.text('APEXISpro', textLeft, blockTop + 4, { lineBreak: false });
     doc.font('Helvetica-Bold').fontSize(5.5).fillColor(BRAND.muted);
     // Moved from +24 to +28 to increase the vertical gap with the BRAND text (as per user tweak)
     doc.text(taglineStr, textLeft + (brandTextW - tagW) / 2 + 3, blockTop + 28, { lineBreak: false });
@@ -499,7 +499,7 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
     const logoH = 64;
     const blockTop = 100;
     doc.font(brandFont).fontSize(48);
-    const brandTextW = doc.widthOfString('APEXIS');
+    const brandTextW = doc.widthOfString('APEXISpro');
     const taglineStr = 'RECORD · REPORT · RELEASE .';
     doc.font('Helvetica').fontSize(10);
     const tagW = doc.widthOfString(taglineStr);
@@ -512,7 +512,7 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
     }
 
     doc.font(brandFont).fontSize(48).fillColor(BRAND.orange);
-    doc.text('APEXIS', (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
+    doc.text('APEXISpro', (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
 
     doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.muted);
     doc.text(taglineStr, (pageWidth - tagW) / 2, blockTop + logoH + 85, { lineBreak: false });
@@ -747,9 +747,9 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
     doc.text(prefix, m.left, textY, { lineBreak: false });
 
     doc.font(brandFont).fontSize(10).fillColor(BRAND.orange);
-    const wb = doc.widthOfString('APEXIS');
+    const wb = doc.widthOfString('APEXISpro');
     // Nudged -2 to align better with the baseline of the other text
-    doc.text('APEXIS', m.left + wp, textY - 2.5, { lineBreak: false });
+    doc.text('APEXISpro', m.left + wp, textY - 2.5, { lineBreak: false });
 
     doc.font('Helvetica').fontSize(7).fillColor(BRAND.muted);
     doc.text(' — CONSTRUCTION COMMUNICATION PLATFORM', m.left + wp + wb, textY, { lineBreak: false });
@@ -765,7 +765,7 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
 export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'Apexis Engineering Consultants';
+    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
@@ -862,7 +862,7 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
 export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'Apexis Engineering Consultants';
+    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
@@ -987,7 +987,7 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
 export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'Apexis Engineering Consultants';
+    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });

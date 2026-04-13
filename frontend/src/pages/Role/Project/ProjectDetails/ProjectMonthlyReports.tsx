@@ -48,7 +48,11 @@ const ProjectMonthlyReports = ({ project, userRole }: Props) => {
   const handleDownload = async (r: Report) => {
     setDownloadingId(r.id);
     try {
-      await downloadReport(r.id, `Monthly_Report_${fmt(r.period_start).replace(/ /g, '_')}_to_${fmt(r.period_end).replace(/ /g, '_')}.pdf`);
+      const projectName = (project?.name || 'Project').replace(/\s+/g, '_');
+      const start = new Date(r.period_start);
+      const monthName = start.toLocaleDateString('en-GB', { month: 'long' }).toLowerCase();
+      const year = start.getFullYear();
+      await downloadReport(r.id, `${projectName}_monthly_${monthName}-${year}.pdf`);
     } catch (e) {
       console.error(e);
     } finally {

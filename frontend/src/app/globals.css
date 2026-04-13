@@ -5,21 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @layer base {
-  @font-face {
-    font-family: 'Angelica';
-    src: url('/fonts/Angelica-C.otf') format('opentype');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: 'Montserrat';
-    src: url('/fonts/Montserrat-Regular.ttf') format('truetype');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-  }
+  /* Fonts are now handled via next/font/local in layout.tsx */
 }
 
 @theme inline {
@@ -59,17 +45,17 @@
 
   --font-sans: var(--font-montserrat);
   --font-mono: var(--font-geist-mono);
-  --font-angelica: "Angelica", serif;
-  --font-montserrat: "Montserrat", sans-serif;
+  --font-angelica: var(--font-angelica);
+  --font-montserrat: var(--font-montserrat);
 }
 
 /* Explicit utility classes for custom fonts to ensure consistent loading */
 .font-angelica {
-  font-family: "Angelica", serif !important;
+  font-family: var(--font-angelica), serif !important;
 }
 
 .font-montserrat {
-  font-family: "Montserrat", sans-serif !important;
+  font-family: var(--font-montserrat), sans-serif !important;
 }
 
 @layer base {

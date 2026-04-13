@@ -186,7 +186,10 @@ export default function LoginScreen() {
 
                     <View style={{ alignItems: 'center', marginBottom: 40 }}>
                         <Image source={require('../../assets/images/app-icon.png')} style={{ width: 100, height: 100, marginBottom: 16 }} resizeMode="contain" />
-                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary }}>APEXIS</Text>
+                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary }}>
+                            APEXIS
+                            <Text className="font-angelica" style={{ fontSize: 18, textTransform: 'lowercase' }}>pro</Text>
+                        </Text>
                         <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>RECORD · REPORT · RELEASE</Text>
                     </View>
 

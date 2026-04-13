@@ -348,7 +348,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 4 }}>
-                {`${((user as any).organization?.name || 'APEXIS').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXIS').slice(1)}`}
+                {`${((user as any).organization?.name || 'APEXISpro').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXISpro').slice(1)}`}
               </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
