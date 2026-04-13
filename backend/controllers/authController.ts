@@ -174,7 +174,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 const orgAdmins = await users.findAll({
@@ -190,7 +190,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 
@@ -456,7 +456,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 const orgAdmins = await users.findAll({
@@ -472,7 +472,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 
@@ -635,8 +635,8 @@ export const switchContext = async (req: Request, res: Response) => {
         const { project_id, organization_id, role } = req.body;
         const normalizedRole = typeof role === "string" ? role.trim().toLowerCase() : "";
 
-        if ((!project_id && !organization_id) || !normalizedRole) {
-            return res.status(400).json({ error: "Project ID or Organization ID and role are required" });
+        if (!normalizedRole) {
+            return res.status(400).json({ error: "Role is required" });
         }
         if (!["superadmin", "admin", "contributor", "client"].includes(normalizedRole)) {
             return res.status(400).json({ error: "Invalid role" });
@@ -645,27 +645,43 @@ export const switchContext = async (req: Request, res: Response) => {
         const user = await users.findByPk(authUser.user_id);
         const project = project_id ? await projects.findByPk(project_id) : null;
         const targetOrganizationId = project?.organization_id || organization_id || null;
-        const organization = targetOrganizationId ? await organizations.findByPk(targetOrganizationId) : null;
 
-        if (!user || !organization || (project_id && !project)) {
-            return res.status(404).json({ error: "User, organization, or project not found" });
+        if (targetOrganizationId) {
+            const organization = await organizations.findByPk(targetOrganizationId);
+            if (!organization) return res.status(404).json({ error: "Organization not found" });
+        }
+
+        if (!user || (project_id && !project)) {
+            return res.status(404).json({ error: "User or project not found" });
         }
 
         const isSuperadminSwitch = user.role === 'superadmin';
         const isAdminSwitch =
             normalizedRole === 'admin' &&
-            (user.role === 'superadmin' || (user.role === 'admin' && Number(targetOrganizationId) === Number(user.organization_id)));
+            (user.role === 'superadmin' || (user.role === 'admin' && (!targetOrganizationId || Number(targetOrganizationId) === Number(user.organization_id))));
         const isSuperadminRoleSwitch = normalizedRole === 'superadmin' && user.role === 'superadmin';
 
         let membership = null;
         if (!isAdminSwitch && !isSuperadminRoleSwitch && !isSuperadminSwitch) {
-            membership = await project_members.findOne({
-                where: { user_id: authUser.user_id, project_id, role: normalizedRole }
-            });
-        }
-
-        if (!membership && !isAdminSwitch && !isSuperadminRoleSwitch && !isSuperadminSwitch) {
-            return res.status(403).json({ error: "No such membership found" });
+            if (project_id) {
+                membership = await project_members.findOne({
+                    where: { user_id: authUser.user_id, project_id, role: normalizedRole }
+                });
+                if (!membership) return res.status(403).json({ error: "No such project membership found" });
+            } else {
+                let hasMembership = false;
+                if (normalizedRole === 'contributor' || normalizedRole === 'client') {
+                    const membershipDoc = await project_members.findOne({
+                        where: { user_id: authUser.user_id, role: normalizedRole }
+                    });
+                    hasMembership = !!membershipDoc;
+                }
+                
+                const isPrimaryRole = user.role === normalizedRole;
+                if (!hasMembership && !isPrimaryRole) {
+                    return res.status(403).json({ error: `You do not have any projects as a ${normalizedRole}.` });
+                }
+            }
         }
 
         const token = jwt.sign(
@@ -673,7 +689,7 @@ export const switchContext = async (req: Request, res: Response) => {
                 user_id: user.id,
                 name: user.name,
                 role: normalizedRole,
-                organization_id: Number(targetOrganizationId),
+                organization_id: targetOrganizationId ? Number(targetOrganizationId) : null,
                 project_id: project ? project.id : null
             },
             process.env.JWT_SECRET || "default_secret",

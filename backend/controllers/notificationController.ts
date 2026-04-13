@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { notifications, projects, Sequelize, Sequelize as SequelizeType } from '../models/index.ts';
+import { notifications, projects, project_members, organizations, Sequelize } from '../models/index.ts';
 import { Op } from 'sequelize';
 /**
  * List all notifications for the current user
@@ -11,9 +11,49 @@ export const listNotifications = async (req: Request, res: Response) => {
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
         const { project_id, type } = req.query;
-        let where: any = { user_id: authUser.user_id };
-        
-        if (project_id && project_id !== 'all') where.project_id = project_id;
+        const activeRole = authUser.role;
+
+        const where: any = { user_id: authUser.user_id };
+
+        // 1. Determine projects matching the active role
+        let roleProjectIds: number[] = [];
+        if (activeRole !== 'superadmin') {
+            // Only query project_members for roles that exist in its enum ('contributor', 'client')
+            if (activeRole === 'contributor' || activeRole === 'client') {
+                const memberships = await project_members.findAll({
+                    where: { user_id: authUser.user_id, role: activeRole },
+                    attributes: ['project_id']
+                });
+                roleProjectIds = memberships.map((m: any) => m.project_id);
+            }
+            
+            // For admins, include projects in their primary organization
+            if (activeRole === 'admin' && authUser.organization_id) {
+                const orgProjects = await projects.findAll({
+                    where: { organization_id: authUser.organization_id },
+                    attributes: ['id']
+                });
+                const orgProjectIds = orgProjects.map((p: any) => p.id);
+                roleProjectIds = [...new Set([...roleProjectIds, ...orgProjectIds])];
+            }
+        }
+
+        if (activeRole !== 'superadmin') {
+            if (project_id && project_id !== 'all') {
+                if (!roleProjectIds.includes(Number(project_id))) {
+                    return res.status(200).json({ notifications: [] });
+                }
+                where.project_id = project_id;
+            } else {
+                // Return notifications for role-matched projects OR system notifications (project_id is null)
+                where[Op.or] = [
+                    { project_id: { [Op.in]: roleProjectIds } },
+                    { project_id: null }
+                ];
+            }
+        } else if (project_id && project_id !== 'all') {
+            where.project_id = project_id;
+        }
         
         if (type && type !== 'all') {
             const categories: Record<string, string[]> = {
@@ -36,13 +76,20 @@ export const listNotifications = async (req: Request, res: Response) => {
             where,
             include: [{
                 model: projects,
-                attributes: ['id', 'name']
+                attributes: ['id', 'name', 'organization_id'],
+                include: [{ model: organizations, as: 'organization', attributes: ['name'] }]
             }],
             order: [['createdAt', 'DESC']],
             limit: 50
         });
 
-        res.status(200).json({ notifications: data });
+        const formattedData = data.map((n: any) => {
+            const json = n.toJSON();
+            json.organizationName = json.project?.organization?.name || 'Apexis';
+            return json;
+        });
+
+        res.status(200).json({ notifications: formattedData });
     } catch (error) {
         console.error('List Notifications Error:', error);
         res.status(500).json({ error: 'Internal server error' });

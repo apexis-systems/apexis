@@ -517,13 +517,24 @@ export default function UploadScreen() {
             console.error('Upload error:', error);
             setFileQueue(prev => prev.map(it => it.status === 'done' ? it : { ...it, status: 'error' }));
             const { message, code } = parseApiError(error, 'Some files could not be uploaded.');
-            Alert.alert(
-                code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Upload Failed', 
-                message,
-                code === 'LIMIT_REACHED' ? [
+            
+            let buttons: any = undefined;
+            if (code === 'LIMIT_REACHED') {
+                buttons = [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Upgrade', onPress: () => router.push('/subscription') }
-                ] : undefined
+                ];
+            } else if (code === 'SUBSCRIPTION_LOCKED') {
+                buttons = [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Billing', onPress: () => router.push('/subscription') }
+                ];
+            }
+
+            Alert.alert(
+                code === 'LIMIT_REACHED' ? 'Limit Reached' : (code === 'SUBSCRIPTION_LOCKED' ? 'Subscription Locked' : 'Upload Failed'), 
+                message,
+                buttons
             );
         }
     };

@@ -118,7 +118,14 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                     <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.userName, { color: colors.text }]}>{item.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.userName, { color: colors.text }]}>{item.name}</Text>
+                        {item.organization?.name && (
+                            <View style={{ backgroundColor: colors.border, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 9, color: colors.textMuted, fontWeight: '700' }}>{item.organization.name}</Text>
+                            </View>
+                        )}
+                    </View>
                     <Text style={[styles.userEmail, { color: colors.textMuted }]}>{item.email}</Text>
                 </View>
                 {isSelected && (

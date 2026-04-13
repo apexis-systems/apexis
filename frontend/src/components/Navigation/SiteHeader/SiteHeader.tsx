@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, Sun, Moon, LogOut, HelpCircle, MessageSquarePlus, MessageSquare, X } from 'lucide-react';
+import { Bell, Search, Sun, Moon, LogOut, HelpCircle, MessageSquarePlus, MessageSquare, X, Shield, Briefcase, Loader2, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,10 +10,14 @@ import HelpSupportDialog from '@/components/shared/HelpSupportDialog';
 import FeedbackDialog from '@/components/shared/FeedbackDialog';
 import LanguageSelector from '@/components/shared/LanguageSelector';
 import NotificationDropdown from '../NotificationDropdown';
+import { switchContext } from '@/services/authService';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 const SiteHeader = () => {
   const router = useRouter();
-  const { user, logout } = useAuth() || {};
+  const { user, logout, login } = useAuth() || {};
+  const [isSwitching, setIsSwitching] = useState<string | null>(null);
   const { setMode } = useInterface() || {};
   const { unreadChatCount } = useSocket();
   const [isDark, setIsDark] = useState(false);
@@ -66,7 +70,10 @@ const SiteHeader = () => {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
               <img src="/app-icon.png" alt="APEXIS" className="h-full w-full object-cover" />
             </div>
-            <span className="text-base font-bold text-accent font-angelica tracking-wider">APEXIS</span>
+            <span className="text-base font-bold font-angelica tracking-wider flex items-center">
+              <span className="text-primary italic">APEXIS</span>
+              <span className="text-[10px] text-primary lowercase mt-1.5 ml-0.5 font-angelica">pro</span>
+            </span>
 
           </button>
 
@@ -119,6 +126,57 @@ const SiteHeader = () => {
               <MessageSquarePlus className="h-4 w-4 text-muted-foreground" />
             </button>
             <LanguageSelector />
+            
+            {/* Global Role Switcher */}
+            {user && (
+              <div className="flex items-center gap-1.5 px-2 mr-2 border-x border-border">
+                {[
+                  { id: 'admin', label: 'Admin', icon: Shield },
+                  { id: 'contributor', label: 'Contributor', icon: User },
+                  { id: 'client', label: 'Client', icon: Briefcase },
+                ].map((role) => {
+                  const isActive = user.role === role.id;
+                  const Icon = role.icon;
+                  return (
+                    <button
+                      key={role.id}
+                      onClick={async () => {
+                        if (isActive || isSwitching || !login) return;
+                        setIsSwitching(role.id);
+                        try {
+                          const res = await switchContext({ role: role.id });
+                          if (res.token) {
+                            const loggedInUser = await login(res.token);
+                            const nextRole = loggedInUser?.role || role.id;
+                            router.push(`/${nextRole}/dashboard`);
+                            toast.success(`Switched to ${role.label} role`);
+                          }
+                        } catch (err: any) {
+                          toast.error(err?.response?.data?.error || "You do not have access to this role.");
+                        } finally {
+                          setIsSwitching(null);
+                        }
+                      }}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all border",
+                        isActive 
+                          ? "bg-primary text-primary-foreground border-primary" 
+                          : "bg-secondary/50 text-muted-foreground border-transparent hover:border-border hover:bg-secondary"
+                      )}
+                      disabled={!!isSwitching}
+                    >
+                      {isSwitching === role.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Icon className="h-3 w-3" />
+                      )}
+                      <span>{role.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <button
               onClick={() => router.push(`/${user?.role || 'admin'}/chats`)}
               className="relative rounded-lg p-2 hover:bg-secondary transition-colors"

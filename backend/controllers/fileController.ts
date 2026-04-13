@@ -15,6 +15,7 @@ import { users as UsersModel } from "../models/index.ts";
 import { PDFDocument } from 'pdf-lib';
 import { getIO } from '../socket.ts';
 import { logActivity } from "../utils/activityUtils.ts";
+import { checkStorageLimit, checkSubscriptionStatus } from "../utils/subscriptionAccess.ts";
 
 interface MulterFile {
     buffer: Buffer;
@@ -24,10 +25,21 @@ interface MulterFile {
 }
 
 // Helper to check access
-const checkProjectAccess = async (userId: number, projectId: number) => {
-    return await project_members.findOne({
+const checkProjectAccess = async (userId: number, projectId: number, role: string, orgId?: number | null) => {
+    // 1. Check explicit project membership
+    const membership = await project_members.findOne({
         where: { user_id: userId, project_id: projectId }
     });
+    if (membership) return membership;
+
+    // 2. If not a member, check if they are an admin of the project's organization
+    if (role === 'admin' || role === 'superadmin') {
+        const project = await projects.findByPk(projectId);
+        if (project && (role === 'superadmin' || project.organization_id === orgId)) {
+            return { role: 'admin' }; // Synthetic membership
+        }
+    }
+    return null;
 };
 
 // Helper to update organization storage usage
@@ -50,11 +62,26 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const { folder_id, project_id, skipActivity } = req.body;
         const project = await projects.findByPk(project_id);
 
-        if (!(req as any).file) {
-            return res.status(400).json({ error: "No file uploaded" });
-        }
         if (!project) {
             return res.status(404).json({ error: "Project not found" });
+        }
+
+        // Check subscription status and storage limit
+        const subscriptionCheck = await checkSubscriptionStatus(project.organization_id);
+        if (!subscriptionCheck.allowed) {
+            return res.status(subscriptionCheck.status).json({
+                error: subscriptionCheck.message,
+                code: (subscriptionCheck as any).code
+            });
+        }
+
+        const fileSizeMb = (req as any).file.size / (1024 * 1024);
+        const storageCheck = await checkStorageLimit(project.organization_id, fileSizeMb);
+        if (!storageCheck.allowed) {
+            return res.status(storageCheck.status).json({
+                error: storageCheck.message,
+                code: storageCheck.code
+            });
         }
 
         const file_name = (req as any).file.originalname;
@@ -62,10 +89,10 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const file_size_mb = Math.max(1, Math.round((req as any).file.size / (1024 * 1024)));
 
         // Ensure contributors have access to this project
-        if (authUser.role === "contributor") {
-            const access = await checkProjectAccess(authUser.user_id, project_id);
-            if (!access || access.role !== "contributor") {
-                return res.status(403).json({ error: "Forbidden: Not a contributor to this project" });
+        if (authUser.role === "contributor" || authUser.role === "client") {
+            const access = await checkProjectAccess(authUser.user_id, project_id, authUser.role, authUser.organization_id);
+            if (!access) {
+                return res.status(403).json({ error: "Forbidden: No access to this project" });
             }
         }
 
@@ -113,15 +140,20 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
         });
 
+        const isImage = file_type.startsWith('image/');
+        const activityCategory = isImage ? 'photos' : 'documents';
+        const notificationType = isImage ? 'photo_upload' : 'file_upload';
+
         // Log Activity
         await logActivity({
             projectId: parseInt(project_id, 10),
             userId: authUser.user_id,
-            type: 'upload',
-            description: `Uploaded ${finalFileName}`
+            type: isImage ? 'photo_upload' : 'upload',
+            description: `Uploaded ${finalFileName}`,
+            metadata: { folderId: finalFolderId, type: activityCategory }
         });
 
-        // Notify project members based on project membership, not the user's home organization.
+        // Notify project members based on project membership
         const members = await project_members.findAll({
             where: { 
                 project_id: parseInt(project_id, 10), 
@@ -145,16 +177,16 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             notifiedUserIds.add(member.user_id);
             await sendNotification({
                 userId: member.user_id,
-                title: 'New File Uploaded',
+                title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
                 body: `${senderName} uploaded ${finalFileName}`,
-                type: 'file_upload',
-                data: { fileId: String(newFile.id), projectId: String(project_id) }
+                type: notificationType,
+                data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
             });
 
         }
 
 
-        // Notify Admins in the organization (if they weren't already notified as project members)
+        // Notify Admins in the organization
         try {
             const admins = await UsersModel.findAll({
                 where: {
@@ -164,14 +196,15 @@ export const uploadFile = async (req: Request | any, res: Response) => {
                 }
             });
 
+            const adminNotificationType = isImage ? 'photo_upload' : 'file_upload_admin';
+
             for (const adminUser of admins) {
                 await sendNotification({
                     userId: adminUser.id,
-                    title: 'New File Uploaded',
+                    title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
                     body: `${senderName} uploaded ${finalFileName}`,
-
-                    type: 'file_upload_admin',
-                    data: { fileId: String(newFile.id), projectId: String(project_id) }
+                    type: adminNotificationType,
+                    data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
                 });
             }
         } catch (err) {
@@ -205,12 +238,10 @@ export const listFiles = async (req: Request, res: Response) => {
         const { projectId } = req.params;
         const { folder_type } = req.query;
 
-        // Verify access if contributor or client
-        if (authUser.role === "contributor" || authUser.role === "client") {
-            const access = await checkProjectAccess(authUser.user_id, Number(projectId));
-            if (!access) {
-                return res.status(403).json({ error: "Forbidden: No access to this project" });
-            }
+        // Verify access
+        const access = await checkProjectAccess(authUser.user_id, Number(projectId), authUser.role, authUser.organization_id);
+        if (!access) {
+            return res.status(403).json({ error: "Forbidden: No access to this project" });
         }
 
         // Get all folders for this project
@@ -509,8 +540,25 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             return res.status(404).json({ error: "Project not found" });
         }
 
+        // Check subscription status and storage limit
+        const subscriptionCheck = await checkSubscriptionStatus(project.organization_id);
+        if (!subscriptionCheck.allowed) {
+            return res.status(subscriptionCheck.status).json({
+                error: subscriptionCheck.message,
+                code: (subscriptionCheck as any).code
+            });
+        }
 
         const scanFiles = (req as any).files as MulterFile[];
+        const totalIncomingSizeMb = (scanFiles || []).reduce((acc, f) => acc + (f.size / (1024 * 1024)), 0);
+
+        const storageCheck = await checkStorageLimit(project.organization_id, totalIncomingSizeMb);
+        if (!storageCheck.allowed) {
+            return res.status(storageCheck.status).json({
+                error: storageCheck.message,
+                code: storageCheck.code
+            });
+        }
 
 
         if (!scanFiles || !Array.isArray(scanFiles) || scanFiles.length === 0) {
@@ -519,7 +567,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
         // Access check
         if (authUser.role === "contributor") {
-            const access = await checkProjectAccess(authUser.user_id, project_id);
+            const access = await checkProjectAccess(authUser.user_id, project_id, authUser.role, authUser.organization_id);
             if (!access || access.role !== "contributor") {
                 return res.status(403).json({ error: "Forbidden: Not a contributor to this project" });
             }
@@ -596,7 +644,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     projectId: parseInt(project_id, 10),
                     userId: authUser.user_id,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
-                    description: `Uploaded scan: ${individualFileName}`
+                    description: `Uploaded scan: ${individualFileName}`,
+                    metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
             }
         } else {
@@ -665,7 +714,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 projectId: parseInt(project_id, 10),
                 userId: authUser.user_id,
                 type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
-                description: `Uploaded scan: ${finalFileName}`
+                description: `Uploaded scan: ${finalFileName}`,
+                metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
             });
         }
 
@@ -677,8 +727,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         });
 
         // Update organization storage usage
-        const totalSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
-        await updateOrganizationStorage(project.organization_id, totalSizeMb);
+        const totalFilesSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
+        await updateOrganizationStorage(project.organization_id, totalFilesSizeMb);
 
         // Notify project members based on project membership, not the user's home organization.
         try {
@@ -711,7 +761,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     title: notificationTitle,
                     body: notificationBody,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                    data: { projectId: String(project_id) }
+                    data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
 
             }
@@ -735,7 +785,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     title: notificationTitle,
                     body: notificationBody,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                    data: { projectId: String(project_id) }
+                    data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
 
             }

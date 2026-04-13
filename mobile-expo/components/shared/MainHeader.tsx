@@ -86,7 +86,10 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                                 resizeMode="cover"
                             />
                         </View>
-                        <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, letterSpacing: 0.5 }}>APEXIS</Text>
+                        <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, letterSpacing: 0.5 }}>
+                            APEXIS
+                            <Text className="font-angelica" style={{ fontSize: 10, textTransform: 'lowercase' }}>pro</Text>
+                        </Text>
                     </TouchableOpacity>
 
                     {/* {showBack && (

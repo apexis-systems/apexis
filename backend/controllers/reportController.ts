@@ -8,10 +8,39 @@ import { generateSingleReportPDF } from '../services/exportService.ts';
 export const shareReport = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
+
+        // Fetch report and project details for naming
+        const report = await reports.findByPk(id, {
+            include: [{ model: projects, attributes: ['name'] }]
+        });
+
+        if (!report) return res.status(404).json({ error: 'Report not found' });
+
         const pdfBuffer = await generateSingleReportPDF(Number(id));
 
+        const projectName = ((report as any).project?.name || 'Project').replace(/\s+/g, '_');
+        const type = report.type;
+        const start = new Date(report.period_start);
+        const end = new Date(report.period_end);
+
+        const fmt = (d: Date) => {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}-${month}-${year}`;
+        };
+
+        let filename = `${projectName}_${type}_report_${fmt(start)}.pdf`;
+        if (type === 'weekly') {
+            filename = `${projectName}_weekly_report_${fmt(start)} to ${fmt(end)}.pdf`;
+        } else if (type === 'monthly') {
+            const monthName = start.toLocaleDateString('en-GB', { month: 'long' }).toLowerCase();
+            const year = start.getFullYear();
+            filename = `${projectName}_monthly_${monthName}-${year}.pdf`;
+        }
+
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=report_${id}.pdf`);
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(pdfBuffer);
     } catch (error: any) {
         console.error('shareReport error:', error);

@@ -132,7 +132,8 @@ export const createRFI = async (req: Request | any, res: Response) => {
             projectId: Number(project_id),
             userId: authUser.user_id,
             type: 'edit',
-            description: `Created RFI "${title.trim()}"`
+            description: `Created RFI "${title.trim()}"`,
+            metadata: { rfiId: rfi.id, type: 'rfi' }
         });
 
         // Notification Logic
@@ -167,7 +168,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
                     title: 'New RFI from Client',
                     body: `${senderName} created a new RFI: ${title}`,
                     type: 'rfi_created',
-                    data: { rfiId: String(rfi.id), projectId: String(project_id) }
+                    data: { rfiId: String(rfi.id), projectId: String(project_id), type: 'rfi' }
                 });
             }
         } else {
@@ -183,7 +184,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
                         title: 'New RFI Assigned',
                         body: `${senderName} assigned an RFI to you: ${title}`,
                         type: 'rfi_assigned',
-                        data: { rfiId: String(rfi.id), projectId: String(project_id) }
+                        data: { rfiId: String(rfi.id), projectId: String(project_id), type: 'rfi' }
                     });
                 }
             }
@@ -231,7 +232,8 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
                 projectId: (rfi as any).project_id,
                 userId: authUser.user_id,
                 type: 'edit',
-                description: `Updated status for RFI "${(rfi as any).title}" to ${status}`
+                description: `Updated status for RFI "${(rfi as any).title}" to ${status}`,
+                metadata: { rfiId: rfi.id, type: 'rfi' }
             });
         }
 
@@ -271,7 +273,7 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
                     title: 'RFI Status Updated',
                     body: `${senderName} updated RFI status to ${friendlyStatus}: ${rfi.title}`,
                     type: 'rfi_status_update',
-                    data: { rfiId: String(rfi.id), projectId: String(rfi.project_id) }
+                    data: { rfiId: String(rfi.id), projectId: String(rfi.project_id), type: 'rfi' }
                 });
             }
         }
@@ -372,7 +374,8 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
             projectId: (rfi as any).project_id,
             userId: authUser.user_id,
             type: 'edit',
-            description: `Updated response for RFI "${(rfi as any).title}"`
+            description: `Updated response for RFI "${(rfi as any).title}"`,
+            metadata: { rfiId: rfi.id, type: 'rfi' }
         });
 
         // Notify creator if assignee responded
@@ -383,7 +386,7 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
                 title: 'RFI Response Received',
                 body: `${sender?.name || 'Assignee'} responded to your RFI: ${rfi.title}`,
                 type: 'rfi_comment',
-                data: { rfiId: String(rfi.id), projectId: String(rfi.project_id) }
+                data: { rfiId: String(rfi.id), projectId: String(rfi.project_id), type: 'rfi' }
             });
         }
 

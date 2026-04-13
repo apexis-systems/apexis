@@ -93,6 +93,14 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         }
     }, [project?.id, selectedFolder]);
 
+    useEffect(() => {
+        if (selectedFolder) {
+            setSortBy('date');
+        } else {
+            setSortBy('name');
+        }
+    }, [selectedFolder]);
+
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
@@ -657,11 +665,10 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
                                         </Text>
                                         {/* Folder Visibility Icon - Indicator/Toggle */}
-                                        {!isSelectionMode && (
+                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
                                             <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
                                                 <TouchableOpacity
-                                                    onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? toggleFolderVis(folder) : null}
-                                                    disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                                    onPress={() => toggleFolderVis(folder)}
                                                 >
                                                     <Feather 
                                                         name={folder.client_visible !== false ? 'eye' : 'eye-off'} 
@@ -720,11 +727,10 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             <Feather name="check" size={10} color="#fff" />
                                         </View>
                                     )}
-                                    {!isSelectionMode && (
+                                    {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
                                         <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
                                             <TouchableOpacity
-                                                onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? togglePhotoVisibility(photo) : null}
-                                                disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                                onPress={() => togglePhotoVisibility(photo)}
                                             >
                                                 <Feather 
                                                     name={photo.client_visible !== false ? 'eye' : 'eye-off'} 
@@ -781,10 +787,9 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(photo.file_size_mb)}</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', gap: 6, zIndex: 10 }}>
-                                        {!isSelectionMode && (
+                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
                                             <TouchableOpacity
-                                                onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? togglePhotoVisibility(photo) : null}
-                                                disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                                onPress={() => togglePhotoVisibility(photo)}
                                                 style={{ padding: 6 }}
                                             >
                                                 <Feather 

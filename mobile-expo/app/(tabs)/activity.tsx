@@ -13,6 +13,8 @@ import { getOrgUsers } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
 import { ActivityItem } from '@/types';
 import { useSocket } from '@/contexts/SocketContext';
+import { useRouter } from 'expo-router';
+import { handleActivityNavigation } from '@/utils/activityNavigation';
 
 const iconMap: Record<string, keyof typeof Feather.glyphMap> = {
     upload: 'upload',
@@ -46,6 +48,7 @@ export default function ActivityScreen() {
     const { type } = useLocalSearchParams<{ type?: string }>();
     const { isTourActive } = require('@/contexts/TourContext').useTour();
     const { socket } = useSocket();
+    const router = useRouter();
 
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [organizations, setOrganizations] = useState<any[]>([]);
@@ -229,8 +232,10 @@ export default function ActivityScreen() {
                                 const iconName = iconMap[activity.type] || 'clock';
                                 const colors = colorMap[activity.type] || { bg: 'rgba(100,100,100,0.15)', icon: '#666' };
                                 return (
-                                    <View
+                                    <TouchableOpacity
                                         key={activity.id}
+                                        onPress={() => handleActivityNavigation(activity, router)}
+                                        activeOpacity={0.7}
                                         style={{
                                             flexDirection: 'row',
                                             alignItems: 'flex-start',
@@ -260,14 +265,15 @@ export default function ActivityScreen() {
                                             </Text>
                                             <Text style={{ fontSize: 11, color: themeColors.textMuted, marginTop: 2 }}>
                                                 <Text style={{ fontWeight: '700', color: themeColors.text }}>{activity.userName}</Text>
-                                                {activity.projectName ? ` • ${activity.projectName}` : ''}
+                                                {activity.organizationName ? ` • ${activity.organizationName}` : ''}
+                                                {activity.projectName ? ` (${activity.projectName})` : ''}
                                             </Text>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
                                                 <Feather name="clock" size={10} color={themeColors.textMuted} />
                                                 <Text style={{ fontSize: 10, color: themeColors.textMuted }}>{activity.timestamp}</Text>
                                             </View>
                                         </View>
-                                    </View>
+                                    </TouchableOpacity>
                                 );
                             })}
                         </View>

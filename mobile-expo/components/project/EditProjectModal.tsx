@@ -118,13 +118,13 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate, i
                             </View>
 
                             <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: colors.textMuted }]}>Description (max 50)</Text>
+                                <Text style={[styles.label, { color: colors.textMuted }]}>Company Name/Client Name (max 50)</Text>
                                 <TextInput
                                     style={[styles.input, styles.textArea, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
                                     value={description}
                                     onChangeText={setDescription}
                                     maxLength={50}
-                                    placeholder="Enter description"
+                                    placeholder="Enter Company/Client Name"
                                     placeholderTextColor="#888"
                                     multiline
                                     numberOfLines={4}

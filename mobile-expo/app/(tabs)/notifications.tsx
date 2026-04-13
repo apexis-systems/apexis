@@ -17,6 +17,7 @@ interface Notification {
     data: any;
     is_read: boolean;
     createdAt: string;
+    organizationName?: string;
 }
 
 export default function NotificationsScreen() {
@@ -205,7 +206,10 @@ export default function NotificationsScreen() {
                 <Text style={[styles.body, { color: colors.textMuted }]}>{item.body}</Text>
                 <View style={styles.timeRow}>
                     <Ionicons name="time-outline" size={10} color={colors.textMuted} />
-                    <Text style={styles.timeText}>{new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                    <Text style={styles.timeText}>
+                        {new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {item.organizationName ? ` • ${item.organizationName}` : ''}
+                    </Text>
                 </View>
             </View>
         </TouchableOpacity>

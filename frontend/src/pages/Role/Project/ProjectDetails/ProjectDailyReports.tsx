@@ -48,7 +48,15 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
   const handleDownload = async (r: Report) => {
     setDownloadingId(r.id);
     try {
-      await downloadReport(r.id, `Daily_Report_${fmt(r.period_start).replace(/ /g, '_')}.pdf`);
+      const projectName = (project?.name || 'Project').replace(/\s+/g, '_');
+      const start = new Date(r.period_start);
+      const fmtDate = (d: Date) => {
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+      };
+      await downloadReport(r.id, `${projectName}_daily_report_${fmtDate(start)}.pdf`);
     } catch (e) {
       console.error(e);
     } finally {

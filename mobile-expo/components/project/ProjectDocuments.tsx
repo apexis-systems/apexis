@@ -79,6 +79,14 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
         }
     }, [project?.id, selectedFolder]);
 
+    useEffect(() => {
+        if (selectedFolder) {
+            setSortBy('date');
+        } else {
+            setSortBy('name');
+        }
+    }, [selectedFolder]);
+
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderDocs = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
@@ -565,11 +573,10 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>{count} files{subcount > 0 ? ` · ${subcount} folders` : ''}</Text>
                                 {/* Folder Visibility Icon - Indicator/Toggle */}
-                                {!isSelectionMode && (
+                                {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
                                     <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
                                         <TouchableOpacity
-                                            onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? toggleFolderVis(folder) : null}
-                                            disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                            onPress={() => toggleFolderVis(folder)}
                                         >
                                             <Feather
                                                 name={folder.client_visible !== false ? 'eye' : 'eye-off'}
@@ -630,11 +637,10 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         </View>
                                     )}
                                     <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: colors.text, textAlign: 'center' }}>{doc.file_name}</Text>
-                                    {!isSelectionMode && (
+                                    {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
                                         <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 30 }}>
                                             <TouchableOpacity
-                                                onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? toggleDocVisibility(doc) : null}
-                                                disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                                onPress={() => toggleDocVisibility(doc)}
                                             >
                                                 <Feather
                                                     name={doc.client_visible !== false ? 'eye' : 'eye-off'}
@@ -722,10 +728,9 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
-                                        {!isSelectionMode && (
+                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
                                             <TouchableOpacity
-                                                onPress={() => (user.role === 'admin' || user.role === 'superadmin') ? toggleDocVisibility(doc) : null}
-                                                disabled={!(user.role === 'admin' || user.role === 'superadmin')}
+                                                onPress={() => toggleDocVisibility(doc)}
                                                 style={{ padding: 4 }}
                                             >
                                                 <Feather

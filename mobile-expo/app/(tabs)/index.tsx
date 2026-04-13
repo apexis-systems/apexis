@@ -21,6 +21,7 @@ import { setActiveProjectContext } from '@/utils/projectSelection';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadOrganizationLogo, fetchSecureLogo, getOrganizations } from '@/services/organizationService';
 import { updateUserProfilePic } from '@/services/userService';
+import { switchContext } from '@/services/authService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 import MainHeader from '@/components/shared/MainHeader';
 import SecureAvatar from '@/components/shared/SecureAvatar';
@@ -31,7 +32,7 @@ import { UsageAlert } from '@/components/shared/UsageAlert';
 import { useUsage } from '@/contexts/UsageContext';
 
 export default function DashboardScreen() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, login } = useAuth();
   const { colors, isDark } = useTheme();
   const { unreadNotificationCount } = useSocket();
   const { t } = useTranslation();
@@ -59,6 +60,7 @@ export default function DashboardScreen() {
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [profileUri, setProfileUri] = useState<string | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -177,7 +179,10 @@ export default function DashboardScreen() {
     try {
       const url = orgId ? `/projects?organization_id=${orgId}` : '/projects';
       const res = await PrivateAxios.get(url);
-      setProjects(res.data.projects || []);
+      const sortedProjects = (res.data.projects || []).sort((a: any, b: any) => 
+        (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+      );
+      setProjects(sortedProjects);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     }
@@ -346,7 +351,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 4 }}>
-                {`${((user as any).organization?.name || 'APEXIS').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXIS').slice(1)}`}
+                {`${((user as any).organization?.name || 'APEXISpro').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXISpro').slice(1)}`}
               </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -366,6 +371,57 @@ export default function DashboardScreen() {
               <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
                 {`${roleSubtitle} • ${user.email || user.phone_number}`}
               </Text>
+
+              {/* Role Selection Buttons */}
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+                {[
+                  { id: 'admin', label: 'Admin', icon: 'shield' },
+                  { id: 'contributor', label: 'Contributor', icon: 'edit-3' },
+                  { id: 'client', label: 'Client', icon: 'user' }
+                ].map((role) => {
+                  const isActive = user.role === role.id;
+                  return (
+                    <TouchableOpacity
+                      key={role.id}
+                      onPress={async () => {
+                        if (isActive || isSwitching) return;
+                        setIsSwitching(true);
+                        try {
+                          const res = await switchContext({ role: role.id });
+                          if (res.token) {
+                            await login(res.token);
+                          }
+                        } catch (err: any) {
+                          Alert.alert('Role Switch Failed', err?.response?.data?.error || 'You do not have access to this role.');
+                        } finally {
+                          setIsSwitching(false);
+                        }
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: isActive ? colors.primary : colors.surface,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor: isActive ? colors.primary : colors.border,
+                        opacity: isSwitching ? 0.7 : 1
+                      }}
+                    >
+                      {isSwitching && isActive ? (
+                        <ActivityIndicator size={12} color="#fff" />
+                      ) : (
+                        <Feather name={role.icon as any} size={12} color={isActive ? '#fff' : colors.textMuted} />
+                      )}
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : colors.textMuted }}>
+                        {role.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           </View>
 
@@ -492,21 +548,18 @@ export default function DashboardScreen() {
                 >
                   {project.name}
                 </Text>
-                {/* Stats */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="file-text" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalDocs, 10) || 0}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="camera" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalPhotos, 10) || 0}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="folder" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalFolders, 10) || 0}</Text>
-                  </View>
-                </View>
+                {/* Company / Client Name */}
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontSize: 8,
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    fontStyle: 'italic'
+                  }}
+                >
+                  {project.description || 'No Company/Client Name'}
+                </Text>
               </TouchableOpacity>
             ))}
 
@@ -597,10 +650,10 @@ export default function DashboardScreen() {
                     onChangeText={(text) => setNewProject({ ...newProject, name: text })}
                   />
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Description (max 50)</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Company Name/Client Name (max 50)</Text>
                   <TextInput
                     style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
-                    placeholder="Short description"
+                    placeholder="Enter Company/Client Name"
                     placeholderTextColor={colors.textMuted}
                     value={newProject.description}
                     maxLength={50}

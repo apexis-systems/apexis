@@ -104,7 +104,7 @@ export default function EditProjectModal({
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="description">Description (max 50)</Label>
+                        <Label htmlFor="description">Company Name/Client Name (max 50)</Label>
                         <Textarea
                             id="description"
                             value={description}

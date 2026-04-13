@@ -58,25 +58,25 @@ export default function ProfileScreen() {
         }
     }, [user?.id, user?.project_id, user?.role]);
 
-    const handleSwitchContext = async ({ projectId, organizationId, role }: { projectId?: number | null; organizationId?: number | null; role: string }) => {
-        if (isSwitching) return;
-        setIsSwitching(true);
-        try {
-            const res = await switchContext({ project_id: projectId ?? null, organization_id: organizationId ?? null, role });
-            if (res.token) {
-                await login(res.token);
-                Alert.alert(
-                    'Success',
-                    `Switched to ${role} role.`,
-                    [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
-                );
-            }
-        } catch (error) {
-            Alert.alert('Error', 'Failed to switch project context.');
-        } finally {
-            setIsSwitching(false);
-        }
-    };
+    // const handleSwitchContext = async ({ projectId, organizationId, role }: { projectId?: number | null; organizationId?: number | null; role: string }) => {
+    //     if (isSwitching) return;
+    //     setIsSwitching(true);
+    //     try {
+    //         const res = await switchContext({ project_id: projectId ?? null, organization_id: organizationId ?? null, role });
+    //         if (res.token) {
+    //             await login(res.token);
+    //             Alert.alert(
+    //                 'Success',
+    //                 `Switched to ${role} role.`,
+    //                 [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+    //             );
+    //         }
+    //     } catch (error) {
+    //         Alert.alert('Error', 'Failed to switch project context.');
+    //     } finally {
+    //         setIsSwitching(false);
+    //     }
+    // };
 
     useEffect(() => {
         const loadProfilePic = async () => {
@@ -90,53 +90,53 @@ export default function ProfileScreen() {
 
     if (!user) return null;
 
-    const groupMembershipsByOrganization = (items: any[]) => {
-        const organizationMap = new Map<number | string, any>();
-
-        items.forEach((membership) => {
-            const organizationId = membership.organization_id ?? membership.project?.organization_id ?? 'unknown';
-            const organizationName = membership.organization?.name || membership.project?.organization?.name || 'Organization';
-            const projectId = membership.project_id ?? `org-${organizationId}`;
-
-            if (!organizationMap.has(organizationId)) {
-                organizationMap.set(organizationId, {
-                    organizationId,
-                    organizationName,
-                    projects: new Map<number | string, any>(),
-                });
-            }
-
-            const organizationGroup = organizationMap.get(organizationId);
-            if (!organizationGroup.projects.has(projectId)) {
-                organizationGroup.projects.set(projectId, {
-                    project: membership.project,
-                    organization: membership.organization || membership.project?.organization || null,
-                    organization_id: organizationId,
-                    context_type: membership.context_type || (membership.project ? 'project' : 'organization'),
-                    roles: [],
-                });
-            }
-
-            const projectGroup = organizationGroup.projects.get(projectId);
-            if (!projectGroup.roles.includes(membership.role)) {
-                projectGroup.roles.push(membership.role);
-            }
-        });
-
-        const roleOrder = ['admin', 'contributor', 'client', 'superadmin'];
-
-        return Array.from(organizationMap.values())
-            .map((organizationGroup) => ({
-                ...organizationGroup,
-                projects: Array.from(organizationGroup.projects.values())
-                    .map((projectGroup: any) => ({
-                        ...projectGroup,
-                        roles: projectGroup.roles.sort((a: string, b: string) => roleOrder.indexOf(a) - roleOrder.indexOf(b)),
-                    }))
-                    .sort((a: any, b: any) => (a.project?.name || a.organization?.name || '').localeCompare(b.project?.name || b.organization?.name || '')),
-            }))
-            .sort((a, b) => a.organizationName.localeCompare(b.organizationName));
-    };
+    // const groupMembershipsByOrganization = (items: any[]) => {
+    //     const organizationMap = new Map<number | string, any>();
+    
+    //     items.forEach((membership) => {
+    //         const organizationId = membership.organization_id ?? membership.project?.organization_id ?? 'unknown';
+    //         const organizationName = membership.organization?.name || membership.project?.organization?.name || 'Organization';
+    //         const projectId = membership.project_id ?? `org-${organizationId}`;
+    //
+    //         if (!organizationMap.has(organizationId)) {
+    //             organizationMap.set(organizationId, {
+    //                 organizationId,
+    //                 organizationName,
+    //                 projects: new Map<number | string, any>(),
+    //             });
+    //         }
+    //
+    //         const organizationGroup = organizationMap.get(organizationId);
+    //         if (!organizationGroup.projects.has(projectId)) {
+    //             organizationGroup.projects.set(projectId, {
+    //                 project: membership.project,
+    //                 organization: membership.organization || membership.project?.organization || null,
+    //                 organization_id: organizationId,
+    //                 context_type: membership.context_type || (membership.project ? 'project' : 'organization'),
+    //                 roles: [],
+    //             });
+    //         }
+    //
+    //         const projectGroup = organizationGroup.projects.get(projectId);
+    //         if (!projectGroup.roles.includes(membership.role)) {
+    //             projectGroup.roles.push(membership.role);
+    //         }
+    //     });
+    //
+    //     const roleOrder = ['admin', 'contributor', 'client', 'superadmin'];
+    //
+    //     return Array.from(organizationMap.values())
+    //         .map((organizationGroup) => ({
+    //             ...organizationGroup,
+    //             projects: Array.from(organizationGroup.projects.values())
+    //                 .map((projectGroup: any) => ({
+    //                     ...projectGroup,
+    //                     roles: projectGroup.roles.sort((a: string, b: string) => roleOrder.indexOf(a) - roleOrder.indexOf(b)),
+    //                 }))
+    //                 .sort((a: any, b: any) => (a.project?.name || a.organization?.name || '').localeCompare(b.project?.name || b.organization?.name || '')),
+    //         }))
+    //         .sort((a, b) => a.organizationName.localeCompare(b.organizationName));
+    // };
 
     const handleProfilePicUpload = async () => {
         try {
@@ -434,144 +434,7 @@ export default function ProfileScreen() {
                         )}
                     </View>
 
-                    {/* Switch Project / Role Section */}
-                    {(() => {
-                        if (memberships.length === 0) return null;
-                        const organizationGroups = groupMembershipsByOrganization(memberships);
 
-                        return (
-                            <View style={{ marginBottom: 24 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textMuted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 4 }}>Switch By Organization And Project</Text>
-                                <View style={{ gap: 12 }}>
-                                    {organizationGroups.map((organizationGroup: any) => (
-                                        <View
-                                            key={organizationGroup.organizationId}
-                                            style={{
-                                                borderRadius: 24,
-                                                backgroundColor: colors.surface,
-                                                borderWidth: 1,
-                                                borderColor: colors.border,
-                                                padding: 16,
-                                                shadowColor: '#000',
-                                                shadowOffset: { width: 0, height: 4 },
-                                                shadowOpacity: 0.05,
-                                                shadowRadius: 10,
-                                                elevation: 3
-                                            }}
-                                        >
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-                                                <View style={{
-                                                    backgroundColor: 'rgba(249,115,22,0.1)',
-                                                    width: 44,
-                                                    height: 44,
-                                                    borderRadius: 14,
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    borderWidth: 1,
-                                                    borderColor: 'rgba(249,115,22,0.2)'
-                                                }}>
-                                                    <Feather name="briefcase" size={22} color="#f97316" />
-                                                </View>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2, textTransform: 'uppercase', letterSpacing: 1 }}>Organization</Text>
-                                                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }} numberOfLines={1}>{organizationGroup.organizationName}</Text>
-                                                </View>
-                                            </View>
-
-                                            <View style={{ gap: 8 }}>
-                                                {organizationGroup.projects.map((group: any) => (
-                                                    <View
-                                                        key={group.project?.id ?? `org-${group.organization_id}`}
-                                                        style={{
-                                                            borderRadius: 18,
-                                                            backgroundColor: colors.background,
-                                                            borderWidth: 1,
-                                                            borderColor: colors.border,
-                                                            padding: 14,
-                                                        }}
-                                                    >
-                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                                                            <View style={{
-                                                                backgroundColor: 'rgba(249,115,22,0.08)',
-                                                                width: 38,
-                                                                height: 38,
-                                                                borderRadius: 12,
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                            }}>
-                                                                <Feather name="layers" size={18} color="#f97316" />
-                                                            </View>
-                                                            <View style={{ flex: 1 }}>
-                                                                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }} numberOfLines={1}>{group.project?.name || group.organization?.name || 'Organization'}</Text>
-                                                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-                                                                    {group.context_type === 'organization' ? 'Organization Role' : 'Project Roles'}
-                                                                </Text>
-                                                            </View>
-                                                        </View>
-
-                                                        <View style={{ gap: 8 }}>
-                                                            {group.roles.map((r: string, rIdx: number) => {
-                                                                const isCurrent =
-                                                                    r === user.role &&
-                                                                    (
-                                                                        (group.context_type === 'project' && Number(group.project?.id) === Number(user.project_id)) ||
-                                                                        (group.context_type === 'organization' && !user.project_id && Number(group.organization_id) === Number(user.organization?.id))
-                                                                    );
-                                                                return (
-                                                                    <TouchableOpacity
-                                                                        key={rIdx}
-                                                                        onPress={() => handleSwitchContext({
-                                                                            projectId: group.project?.id ?? null,
-                                                                            organizationId: group.organization_id ?? group.organization?.id ?? null,
-                                                                            role: r
-                                                                        })}
-                                                                        disabled={isSwitching || isCurrent}
-                                                                        activeOpacity={isCurrent ? 1 : 0.7}
-                                                                        style={{
-                                                                            backgroundColor: isCurrent ? 'rgba(249,115,22,0.12)' : colors.surface,
-                                                                            borderWidth: 1,
-                                                                            borderColor: isCurrent ? '#f97316' : colors.border,
-                                                                            paddingHorizontal: 16,
-                                                                            paddingVertical: 12,
-                                                                            borderRadius: 14,
-                                                                            flexDirection: 'row',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'space-between',
-                                                                            opacity: isCurrent ? 0.95 : 1,
-                                                                        }}
-                                                                    >
-                                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                                                            <View style={{ backgroundColor: isCurrent ? '#f97316' : colors.border, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                                                                                <Text style={{ fontSize: 9, fontWeight: '900', color: isCurrent ? '#fff' : colors.textMuted, textTransform: 'uppercase' }}>{r}</Text>
-                                                                            </View>
-                                                                            {!isCurrent && (
-                                                                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
-                                                                                    Switch Role
-                                                                                </Text>
-                                                                            )}
-                                                                        </View>
-                                                                        {isCurrent ? (
-                                                                            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(249,115,22,0.14)' }}>
-                                                                                <Text style={{ fontSize: 10, fontWeight: '900', color: '#f97316', textTransform: 'uppercase' }}>Current</Text>
-                                                                            </View>
-                                                                        ) : isSwitching ? (
-                                                                            <ActivityIndicator size={16} color="#f97316" />
-                                                                        ) : (
-                                                                            <Feather name="refresh-cw" size={16} color={colors.textMuted} />
-                                                                        )}
-                                                                    </TouchableOpacity>
-                                                                );
-                                                            })}
-                                                        </View>
-                                                    </View>
-                                                ))}
-                                            </View>
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
-                        );
-                    })()}
 
                     {/* Sign Out */}
                     <TouchableOpacity

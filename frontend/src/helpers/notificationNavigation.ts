@@ -54,5 +54,9 @@ export const handleNotificationNavigation = (type: string, data: any, userRole: 
             break;
     }
 
-    router.push(`/${userRole}/project/${projectId}?tab=${tab}`);
+    let url = `/${userRole}/project/${projectId}?tab=${tab}`;
+    if (data?.folderId) {
+        url += `&folderId=${data.folderId}`;
+    }
+    router.push(url);
 };

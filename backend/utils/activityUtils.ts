@@ -6,20 +6,28 @@ export const logActivity = async ({
     projectId,
     userId,
     type,
-    description
+    description,
+    metadata
 }: {
     projectId: number;
     userId: number;
     type: string;
     description: string;
+    metadata?: any;
 }) => {
     try {
+        let finalDescription = description;
+        if (metadata) {
+            // Embed metadata invisibly (Zero-width space separator)
+            finalDescription += `\u200B\u200B${JSON.stringify(metadata)}\u200B\u200B`;
+        }
+
         // 1. Create activity in DB
         const newActivity = await activities.create({
             project_id: projectId,
             user_id: userId,
             type,
-            description
+            description: finalDescription
         });
 
         // 2. Fetch full activity details (with user and project) for socket broadcast

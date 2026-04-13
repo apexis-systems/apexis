@@ -145,17 +145,23 @@ export default function TourOverlay() {
         };
     });
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (currentStep === 3) router.push('/activity');
         if (currentStep === 4) router.push('/notifications');
         if (currentStep === 5) router.push('/chat');
         if (currentStep === 6) router.push('/settings');
 
         if (currentStep === TOUR_STEPS.length) {
-            stopTour();
+            await stopTour();
+            router.replace('/(tabs)');
         } else {
             nextStep();
         }
+    };
+
+    const handleExit = async () => {
+        await stopTour();
+        router.replace('/(tabs)');
     };
 
     if (!isTourActive || !step) return null;
@@ -183,7 +189,7 @@ export default function TourOverlay() {
                     <Text style={[styles.description, { color: colors.textMuted }]}>{step.description}</Text>
 
                     <View style={styles.footer}>
-                        <TouchableOpacity onPress={stopTour} style={styles.skipButton}>
+                        <TouchableOpacity onPress={handleExit} style={styles.skipButton}>
                             <Text style={{ color: colors.textMuted }}>Exit Tour</Text>
                         </TouchableOpacity>
                         <TouchableOpacity

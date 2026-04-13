@@ -7,6 +7,8 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { projects, users, folders, files, organizations, project_members, Sequelize } from "../models/index.ts";
 import { Op, fn, col, literal } from "sequelize";
 
+import { checkProjectLimit } from "../utils/subscriptionAccess.ts";
+
 // Helper to generate 6-character random alphanumeric code
 const generateCode = () => {
     return crypto.randomBytes(3).toString("hex").toUpperCase();
@@ -20,6 +22,17 @@ export const createProject = async (req: Request, res: Response) => {
 
         if (!authUser || authUser.role !== "admin") {
             return res.status(403).json({ error: "Only admins can create projects" });
+        }
+
+        // Check project limit
+        const limitCheck = await checkProjectLimit(authUser.organization_id);
+        if (!limitCheck.allowed) {
+            return res.status(limitCheck.status).json({
+                error: limitCheck.message,
+                code: limitCheck.code,
+                limit: limitCheck.limit,
+                currentUsage: limitCheck.currentUsage
+            });
         }
 
         if (!start_date || !end_date) {
@@ -90,26 +103,49 @@ export const getProjects = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { organization_id } = req.query;
+        const { organization_id: queryOrgId } = req.query;
+        const activeOrgId = authUser.organization_id;
+        const activeRole = authUser.role;
 
-        // Build WHERE condition based on role
+        // Build WHERE condition based on role and organization context
         let whereCondition: any = {};
 
-        if (authUser.role === 'superadmin') {
-            if (organization_id) {
-                whereCondition.organization_id = organization_id;
+        if (activeRole === 'superadmin') {
+            if (queryOrgId) {
+                whereCondition.organization_id = queryOrgId;
             }
-            // else: no filter, fetch all
-        } else if (authUser.role === 'admin') {
-            whereCondition.organization_id = authUser.organization_id;
-        } else if (authUser.role === 'contributor' || authUser.role === 'client') {
-            // Fetch all projects where the user has an explicit membership record
+        } else if (activeRole === 'admin') {
+            // If we have a specific organization in the query or token, use it.
+            // Otherwise (Global Admin), show projects from their primary org 
+            // AND any projects where they might be an admin in project_members.
+            if (queryOrgId) {
+                whereCondition.organization_id = queryOrgId;
+            } else if (activeOrgId) {
+                whereCondition.organization_id = activeOrgId;
+            } else {
+                // Global Admin view: Fetch projects from primary org
+                const dbUser = await users.findByPk(authUser.user_id);
+                const adminProjectIds: number[] = []; // Admin role doesn't exist in project_members table enum
+                
+                whereCondition[Op.or] = [
+                    dbUser?.organization_id ? { organization_id: dbUser.organization_id } : null,
+                    adminProjectIds.length > 0 ? { id: { [Op.in]: adminProjectIds } } : null
+                ].filter(Boolean);
+            }
+        } else if (activeRole === 'contributor' || activeRole === 'client') {
+            // Fetch projects where the user has an explicit membership record with the ACTIVE role
             const userMemberships = await project_members.findAll({
-                where: { user_id: authUser.user_id },
+                where: { user_id: authUser.user_id, role: activeRole },
                 attributes: ['project_id']
             });
             const projectIds = userMemberships.map((pm: any) => pm.project_id);
-            whereCondition.id = { [Op.in]: projectIds };
+            
+            if (queryOrgId) {
+                whereCondition.organization_id = queryOrgId;
+                whereCondition.id = { [Op.in]: projectIds };
+            } else {
+                whereCondition.id = { [Op.in]: projectIds };
+            }
         }
 
         const result = await projects.findAll({
