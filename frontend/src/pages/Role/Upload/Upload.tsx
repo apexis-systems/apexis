@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { createActivity } from '@/services/activityService';
 import CreateFolderDialog from '../Project/ProjectDetails/CreateFolderDialog';
 import { getApiErrorMessage } from '@/helpers/apiError';
+import { useUsage } from '@/contexts/UsageContext';
 
 function UploadInner() {
     const { user } = useAuth();
@@ -40,6 +41,8 @@ function UploadInner() {
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
     const [done, setDone] = useState(false);
     const [doneType, setDoneType] = useState<'documents' | 'photos'>('documents');
+    
+    const { usageData, checkLimit, refreshUsage } = useUsage();
 
     // Section collapsed state
     const [metaOpen, setMetaOpen] = useState(false);
@@ -226,6 +229,35 @@ function UploadInner() {
     const handleUpload = async () => {
         if (files.length === 0) { toast.error('Please select at least one file to upload'); return; }
         if (!selectedProject) { toast.error('Please select a project'); return; }
+        
+        // 1. Check if subscription is locked
+        if (usageData?.plan.access?.isLocked) {
+            toast.error("Subscription Locked", {
+                description: "Your plan has expired. Please renew to continue uploading files.",
+                action: {
+                    label: "Billing",
+                    onClick: () => router.push('/Role/Billing')
+                }
+            });
+            return;
+        }
+
+        // 2. Proactive storage check
+        const totalSizeMb = files.reduce((acc, f) => acc + (f.size / (1024 * 1024)), 0);
+        const currentUsedMb = usageData?.usage.storage_mb || 0;
+        const limitMb = usageData?.plan.limits.storage_limit_mb || 1024; // fallback
+
+        if (currentUsedMb + totalSizeMb > limitMb) {
+            toast.error("Storage Limit Exceeded", {
+                description: `You are trying to upload ${totalSizeMb.toFixed(2)}MB, but only ${Math.max(0, limitMb - currentUsedMb).toFixed(2)}MB is remaining.`,
+                action: {
+                    label: "Upgrade",
+                    onClick: () => router.push('/Role/Billing/Plans')
+                }
+            });
+            return;
+        }
+
         const effectiveType = uploadType || (files.every(f => f.type.startsWith('image/')) ? 'photos' : 'documents');
 
         setIsUploading(true);
@@ -242,6 +274,9 @@ function UploadInner() {
                 }
                 return uploadFile(formData);
             }));
+
+            // Refresh usage after successful upload
+            refreshUsage();
 
             await createActivity({
                 project_id: selectedProject,

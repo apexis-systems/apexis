@@ -15,6 +15,7 @@ import { users as UsersModel } from "../models/index.ts";
 import { PDFDocument } from 'pdf-lib';
 import { getIO } from '../socket.ts';
 import { logActivity } from "../utils/activityUtils.ts";
+import { checkStorageLimit, checkSubscriptionStatus } from "../utils/subscriptionAccess.ts";
 
 interface MulterFile {
     buffer: Buffer;
@@ -24,10 +25,21 @@ interface MulterFile {
 }
 
 // Helper to check access
-const checkProjectAccess = async (userId: number, projectId: number) => {
-    return await project_members.findOne({
+const checkProjectAccess = async (userId: number, projectId: number, role: string, orgId?: number | null) => {
+    // 1. Check explicit project membership
+    const membership = await project_members.findOne({
         where: { user_id: userId, project_id: projectId }
     });
+    if (membership) return membership;
+
+    // 2. If not a member, check if they are an admin of the project's organization
+    if (role === 'admin' || role === 'superadmin') {
+        const project = await projects.findByPk(projectId);
+        if (project && (role === 'superadmin' || project.organization_id === orgId)) {
+            return { role: 'admin' }; // Synthetic membership
+        }
+    }
+    return null;
 };
 
 // Helper to update organization storage usage
@@ -50,11 +62,26 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const { folder_id, project_id, skipActivity } = req.body;
         const project = await projects.findByPk(project_id);
 
-        if (!(req as any).file) {
-            return res.status(400).json({ error: "No file uploaded" });
-        }
         if (!project) {
             return res.status(404).json({ error: "Project not found" });
+        }
+
+        // Check subscription status and storage limit
+        const subscriptionCheck = await checkSubscriptionStatus(project.organization_id);
+        if (!subscriptionCheck.allowed) {
+            return res.status(subscriptionCheck.status).json({
+                error: subscriptionCheck.message,
+                code: (subscriptionCheck as any).code
+            });
+        }
+
+        const fileSizeMb = (req as any).file.size / (1024 * 1024);
+        const storageCheck = await checkStorageLimit(project.organization_id, fileSizeMb);
+        if (!storageCheck.allowed) {
+            return res.status(storageCheck.status).json({
+                error: storageCheck.message,
+                code: storageCheck.code
+            });
         }
 
         const file_name = (req as any).file.originalname;
@@ -62,10 +89,10 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const file_size_mb = Math.max(1, Math.round((req as any).file.size / (1024 * 1024)));
 
         // Ensure contributors have access to this project
-        if (authUser.role === "contributor") {
-            const access = await checkProjectAccess(authUser.user_id, project_id);
-            if (!access || access.role !== "contributor") {
-                return res.status(403).json({ error: "Forbidden: Not a contributor to this project" });
+        if (authUser.role === "contributor" || authUser.role === "client") {
+            const access = await checkProjectAccess(authUser.user_id, project_id, authUser.role, authUser.organization_id);
+            if (!access) {
+                return res.status(403).json({ error: "Forbidden: No access to this project" });
             }
         }
 
@@ -205,12 +232,10 @@ export const listFiles = async (req: Request, res: Response) => {
         const { projectId } = req.params;
         const { folder_type } = req.query;
 
-        // Verify access if contributor or client
-        if (authUser.role === "contributor" || authUser.role === "client") {
-            const access = await checkProjectAccess(authUser.user_id, Number(projectId));
-            if (!access) {
-                return res.status(403).json({ error: "Forbidden: No access to this project" });
-            }
+        // Verify access
+        const access = await checkProjectAccess(authUser.user_id, Number(projectId), authUser.role, authUser.organization_id);
+        if (!access) {
+            return res.status(403).json({ error: "Forbidden: No access to this project" });
         }
 
         // Get all folders for this project
@@ -509,8 +534,25 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             return res.status(404).json({ error: "Project not found" });
         }
 
+        // Check subscription status and storage limit
+        const subscriptionCheck = await checkSubscriptionStatus(project.organization_id);
+        if (!subscriptionCheck.allowed) {
+            return res.status(subscriptionCheck.status).json({
+                error: subscriptionCheck.message,
+                code: (subscriptionCheck as any).code
+            });
+        }
 
         const scanFiles = (req as any).files as MulterFile[];
+        const totalIncomingSizeMb = (scanFiles || []).reduce((acc, f) => acc + (f.size / (1024 * 1024)), 0);
+
+        const storageCheck = await checkStorageLimit(project.organization_id, totalIncomingSizeMb);
+        if (!storageCheck.allowed) {
+            return res.status(storageCheck.status).json({
+                error: storageCheck.message,
+                code: storageCheck.code
+            });
+        }
 
 
         if (!scanFiles || !Array.isArray(scanFiles) || scanFiles.length === 0) {
@@ -519,7 +561,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
         // Access check
         if (authUser.role === "contributor") {
-            const access = await checkProjectAccess(authUser.user_id, project_id);
+            const access = await checkProjectAccess(authUser.user_id, project_id, authUser.role, authUser.organization_id);
             if (!access || access.role !== "contributor") {
                 return res.status(403).json({ error: "Forbidden: Not a contributor to this project" });
             }
@@ -677,8 +719,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         });
 
         // Update organization storage usage
-        const totalSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
-        await updateOrganizationStorage(project.organization_id, totalSizeMb);
+        const totalFilesSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
+        await updateOrganizationStorage(project.organization_id, totalFilesSizeMb);
 
         // Notify project members based on project membership, not the user's home organization.
         try {

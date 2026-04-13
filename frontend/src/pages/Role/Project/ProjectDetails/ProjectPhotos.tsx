@@ -549,7 +549,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       <button onClick={(e) => { e.stopPropagation(); setShareItem(photo); }} className="rounded-md p-1 hover:bg-secondary">
                         <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
-                      {user.role === 'admin' && (
+                      {(user.role === 'admin' || user.role === 'superadmin') && (
                         <>
                           <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title="Toggle client visibility">
                             {photo.client_visible !== false ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -612,7 +612,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     >
                       <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                     </button>
-                    {user.role === 'admin' && (
+                    {(user.role === 'admin' || user.role === 'superadmin') && (
                       <button
                         onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
                         className="rounded-full p-1 hover:bg-secondary transition-colors"
@@ -703,7 +703,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 >
                   <Move className="h-3.5 w-3.5 mr-1" /> Move
                 </Button>
-                {user.role === 'admin' && (
+                {(user.role === 'admin' || user.role === 'superadmin') && (
                   <div className="flex items-center gap-1 border-l border-border pl-2">
                     <Button
                       size="sm"

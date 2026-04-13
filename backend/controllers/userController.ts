@@ -1,14 +1,15 @@
 import type { Request, Response } from "express";
-import { 
-    users, 
-    projects, 
-    project_members, 
-    room_members, 
-    notifications, 
-    activities, 
-    snags, 
+import {
+    users,
+    projects,
+    project_members,
+    room_members,
+    notifications,
+    activities,
+    snags,
     rfis,
-    sequelize 
+    organizations,
+    sequelize
 } from "../models/index.ts";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
@@ -53,8 +54,8 @@ export const inviteUser = async (req: Request, res: Response) => {
         } else {
             // User exists.
             if (user.organization_id && user.organization_id !== authUser.organization_id) {
-                return res.status(400).json({ 
-                    error: "User is already registered with another organization. Cross-organization invitations are not permitted for security reasons." 
+                return res.status(400).json({
+                    error: "User is already registered with another organization. Cross-organization invitations are not permitted for security reasons."
                 });
             }
 
@@ -138,10 +139,18 @@ export const getOrgUsers = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
-        let whereCondition: any = { organization_id: authUser.organization_id };
+        // 1. Find all organizations the user belongs to
+        const myProjectOrgs = await project_members.findAll({
+            where: { user_id: authUser.user_id },
+            include: [{ model: projects, as: 'project', attributes: ['organization_id'] }]
+        }).then((pms: any) => pms.map((pm: any) => pm.project?.organization_id).filter(Boolean));
+
+        const myOrgs = [...new Set([authUser.organization_id, ...myProjectOrgs].filter(Boolean))];
+
+        let whereCondition: any = { organization_id: { [Op.in]: myOrgs } };
 
         if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
-            // Non-admins: Only see users who share a project with them
+            // Non-admins: Only see users who share a project with them in ANY of their orgs
             const myProjectIds = await project_members.findAll({
                 where: { user_id: authUser.user_id },
                 attributes: ['project_id']
@@ -157,7 +166,8 @@ export const getOrgUsers = async (req: Request, res: Response) => {
 
         const orgUsers = await users.findAll({
             where: whereCondition,
-            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt']
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt', 'organization_id'],
+            include: [{ model: organizations, attributes: ['name'] }]
         });
 
         res.status(200).json({ users: orgUsers });
@@ -223,16 +233,16 @@ export const deleteUser = async (req: Request, res: Response) => {
         if (error.name === 'SequelizeForeignKeyConstraintError') {
             const table = error.table || '';
             let details = "This user is referenced by other project data.";
-            
+
             if (table === 'files' || table === 'folders') {
                 details = `User cannot be removed because they have created ${table}. Please deactivate the user instead or reassign their data.`;
             } else if (table === 'rfis' || table === 'projects') {
                 details = `User cannot be removed because they are the creator of ${table}.`;
             }
 
-            return res.status(400).json({ 
-                error: "Conflict: User has critical project data", 
-                details 
+            return res.status(400).json({
+                error: "Conflict: User has critical project data",
+                details
             });
         }
 
@@ -252,11 +262,11 @@ export const updatePushToken = async (req: Request, res: Response) => {
         if (!token) return res.status(400).json({ error: "Token is required" });
 
         // 1. Remove this token from any other users to prevent cross-account notifications on shared devices
-        await users.update({ fcm_token: null }, { 
-            where: { 
-                fcm_token: token, 
-                id: { [Op.ne]: authUser.user_id } 
-            } 
+        await users.update({ fcm_token: null }, {
+            where: {
+                fcm_token: token,
+                id: { [Op.ne]: authUser.user_id }
+            }
         });
 
         // 2. Set the token for the current user

@@ -208,6 +208,11 @@ const NotificationsPage = () => {
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{notif.body}</p>
                                 <div className="flex items-center gap-3 mt-2 font-medium">
+                                    {notif.organizationName && (
+                                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                            <span className="px-1 py-0.5 bg-muted rounded text-[7px] font-bold uppercase">{notif.organizationName}</span>
+                                        </div>
+                                    )}
                                     {notif.project && (
                                         <div className="flex items-center gap-1 text-[10px] text-accent/80">
                                             <Filter className="h-3 w-3" />

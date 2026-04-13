@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { activities, users, projects, project_members } from '../models/index.ts';
+import { activities, users, projects, project_members, organizations } from '../models/index.ts';
 import { Op } from "sequelize";
 import { logActivity } from "../utils/activityUtils.ts";
 
@@ -18,7 +18,7 @@ export const getActivities = async (req: Request | any, res: Response) => {
                 attributes: ['project_id']
             });
             const projectIds = userProjects.map((p: any) => p.project_id);
-            
+
             if (project_id) {
                 // If a specific project_id is requested, ensure the user belongs to it
                 if (!projectIds.includes(parseInt(project_id as string, 10))) {
@@ -33,12 +33,25 @@ export const getActivities = async (req: Request | any, res: Response) => {
             where.project_id = project_id;
         }
 
+        // 1. Determine all organizations the user belongs to
+        const myProjectOrgs = await project_members.findAll({
+            where: { user_id: authUser.user_id },
+            include: [{ model: projects, attributes: ['organization_id'] }]
+        }).then((pms: any) => pms.map((pm: any) => pm.project?.organization_id).filter(Boolean));
+
+        const myOrgs = [...new Set([authUser.organization_id, ...myProjectOrgs].filter(Boolean))];
+
         if (authUser.role === 'superadmin') {
             if (organization_id) {
                 projectWhere.organization_id = organization_id;
             }
         } else {
-            projectWhere.organization_id = authUser.organization_id;
+            // Use active organization from token if provided, otherwise all authorized orgs
+            if (authUser.organization_id) {
+                projectWhere.organization_id = authUser.organization_id;
+            } else {
+                projectWhere.organization_id = { [Op.in]: myOrgs };
+            }
         }
 
         if (user_id) where.user_id = user_id;
@@ -58,7 +71,8 @@ export const getActivities = async (req: Request | any, res: Response) => {
                 {
                     model: projects,
                     attributes: ['id', 'name', 'organization_id'],
-                    where: projectWhere
+                    where: projectWhere,
+                    include: [{ model: organizations, as: 'organization', attributes: ['name'] }]
                 }
             ]
         });
@@ -69,6 +83,7 @@ export const getActivities = async (req: Request | any, res: Response) => {
             type: act.type,
             description: act.description,
             projectName: act.project ? act.project.name : 'System',
+            organizationName: act.project?.organization?.name || 'Apexis',
             projectId: act.project_id,
             userName: act.user ? act.user.name : 'Unknown',
             timestamp: act.createdAt

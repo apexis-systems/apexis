@@ -159,7 +159,14 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                                     <span className="text-white font-bold">{u.name.charAt(0)}</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-sm text-foreground truncate">{u.name}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-semibold text-sm text-foreground truncate">{u.name}</p>
+                                        {u.organization?.name && (
+                                            <span className="px-1.5 py-0.5 bg-muted rounded text-[7px] font-bold text-muted-foreground uppercase">
+                                                {u.organization.name}
+                                            </span>
+                                        )}
+                                    </div>
                                     <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                                 </div>
                                 {selectedUsers.includes(u.id) && (

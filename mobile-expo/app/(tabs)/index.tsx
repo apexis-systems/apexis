@@ -21,6 +21,7 @@ import { setActiveProjectContext } from '@/utils/projectSelection';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadOrganizationLogo, fetchSecureLogo, getOrganizations } from '@/services/organizationService';
 import { updateUserProfilePic } from '@/services/userService';
+import { switchContext } from '@/services/authService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 import MainHeader from '@/components/shared/MainHeader';
 import SecureAvatar from '@/components/shared/SecureAvatar';
@@ -31,7 +32,7 @@ import { UsageAlert } from '@/components/shared/UsageAlert';
 import { useUsage } from '@/contexts/UsageContext';
 
 export default function DashboardScreen() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, login } = useAuth();
   const { colors, isDark } = useTheme();
   const { unreadNotificationCount } = useSocket();
   const { t } = useTranslation();
@@ -59,6 +60,7 @@ export default function DashboardScreen() {
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [profileUri, setProfileUri] = useState<string | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -366,6 +368,57 @@ export default function DashboardScreen() {
               <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
                 {`${roleSubtitle} • ${user.email || user.phone_number}`}
               </Text>
+
+              {/* Role Selection Buttons */}
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+                {[
+                  { id: 'admin', label: 'Admin', icon: 'shield' },
+                  { id: 'contributor', label: 'Contributor', icon: 'edit-3' },
+                  { id: 'client', label: 'Client', icon: 'user' }
+                ].map((role) => {
+                  const isActive = user.role === role.id;
+                  return (
+                    <TouchableOpacity
+                      key={role.id}
+                      onPress={async () => {
+                        if (isActive || isSwitching) return;
+                        setIsSwitching(true);
+                        try {
+                          const res = await switchContext({ role: role.id });
+                          if (res.token) {
+                            await login(res.token);
+                          }
+                        } catch (err: any) {
+                          Alert.alert('Role Switch Failed', err?.response?.data?.error || 'You do not have access to this role.');
+                        } finally {
+                          setIsSwitching(false);
+                        }
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: isActive ? colors.primary : colors.surface,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor: isActive ? colors.primary : colors.border,
+                        opacity: isSwitching ? 0.7 : 1
+                      }}
+                    >
+                      {isSwitching && isActive ? (
+                        <ActivityIndicator size={12} color="#fff" />
+                      ) : (
+                        <Feather name={role.icon as any} size={12} color={isActive ? '#fff' : colors.textMuted} />
+                      )}
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : colors.textMuted }}>
+                        {role.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           </View>
 

@@ -276,7 +276,19 @@ export const getTransactions = async (req: Request, res: Response) => {
 
 export const getUsage = async (req: Request, res: Response) => {
   try {
-    const { organization_id } = (req as any).user;
+    let { organization_id } = (req as any).user;
+
+    // Fallback if organization_id is null/missing (Global Role view)
+    if (!organization_id) {
+      const user = await users.findByPk((req as any).user.user_id, {
+        attributes: ["organization_id"],
+      });
+      organization_id = user?.organization_id;
+    }
+
+    if (!organization_id) {
+      return res.status(404).json({ error: "Organization not found for user" });
+    }
 
     const org = await organizations.findByPk(organization_id, {
       include: [{ model: plans }],

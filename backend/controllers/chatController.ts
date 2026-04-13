@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { messaging } from '../config/firebase.ts';
-import { users, rooms, room_members, chat_messages, sequelize, notifications, projects, project_members } from '../models/index.ts';
+import { users, rooms, room_members, chat_messages, sequelize, notifications, projects, project_members, organizations } from '../models/index.ts';
 import { Op } from 'sequelize';
 import { getIO, isUserOnline } from '../socket.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
@@ -82,7 +82,11 @@ export const listRooms = async (req: Request, res: Response) => {
             include: [
                 {
                     model: room_members,
-                    include: [{ model: users, attributes: ['id', 'name', 'role', 'profile_pic'] }]
+                    include: [{
+                        model: users,
+                        attributes: ['id', 'name', 'role', 'profile_pic', 'organization_id'],
+                        include: [{ model: organizations, attributes: ['name'] }]
+                    }]
                 },
                 {
                     model: chat_messages,
@@ -201,10 +205,10 @@ export const sendChatMessage = async (req: Request, res: Response) => {
         const messageWithSender = await chat_messages.findByPk(newMessage.id, {
             include: [
                 { model: users, as: 'sender', attributes: ['id', 'name', 'profile_pic'] },
-                { 
-                    model: chat_messages, 
-                    as: 'parent', 
-                    include: [{ model: users, as: 'sender', attributes: ['id', 'name'] }] 
+                {
+                    model: chat_messages,
+                    as: 'parent',
+                    include: [{ model: users, as: 'sender', attributes: ['id', 'name'] }]
                 }
             ]
         });
@@ -212,8 +216,8 @@ export const sendChatMessage = async (req: Request, res: Response) => {
         // 2. Trigger Notifications
         const otherMembers = await room_members.findAll({
             where: { room_id: roomId, user_id: { [Op.ne]: authUser.user_id } },
-            include: [{ 
-                model: users, 
+            include: [{
+                model: users,
                 attributes: ['id', 'fcm_token']
             }]
         });
@@ -428,9 +432,9 @@ export const createRoom = async (req: Request, res: Response) => {
 
             // Check if direct room already exists
             const existingRoom = await rooms.findOne({
-                where: { 
-                    type: 'direct', 
-                    organization_id: actualOrgId 
+                where: {
+                    type: 'direct',
+                    organization_id: actualOrgId
                 },
                 include: [
                     {

@@ -15,6 +15,7 @@ import { useSocket } from '@/contexts/SocketContext';
 
 interface ActivityItem extends GlobalActivityItem {
     userName?: string;
+    organizationName?: string;
 }
 
 const actionTypes = [
@@ -208,10 +209,16 @@ const Activity = () => {
                                 <p className="text-sm font-medium text-foreground">{activity.description}</p>
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                     <span className="font-semibold text-foreground">{activity.userName}</span>
+                                    {activity.organizationName && (
+                                        <>
+                                            <span className="mx-1">•</span>
+                                            <span className="px-1 py-0.5 bg-muted rounded text-[9px] font-bold text-muted-foreground uppercase">{activity.organizationName}</span>
+                                        </>
+                                    )}
                                     {activity.projectName && (
                                         <>
                                             <span className="mx-1">•</span>
-                                            {activity.projectName}
+                                            <span className="truncate">{activity.projectName}</span>
                                         </>
                                     )}
                                 </p>
