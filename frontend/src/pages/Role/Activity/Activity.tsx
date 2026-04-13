@@ -12,6 +12,8 @@ import { getProjects } from '@/services/projectService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ActivityItem as GlobalActivityItem } from '@/types';
 import { useSocket } from '@/contexts/SocketContext';
+import { useRouter } from 'next/navigation';
+import { handleActivityNavigation } from '@/helpers/activityNavigation';
 
 interface ActivityItem extends GlobalActivityItem {
     userName?: string;
@@ -31,6 +33,7 @@ const Activity = () => {
     const { user } = useAuth();
     const { t } = useLanguage();
     const { socket } = useSocket();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const initialType = searchParams?.get('type') || 'all';
 
@@ -201,7 +204,11 @@ const Activity = () => {
             ) : (
                 <div className="space-y-2">
                     {activities.map((activity) => (
-                        <div key={activity.id} className="flex items-start gap-3 rounded-xl bg-card border border-border p-3.5">
+                        <div 
+                            key={activity.id} 
+                            onClick={() => handleActivityNavigation(activity, (path:any) => router.push(path), user?.role)}
+                            className="flex items-start gap-3 rounded-xl bg-card border border-border p-3.5 hover:bg-muted/50 transition-colors cursor-pointer group"
+                        >
                             <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${activity.type === 'upload_photo' ? 'bg-blue-500/10' : 'bg-accent/10'} shrink-0`}>
                                 {activity.type === 'upload_photo' ? <Camera className="h-4 w-4 text-blue-500" /> : <FileText className="h-4 w-4 text-accent" />}
                             </div>

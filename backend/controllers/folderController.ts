@@ -41,7 +41,8 @@ export const createFolder = async (req: Request, res: Response) => {
             projectId: project_id,
             userId: authUser.user_id,
             type: 'edit',
-            description: `Created folder "${name}"`
+            description: `Created folder "${name}"`,
+            metadata: { folderId: newFolder.id, type: folder_type || 'documents' }
         });
 
         res.status(201).json({
@@ -126,7 +127,7 @@ export const toggleFolderVisibility = async (req: Request, res: Response) => {
                     title: 'New Folder Available',
                     body: `A new folder "${folder.name}" is now visible to you.`,
                     type: 'folder_visibility',
-                    data: { folderId: String(folder.id), projectId: String(folder.project_id) }
+                    data: { folderId: String(folder.id), projectId: String(folder.project_id), type: folder.folder_type || 'documents' }
                 });
             }
         }

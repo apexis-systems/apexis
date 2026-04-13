@@ -61,7 +61,8 @@ export const addComment = async (req: Request, res: Response) => {
                     projectId: file.project_id,
                     userId: authUser.user_id,
                     type: 'comment',
-                    description: `${authUser.name} commented on photo: ${file.file_name}`
+                    description: `${authUser.name} commented on photo: ${file.file_name}`,
+                    metadata: { folderId: file.folder_id, type: 'photos' }
                 });
 
                 // 2. Send Notification to File Uploader
@@ -79,6 +80,8 @@ export const addComment = async (req: Request, res: Response) => {
                             data: {
                                 fileId: String(file.id),
                                 projectId: String(file.project_id),
+                                folderId: String(file.folder_id),
+                                type: 'photos',
                                 commentId: String(comment.id)
                             }
                         });

@@ -118,6 +118,7 @@ export const createSnag = async (req: Request, res: Response) => {
       userId: authUser.user_id,
       type: "edit",
       description: `Added snag "${title.trim()}"`,
+      metadata: { snagId: snag.id, type: 'snags' }
     });
 
     // Notify assignee if they belong to this project.
@@ -133,7 +134,7 @@ export const createSnag = async (req: Request, res: Response) => {
           title: "New Snag Assigned",
           body: `${senderName} assigned a new snag to you: ${title}`,
           type: "snag_assigned",
-          data: { snagId: String(snag.id), projectId: String(project_id) },
+          data: { snagId: String(snag.id), projectId: String(project_id), type: 'snags' },
         });
       }
     }
@@ -156,7 +157,7 @@ export const createSnag = async (req: Request, res: Response) => {
           title: "New Snag Created",
           body: `${authUser.name} created a new snag: ${title}`,
           type: "snag_creation_admin",
-          data: { snagId: String(snag.id), projectId: String(project_id) },
+          data: { snagId: String(snag.id), projectId: String(project_id), type: 'snags' },
         });
       }
     } catch (err) {
@@ -198,6 +199,7 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
         userId: authUser.user_id,
         type: "edit",
         description: `Updated status for snag "${(snag as any).title}"`,
+        metadata: { snagId: snag.id, type: 'snags' }
       });
     }
     res.json({ snag });
@@ -232,7 +234,7 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
           title: "Snag Status Updated",
           body: `${senderName} updated status to ${friendlyStatus} for snag: ${snag.title}`,
           type: "snag_status_update",
-          data: { snagId: String(snag.id), projectId: String(snag.project_id) },
+          data: { snagId: String(snag.id), projectId: String(snag.project_id), type: 'snags' },
         });
       }
     }

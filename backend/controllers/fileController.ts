@@ -140,15 +140,20 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
         });
 
+        const isImage = file_type.startsWith('image/');
+        const activityCategory = isImage ? 'photos' : 'documents';
+        const notificationType = isImage ? 'photo_upload' : 'file_upload';
+
         // Log Activity
         await logActivity({
             projectId: parseInt(project_id, 10),
             userId: authUser.user_id,
-            type: 'upload',
-            description: `Uploaded ${finalFileName}`
+            type: isImage ? 'photo_upload' : 'upload',
+            description: `Uploaded ${finalFileName}`,
+            metadata: { folderId: finalFolderId, type: activityCategory }
         });
 
-        // Notify project members based on project membership, not the user's home organization.
+        // Notify project members based on project membership
         const members = await project_members.findAll({
             where: { 
                 project_id: parseInt(project_id, 10), 
@@ -172,16 +177,16 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             notifiedUserIds.add(member.user_id);
             await sendNotification({
                 userId: member.user_id,
-                title: 'New File Uploaded',
+                title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
                 body: `${senderName} uploaded ${finalFileName}`,
-                type: 'file_upload',
-                data: { fileId: String(newFile.id), projectId: String(project_id) }
+                type: notificationType,
+                data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
             });
 
         }
 
 
-        // Notify Admins in the organization (if they weren't already notified as project members)
+        // Notify Admins in the organization
         try {
             const admins = await UsersModel.findAll({
                 where: {
@@ -191,14 +196,15 @@ export const uploadFile = async (req: Request | any, res: Response) => {
                 }
             });
 
+            const adminNotificationType = isImage ? 'photo_upload' : 'file_upload_admin';
+
             for (const adminUser of admins) {
                 await sendNotification({
                     userId: adminUser.id,
-                    title: 'New File Uploaded',
+                    title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
                     body: `${senderName} uploaded ${finalFileName}`,
-
-                    type: 'file_upload_admin',
-                    data: { fileId: String(newFile.id), projectId: String(project_id) }
+                    type: adminNotificationType,
+                    data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
                 });
             }
         } catch (err) {
@@ -638,7 +644,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     projectId: parseInt(project_id, 10),
                     userId: authUser.user_id,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
-                    description: `Uploaded scan: ${individualFileName}`
+                    description: `Uploaded scan: ${individualFileName}`,
+                    metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
             }
         } else {
@@ -707,7 +714,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 projectId: parseInt(project_id, 10),
                 userId: authUser.user_id,
                 type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
-                description: `Uploaded scan: ${finalFileName}`
+                description: `Uploaded scan: ${finalFileName}`,
+                metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
             });
         }
 
@@ -753,7 +761,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     title: notificationTitle,
                     body: notificationBody,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                    data: { projectId: String(project_id) }
+                    data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
 
             }
@@ -777,7 +785,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     title: notificationTitle,
                     body: notificationBody,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                    data: { projectId: String(project_id) }
+                    data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
 
             }

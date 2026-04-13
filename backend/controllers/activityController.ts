@@ -78,16 +78,35 @@ export const getActivities = async (req: Request | any, res: Response) => {
         });
 
         // Format for frontend
-        const formattedFeed = feed.map((act: any) => ({
-            id: act.id,
-            type: act.type,
-            description: act.description,
-            projectName: act.project ? act.project.name : 'System',
-            organizationName: act.project?.organization?.name || 'Apexis',
-            projectId: act.project_id,
-            userName: act.user ? act.user.name : 'Unknown',
-            timestamp: act.createdAt
-        }));
+        const formattedFeed = feed.map((act: any) => {
+            let desc = act.description;
+            let metadata = null;
+            
+            // Extract metadata if exists (delimited by \u200B\u200B)
+            if (desc && desc.includes('\u200B\u200B')) {
+                const parts = desc.split('\u200B\u200B');
+                if (parts.length >= 2) {
+                    try {
+                        metadata = JSON.parse(parts[1]);
+                        desc = parts[0]; // Clean description for UI
+                    } catch (e) {
+                        console.error('Metadata parse error:', e);
+                    }
+                }
+            }
+
+            return {
+                id: act.id,
+                type: act.type,
+                description: desc,
+                metadata,
+                projectName: act.project ? act.project.name : 'System',
+                organizationName: act.project?.organization?.name || 'Apexis',
+                projectId: act.project_id,
+                userName: act.user ? act.user.name : 'Unknown',
+                timestamp: act.createdAt
+            };
+        });
 
         res.status(200).json({ activities: formattedFeed });
     } catch (error) {

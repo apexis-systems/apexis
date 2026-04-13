@@ -31,7 +31,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const searchParams = useSearchParams();
   const [docs, setDocs] = useState<any[]>([]);
   const [selectedFolder, setRawSelectedFolder] = useState<string | null>(
-    searchParams?.get('folder') || null
+    searchParams?.get('folder') || searchParams?.get('folderId') || null
   );
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -72,7 +72,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
   // Sync state from URL for tab switching / back navigation
   useEffect(() => {
-    const folderId = searchParams?.get('folder') || null;
+    const folderId = searchParams?.get('folder') || searchParams?.get('folderId') || null;
     if (folderId !== selectedFolder) {
       setRawSelectedFolder(folderId);
     }

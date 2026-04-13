@@ -29,7 +29,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type Tab = 'overview' | 'documents' | 'photos' | 'rfi' | 'reports' | 'snags' | 'sops';
 
 export default function ProjectWorkspaceScreen() {
-    const { id, tab, folderId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string }>();
+    const { id, tab, folderId: qFolderId, initialFolderId: qInitialFolderId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string; initialFolderId?: string }>();
+    const folderId = qFolderId || qInitialFolderId;
     const { user } = useAuth();
     const { colors, isDark } = useTheme();
     const router = useRouter();

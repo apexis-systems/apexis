@@ -174,7 +174,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 const orgAdmins = await users.findAll({
@@ -190,7 +190,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 
@@ -456,7 +456,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 const orgAdmins = await users.findAll({
@@ -472,7 +472,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 

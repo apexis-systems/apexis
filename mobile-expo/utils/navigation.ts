@@ -25,34 +25,40 @@ export const handleNotificationNavigation = (type: string, data: any, router: Ro
         return;
     }
 
+    let tab = 'overview';
     switch (type) {
         case 'file_upload':
         case 'file_visibility':
         case 'folder_visibility':
         case 'file_upload_admin':
-            router.push(`/(tabs)/project/${projectId}?tab=documents`);
+            tab = 'documents';
             break;
         case 'photo_upload':
         case 'photo_comment':
-            router.push(`/(tabs)/project/${projectId}?tab=photos`);
+            tab = 'photos';
             break;
         case 'snag_assigned':
         case 'snag_creation_admin':
         case 'snag_status_update':
-            router.push(`/(tabs)/project/${projectId}?tab=snags`);
+            tab = 'snags';
             break;
         case 'rfi_created':
         case 'rfi_assigned':
         case 'rfi_status_update':
         case 'rfi_comment':
-            router.push(`/(tabs)/project/${projectId}?tab=rfi`);
+            tab = 'rfi';
             break;
         case 'member_joined':
-            router.push(`/(tabs)/project/${projectId}`);
+            tab = 'overview';
             break;
         default:
-            // Fallback to project overview
-            router.push(`/(tabs)/project/${projectId}`);
+            tab = 'overview';
             break;
     }
+
+    let url = `/(tabs)/project/${projectId}?tab=${tab}`;
+    if (data?.folderId) {
+        url += `&initialFolderId=${data.folderId}`;
+    }
+    router.push(url as any);
 };
