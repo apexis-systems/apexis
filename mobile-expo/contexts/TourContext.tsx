@@ -13,7 +13,7 @@ interface TourContextType {
     isTourActive: boolean;
     currentStep: number;
     startTour: () => void;
-    stopTour: () => void;
+    stopTour: () => Promise<void>;
     nextStep: () => void;
     prevStep: () => void;
     hasSeenTour: boolean;
