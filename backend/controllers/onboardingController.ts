@@ -130,7 +130,7 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
             }
         });
 
-        if (existingUser) {
+        if (existingUser && existingUser.role === "admin") {
             return res.status(400).json({ error: "Email or Phone already registered" });
         }
 
@@ -252,17 +252,41 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
         });
         const isPrimary = adminCount === 0;
 
-        const newUser = await users.create({
-            organization_id: organization.id,
-            name,
-            email: savedEmail,
-            phone_number: savedPhone,
-            password: password_hash,
-            role: "admin",
-            is_primary: isPrimary,
-            email_verified: !!savedEmail,
-            phone_verified: !!savedPhone,
+        // Check if user already exists (e.g. they were a contributor/client)
+        let user = await users.findOne({
+            where: {
+                [Op.or]: [
+                    savedEmail ? { email: savedEmail } : null,
+                    savedPhone ? { phone_number: savedPhone } : null
+                ].filter(Boolean) as any[]
+            }
         });
+
+        if (user) {
+            await user.update({
+                organization_id: organization.id,
+                name,
+                password: password_hash,
+                role: "admin",
+                is_primary: isPrimary,
+                email_verified: user.email_verified || !!savedEmail,
+                phone_verified: user.phone_verified || !!savedPhone,
+            });
+        } else {
+            user = await users.create({
+                organization_id: organization.id,
+                name,
+                email: savedEmail,
+                phone_number: savedPhone,
+                password: password_hash,
+                role: "admin",
+                is_primary: isPrimary,
+                email_verified: !!savedEmail,
+                phone_verified: !!savedPhone,
+            });
+        }
+
+        const newUser = user; // for downstream consistency
 
         await redis.del(redisKey);
 

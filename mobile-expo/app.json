@@ -2,7 +2,7 @@
   "expo": {
     "name": "APEXIS",
     "slug": "apexis",
-    "version": "1.4.4",
+    "version": "1.4.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "apexis",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apexis.ios",
-      "buildNumber": "17",
+      "buildNumber": "18",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "APEXIS needs access to your photo library to attach photos to snags and upload site images.",
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.apexis.app",
-      "versionCode": 17,
+      "versionCode": 18,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.READ_MEDIA_IMAGES",
