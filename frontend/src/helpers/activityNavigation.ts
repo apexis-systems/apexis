@@ -5,14 +5,34 @@ export const handleActivityNavigation = (act: any, navigate: (path: string) => v
     const { type, projectId, metadata } = act;
     const role = userRole || 'admin';
 
-    // 1. Folder redirection (Files/Photos)
+    // 1. Folder-level deep redirection
     if (metadata?.folderId) {
-        const tab = metadata.type === 'photos' ? 'photos' : 'documents';
+        // Standardize type to plural tab name
+        const rawType = metadata.type?.toLowerCase();
+        const tab = (rawType === 'photo' || rawType === 'photos') ? 'photos' : 'documents';
+        
         navigate(`/${role}/project/${projectId}?tab=${tab}&folderId=${metadata.folderId}`);
         return;
     }
 
-    // 2. Type-based redirection
+    // 2. Tab-level redirection based on metadata type (if no folderId)
+    if (metadata?.type) {
+        const rawType = metadata.type.toLowerCase();
+        let tab = 'overview';
+        
+        if (rawType === 'photo' || rawType === 'photos') tab = 'photos';
+        else if (rawType === 'document' || rawType === 'documents') tab = 'documents';
+        else if (rawType === 'snag' || rawType === 'snags') tab = 'snags';
+        else if (rawType === 'rfi') tab = 'rfi';
+        else if (rawType === 'report' || rawType === 'reports') tab = 'reports';
+
+        if (tab !== 'overview') {
+            navigate(`/${role}/project/${projectId}?tab=${tab}`);
+            return;
+        }
+    }
+
+    // 3. Fallback: Type-based redirection using activity type string
     switch (type) {
         case 'upload':
         case 'file_upload':
@@ -24,7 +44,7 @@ export const handleActivityNavigation = (act: any, navigate: (path: string) => v
         case 'upload_photo':
         case 'photo_upload':
         case 'photo_comment':
-        case 'comment': // Assuming photo comments for now if no metadata, but metadata handles it above
+        case 'comment': // Default to photos for 'comment' activity string if no metadata caught it
             navigate(`/${role}/project/${projectId}?tab=photos`);
             break;
         case 'snag_assigned':

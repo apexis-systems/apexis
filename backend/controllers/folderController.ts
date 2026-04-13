@@ -42,7 +42,7 @@ export const createFolder = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Created folder "${name}"`,
-            metadata: { folderId: newFolder.id, type: folder_type || 'documents' }
+            metadata: { folderId: newFolder.id, type: folder_type === 'photo' ? 'photos' : 'documents' }
         });
 
         res.status(201).json({
@@ -180,7 +180,8 @@ export const bulkUpdateFolders = async (req: Request, res: Response) => {
                     projectId: firstFolder.project_id,
                     userId: authUser.user_id,
                     type: 'edit',
-                    description: `Bulk updated ${ids.length} folders`
+                    description: `Bulk updated ${ids.length} folders`,
+                    metadata: { folderId: firstFolder.id, type: firstFolder.folder_type === 'photo' ? 'photos' : 'documents' }
                 });
             }
         }
@@ -231,7 +232,8 @@ export const updateFolder = async (req: Request, res: Response) => {
             projectId: folder.project_id,
             userId: authUser.user_id,
             type: 'edit',
-            description: `Renamed folder from "${oldName}" to "${name}"`
+            description: `Renamed folder from "${oldName}" to "${name}"`,
+            metadata: { folderId: folder.id, type: folder.folder_type === 'photo' ? 'photos' : 'documents' }
         });
 
         res.status(200).json({
@@ -321,7 +323,8 @@ export const deleteFolder = async (req: Request, res: Response) => {
             projectId: project_id,
             userId: authUser.user_id,
             type: 'edit',
-            description: `Deleted folder "${folderName}" ${forceDelete ? '(recursively)' : ''}`
+            description: `Deleted folder "${folderName}" ${forceDelete ? '(recursively)' : ''}`,
+            metadata: { folderId: folder.id, type: folder.folder_type === 'photo' ? 'photos' : 'documents' }
         });
 
         res.status(200).json({ message: "Folder deleted successfully" });

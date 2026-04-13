@@ -56,13 +56,16 @@ export const addComment = async (req: Request, res: Response) => {
         // (Don't await these to keep response time fast)
         (async () => {
             try {
+                const isImage = file.file_type?.startsWith('image/');
+                const activityCategory = isImage ? 'photos' : 'documents';
+
                 // 1. Log Activity
                 await logActivity({
                     projectId: file.project_id,
                     userId: authUser.user_id,
-                    type: 'comment',
-                    description: `${authUser.name} commented on photo: ${file.file_name}`,
-                    metadata: { folderId: file.folder_id, type: 'photos' }
+                    type: isImage ? 'photo_comment' : 'comment',
+                    description: `${authUser.name} commented on ${isImage ? 'photo' : 'file'}: ${file.file_name}`,
+                    metadata: { folderId: file.folder_id, type: activityCategory }
                 });
 
                 // 2. Send Notification to File Uploader
@@ -74,14 +77,14 @@ export const addComment = async (req: Request, res: Response) => {
                     if (uploaderMembership) {
                         await sendNotification({
                             userId: file.created_by,
-                            title: 'New Photo Comment',
-                            body: `${authUser.name} commented on your photo: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
-                            type: 'photo_comment',
+                            title: isImage ? 'New Photo Comment' : 'New File Comment',
+                            body: `${authUser.name} commented on your ${isImage ? 'photo' : 'file'}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
+                            type: isImage ? 'photo_comment' : 'comment',
                             data: {
                                 fileId: String(file.id),
                                 projectId: String(file.project_id),
                                 folderId: String(file.folder_id),
-                                type: 'photos',
+                                type: activityCategory,
                                 commentId: String(comment.id)
                             }
                         });
