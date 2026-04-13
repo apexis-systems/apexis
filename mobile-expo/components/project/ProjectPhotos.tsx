@@ -93,6 +93,14 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         }
     }, [project?.id, selectedFolder]);
 
+    useEffect(() => {
+        if (selectedFolder) {
+            setSortBy('date');
+        } else {
+            setSortBy('name');
+        }
+    }, [selectedFolder]);
+
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));

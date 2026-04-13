@@ -179,7 +179,10 @@ export default function DashboardScreen() {
     try {
       const url = orgId ? `/projects?organization_id=${orgId}` : '/projects';
       const res = await PrivateAxios.get(url);
-      setProjects(res.data.projects || []);
+      const sortedProjects = (res.data.projects || []).sort((a: any, b: any) => 
+        (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+      );
+      setProjects(sortedProjects);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     }
@@ -545,21 +548,18 @@ export default function DashboardScreen() {
                 >
                   {project.name}
                 </Text>
-                {/* Stats */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="file-text" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalDocs, 10) || 0}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="camera" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalPhotos, 10) || 0}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="folder" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalFolders, 10) || 0}</Text>
-                  </View>
-                </View>
+                {/* Company / Client Name */}
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontSize: 8,
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    fontStyle: 'italic'
+                  }}
+                >
+                  {project.description || 'No Company/Client Name'}
+                </Text>
               </TouchableOpacity>
             ))}
 
@@ -650,10 +650,10 @@ export default function DashboardScreen() {
                     onChangeText={(text) => setNewProject({ ...newProject, name: text })}
                   />
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Description (max 50)</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Company Name/Client Name (max 50)</Text>
                   <TextInput
                     style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
-                    placeholder="Short description"
+                    placeholder="Enter Company/Client Name"
                     placeholderTextColor={colors.textMuted}
                     value={newProject.description}
                     maxLength={50}

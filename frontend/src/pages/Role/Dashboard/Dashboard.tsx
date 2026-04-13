@@ -95,7 +95,10 @@ export default function Dashboard() {
     const fetchProjects = async (orgId?: string) => {
         try {
             const data = await getProjects(orgId);
-            setProjects(data.projects || []);
+            const sortedProjects = (data.projects || []).sort((a: any, b: any) => 
+                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+            );
+            setProjects(sortedProjects);
         } catch (e) {
             console.error("Failed to fetch projects", e);
         }
@@ -335,11 +338,12 @@ export default function Dashboard() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Description (max 50)</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">Company Name/Client Name (max 50)</label>
                             <input
                                 type="text"
                                 maxLength={50}
                                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-border/80"
+                                placeholder="Enter Company/Client Name"
                                 value={newProject.description}
                                 onChange={e => setNewProject({ ...newProject, description: e.target.value })}
                             />
@@ -401,9 +405,8 @@ export default function Dashboard() {
                             {project.name}
                         </h3>
 
-                        <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
-                            {project.description || 'No Description'}
+                        <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground italic">
+                            {project.description || 'No Company/Client Name'}
                         </div>
 
                         <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">

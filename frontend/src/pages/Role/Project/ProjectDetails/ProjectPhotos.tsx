@@ -72,6 +72,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     }
   }, [project?.id]);
 
+  useEffect(() => {
+    if (selectedFolder) {
+      setSortBy('date');
+    } else {
+      setSortBy('name');
+    }
+  }, [selectedFolder]);
+
   // Sync state from URL for tab switching / back navigation
   useEffect(() => {
     const folderId = searchParams?.get('folder') || searchParams?.get('folderId') || null;
