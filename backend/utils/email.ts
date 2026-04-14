@@ -11,13 +11,29 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-export const sendEmail = async (to: string, subject: string, content: string, isHtml = false) => {
+type EmailAttachment = {
+    filename?: string;
+    path?: string;
+    cid?: string;
+};
+
+type SendEmailOptions = boolean | {
+    isHtml?: boolean;
+    text?: string;
+    attachments?: EmailAttachment[];
+};
+
+export const sendEmail = async (to: string, subject: string, content: string, options: SendEmailOptions = false) => {
     try {
+        const normalizedOptions = typeof options === "boolean" ? { isHtml: options } : options;
+        const isHtml = Boolean(normalizedOptions.isHtml);
         const info = await transporter.sendMail({
             from: `"APEXISpro" <${process.env.EMAIL_USER}>`,
             to,
             subject,
             [isHtml ? "html" : "text"]: content,
+            ...(isHtml && normalizedOptions.text ? { text: normalizedOptions.text } : {}),
+            ...(normalizedOptions.attachments?.length ? { attachments: normalizedOptions.attachments } : {}),
         });
         console.log("Email sent: " + info.response);
     } catch (error) {
