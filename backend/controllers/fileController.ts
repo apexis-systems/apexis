@@ -148,7 +148,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         await logActivity({
             projectId: parseInt(project_id, 10),
             userId: authUser.user_id,
-            type: isImage ? 'photo_upload' : 'upload',
+            type: isImage ? 'upload_photo' : 'upload',
             description: `Uploaded ${finalFileName}`,
             metadata: { folderId: finalFolderId, type: activityCategory }
         });

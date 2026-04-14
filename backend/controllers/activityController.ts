@@ -46,11 +46,13 @@ export const getActivities = async (req: Request | any, res: Response) => {
                 projectWhere.organization_id = organization_id;
             }
         } else {
-            // Use active organization from token if provided, otherwise all authorized orgs
-            if (authUser.organization_id) {
-                projectWhere.organization_id = authUser.organization_id;
-            } else {
-                projectWhere.organization_id = { [Op.in]: myOrgs };
+            // Include all authorized organizations (primary org + member projects' orgs)
+            // This ensures activities from all projects are visible on the home screen.
+            projectWhere.organization_id = { [Op.in]: myOrgs };
+            
+            // If they specifically requested an organization, filter further
+            if (organization_id) {
+                projectWhere.organization_id = organization_id;
             }
         }
 
@@ -80,10 +82,10 @@ export const getActivities = async (req: Request | any, res: Response) => {
         // Format for frontend
         const formattedFeed = feed.map((act: any) => {
             let desc = act.description;
-            let metadata = null;
+            let metadata = act.metadata; // Prioritize new column
             
-            // Extract metadata if exists (delimited by \u200B\u200B)
-            if (desc && desc.includes('\u200B\u200B')) {
+            // Extract metadata if exists (delimited by \u200B\u200B) - legacy fallback
+            if (!metadata && desc && desc.includes('\u200B\u200B')) {
                 const parts = desc.split('\u200B\u200B');
                 if (parts.length >= 2) {
                     try {

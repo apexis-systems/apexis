@@ -28,6 +28,10 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING,
                 allowNull: false,
             },
+            metadata: {
+                type: DataTypes.JSON,
+                allowNull: true,
+            },
         },
         {
             tableName: "activities",
