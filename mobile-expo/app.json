@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "APEXISpro",
+    "name": "APEXISpro™",
     "slug": "apexis",
     "version": "1.4.5",
     "orientation": "portrait",
@@ -14,10 +14,10 @@
       "buildNumber": "18",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "APEXISpro needs access to your photo library to attach photos to snags and upload site images.",
-        "NSPhotoLibraryAddUsageDescription": "APEXISpro needs permission to save downloaded photos to your library.",
-        "NSCameraUsageDescription": "APEXISpro needs camera access to capture site photos.",
-        "NSMicrophoneUsageDescription": "APEXISpro needs microphone access for video capture.",
+        "NSPhotoLibraryUsageDescription": "APEXISpro™ needs access to your photo library to attach photos to snags and upload site images.",
+        "NSPhotoLibraryAddUsageDescription": "APEXISpro™ needs permission to save downloaded photos to your library.",
+        "NSCameraUsageDescription": "APEXISpro™ needs camera access to capture site photos.",
+        "NSMicrophoneUsageDescription": "APEXISpro™ needs microphone access for video capture.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -75,22 +75,22 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "APEXISpro needs access to your photos to attach images to snags and upload site photos.",
-          "cameraPermission": "APEXISpro needs camera access to capture site photos."
+          "photosPermission": "APEXISpro™ needs access to your photos to attach images to snags and upload site photos.",
+          "cameraPermission": "APEXISpro™ needs camera access to capture site photos."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "APEXISpro needs access to your photo library.",
-          "savePhotosPermission": "APEXISpro needs permission to save photos to your library.",
+          "photosPermission": "APEXISpro™ needs access to your photo library.",
+          "savePhotosPermission": "APEXISpro™ needs permission to save photos to your library.",
           "isAccessMediaLocationEnabled": true
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "APEXISpro needs camera access to scan documents."
+          "cameraPermission": "APEXISpro™ needs camera access to scan documents."
         }
       ],
       "@react-native-firebase/app",

@@ -20,10 +20,10 @@ const buildAdminOtpEmail = (name: string, organizationName: string, otp: string)
     const text = [
         `Hello ${safeName},`,
         "",
-        "Welcome to APEXISpro.",
+        "Welcome to APEXISpro™.",
         "Your construction communication platform.",
         "",
-        `To access project "${safeOrganization}" on APEXISpro as an "Admin", your verification code is: ${otp}`,
+        `To access project "${safeOrganization}" on APEXISpro™ as an "Admin", your verification code is: ${otp}`,
         "",
         "This code is valid for 5 minutes.",
     ].join("\n");
@@ -35,7 +35,7 @@ const buildAdminOtpEmail = (name: string, organizationName: string, otp: string)
                     <div style="display:flex;align-items:center;gap:20px;">
                         <img src="cid:apexis-app-icon" alt="Apexispro logo" width="56" height="56" style="display:block;border-radius:14px;" />
                         <div style="margin-left:16px;">
-                            <div style="font-size:24px;line-height:1.2;font-weight:700;color:#0f172a;">APEXISpro</div>
+                            <div style="font-size:24px;line-height:1.2;font-weight:700;color:#0f172a;">APEXISpro™</div>
                             <div style="font-size:14px;line-height:1.5;color:#475569;">Record.Report.Release.</div>
                         </div>
                     </div>
@@ -43,13 +43,13 @@ const buildAdminOtpEmail = (name: string, organizationName: string, otp: string)
                 <div style="padding:32px;">
                     <p style="margin:0 0 20px;font-size:16px;line-height:1.7;">Hello ${safeName},</p>
                     <p style="margin:0 0 16px;font-size:16px;line-height:1.7;">
-                        Welcome to <strong>APEXISpro</strong>.
+                        Welcome to <strong>APEXISpro™</strong>.
                     </p>
                     <p style="margin:0 0 24px;font-size:16px;line-height:1.7;">
                         Your construction communication platform.
                     </p>
                     <p style="margin:0 0 24px;font-size:16px;line-height:1.7;">
-                        To access project <strong>"${safeOrganization}"</strong> on APEXISpro as an <strong>"Admin"</strong>, your verification code is:
+                        To access project <strong>"${safeOrganization}"</strong> on APEXISpro™ as an <strong>"Admin"</strong>, your verification code is:
                     </p>
                     <div style="margin:0 0 24px;padding:18px 20px;border-radius:14px;background:#eff6ff;border:1px solid #bfdbfe;text-align:center;">
                         <div style="font-size:34px;line-height:1.2;letter-spacing:6px;font-weight:700;color:#1d4ed8;">${otp}</div>

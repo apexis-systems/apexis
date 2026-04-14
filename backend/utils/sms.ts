@@ -87,6 +87,6 @@ export const sendSMS = async (phone: string, message: string) => {
 };
 
 export const sendOTP = async (phone: string, otp: string) => {
-    const message = `Your APEXISpro verification code is: ${otp}. Valid for 5 minutes.`;
+    const message = `Your APEXISpro™ verification code is: ${otp}. Valid for 5 minutes.`;
     return sendSMS(phone, message);
 };
