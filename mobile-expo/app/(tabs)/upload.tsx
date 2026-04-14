@@ -423,8 +423,8 @@ export default function UploadScreen() {
     // -- Destination Logic --
 
     const handleUpload = async () => {
-        if (!selectedProject || !selectedFolder || fileQueue.length === 0) {
-            Alert.alert('Incomplete', 'Please select a project and destination folder.');
+        if (!selectedProject || !selectedFolder || selectedFolder === 'root' || fileQueue.length === 0) {
+            Alert.alert('Incomplete', 'Please select a specific destination folder. Uploading directly to the project root is not permitted.');
             return;
         }
 
@@ -447,6 +447,7 @@ export default function UploadScreen() {
                 if (photoLocation) formData.append('location', photoLocation);
                 if (photoTags) formData.append('tags', photoTags);
                 formData.append('is_doc_mode', String(isDocMode));
+                formData.append('skipActivity', 'true');
 
 
                 itemsToUpload.forEach((item, idx) => {
@@ -471,8 +472,14 @@ export default function UploadScreen() {
                 if (res.data.success) {
                     setFileQueue(prev => prev.map(it => ({ ...it, status: 'done', progress: 100 })));
                     setMode('done');
-                    await createActivity({ project_id: selectedProject!, type: 'upload', description: `Uploaded ${itemsToUpload.length} documents` });
-
+                    
+                    const folderParam = selectedFolder === 'root' ? null : selectedFolder;
+                    await createActivity({ 
+                        project_id: selectedProject!, 
+                        type: 'upload', 
+                        description: `Uploaded ${itemsToUpload.length} documents`,
+                        metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'documents' }) : undefined
+                    });
                 }
             } else {
                 // Photo Upload Path
@@ -491,6 +498,7 @@ export default function UploadScreen() {
                     formData.append('client_visible', String(true));
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
+                    formData.append('skipActivity', 'true');
 
                     await uploadFileWithProgress(
                         formData,
@@ -508,9 +516,14 @@ export default function UploadScreen() {
                     );
                 }
                 setMode('done');
-                await createActivity({ project_id: selectedProject!, type: 'upload', description: `Uploaded ${itemsToUpload.length} photos` });
 
-
+                const folderParam = selectedFolder === 'root' ? null : selectedFolder;
+                await createActivity({ 
+                    project_id: selectedProject!, 
+                    type: 'upload_photo', 
+                    description: `Uploaded ${itemsToUpload.length} photos`,
+                    metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'photos' }) : undefined
+                });
             }
 
         } catch (error: any) {

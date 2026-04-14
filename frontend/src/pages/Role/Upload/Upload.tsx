@@ -278,12 +278,7 @@ function UploadInner() {
             // Refresh usage after successful upload
             refreshUsage();
 
-            await createActivity({
-                project_id: selectedProject,
-                type: effectiveType === 'photos' ? 'upload_photo' : 'upload',
-                description: `${files.length} new ${effectiveType === 'documents' ? 'documents' : 'site photos'} added`
-            });
-
+            // Backend uploadFile implicitly logs the localized activity via logActivity inside fileController.
             let projectUrl: string;
             if (returnUrl) {
                 projectUrl = returnUrl;

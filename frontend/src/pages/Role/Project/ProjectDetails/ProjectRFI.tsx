@@ -5,7 +5,7 @@ import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useUsage } from '@/contexts/UsageContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2,
     AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera
@@ -40,6 +40,8 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const { t } = useLanguage();
     const { checkLimit } = useUsage();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialRfiId = searchParams?.get('rfiId');
 
     const [rfis, setRfis] = useState<RFI[]>([]);
     const [assignees, setAssignees] = useState<Assignee[]>([]);
@@ -113,6 +115,20 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     };
 
     useEffect(() => { load(); }, [project?.id]);
+
+    useEffect(() => {
+        if (initialRfiId && rfis.length > 0) {
+            const target = rfis.find(r => String(r.id) === String(initialRfiId));
+            if (target) {
+                setSelectedRFI(target);
+                // Clear the ID from URL to prevent loop on back navigation
+                const params = new URLSearchParams(window.location.search);
+                params.delete('rfiId');
+                const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+                window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
+            }
+        }
+    }, [initialRfiId, rfis]);
 
     const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);

@@ -29,7 +29,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type Tab = 'overview' | 'documents' | 'photos' | 'rfi' | 'reports' | 'snags' | 'sops';
 
 export default function ProjectWorkspaceScreen() {
-    const { id, tab, folderId: qFolderId, initialFolderId: qInitialFolderId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string; initialFolderId?: string }>();
+    const { id, tab, folderId: qFolderId, initialFolderId: qInitialFolderId, rfiId, snagId, fileId, photoId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string; initialFolderId?: string; rfiId?: string; snagId?: string; fileId?: string; photoId?: string }>();
     const folderId = qFolderId || qInitialFolderId;
     const { user } = useAuth();
     const { colors, isDark } = useTheme();
@@ -289,9 +289,9 @@ export default function ProjectWorkspaceScreen() {
                         }}
                     />
                 )}
-                {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} />}
-                {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} />}
-                {activeTab === 'rfi' && <ProjectRFI project={project} user={user} onUpdate={checkRFIs} />}
+                {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} initialFileId={fileId} />}
+                {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} initialFileId={fileId || photoId} />}
+                {activeTab === 'rfi' && <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />}
 
                 {/* Internal / Hidden Tabs */}
                 {activeTab === 'reports' && (
@@ -344,7 +344,7 @@ export default function ProjectWorkspaceScreen() {
                             </TouchableOpacity>
                             <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
                         </View>
-                        <ProjectSnagList project={project} />
+                        <ProjectSnagList project={project} initialSnagId={snagId} />
                     </View>
                 )}
                 {activeTab === 'sops' && (

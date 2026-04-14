@@ -24,7 +24,7 @@ import ZoomableImage from '../shared/ZoomableImage';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectPhotos({ project, user, initialFolderId }: { project: any; user: any; initialFolderId?: string }) {
+export default function ProjectPhotos({ project, user, initialFolderId, initialFileId }: { project: any; user: any; initialFolderId?: string; initialFileId?: string }) {
     const { colors } = useTheme();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
@@ -100,6 +100,25 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
             setSortBy('name');
         }
     }, [selectedFolder]);
+
+    useEffect(() => {
+        if (initialFileId && photos.length > 0) {
+            const currentFolderPhotosForInit = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
+            const visiblePhotosInit = user.role === 'client' ? currentFolderPhotosForInit.filter((p) => p.client_visible !== false) : currentFolderPhotosForInit;
+            const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
+                if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
+                if (sortBy === 'date') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
+                return 0;
+            });
+
+            const index = sortedInit.findIndex(p => String(p.id) === String(initialFileId));
+            if (index !== -1) {
+                openViewer(index);
+                router.setParams({ fileId: undefined, photoId: undefined });
+            }
+        }
+    }, [initialFileId, photos, selectedFolder, sortBy, user.role, router]);
 
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));

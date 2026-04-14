@@ -150,7 +150,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             userId: authUser.user_id,
             type: isImage ? 'upload_photo' : 'upload',
             description: `Uploaded ${finalFileName}`,
-            metadata: { folderId: finalFolderId, type: activityCategory }
+            metadata: { folderId: finalFolderId, fileId: newFile.id, type: activityCategory }
         });
 
         // Notify project members based on project membership
@@ -645,7 +645,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     userId: authUser.user_id,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
                     description: `Uploaded scan: ${individualFileName}`,
-                    metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                    metadata: { folderId: validFolderId, fileId: newFile.id, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
             }
         } else {
@@ -715,7 +715,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 userId: authUser.user_id,
                 type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
                 description: `Uploaded scan: ${finalFileName}`,
-                metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                metadata: { folderId: validFolderId, fileId: newFile.id, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
             });
         }
 

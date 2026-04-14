@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as DocumentPicker from 'expo-document-picker';
@@ -27,6 +27,7 @@ interface Props {
   project: Project;
   user: User;
   onUpdate?: () => void;
+  initialRfiId?: string;
 }
 
 const statusConfig = {
@@ -35,8 +36,9 @@ const statusConfig = {
   overdue: { icon: 'alert-triangle', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', label: 'Overdue' },
 };
 
-export default function ProjectRFI({ project, user, onUpdate }: Props) {
+export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [rfis, setRfis] = useState<RFI[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +97,18 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       if (selectedDate) setExpiryDate(selectedDate);
     }
   };
+
+  useEffect(() => {
+    if (initialRfiId && rfis.length > 0) {
+      const target = rfis.find(r => String(r.id) === String(initialRfiId));
+      if (target) {
+        setSelectedRFI(target);
+        setDetailModalVisible(true);
+        // Clear param to prevent loop
+        router.setParams({ rfiId: undefined });
+      }
+    }
+  }, [initialRfiId, rfis]);
 
   const projectId = Number(project.id);
 

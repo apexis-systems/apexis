@@ -60,5 +60,14 @@ export const handleNotificationNavigation = (type: string, data: any, router: Ro
     if (data?.folderId) {
         url += `&initialFolderId=${data.folderId}`;
     }
+    if (data?.fileId) {
+        url += `&fileId=${data.fileId}`;
+    }
+    if (data?.snagId) {
+        url += `&snagId=${data.snagId}`;
+    }
+    if (data?.rfiId) {
+        url += `&rfiId=${data.rfiId}`;
+    }
     router.push(url as any);
 };

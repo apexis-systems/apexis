@@ -23,7 +23,7 @@ export const getActivities = async (filters: {
     }
 };
 
-export const createActivity = async (payload: { project_id: string; type: string; description: string }) => {
+export const createActivity = async (payload: { project_id: string; type: string; description: string, metadata?: string }) => {
     try {
         const res = await PrivateAxios.post('/activities', payload);
         return res.data;

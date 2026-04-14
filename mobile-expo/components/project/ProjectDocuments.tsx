@@ -18,7 +18,7 @@ import { formatFileSize } from '@/helpers/format';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectDocuments({ project, user, initialFolderId }: { project: any, user: any, initialFolderId?: string }) {
+export default function ProjectDocuments({ project, user, initialFolderId, initialFileId }: { project: any, user: any, initialFolderId?: string, initialFileId?: string }) {
     const { colors } = useTheme();
     const router = useRouter();
     const [docs, setDocs] = useState<any[]>([]);
@@ -86,6 +86,25 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
             setSortBy('name');
         }
     }, [selectedFolder]);
+
+    useEffect(() => {
+        if (initialFileId && docs.length > 0) {
+            const currentFolderDocsForInit = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
+            const visibleDocsInit = user.role === 'client' ? currentFolderDocsForInit.filter((d) => d.client_visible !== false) : currentFolderDocsForInit;
+            const sortedInit = [...visibleDocsInit].sort((a: any, b: any) => {
+                if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
+                if (sortBy === 'date') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
+                return 0;
+            });
+
+            const index = sortedInit.findIndex(d => String(d.id) === String(initialFileId));
+            if (index !== -1) {
+                openDoc(sortedInit[index]);
+                router.setParams({ fileId: undefined, documentId: undefined });
+            }
+        }
+    }, [initialFileId, docs, selectedFolder, sortBy, user.role, router]);
 
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
