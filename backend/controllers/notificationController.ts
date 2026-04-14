@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { notifications, projects, project_members, organizations, Sequelize } from '../models/index.ts';
+import { notifications, projects, project_members, organizations, Sequelize, users } from '../models/index.ts';
 import { Op } from 'sequelize';
 /**
  * List all notifications for the current user
@@ -15,26 +15,27 @@ export const listNotifications = async (req: Request, res: Response) => {
 
         const where: any = { user_id: authUser.user_id };
 
-        // 1. Determine projects matching the active role
+        // 1. Determine projects matching the active role or memberships
         let roleProjectIds: number[] = [];
         if (activeRole !== 'superadmin') {
-            // Only query project_members for roles that exist in its enum ('contributor', 'client')
-            if (activeRole === 'contributor' || activeRole === 'client') {
-                const memberships = await project_members.findAll({
-                    where: { user_id: authUser.user_id, role: activeRole },
-                    attributes: ['project_id']
-                });
-                roleProjectIds = memberships.map((m: any) => m.project_id);
-            }
-            
-            // For admins, include projects in their primary organization
-            if (activeRole === 'admin' && authUser.organization_id) {
-                const orgProjects = await projects.findAll({
-                    where: { organization_id: authUser.organization_id },
-                    attributes: ['id']
-                });
-                const orgProjectIds = orgProjects.map((p: any) => p.id);
-                roleProjectIds = [...new Set([...roleProjectIds, ...orgProjectIds])];
+            // Include projects where the user has an explicit membership record
+            const memberships = await project_members.findAll({
+                where: { user_id: authUser.user_id },
+                attributes: ['project_id']
+            });
+            roleProjectIds = memberships.map((m: any) => m.project_id);
+
+            // For admins, also include projects in their primary organization
+            if (activeRole === 'admin') {
+                const orgId = authUser.organization_id || (await users.findByPk(authUser.user_id))?.organization_id;
+                if (orgId) {
+                    const orgProjects = await projects.findAll({
+                        where: { organization_id: orgId },
+                        attributes: ['id']
+                    });
+                    const orgProjectIds = orgProjects.map((p: any) => p.id);
+                    roleProjectIds = [...new Set([...roleProjectIds, ...orgProjectIds])];
+                }
             }
         }
 
@@ -54,7 +55,7 @@ export const listNotifications = async (req: Request, res: Response) => {
         } else if (project_id && project_id !== 'all') {
             where.project_id = project_id;
         }
-        
+
         if (type && type !== 'all') {
             const categories: Record<string, string[]> = {
                 chat: ['chat'],

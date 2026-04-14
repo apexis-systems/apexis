@@ -243,10 +243,17 @@ export const getProjectById = async (req: Request, res: Response) => {
 
         // Restrict access for non-superadmins
         if (authUser.role === "admin" && project.organization_id !== authUser.organization_id) {
-            return res.status(403).json({ error: "Forbidden: Not part of organization" });
+            // Check if the user is a member of this project (perhaps with a different role)
+            const membership = await project_members.findOne({
+                where: { project_id: project.id, user_id: authUser.user_id }
+            });
+            if (!membership) {
+                return res.status(403).json({ error: "Forbidden: Not part of organization" });
+            }
         }
+
         if (authUser.role === "contributor" || authUser.role === "client") {
-            // Check if user is a member of this project in the database
+            // Check if user is a member of this project in the database with the active role
             const membership = await project_members.findOne({
                 where: { project_id: project.id, user_id: authUser.user_id, role: authUser.role }
             });
