@@ -75,6 +75,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [activeFilterType, setActiveFilterType] = useState<'status' | 'creator' | 'assignee' | null>(null);
 
+  // Assignee dropdown in create form
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
       if (showDatePicker) {
@@ -695,26 +698,28 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
                 <View>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                    {assignees.map((a) => (
-                      <TouchableOpacity
-                        key={a.id}
-                        onPress={() => setAssignedToId(a.id === assignedToId ? null : a.id)}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          backgroundColor: assignedToId === a.id ? colors.primary : colors.surface,
-                          borderWidth: 1,
-                          borderColor: assignedToId === a.id ? colors.primary : colors.border
-                        }}
-                      >
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: assignedToId === a.id ? '#fff' : colors.text }}>
-                          {a.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                  {/* Dropdown trigger */}
+                  <TouchableOpacity
+                    onPress={() => setShowAssigneeDropdown(true)}
+                    style={{
+                      height: 48,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: assignedToId ? colors.primary : colors.border,
+                      paddingHorizontal: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
+                      {assignedToId
+                        ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
+                        : 'Select assignee (optional)'}
+                    </Text>
+                    <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
+                  </TouchableOpacity>
                 </View>
 
                 <View>
@@ -819,6 +824,86 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           </View>
         </View>
       </Modal>
+
+      {/* Assignee Picker Modal (for create form) */}
+      <Modal visible={showAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowAssigneeDropdown(false)}>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 24 }}
+          onPress={() => setShowAssigneeDropdown(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: colors.background,
+              borderRadius: 16,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+              </View>
+              <ScrollView style={{ maxHeight: 320 }}>
+                {/* None option */}
+                <TouchableOpacity
+                  onPress={() => { setAssignedToId(null); setShowAssigneeDropdown(false); }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 14, color: assignedToId === null ? colors.primary : colors.textMuted, fontWeight: assignedToId === null ? '700' : '400' }}>
+                    None (Unassigned)
+                  </Text>
+                  {assignedToId === null && <Feather name="check" size={16} color={colors.primary} />}
+                </TouchableOpacity>
+
+                {assignees.map((a) => (
+                  <TouchableOpacity
+                    key={a.id}
+                    onPress={() => { setAssignedToId(a.id); setShowAssigneeDropdown(false); }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                      backgroundColor: assignedToId === a.id ? colors.primary + '10' : 'transparent',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 15,
+                        backgroundColor: colors.primary + '20',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                          {a.name?.charAt(0)?.toUpperCase() || '?'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 14, color: assignedToId === a.id ? colors.primary : colors.text, fontWeight: assignedToId === a.id ? '700' : '400' }}>
+                        {a.name}
+                      </Text>
+                    </View>
+                    {assignedToId === a.id && <Feather name="check" size={16} color={colors.primary} />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Filter Options Modal */}
       <Modal visible={filterModalVisible} animationType="fade" transparent onRequestClose={() => setFilterModalVisible(false)}>
         <TouchableOpacity

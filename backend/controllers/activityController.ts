@@ -6,9 +6,18 @@ import { logActivity } from "../utils/activityUtils.ts";
 export const getActivities = async (req: Request | any, res: Response) => {
     try {
         const authUser = req.user;
-        const { organization_id, user_id, type, project_id } = req.query;
+        const { organization_id, user_id, user_ids, type, project_id, project_ids } = req.query;
         let where: any = {};
         let projectWhere: any = {};
+
+        // Parse multi-value params (comma-separated)
+        const projectIdList: number[] = project_ids
+            ? (project_ids as string).split(',').map(Number).filter(Boolean)
+            : project_id ? [parseInt(project_id as string, 10)] : [];
+
+        const userIdList: number[] = user_ids
+            ? (user_ids as string).split(',').map(Number).filter(Boolean)
+            : user_id ? [parseInt(user_id as string, 10)] : [];
 
         // Determine accessible projects for the user
         if (authUser.role !== 'superadmin' && authUser.role !== 'admin') {
@@ -17,20 +26,18 @@ export const getActivities = async (req: Request | any, res: Response) => {
                 where: { user_id: authUser.user_id },
                 attributes: ['project_id']
             });
-            const projectIds = userProjects.map((p: any) => p.project_id);
+            const accessibleProjectIds = userProjects.map((p: any) => p.project_id);
 
-            if (project_id) {
-                // If a specific project_id is requested, ensure the user belongs to it
-                if (!projectIds.includes(parseInt(project_id as string, 10))) {
-                    return res.status(200).json({ activities: [] });
-                }
-                where.project_id = project_id;
+            if (projectIdList.length > 0) {
+                // Filter: only include project IDs the user has access to
+                const allowed = projectIdList.filter(id => accessibleProjectIds.includes(id));
+                if (allowed.length === 0) return res.status(200).json({ activities: [] });
+                where.project_id = { [Op.in]: allowed };
             } else {
-                // Filter by all projects the user belongs to
-                where.project_id = { [Op.in]: projectIds };
+                where.project_id = { [Op.in]: accessibleProjectIds };
             }
-        } else if (project_id) {
-            where.project_id = project_id;
+        } else if (projectIdList.length > 0) {
+            where.project_id = projectIdList.length === 1 ? projectIdList[0] : { [Op.in]: projectIdList };
         }
 
         // 1. Determine all organizations the user belongs to
@@ -46,17 +53,16 @@ export const getActivities = async (req: Request | any, res: Response) => {
                 projectWhere.organization_id = organization_id;
             }
         } else {
-            // Include all authorized organizations (primary org + member projects' orgs)
-            // This ensures activities from all projects are visible on the home screen.
             projectWhere.organization_id = { [Op.in]: myOrgs };
-            
-            // If they specifically requested an organization, filter further
             if (organization_id) {
                 projectWhere.organization_id = organization_id;
             }
         }
 
-        if (user_id) where.user_id = user_id;
+        // Apply user filter (multi or single)
+        if (userIdList.length === 1) where.user_id = userIdList[0];
+        else if (userIdList.length > 1) where.user_id = { [Op.in]: userIdList };
+
         if (type) where.type = type;
 
         // Fetch activities only for projects within the determined organization(s) and membership scope

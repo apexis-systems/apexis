@@ -4,15 +4,19 @@ import { ActivityItem } from '@/types';
 export const getActivities = async (filters: {
     organization_id?: string;
     user_id?: string;
+    user_ids?: string;
     type?: string;
     project_id?: string;
+    project_ids?: string;
 } = {}): Promise<ActivityItem[]> => {
     try {
         const params = new URLSearchParams();
         if (filters.organization_id) params.append('organization_id', filters.organization_id);
         if (filters.user_id) params.append('user_id', filters.user_id);
+        if (filters.user_ids) params.append('user_ids', filters.user_ids);
         if (filters.type) params.append('type', filters.type);
         if (filters.project_id) params.append('project_id', filters.project_id);
+        if (filters.project_ids) params.append('project_ids', filters.project_ids);
 
         const url = `/activities?${params.toString()}`;
         const res = await PrivateAxios.get(url);
