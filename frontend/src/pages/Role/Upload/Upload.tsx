@@ -278,7 +278,13 @@ function UploadInner() {
             // Refresh usage after successful upload
             refreshUsage();
 
-            // Backend uploadFile implicitly logs the localized activity via logActivity inside fileController.
+            const folderParam = selectedFolder === 'root' ? null : selectedFolder;
+            await createActivity({
+                project_id: selectedProject,
+                type: effectiveType === 'photos' ? 'upload_photo' : 'upload',
+                description: `${files.length} new ${effectiveType === 'documents' ? 'documents' : 'site photos'} added`,
+                metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: effectiveType }) : undefined
+            });
             let projectUrl: string;
             if (returnUrl) {
                 projectUrl = returnUrl;
