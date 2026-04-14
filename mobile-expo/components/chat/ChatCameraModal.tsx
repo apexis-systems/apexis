@@ -39,8 +39,8 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                 // Fix orientation for iOS
                 const manipulated = await ImageManipulator.manipulateAsync(
                     photo.uri,
-                    [{ resize: { width: 1280 } }],
-                    { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                    [{ resize: { width: 1920 } }],
+                    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                 );
 
                 onCapture({
@@ -72,8 +72,8 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
             try {
                 const manipulated = await ImageManipulator.manipulateAsync(
                     uri,
-                    [{ resize: { width: 1280 } }],
-                    { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                    [{ resize: { width: 1920 } }],
+                    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                 );
                 uri = manipulated.uri;
             } catch (e) {}

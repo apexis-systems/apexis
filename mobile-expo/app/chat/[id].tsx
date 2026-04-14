@@ -266,8 +266,8 @@ export default function ChatDetailScreen() {
             try {
                 const manipulated = await ImageManipulator.manipulateAsync(
                     uri,
-                    [{ resize: { width: 1280 } }],
-                    { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                    [{ resize: { width: 1920 } }],
+                    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                 );
                 uri = manipulated.uri;
             } catch (e) {}
@@ -301,8 +301,8 @@ export default function ChatDetailScreen() {
                 try {
                     const manipulated = await ImageManipulator.manipulateAsync(
                         uri,
-                        [{ resize: { width: 1280 } }],
-                        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                        [{ resize: { width: 1920 } }],
+                        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                     );
                     uri = manipulated.uri;
                     mimeType = 'image/jpeg'; // Standardize to JPEG after manipulation

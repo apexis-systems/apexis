@@ -211,8 +211,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       // Fix orientation and format for iOS compatibility
       const manipulated = await ImageManipulator.manipulateAsync(
         photo.uri,
-        [{ resize: { width: 1280 } }],
-        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: 1920 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
       );
 
       const newIdx = selectedImages.length;
@@ -246,8 +246,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         try {
           const manipulated = await ImageManipulator.manipulateAsync(
             asset.uri,
-            [{ resize: { width: 1280 } }],
-            { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+            [{ resize: { width: 1920 } }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
           );
           processedUris.push(manipulated.uri);
         } catch (e) {

@@ -236,8 +236,8 @@ export default function UploadScreen() {
                 try {
                     const manipulated = await ImageManipulator.manipulateAsync(
                         uri,
-                        [{ resize: { width: 1280 } }],
-                        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                        [{ resize: { width: 1920 } }],
+                        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                     );
                     uri = manipulated.uri;
                 } catch (e) {
@@ -285,8 +285,8 @@ export default function UploadScreen() {
                     try {
                         const manipulated = await ImageManipulator.manipulateAsync(
                             uri,
-                            [{ resize: { width: 1280 } }],
-                            { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                            [{ resize: { width: 1920 } }],
+                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                         );
                         uri = manipulated.uri;
                         mimeType = 'image/jpeg'; // Standardize to JPEG after manipulation
@@ -347,8 +347,8 @@ export default function UploadScreen() {
             // Fix orientation for iOS items
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [{ resize: { width: 1280 } }],
-                { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                [{ resize: { width: 1920 } }],
+                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
             );
 
             if (isDocMode) {
@@ -413,8 +413,8 @@ export default function UploadScreen() {
                     try {
                         const manipulated = await ImageManipulator.manipulateAsync(
                             uri,
-                            [{ resize: { width: 1280 } }],
-                            { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                            [{ resize: { width: 1920 } }],
+                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                         );
                         uri = manipulated.uri;
                     } catch (e) {
