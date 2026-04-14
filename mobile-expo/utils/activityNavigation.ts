@@ -4,13 +4,25 @@ import { Router } from 'expo-router';
  * Handles navigation logic for activity feed items in the mobile app.
  */
 export const handleActivityNavigation = (act: any, router: Router) => {
-    const { type, projectId, metadata } = act;
+    let { type, projectId, metadata } = act;
+
+    // Parse metadata if it came back as a string due to database config or fallback
+    if (typeof metadata === 'string') {
+        try {
+            metadata = JSON.parse(metadata);
+        } catch (e) {
+            console.error('Failed to parse activity metadata string', e);
+            metadata = {};
+        }
+    }
 
     // 1. Folder-level deep redirection
     if (metadata?.folderId) {
         const rawType = metadata.type?.toLowerCase();
         const tab = (rawType === 'photo' || rawType === 'photos') ? 'photos' : 'documents';
-        router.push(`/(tabs)/project/${projectId}?tab=${tab}&initialFolderId=${metadata.folderId}` as any);
+        let additionalParams = '';
+        if (metadata.fileId) additionalParams += `&fileId=${metadata.fileId}`;
+        router.push(`/(tabs)/project/${projectId}?tab=${tab}&initialFolderId=${metadata.folderId}${additionalParams}` as any);
         return;
     }
 
@@ -18,15 +30,28 @@ export const handleActivityNavigation = (act: any, router: Router) => {
     if (metadata?.type) {
         const rawType = metadata.type.toLowerCase();
         let tab = 'overview';
+        let query = '';
         
+        if ((rawType === 'photo' || rawType === 'photos') && metadata.fileId) {
+            query += `&fileId=${metadata.fileId}`;
+        } else if ((rawType === 'document' || rawType === 'documents') && metadata.fileId) {
+            query += `&fileId=${metadata.fileId}`;
+        }
+
         if (rawType === 'photo' || rawType === 'photos') tab = 'photos';
         else if (rawType === 'document' || rawType === 'documents') tab = 'documents';
-        else if (rawType === 'snag' || rawType === 'snags') tab = 'snags';
-        else if (rawType === 'rfi') tab = 'rfi';
+        else if (rawType === 'snag' || rawType === 'snags') {
+            tab = 'snags';
+            if (metadata.snagId) query = `&snagId=${metadata.snagId}`;
+        }
+        else if (rawType === 'rfi') {
+            tab = 'rfi';
+            if (metadata.rfiId) query = `&rfiId=${metadata.rfiId}`;
+        }
         else if (rawType === 'report' || rawType === 'reports') tab = 'reports';
 
         if (tab !== 'overview') {
-            router.push(`/(tabs)/project/${projectId}?tab=${tab}` as any);
+            router.push(`/(tabs)/project/${projectId}?tab=${tab}${query}` as any);
             return;
         }
     }
@@ -39,7 +64,27 @@ export const handleActivityNavigation = (act: any, router: Router) => {
         case 'file_upload_admin':
         case 'file_visibility':
         case 'folder_visibility':
-            tab = 'documents';
+            // If it's plural photos type but generic upload type
+            if (metadata?.type === 'photos') {
+                tab = 'photos';
+            } else {
+                tab = 'documents';
+            }
+            break;
+        case 'edit':
+            if (metadata?.type === 'snags') {
+                tab = 'snags';
+                const query = metadata.snagId ? `&snagId=${metadata.snagId}` : '';
+                router.push(`/(tabs)/project/${projectId}?tab=${tab}${query}` as any);
+                return;
+            }
+            if (metadata?.type === 'rfi') {
+                tab = 'rfi';
+                const query = metadata.rfiId ? `&rfiId=${metadata.rfiId}` : '';
+                router.push(`/(tabs)/project/${projectId}?tab=${tab}${query}` as any);
+                return;
+            }
+            tab = 'overview';
             break;
         case 'upload_photo':
         case 'photo_upload':

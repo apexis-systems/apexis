@@ -27,6 +27,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { useUsage } from '@/contexts/UsageContext';
+import * as Notifications from 'expo-notifications';
+import { handleNotificationNavigation } from '@/utils/navigation';
 
 function RootLayoutNav() {
   const { isLoggedIn, isLoading: isAuthLoading, user, isPendingName } = useAuth();
@@ -35,6 +37,18 @@ function RootLayoutNav() {
   const router = useRouter();
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [subscriptionLocked, setSubscriptionLocked] = useState(false);
+  const response = Notifications.useLastNotificationResponse();
+
+  useEffect(() => {
+    if (response && isLoggedIn && !isAuthLoading && hasSeenOnboarding && !subscriptionLocked) {
+      const data = response.notification.request.content.data;
+      const type = data.type as string;
+
+      setTimeout(() => {
+        handleNotificationNavigation(type, data, router);
+      }, 500);
+    }
+  }, [response, isLoggedIn, isAuthLoading, hasSeenOnboarding, subscriptionLocked]);
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -80,9 +94,9 @@ function RootLayoutNav() {
     const nextLocked = fromProfile || fromUsage;
     setSubscriptionLocked(nextLocked);
     if (nextLocked) {
-      SecureStore.setItemAsync('subscriptionLocked', 'true').catch(() => {});
+      SecureStore.setItemAsync('subscriptionLocked', 'true').catch(() => { });
     } else {
-      SecureStore.deleteItemAsync('subscriptionLocked').catch(() => {});
+      SecureStore.deleteItemAsync('subscriptionLocked').catch(() => { });
     }
   }, [user?.organization?.subscription_locked, usageData?.plan?.access?.isLocked]);
 

@@ -15,6 +15,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as Haptics from 'expo-haptics';
 import ChatCameraModal from '@/components/chat/ChatCameraModal';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
@@ -127,6 +128,7 @@ export default function ChatDetailScreen() {
                 if (String(tid) === String(id)) {
                     setTypingUser(prev => {
                         if (!prev) {
+                            if (animationRef.current) animationRef.current.stop();
                             animationRef.current = Animated.loop(
                                 Animated.sequence([
                                     Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
@@ -226,7 +228,7 @@ export default function ChatDetailScreen() {
 
             const payload: any = {
                 roomId: id as string,
-                type: fileData ? (fileData.file_type.startsWith('image/') ? 'image' : 'file') : 'text',
+                type: fileData ? (fileData.file_type?.startsWith('image/') ? 'image' : 'file') : 'text',
                 file_url: fileData?.file_url,
                 file_name: fileData?.file_name,
                 file_type: fileData?.file_type,
@@ -255,15 +257,25 @@ export default function ChatDetailScreen() {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: false,
-            quality: 0.8,
+            quality: 0.9,
         });
 
         if (!result.canceled) {
             const asset = result.assets[0];
+            let uri = asset.uri;
+            try {
+                const manipulated = await ImageManipulator.manipulateAsync(
+                    uri,
+                    [{ resize: { width: 1920 } }],
+                    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                );
+                uri = manipulated.uri;
+            } catch (e) {}
+
             setAnnotatingImage({
-                uri: asset.uri,
+                uri,
                 name: asset.fileName || `image_${Date.now()}.jpg`,
-                type: asset.mimeType || 'image/jpeg',
+                type: 'image/jpeg',
                 size: asset.fileSize || 0
             });
         }
@@ -281,10 +293,28 @@ export default function ChatDetailScreen() {
 
         if (!result.canceled) {
             const asset = result.assets[0];
+            let uri = asset.uri;
+            let mimeType = asset.mimeType || 'application/octet-stream';
+
+            // If it's an image picked from files, enforce the same 1280px resolution
+            if (mimeType.startsWith('image/')) {
+                try {
+                    const manipulated = await ImageManipulator.manipulateAsync(
+                        uri,
+                        [{ resize: { width: 1920 } }],
+                        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                    );
+                    uri = manipulated.uri;
+                    mimeType = 'image/jpeg'; // Standardize to JPEG after manipulation
+                } catch (e) {
+                    console.error('Document image manipulation error:', e);
+                }
+            }
+
             setAttachment({
-                uri: asset.uri,
+                uri,
                 name: asset.name,
-                type: asset.mimeType,
+                type: mimeType,
                 size: asset.size || 0
             });
         }
@@ -550,7 +580,7 @@ export default function ChatDetailScreen() {
 
                 <TouchableOpacity style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }} numberOfLines={1}>
-                        {room?.name || room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name || 'Loading...'}
+                        {(room?.type === 'direct' ? room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name : room?.name) || 'Loading...'}
                     </Text>
                     <Text style={{ fontSize: 12, color: colors.textMuted }}>
                         {room?.type === 'group'
@@ -691,6 +721,9 @@ export default function ChatDetailScreen() {
 
                             <TouchableOpacity onPress={pickDocument} style={{ padding: 4 }}>
                                 <Feather name="paperclip" size={22} color={colors.textMuted} style={{ transform: [{ rotate: '-45deg' }] }} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={pickImage} style={{ padding: 4, marginLeft: 4 }}>
+                                <Feather name="image" size={22} color={colors.textMuted} />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={takePhoto} style={{ padding: 4, marginLeft: 4 }}>
                                 <Feather name="camera" size={22} color={colors.textMuted} />

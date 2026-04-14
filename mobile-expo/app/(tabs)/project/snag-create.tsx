@@ -108,13 +108,13 @@ export default function SnagCreateScreen() {
         if (!cameraRef.current || isCapturing) return;
         setIsCapturing(true);
         try {
-            const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+            const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
             if (!photo?.uri) return;
 
             // Fix orientation for iOS
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [],
+                [{ resize: { width: 1920 } }],
                 { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
             );
 
@@ -131,11 +131,21 @@ export default function SnagCreateScreen() {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsMultipleSelection: false,
-            quality: 0.8,
+            quality: 0.9,
         });
         if (result.canceled || !result.assets?.length) return;
         const a = result.assets[0] as any;
-        setCapturedPhoto({ uri: a.uri, mime: a.mimeType || 'image/jpeg', name: a.fileName || `snag_${Date.now()}.jpg` });
+        let uri = a.uri;
+        try {
+            const manipulated = await ImageManipulator.manipulateAsync(
+                uri,
+                [{ resize: { width: 1920 } }],
+                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            uri = manipulated.uri;
+        } catch (e) {}
+
+        setCapturedPhoto({ uri, mime: 'image/jpeg', name: a.fileName || `snag_${Date.now()}.jpg` });
         setStep('details');
     };
 

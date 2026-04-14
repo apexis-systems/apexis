@@ -7,7 +7,9 @@ import { Bell, Clock, Loader2, Filter, CheckCircle } from 'lucide-react';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import { getOrganizations } from '@/services/superadminService';
 import { getProjects } from '@/services/projectService';
+import { getOrgUsers } from '@/services/userService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { handleNotificationNavigation } from '@/helpers/notificationNavigation';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/contexts/SocketContext';
@@ -21,9 +23,12 @@ const NotificationsPage = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [organizations, setOrganizations] = useState<any[]>([]);
     const [projectsList, setProjectsList] = useState<any[]>([]);
+    const [usersList, setUsersList] = useState<any[]>([]);
 
     const [selectedOrgId, setSelectedOrgId] = useState<string>('all');
-    const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+    // Multi-select: empty array = "all"
+    const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [selectedType, setSelectedType] = useState<string>('all');
 
     const [loading, setLoading] = useState(true);
@@ -60,16 +65,20 @@ const NotificationsPage = () => {
     }, [user]);
 
     useEffect(() => {
-        const fetchProjects = async () => {
+        const fetchFilters = async () => {
             try {
                 const orgId = selectedOrgId !== 'all' ? selectedOrgId : undefined;
-                const data = await getProjects(orgId);
-                setProjectsList(data.projects || []);
+                const [projectsData, usersData] = await Promise.all([
+                    getProjects(orgId),
+                    getOrgUsers(),
+                ]);
+                setProjectsList(projectsData.projects || []);
+                setUsersList(usersData || []);
             } catch (error) {
-                console.error("Error fetching projects", error);
+                console.error("Error fetching filters", error);
             }
         };
-        fetchProjects();
+        fetchFilters();
     }, [selectedOrgId]);
 
     const fetchNotifications = async () => {
@@ -77,17 +86,25 @@ const NotificationsPage = () => {
         setLoading(true);
         try {
             const params = new URLSearchParams();
-            if (selectedProjectId !== 'all') params.append('project_id', selectedProjectId);
+            if (selectedProjectIds.length === 1) params.append('project_id', selectedProjectIds[0]);
+            else if (selectedProjectIds.length > 1) params.append('project_ids', selectedProjectIds.join(','));
             if (selectedType !== 'all') params.append('type', selectedType);
 
             const res = await PrivateAxios.get(`/notifications?${params.toString()}`);
-            // Only show unread notifications based on user request "delete the seen notification"
-            // Actually, the backend still returns all. We filter here.
             const all = res.data.notifications || [];
-            setNotifications(all.filter((n: any) => !n.is_read && matchesTypeFilter(n, selectedType)));
+
+            // Filter by user if multi-select is active
+            let filtered = all.filter((n: any) => !n.is_read && matchesTypeFilter(n, selectedType));
+            if (selectedUserIds.length > 0) {
+                filtered = filtered.filter((n: any) =>
+                    selectedUserIds.includes(String(n.sender_id ?? n.userId ?? n.user_id ?? ''))
+                );
+            }
+
+            setNotifications(filtered);
             
-            // Sync unread count globally if we are viewing "all"
-            if (selectedProjectId === 'all' && selectedType === 'all') {
+            // Sync unread count globally if viewing "all"
+            if (selectedProjectIds.length === 0 && selectedType === 'all' && selectedUserIds.length === 0) {
                 setUnreadNotificationCount(all.filter((n: any) => !n.is_read).length);
             }
         } catch (error) {
@@ -99,7 +116,7 @@ const NotificationsPage = () => {
 
     useEffect(() => {
         fetchNotifications();
-    }, [user, selectedProjectId, selectedType]);
+    }, [user, selectedProjectIds, selectedUserIds, selectedType]);
 
     const markReadAndNavigate = async (notif: any) => {
         try {
@@ -127,6 +144,9 @@ const NotificationsPage = () => {
 
     if (!user) return null;
 
+    const projectOptions = projectsList.map(p => ({ label: p.name, value: String(p.id) }));
+    const userOptions = usersList.map(u => ({ label: u.name, value: String(u.id) }));
+
     return (
         <div className="max-w-4xl p-8 mx-auto">
             <div className="flex flex-col gap-6 mb-8">
@@ -148,7 +168,7 @@ const NotificationsPage = () => {
 
                 <div className="flex flex-wrap gap-3">
                     {user.role === 'superadmin' && (
-                        <Select value={selectedOrgId} onValueChange={(val) => { setSelectedOrgId(val); setSelectedProjectId('all'); }}>
+                        <Select value={selectedOrgId} onValueChange={(val) => { setSelectedOrgId(val); setSelectedProjectIds([]); setSelectedUserIds([]); }}>
                             <SelectTrigger className="w-40 text-xs">
                                 <SelectValue placeholder="All Organizations" />
                             </SelectTrigger>
@@ -161,17 +181,19 @@ const NotificationsPage = () => {
                         </Select>
                     )}
 
-                    <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                        <SelectTrigger className="w-40 text-xs">
-                            <SelectValue placeholder="All Projects" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Projects</SelectItem>
-                            {projectsList.map(proj => (
-                                <SelectItem key={proj.id} value={String(proj.id)}>{proj.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <MultiSelect
+                        options={projectOptions}
+                        selected={selectedProjectIds}
+                        onChange={setSelectedProjectIds}
+                        placeholder="All Projects"
+                    />
+
+                    <MultiSelect
+                        options={userOptions}
+                        selected={selectedUserIds}
+                        onChange={setSelectedUserIds}
+                        placeholder="All Users"
+                    />
 
                     <Select value={selectedType} onValueChange={setSelectedType}>
                         <SelectTrigger className="w-40 text-xs">

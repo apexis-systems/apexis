@@ -96,7 +96,7 @@ const Signup = () => {
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight text-primary font-angelica flex items-center justify-center gap-1">
                     APEXIS
-                    <span className="text-sm lowercase mt-2 font-angelica">pro</span>
+                    <span className="text-sm lowercase mt-2 font-angelica">pro™</span>
                 </h1>
                 <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground uppercase">CREATE YOUR ACCOUNT</p>
             </div>

@@ -1,24 +1,20 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-    View, TouchableOpacity, Modal, ScrollView, Image, ActivityIndicator, Alert, Platform, BackHandler
+    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, BackHandler
 } from 'react-native';
-import { Text, TextInput } from '@/components/ui/AppText';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
+import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Project } from '@/types';
 import {
-    Snag, Assignee, SnagStatus,
-    getSnags, getAssignees, updateSnagStatus, deleteSnagApi,
+    Snag, SnagStatus,
+    getSnags, updateSnagStatus, deleteSnagApi,
 } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 
-interface Props { project: Project; }
+interface Props { project: Project; initialSnagId?: string; }
 
 const STATUS_CONFIG: Record<SnagStatus, { icon: keyof typeof Feather.glyphMap; bg: string; label: string }> = {
     amber: { icon: 'minus', bg: '#f59e0b', label: 'Waiting for Clearance' },
@@ -27,18 +23,14 @@ const STATUS_CONFIG: Record<SnagStatus, { icon: keyof typeof Feather.glyphMap; b
 };
 const STATUS_CYCLE: SnagStatus[] = ['amber', 'green', 'red'];
 
-// Step: 'camera' = show full-screen camera, 'details' = show snag form
-type SnagStep = 'camera' | 'details';
-
-export default function ProjectSnagList({ project }: Props) {
+export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const { colors } = useTheme();
     const { user } = useAuth();
     const router = useRouter();
-    const projectId = (project as any)?.id;
+    const projectId = project.id;
 
     const [snags, setSnags] = useState<Snag[]>([]);
     const [loading, setLoading] = useState(true);
-
     // Photo viewer
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
@@ -105,10 +97,28 @@ export default function ProjectSnagList({ project }: Props) {
                 <View style={{ gap: 8 }}>
                     {snags.map((snag) => {
                         const cfg = STATUS_CONFIG[snag.status];
+                        const isTarget = initialSnagId && String(snag.id) === String(initialSnagId);
                         return (
                             <View
                                 key={snag.id}
-                                style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, padding: 12 }}
+                                style={{ 
+                                    flexDirection: 'row', 
+                                    alignItems: 'flex-start', 
+                                    gap: 10, 
+                                    borderRadius: 12, 
+                                    borderWidth: isTarget ? 2 : 1, 
+                                    borderColor: isTarget ? colors.primary : colors.border, 
+                                    backgroundColor: colors.background, 
+                                    padding: 12,
+                                    // Soft shadow if targeted
+                                    ...(isTarget ? {
+                                        shadowColor: colors.primary,
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.2,
+                                        shadowRadius: 4,
+                                        elevation: 3
+                                    } : {})
+                                }}
                             >
                                 <TouchableOpacity
                                     onPress={() => handleCycleStatus(snag)}
@@ -131,7 +141,7 @@ export default function ProjectSnagList({ project }: Props) {
                                         </View>
                                     ) : null}
                                 </View>
-                                {(String(snag.creator?.id) === String(user?.id)) && (
+                                {(snag.creator?.id && user?.id && String(snag.creator.id) === String(user.id)) && (
                                     <TouchableOpacity
                                         onPress={async () => {
                                             Alert.alert('Delete', `Remove "${snag.title}"?`, [
@@ -175,8 +185,6 @@ export default function ProjectSnagList({ project }: Props) {
                     )}
                 </View>
             )}
-
-
 
             {/* ── Photo viewer ───────────────────────────────────────────────── */}
             <FullScreenImageModal

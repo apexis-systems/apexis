@@ -230,10 +230,33 @@ export default function UploadScreen() {
 
             if (result.canceled || !result.assets?.length) return;
 
-            const queue: FileProgress[] = result.assets.map((a: any) => ({
-                asset: { uri: a.uri, fileName: a.fileName || a.uri.split('/').pop(), type: a.mimeType || 'image/jpeg', size: a.fileSize || 0 },
-                progress: 0, status: 'pending', anim: new Animated.Value(0), source: isDocMode ? 'scan' : 'gallery',
-            }));
+            const queue: FileProgress[] = [];
+            for (const asset of result.assets) {
+                let uri = asset.uri;
+                try {
+                    const manipulated = await ImageManipulator.manipulateAsync(
+                        uri,
+                        [{ resize: { width: 1920 } }],
+                        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                    );
+                    uri = manipulated.uri;
+                } catch (e) {
+                    console.warn('Gallery ImageManipulator failed:', e);
+                }
+
+                queue.push({
+                    asset: { 
+                        uri, 
+                        fileName: asset.fileName || uri.split('/').pop(), 
+                        type: 'image/jpeg', 
+                        size: asset.fileSize || 0 
+                    },
+                    progress: 0, 
+                    status: 'pending', 
+                    anim: new Animated.Value(0), 
+                    source: isDocMode ? 'scan' : 'gallery',
+                });
+            }
 
             addToQueue(queue);
         } catch (error) {
@@ -251,10 +274,35 @@ export default function UploadScreen() {
             });
             if (result.canceled || !result.assets?.length) return;
 
-            const queue: FileProgress[] = result.assets.map((a) => ({
-                asset: { uri: a.uri, fileName: a.name, type: a.mimeType, size: a.size },
-                progress: 0, status: 'pending', anim: new Animated.Value(0), source: 'document',
-            }));
+            const queue: FileProgress[] = [];
+            
+            for (const a of result.assets) {
+                let uri = a.uri;
+                let mimeType = a.mimeType || 'application/octet-stream';
+
+                // If it's an image picked from files, enforce the same 1280px resolution
+                if (mimeType.startsWith('image/')) {
+                    try {
+                        const manipulated = await ImageManipulator.manipulateAsync(
+                            uri,
+                            [{ resize: { width: 1920 } }],
+                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                        );
+                        uri = manipulated.uri;
+                        mimeType = 'image/jpeg'; // Standardize to JPEG after manipulation
+                    } catch (e) {
+                        console.warn('Document picker image manipulation failed:', e);
+                    }
+                }
+
+                queue.push({
+                    asset: { uri, fileName: a.name, type: mimeType, size: a.size },
+                    progress: 0, 
+                    status: 'pending', 
+                    anim: new Animated.Value(0), 
+                    source: 'document',
+                });
+            }
             addToQueue(queue);
         } catch (err) {
             console.error('pickDocument error:', err);
@@ -299,8 +347,8 @@ export default function UploadScreen() {
             // Fix orientation for iOS items
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [],
-                { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                [{ resize: { width: 1920 } }],
+                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
             );
 
             if (isDocMode) {
@@ -365,8 +413,8 @@ export default function UploadScreen() {
                     try {
                         const manipulated = await ImageManipulator.manipulateAsync(
                             uri,
-                            [],
-                            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                            [{ resize: { width: 1920 } }],
+                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                         );
                         uri = manipulated.uri;
                     } catch (e) {
@@ -423,8 +471,8 @@ export default function UploadScreen() {
     // -- Destination Logic --
 
     const handleUpload = async () => {
-        if (!selectedProject || !selectedFolder || fileQueue.length === 0) {
-            Alert.alert('Incomplete', 'Please select a project and destination folder.');
+        if (!selectedProject || !selectedFolder || selectedFolder === 'root' || fileQueue.length === 0) {
+            Alert.alert('Incomplete', 'Please select a specific destination folder. Uploading directly to the project root is not permitted.');
             return;
         }
 
@@ -447,6 +495,7 @@ export default function UploadScreen() {
                 if (photoLocation) formData.append('location', photoLocation);
                 if (photoTags) formData.append('tags', photoTags);
                 formData.append('is_doc_mode', String(isDocMode));
+                formData.append('skipActivity', 'true');
 
 
                 itemsToUpload.forEach((item, idx) => {
@@ -471,8 +520,14 @@ export default function UploadScreen() {
                 if (res.data.success) {
                     setFileQueue(prev => prev.map(it => ({ ...it, status: 'done', progress: 100 })));
                     setMode('done');
-                    await createActivity({ project_id: selectedProject!, type: 'upload', description: `Uploaded ${itemsToUpload.length} documents` });
-
+                    
+                    const folderParam = selectedFolder === 'root' ? null : selectedFolder;
+                    await createActivity({ 
+                        project_id: selectedProject!, 
+                        type: 'upload', 
+                        description: `Uploaded ${itemsToUpload.length} documents`,
+                        metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'documents' }) : undefined
+                    });
                 }
             } else {
                 // Photo Upload Path
@@ -480,17 +535,19 @@ export default function UploadScreen() {
                     const item = itemsToUpload[i];
                     
                     const formData = new FormData();
+                    formData.append('project_id', selectedProject!);
+                    formData.append('folder_id', (selectedFolder === 'root' ? '' : selectedFolder) || '');
+                    formData.append('file_tag', 'photo');
+                    formData.append('client_visible', String(true));
+                    formData.append('skipActivity', 'true');
+                    if (photoLocation) formData.append('location', photoLocation);
+                    if (photoTags) formData.append('tags', photoTags);
+                    
                     formData.append('file', {
                         uri: item.asset.uri,
                         name: item.asset.fileName || `photo_${i}.jpg`,
                         type: item.asset.type || 'image/jpeg',
                     } as any);
-                    formData.append('project_id', selectedProject!);
-                    formData.append('folder_id', (selectedFolder === 'root' ? '' : selectedFolder) || '');
-                    formData.append('file_tag', 'photo');
-                    formData.append('client_visible', String(true));
-                    if (photoLocation) formData.append('location', photoLocation);
-                    if (photoTags) formData.append('tags', photoTags);
 
                     await uploadFileWithProgress(
                         formData,
@@ -508,9 +565,14 @@ export default function UploadScreen() {
                     );
                 }
                 setMode('done');
-                await createActivity({ project_id: selectedProject!, type: 'upload', description: `Uploaded ${itemsToUpload.length} photos` });
 
-
+                const folderParam = selectedFolder === 'root' ? null : selectedFolder;
+                await createActivity({ 
+                    project_id: selectedProject!, 
+                    type: 'upload_photo', 
+                    description: `Uploaded ${itemsToUpload.length} photos`,
+                    metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'photos' }) : undefined
+                });
             }
 
         } catch (error: any) {

@@ -264,7 +264,6 @@ function UploadInner() {
         try {
             await Promise.all(files.map(async (f) => {
                 const formData = new FormData();
-                formData.append('file', f);
                 formData.append('project_id', selectedProject);
                 formData.append('skipActivity', 'true');
                 if (selectedFolder) formData.append('folder_id', selectedFolder);
@@ -272,18 +271,20 @@ function UploadInner() {
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
                 }
+                formData.append('file', f);
                 return uploadFile(formData);
             }));
 
             // Refresh usage after successful upload
             refreshUsage();
 
+            const folderParam = selectedFolder === 'root' ? null : selectedFolder;
             await createActivity({
                 project_id: selectedProject,
                 type: effectiveType === 'photos' ? 'upload_photo' : 'upload',
-                description: `${files.length} new ${effectiveType === 'documents' ? 'documents' : 'site photos'} added`
+                description: `${files.length} new ${effectiveType === 'documents' ? 'documents' : 'site photos'} added`,
+                metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: effectiveType }) : undefined
             });
-
             let projectUrl: string;
             if (returnUrl) {
                 projectUrl = returnUrl;

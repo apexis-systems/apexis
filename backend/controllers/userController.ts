@@ -150,7 +150,7 @@ export const getOrgUsers = async (req: Request, res: Response) => {
         let whereCondition: any = { organization_id: { [Op.in]: myOrgs } };
 
         if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
-            // Non-admins: Only see users who share a project with them in ANY of their orgs
+            // Non-admins: See users who share a project with them, PLUS all admins of their org
             const myProjectIds = await project_members.findAll({
                 where: { user_id: authUser.user_id },
                 attributes: ['project_id']
@@ -161,12 +161,22 @@ export const getOrgUsers = async (req: Request, res: Response) => {
                 attributes: ['user_id']
             }).then((pms: any[]) => pms.map((pm: any) => pm.user_id));
 
-            whereCondition.id = { [Op.in]: [...new Set([...peerUserIds, authUser.user_id])] };
+            // Always include admins of the organizations the user belongs to,
+            // so contributors/clients can always message their project admin(s).
+            const adminUserIds = await users.findAll({
+                where: {
+                    organization_id: { [Op.in]: myOrgs },
+                    role: 'admin'
+                },
+                attributes: ['id']
+            }).then((admins: any[]) => admins.map((a: any) => a.id));
+
+            whereCondition.id = { [Op.in]: [...new Set([...peerUserIds, ...adminUserIds, authUser.user_id])] };
         }
 
         const orgUsers = await users.findAll({
             where: whereCondition,
-            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt', 'organization_id'],
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'profile_pic', 'is_primary', 'email_verified', 'phone_verified', 'createdAt', 'organization_id'],
             include: [{ model: organizations, attributes: ['name'] }]
         });
 

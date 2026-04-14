@@ -22,7 +22,7 @@ const RedirectContent = () => {
 
             const timer = setTimeout(() => {
                 setAttempted(true);
-            }, 2000);
+            }, 1500);
 
             return () => clearTimeout(timer);
         }
@@ -52,7 +52,7 @@ const RedirectContent = () => {
                 <img src="/app-icon.png" alt="Apexis Logo" className="w-full h-full object-contain drop-shadow-md" />
             </div>
 
-            <h1 className="text-2xl font-bold text-foreground mb-3 font-angelica uppercase tracking-wider">APEXIS</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-3 font-angelica uppercase tracking-wider">APEXIS<span className="text-sm lowercase font-angelica">pro™</span></h1>
             <p className="text-muted-foreground max-w-sm mb-10 text-sm">
                 We're opening the app for you to access your project.
             </p>

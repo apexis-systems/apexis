@@ -112,7 +112,7 @@ export const getActiveQrSessions = async (req: AuthRequest, res: Response) => {
                             sessions.push({
                                 sessionId: key.replace('qr_session:', ''),
                                 // In a real app we'd capture device type/IP in the auth step and store it
-                                device: "APEXISpro Web API Session"
+                                device: "APEXISpro™ Web API Session"
                             });
                         }
                     } catch (e) {

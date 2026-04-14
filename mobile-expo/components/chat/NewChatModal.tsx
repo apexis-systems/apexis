@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Modal, View, TouchableOpacity, FlatList, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform, StatusBar
+    Modal, View, TouchableOpacity, FlatList, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform, StatusBar, Alert
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -9,6 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getOrgUsers } from '@/services/userService';
 import { createRoom } from '@/services/chatService';
 import { useAuth } from '@/contexts/AuthContext';
+import SecureAvatar from '@/components/shared/SecureAvatar';
 
 interface Props {
     visible: boolean;
@@ -27,6 +28,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
     const [groupName, setGroupName] = useState('');
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [submittingUserId, setSubmittingUserId] = useState<number | null>(null);
 
     useEffect(() => {
         if (visible) {
@@ -56,18 +58,27 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
     );
 
     const handleDirectSelect = async (userId: number) => {
+        if (submitting) return;  // prevent double-tap
         setSubmitting(true);
+        setSubmittingUserId(userId);
         try {
             const room = await createRoom({
                 type: 'direct',
                 memberIds: [userId]
             });
-            onSuccess(room);
+            // On iOS, router.push() is swallowed if the Modal is still animating.
+            // We must close the modal first, then defer the navigation.
             onClose();
-        } catch (err) {
-            console.error("Failed to create chat", err);
+            setTimeout(() => {
+                onSuccess(room);
+            }, Platform.OS === 'ios' ? 350 : 50);
+        } catch (err: any) {
+            console.error("Failed to create direct chat", err);
+            const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to start chat';
+            Alert.alert('Unable to Start Chat', errorMsg);
         } finally {
             setSubmitting(false);
+            setSubmittingUserId(null);
         }
     };
 
@@ -97,11 +108,15 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                 name: type === 'group' ? groupName : undefined,
                 memberIds: selectedUsers
             });
-            onSuccess(room);
+            // Same iOS modal-close-before-navigate pattern as direct chat
             onClose();
+            setTimeout(() => {
+                onSuccess(room);
+            }, Platform.OS === 'ios' ? 350 : 50);
         } catch (err: any) {
             console.error("Failed to create chat", err);
-            alert(err?.response?.data?.message || err.message || "Failed to create chat");
+            const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to create chat';
+            Alert.alert('Unable to Create Chat', errorMsg);
         } finally {
             setSubmitting(false);
         }
@@ -109,17 +124,26 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
 
     const renderUser = ({ item }: { item: any }) => {
         const isSelected = selectedUsers.includes(item.id);
+        const isLoadingThisRow = submittingUserId === item.id;
         return (
             <TouchableOpacity
                 onPress={() => toggleUser(item.id)}
-                style={[styles.userItem, { borderBottomColor: colors.border }]}
+                disabled={submitting}
+                style={[styles.userItem, { borderBottomColor: colors.border, opacity: submitting && !isLoadingThisRow ? 0.5 : 1 }]}
             >
-                <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
-                </View>
+                <SecureAvatar
+                    fileKey={item.profile_pic}
+                    name={item.name || '?'}
+                    size={44}
+                />
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <Text style={[styles.userName, { color: colors.text }]}>{item.name}</Text>
+                        {item.role && item.role !== 'superadmin' && (
+                            <View style={{ backgroundColor: colors.primary + '22', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 9, color: colors.primary, fontWeight: '700', textTransform: 'capitalize' }}>{item.role}</Text>
+                            </View>
+                        )}
                         {item.organization?.name && (
                             <View style={{ backgroundColor: colors.border, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
                                 <Text style={{ fontSize: 9, color: colors.textMuted, fontWeight: '700' }}>{item.organization.name}</Text>
@@ -128,11 +152,13 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                     </View>
                     <Text style={[styles.userEmail, { color: colors.textMuted }]}>{item.email}</Text>
                 </View>
-                {isSelected && (
+                {isLoadingThisRow ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                ) : isSelected ? (
                     <View style={[styles.checkbox, { backgroundColor: colors.primary }]}>
                         <Feather name="check" size={12} color="#fff" />
                     </View>
-                )}
+                ) : null}
             </TouchableOpacity>
         );
     };

@@ -422,15 +422,66 @@ export const createRoom = async (req: Request, res: Response) => {
             }
 
             const targetUserId = memberIds[0];
+            let targetUser = await users.findByPk(targetUserId);
 
-            const targetUser = allowedUserIds
-                ? (allowedUserIds.has(Number(targetUserId)) ? await users.findByPk(targetUserId) : null)
-                : await users.findOne({ where: { id: targetUserId, organization_id: actualOrgId } });
             if (!targetUser) {
-                return res.status(404).json({ error: project_id ? 'User is not part of this project organization' : 'User not found in your organization' });
+                return res.status(404).json({ error: 'User not found' });
             }
 
-            // Check if direct room already exists
+            // CROSS-ORG VISIBILITY CHECK
+            // If project_id is provided, use the strict project allowedUserIds
+            if (allowedUserIds) {
+                if (!allowedUserIds.has(Number(targetUserId))) {
+                    return res.status(403).json({ error: 'User is not part of this project organization' });
+                }
+            } else {
+                // Determine all organizations the authUser has access to
+                const myProjectOrgs = await project_members.findAll({
+                    where: { user_id: authUser.user_id },
+                    include: [{ model: projects, as: 'project', attributes: ['organization_id'] }]
+                }).then((pms: any) => pms.map((pm: any) => pm.project?.organization_id).filter(Boolean));
+                const myAccessibleOrgs = [...new Set([authUser.organization_id, ...myProjectOrgs].filter(Boolean))];
+
+                let isVisible = false;
+
+                // 1. Is it the same primary organization?
+                if (myAccessibleOrgs.includes(targetUser.organization_id)) {
+                    // If either is admin, visible.
+                    if (authUser.role === 'admin' || targetUser.role === 'admin' || authUser.role === 'superadmin') {
+                        isVisible = true;
+                    } else {
+                        // Both non-admins: Must share at least one project
+                        const sharedProjectCount = await project_members.count({
+                            where: {
+                                user_id: { [Op.in]: [authUser.user_id, targetUserId] }
+                            },
+                            group: ['project_id'],
+                            having: sequelize.literal('count(DISTINCT "user_id") = 2')
+                        });
+                        if (sharedProjectCount.length > 0) isVisible = true;
+                    }
+                } else {
+                    // 2. Different organizations: Must share a project
+                    const sharedProjectCount = await project_members.count({
+                        where: {
+                            user_id: { [Op.in]: [authUser.user_id, targetUserId] }
+                        },
+                        group: ['project_id'],
+                        having: sequelize.literal('count(DISTINCT "user_id") = 2')
+                    });
+                    if (sharedProjectCount.length > 0) isVisible = true;
+                }
+
+                if (!isVisible) {
+                    return res.status(403).json({ error: 'You do not have permission to message this user' });
+                }
+
+                // For cross-org direct chats without a project context, 
+                // we default to the target user's organization for the room.
+                actualOrgId = targetUser.organization_id;
+            }
+
+            // Check if direct room already exists in this organization context
             const existingRoom = await rooms.findOne({
                 where: {
                     type: 'direct',
@@ -484,16 +535,23 @@ export const createRoom = async (req: Request, res: Response) => {
                     return res.status(400).json({ error: 'Some selected users are not part of this project organization' });
                 }
             } else {
+                // Broad group chat creator's accessible organizations
+                const myProjectOrgs = await project_members.findAll({
+                    where: { user_id: authUser.user_id },
+                    include: [{ model: projects, as: 'project', attributes: ['organization_id'] }]
+                }).then((pms: any) => pms.map((pm: any) => pm.project?.organization_id).filter(Boolean));
+                const myAccessibleOrgs = [...new Set([authUser.organization_id, ...myProjectOrgs].filter(Boolean))];
+
                 const validUsers = await users.findAll({
                     where: {
                         id: { [Op.in]: allMemberIds },
-                        organization_id: actualOrgId
+                        organization_id: { [Op.in]: myAccessibleOrgs }
                     },
                     attributes: ['id']
                 });
 
                 if (validUsers.length !== allMemberIds.length) {
-                    return res.status(400).json({ error: 'Some selected users do not belong to your organization' });
+                    return res.status(400).json({ error: 'Some selected users are not accessible from your organizations' });
                 }
             }
 

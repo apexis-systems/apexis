@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as DocumentPicker from 'expo-document-picker';
@@ -27,6 +27,7 @@ interface Props {
   project: Project;
   user: User;
   onUpdate?: () => void;
+  initialRfiId?: string;
 }
 
 const statusConfig = {
@@ -35,8 +36,9 @@ const statusConfig = {
   overdue: { icon: 'alert-triangle', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', label: 'Overdue' },
 };
 
-export default function ProjectRFI({ project, user, onUpdate }: Props) {
+export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [rfis, setRfis] = useState<RFI[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +75,9 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [activeFilterType, setActiveFilterType] = useState<'status' | 'creator' | 'assignee' | null>(null);
 
+  // Assignee dropdown in create form
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
       if (showDatePicker) {
@@ -95,6 +100,18 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       if (selectedDate) setExpiryDate(selectedDate);
     }
   };
+
+  useEffect(() => {
+    if (initialRfiId && rfis.length > 0) {
+      const target = rfis.find(r => String(r.id) === String(initialRfiId));
+      if (target) {
+        setSelectedRFI(target);
+        setDetailModalVisible(true);
+        // Clear param to prevent loop
+        router.setParams({ rfiId: undefined });
+      }
+    }
+  }, [initialRfiId, rfis]);
 
   const projectId = Number(project.id);
 
@@ -161,9 +178,16 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
     }, [detailModalVisible, createModalVisible, filterModalVisible, statusFilter, fetchRFIs, fetchAssignees, previewImage, annotatingImageIndex, cameraVisible])
   );
 
-  const handleImageSelection = () => {
+  const handleImageSelection = async () => {
     if (!cameraPermission?.granted) {
-      requestCameraPermission();
+      const res = await requestCameraPermission();
+      if (!res.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Camera permission is needed to take RFI photos. Please enable it in your device settings."
+        );
+        return;
+      }
     }
     setCameraVisible(true);
   };
@@ -177,7 +201,7 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
     setIsCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 0.9,
         base64: false,
         exif: true,
       });
@@ -187,8 +211,8 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       // Fix orientation and format for iOS compatibility
       const manipulated = await ImageManipulator.manipulateAsync(
         photo.uri,
-        [],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: 1920 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
       );
 
       const newIdx = selectedImages.length;
@@ -213,12 +237,24 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: remaining,
-      quality: 0.7,
+      quality: 0.9,
     });
 
     if (!result.canceled) {
-      const newUris = result.assets.map(a => a.uri);
-      setSelectedImages([...selectedImages, ...newUris].slice(0, 3));
+      const processedUris = [];
+      for (const asset of result.assets) {
+        try {
+          const manipulated = await ImageManipulator.manipulateAsync(
+            asset.uri,
+            [{ resize: { width: 1920 } }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          processedUris.push(manipulated.uri);
+        } catch (e) {
+          processedUris.push(asset.uri);
+        }
+      }
+      setSelectedImages([...selectedImages, ...processedUris].slice(0, 3));
     }
   };
 
@@ -681,26 +717,28 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
 
                 <View>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                    {assignees.map((a) => (
-                      <TouchableOpacity
-                        key={a.id}
-                        onPress={() => setAssignedToId(a.id === assignedToId ? null : a.id)}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          backgroundColor: assignedToId === a.id ? colors.primary : colors.surface,
-                          borderWidth: 1,
-                          borderColor: assignedToId === a.id ? colors.primary : colors.border
-                        }}
-                      >
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: assignedToId === a.id ? '#fff' : colors.text }}>
-                          {a.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                  {/* Dropdown trigger */}
+                  <TouchableOpacity
+                    onPress={() => setShowAssigneeDropdown(true)}
+                    style={{
+                      height: 48,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: assignedToId ? colors.primary : colors.border,
+                      paddingHorizontal: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
+                      {assignedToId
+                        ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
+                        : 'Select assignee (optional)'}
+                    </Text>
+                    <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
+                  </TouchableOpacity>
                 </View>
 
                 <View>
@@ -805,6 +843,86 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
           </View>
         </View>
       </Modal>
+
+      {/* Assignee Picker Modal (for create form) */}
+      <Modal visible={showAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowAssigneeDropdown(false)}>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 24 }}
+          onPress={() => setShowAssigneeDropdown(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: colors.background,
+              borderRadius: 16,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+              </View>
+              <ScrollView style={{ maxHeight: 320 }}>
+                {/* None option */}
+                <TouchableOpacity
+                  onPress={() => { setAssignedToId(null); setShowAssigneeDropdown(false); }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 14, color: assignedToId === null ? colors.primary : colors.textMuted, fontWeight: assignedToId === null ? '700' : '400' }}>
+                    None (Unassigned)
+                  </Text>
+                  {assignedToId === null && <Feather name="check" size={16} color={colors.primary} />}
+                </TouchableOpacity>
+
+                {assignees.map((a) => (
+                  <TouchableOpacity
+                    key={a.id}
+                    onPress={() => { setAssignedToId(a.id); setShowAssigneeDropdown(false); }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                      backgroundColor: assignedToId === a.id ? colors.primary + '10' : 'transparent',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 15,
+                        backgroundColor: colors.primary + '20',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                          {a.name?.charAt(0)?.toUpperCase() || '?'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 14, color: assignedToId === a.id ? colors.primary : colors.text, fontWeight: assignedToId === a.id ? '700' : '400' }}>
+                        {a.name}
+                      </Text>
+                    </View>
+                    {assignedToId === a.id && <Feather name="check" size={16} color={colors.primary} />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Filter Options Modal */}
       <Modal visible={filterModalVisible} animationType="fade" transparent onRequestClose={() => setFilterModalVisible(false)}>
         <TouchableOpacity

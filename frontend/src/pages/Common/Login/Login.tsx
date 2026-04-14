@@ -159,7 +159,7 @@ const Login = () => {
                     <div className='flex flex-col items-center'>
                         <h1 className="text-4xl tracking-[0.1em] text-primary font-angelica flex items-center gap-1">
                             APEXIS
-                            <span className="text-xl lowercase mt-3 font-angelica">pro</span>
+                            <span className="text-xl lowercase mt-3 font-angelica">pro™</span>
                         </h1>
                         <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground uppercase">
                             RECORD · REPORT · RELEASE
@@ -180,7 +180,7 @@ const Login = () => {
                                     <div className="space-y-8 flex-1">
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">1</div>
-                                            <p className="text-[17px] text-foreground leading-snug pt-0.5 font-montserrat">Open the <span className="text-primary inline-flex items-center gap-0.5 bg-primary/5 px-2 py-0.5 rounded-md font-angelica tracking-widest">APEXIS<span className="text-[10px] lowercase pt-0.5 font-angelica">pro</span></span> mobile app & log in</p>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5 font-montserrat">Open the <span className="text-primary inline-flex items-center gap-0.5 bg-primary/5 px-2 py-0.5 rounded-md font-angelica tracking-widest">APEXIS<span className="text-[10px] lowercase pt-0.5 font-angelica">pro™</span></span> mobile app & log in</p>
                                         </div>
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">2</div>

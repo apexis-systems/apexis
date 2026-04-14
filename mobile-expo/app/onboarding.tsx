@@ -85,10 +85,10 @@ export default function OnboardingScreen() {
                                 style={[styles.title, { color: colors.text, fontFamily: 'Angelica' }]}
                             >
                                 {item.title === 'APEXISpro' ? (
-                                    <>
+                                    <Text style={{ fontSize: 42, color: colors.text, fontFamily: 'Angelica' }}>
                                         APEXIS
-                                        <Text style={{ fontSize: 22, textTransform: 'lowercase', fontFamily: 'Angelica' }}>pro</Text>
-                                    </>
+                                        <Text style={{ fontSize: 22, textTransform: 'lowercase', fontFamily: 'Angelica' }}>pro™</Text>
+                                    </Text>
                                 ) : item.title}
                             </Animated.Text>
                             <Animated.Text

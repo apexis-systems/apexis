@@ -23,24 +23,24 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
     const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
 
     useEffect(() => {
-        if (visible) {
+        if (visible && (!permission || !permission.granted)) {
             requestPermission();
         }
-    }, [visible]);
+    }, [visible, permission?.granted]);
 
     const handleCapture = async () => {
         if (!cameraRef.current || isProcessing) return;
         setIsProcessing(true);
         try {
             const photo = await cameraRef.current.takePictureAsync({
-                quality: 0.8,
+                quality: 0.9,
             });
             if (photo) {
                 // Fix orientation for iOS
                 const manipulated = await ImageManipulator.manipulateAsync(
                     photo.uri,
-                    [],
-                    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                    [{ resize: { width: 1920 } }],
+                    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                 );
 
                 onCapture({
@@ -63,15 +63,25 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: false,
-            quality: 0.8,
+            quality: 0.9,
         });
 
         if (!result.canceled) {
             const asset = result.assets[0];
+            let uri = asset.uri;
+            try {
+                const manipulated = await ImageManipulator.manipulateAsync(
+                    uri,
+                    [{ resize: { width: 1920 } }],
+                    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                );
+                uri = manipulated.uri;
+            } catch (e) {}
+
             onCapture({
-                uri: asset.uri,
+                uri,
                 name: asset.fileName || `image_${Date.now()}.jpg`,
-                type: asset.mimeType || 'image/jpeg',
+                type: 'image/jpeg',
                 size: asset.fileSize || 0
             });
             onClose();

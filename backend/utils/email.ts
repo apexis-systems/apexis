@@ -28,7 +28,7 @@ export const sendEmail = async (to: string, subject: string, content: string, op
         const normalizedOptions = typeof options === "boolean" ? { isHtml: options } : options;
         const isHtml = Boolean(normalizedOptions.isHtml);
         const info = await transporter.sendMail({
-            from: `"APEXISpro" <${process.env.EMAIL_USER}>`,
+            from: `"APEXISpro™" <${process.env.EMAIL_USER}>`,
             to,
             subject,
             [isHtml ? "html" : "text"]: content,

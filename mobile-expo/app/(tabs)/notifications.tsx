@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, FlatList, TouchableOpacity, StyleSheet, RefreshControl, BackHandler, ActivityIndicator } from 'react-native';
+import { View, FlatList, TouchableOpacity, StyleSheet, RefreshControl, BackHandler, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { handleNotificationNavigation } from '@/utils/navigation';
+import { getProjects } from '@/services/projectService';
+import { getOrgUsers } from '@/services/userService';
 
 interface Notification {
     id: number;
@@ -18,6 +20,9 @@ interface Notification {
     is_read: boolean;
     createdAt: string;
     organizationName?: string;
+    sender_id?: number;
+    userId?: number;
+    user_id?: number;
 }
 
 export default function NotificationsScreen() {
@@ -25,13 +30,20 @@ export default function NotificationsScreen() {
     const router = useRouter();
     const { socket, setUnreadNotificationCount } = useSocket();
     const { isTourActive } = require('@/contexts/TourContext').useTour();
+
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [projects, setProjects] = useState<any[]>([]);
+    const [usersList, setUsersList] = useState<any[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
-    
-    const [selectedProjectId, setSelectedProjectId] = useState<number | 'all'>('all');
-    const [selectedType, setSelectedType] = useState<string | 'all'>('all');
+
+    // Multi-select: empty array = "all"
+    const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+    const [selectedType, setSelectedType] = useState<string>('all');
+
+    // Modal state
+    const [activeModal, setActiveModal] = useState<'project' | 'user' | null>(null);
 
     const filterTypes = [
         { label: 'All', value: 'all' },
@@ -43,9 +55,8 @@ export default function NotificationsScreen() {
         { label: 'Members', value: 'member' },
     ];
 
-    const matchesTypeFilter = (notif: Notification, type: string | 'all') => {
+    const matchesTypeFilter = (notif: Notification, type: string) => {
         if (type === 'all') return true;
-
         const categories: Record<string, string[]> = {
             chat: ['chat', 'group_creation'],
             file: ['file_upload', 'file_upload_admin', 'file_visibility', 'folder_visibility'],
@@ -54,7 +65,6 @@ export default function NotificationsScreen() {
             rfi: ['rfi_created', 'rfi_assigned', 'rfi_status_update', 'rfi_comment'],
             member: ['member_joined'],
         };
-
         return (categories[type] || [type]).includes(notif.type);
     };
 
@@ -64,38 +74,52 @@ export default function NotificationsScreen() {
                 router.back();
                 return true;
             };
-
             const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
             return () => subscription.remove();
         }, [router])
     );
 
-    const fetchProjects = async () => {
-        try {
-            const res = await PrivateAxios.get('/projects');
-            setProjects(res.data.projects || []);
-        } catch (error) {
-            console.error('Failed to fetch projects:', error);
-        }
-    };
+    useEffect(() => {
+        const fetchFilters = async () => {
+            try {
+                const [projectsData, usersData] = await Promise.all([
+                    getProjects(undefined),
+                    getOrgUsers(),
+                ]);
+                setProjects(projectsData.projects || []);
+                setUsersList(usersData || []);
+            } catch (error) {
+                console.error('Failed to fetch filters:', error);
+            }
+        };
+        fetchFilters();
+    }, []);
 
     const fetchNotifications = async () => {
         try {
             setLoading(true);
-            let url = '/notifications';
             const params: string[] = [];
-            if (selectedProjectId !== 'all') params.push(`project_id=${selectedProjectId}`);
+            if (selectedProjectIds.length === 1) params.push(`project_id=${selectedProjectIds[0]}`);
+            else if (selectedProjectIds.length > 1) params.push(`project_ids=${selectedProjectIds.join(',')}`);
             if (selectedType !== 'all') params.push(`type=${selectedType}`);
-            
-            if (params.length > 0) url += `?${params.join('&')}`;
 
+            const url = params.length > 0 ? `/notifications?${params.join('&')}` : '/notifications';
             const res = await PrivateAxios.get(url);
             const data = res.data.notifications || [];
-            const unread = data.filter((n: any) => !n.is_read);
+
+            let unread = data.filter((n: any) => !n.is_read && matchesTypeFilter(n, selectedType));
+
+            // Filter by user if multi-select is active
+            if (selectedUserIds.length > 0) {
+                unread = unread.filter((n: any) =>
+                    selectedUserIds.includes(String(n.sender_id ?? n.userId ?? n.user_id ?? ''))
+                );
+            }
+
             setNotifications(unread);
-            
-            if (selectedProjectId === 'all' && selectedType === 'all') {
-                setUnreadNotificationCount(unread.length);
+
+            if (selectedProjectIds.length === 0 && selectedType === 'all' && selectedUserIds.length === 0) {
+                setUnreadNotificationCount(data.filter((n: any) => !n.is_read).length);
             }
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
@@ -128,36 +152,25 @@ export default function NotificationsScreen() {
     }, [isTourActive, registerSpotlight]);
 
     useEffect(() => {
-        fetchProjects();
-    }, []);
-
-    const DUMMY_NOTIFICATIONS = [
-        { id: 1, title: 'Project Status Updated', body: 'The foundation work for Site A has been approved.', type: 'snag_status_update', is_read: false, createdAt: new Date().toISOString(), data: {} },
-        { id: 2, title: 'New Document Uploaded', body: 'Sarah uploaded "Borehole Test Results".', type: 'file_upload', is_read: false, createdAt: new Date().toISOString(), data: {} },
-    ];
-
-    const displayNotifications = isTourActive ? DUMMY_NOTIFICATIONS : notifications;
-
-    useEffect(() => {
         fetchNotifications();
-    }, [selectedProjectId, selectedType]);
+    }, [selectedProjectIds, selectedUserIds, selectedType]);
 
     useEffect(() => {
         if (socket) {
             const handleNewNotif = (notif: Notification) => {
-                const matchesProject = selectedProjectId === 'all' || notif.data?.projectId == selectedProjectId;
+                const matchesProject = selectedProjectIds.length === 0 || selectedProjectIds.includes(notif.data?.projectId);
                 const matchesType = matchesTypeFilter(notif, selectedType);
-                
-                if (matchesProject && matchesType) {
+                const matchesUser = selectedUserIds.length === 0 ||
+                    selectedUserIds.includes(String(notif.sender_id ?? notif.userId ?? notif.user_id ?? ''));
+
+                if (matchesProject && matchesType && matchesUser) {
                     setNotifications(prev => [notif, ...prev]);
                 }
             };
             socket.on('new-notification', handleNewNotif);
-            return () => {
-                socket.off('new-notification', handleNewNotif);
-            };
+            return () => { socket.off('new-notification', handleNewNotif); };
         }
-    }, [socket, selectedProjectId, selectedType]);
+    }, [socket, selectedProjectIds, selectedUserIds, selectedType]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -175,7 +188,37 @@ export default function NotificationsScreen() {
         }
     };
 
-    const renderItem = ({ item }: { item: Notification }) => (
+    const DUMMY_NOTIFICATIONS = [
+        { id: 1, title: 'Project Status Updated', body: 'The foundation work for Site A has been approved.', type: 'snag_status_update', is_read: false, createdAt: new Date().toISOString(), data: {} },
+        { id: 2, title: 'New Document Uploaded', body: 'Sarah uploaded "Borehole Test Results".', type: 'file_upload', is_read: false, createdAt: new Date().toISOString(), data: {} },
+    ];
+
+    const displayNotifications = isTourActive ? DUMMY_NOTIFICATIONS : notifications;
+
+    const toggleProject = (id: number) => {
+        setSelectedProjectIds(prev =>
+            prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+        );
+    };
+    const toggleUser = (id: string) => {
+        setSelectedUserIds(prev =>
+            prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+        );
+    };
+
+    const projectLabel = selectedProjectIds.length === 0
+        ? 'All Projects'
+        : selectedProjectIds.length === 1
+            ? (projects.find(p => p.id === selectedProjectIds[0])?.name || '...')
+            : `${selectedProjectIds.length} selected`;
+
+    const userLabel = selectedUserIds.length === 0
+        ? 'All Users'
+        : selectedUserIds.length === 1
+            ? (usersList.find(u => String(u.id) === selectedUserIds[0])?.name || '...')
+            : `${selectedUserIds.length} selected`;
+
+    const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity
             style={[
                 styles.notificationItem,
@@ -255,12 +298,13 @@ export default function NotificationsScreen() {
                 )}
             </View>
 
+            {/* Type Filter Chips */}
             <View style={{ paddingTop: 10 }}>
                 <FlatList
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     data={filterTypes}
-                    contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 10 }}
+                    contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 8 }}
                     keyExtractor={item => item.value}
                     renderItem={({ item }) => (
                         <TouchableOpacity
@@ -280,29 +324,52 @@ export default function NotificationsScreen() {
                     )}
                 />
 
-                <FlatList
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    data={[{ id: 'all', name: 'All Projects' }, ...projects]}
-                    contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 12 }}
-                    keyExtractor={item => item.id.toString()}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity
-                            onPress={() => setSelectedProjectId(item.id === 'all' ? 'all' : item.id)}
-                            style={[
-                                styles.chip,
-                                {
-                                    backgroundColor: (item.id === 'all' ? selectedProjectId === 'all' : selectedProjectId === item.id) ? colors.primary : colors.surface,
-                                    borderColor: colors.border,
-                                }
-                            ]}
-                        >
-                            <Text style={[styles.chipText, { color: (item.id === 'all' ? selectedProjectId === 'all' : selectedProjectId === item.id) ? '#fff' : colors.textMuted }]}>
-                                {item.name}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-                />
+                {/* Project + User dropdown filter buttons */}
+                <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 10 }}>
+                    {/* Project filter */}
+                    <TouchableOpacity
+                        onPress={() => setActiveModal('project')}
+                        style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            borderRadius: 9,
+                            borderWidth: 1,
+                            borderColor: selectedProjectIds.length > 0 ? colors.primary : colors.border,
+                            backgroundColor: selectedProjectIds.length > 0 ? colors.primary + '12' : colors.surface,
+                        }}
+                    >
+                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: selectedProjectIds.length > 0 ? colors.primary : colors.textMuted, flex: 1 }}>
+                            {projectLabel}
+                        </Text>
+                        <Feather name="chevron-down" size={11} color={selectedProjectIds.length > 0 ? colors.primary : colors.textMuted} />
+                    </TouchableOpacity>
+
+                    {/* User filter */}
+                    <TouchableOpacity
+                        onPress={() => setActiveModal('user')}
+                        style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            borderRadius: 9,
+                            borderWidth: 1,
+                            borderColor: selectedUserIds.length > 0 ? colors.primary : colors.border,
+                            backgroundColor: selectedUserIds.length > 0 ? colors.primary + '12' : colors.surface,
+                        }}
+                    >
+                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: selectedUserIds.length > 0 ? colors.primary : colors.textMuted, flex: 1 }}>
+                            {userLabel}
+                        </Text>
+                        <Feather name="chevron-down" size={11} color={selectedUserIds.length > 0 ? colors.primary : colors.textMuted} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {loading ? (
@@ -311,7 +378,7 @@ export default function NotificationsScreen() {
                 </View>
             ) : (
                 <FlatList
-                    data={displayNotifications as Notification[]}
+                    data={displayNotifications as any[]}
                     renderItem={renderItem}
                     keyExtractor={item => item.id.toString()}
                     refreshControl={
@@ -325,6 +392,112 @@ export default function NotificationsScreen() {
                     }
                 />
             )}
+
+            {/* Multi-select Modal for Project/User */}
+            <Modal visible={activeModal !== null} animationType="fade" transparent>
+                <TouchableOpacity
+                    activeOpacity={1}
+                    onPress={() => setActiveModal(null)}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.15)' }}
+                >
+                    <View style={{
+                        position: 'absolute',
+                        top: 170,
+                        left: 14,
+                        right: 14,
+                        backgroundColor: colors.surface,
+                        borderRadius: 12,
+                        padding: 4,
+                        elevation: 8,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 8,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                    }}>
+                        <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: colors.text }}>
+                                {activeModal === 'project' ? 'Select Projects' : 'Select Users'}
+                            </Text>
+                        </View>
+                        <ScrollView style={{ maxHeight: 340 }}>
+                            {/* All option */}
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (activeModal === 'project') setSelectedProjectIds([]);
+                                    else setSelectedUserIds([]);
+                                }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12 }}
+                            >
+                                <View style={{
+                                    width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+                                    borderColor: (activeModal === 'project' ? selectedProjectIds.length === 0 : selectedUserIds.length === 0) ? colors.primary : colors.border,
+                                    backgroundColor: (activeModal === 'project' ? selectedProjectIds.length === 0 : selectedUserIds.length === 0) ? colors.primary : 'transparent',
+                                    alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                    {(activeModal === 'project' ? selectedProjectIds.length === 0 : selectedUserIds.length === 0) && (
+                                        <Feather name="check" size={11} color="#fff" />
+                                    )}
+                                </View>
+                                <Text style={{ fontSize: 14, color: colors.text }}>
+                                    {activeModal === 'project' ? 'All Projects' : 'All Users'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            {activeModal === 'project' && projects.map((p) => {
+                                const isSelected = selectedProjectIds.includes(p.id);
+                                return (
+                                    <TouchableOpacity
+                                        key={p.id}
+                                        onPress={() => toggleProject(p.id)}
+                                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12 }}
+                                    >
+                                        <View style={{
+                                            width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+                                            borderColor: isSelected ? colors.primary : colors.border,
+                                            backgroundColor: isSelected ? colors.primary : 'transparent',
+                                            alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            {isSelected && <Feather name="check" size={11} color="#fff" />}
+                                        </View>
+                                        <Text style={{ fontSize: 14, color: colors.text }}>{p.name}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+
+                            {activeModal === 'user' && usersList.map((u) => {
+                                const isSelected = selectedUserIds.includes(String(u.id));
+                                return (
+                                    <TouchableOpacity
+                                        key={u.id}
+                                        onPress={() => toggleUser(String(u.id))}
+                                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12 }}
+                                    >
+                                        <View style={{
+                                            width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+                                            borderColor: isSelected ? colors.primary : colors.border,
+                                            backgroundColor: isSelected ? colors.primary : 'transparent',
+                                            alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            {isSelected && <Feather name="check" size={11} color="#fff" />}
+                                        </View>
+                                        <Text style={{ fontSize: 14, color: colors.text }}>{u.name}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+
+                        {/* Done */}
+                        <TouchableOpacity
+                            onPress={() => setActiveModal(null)}
+                            style={{ margin: 10, backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 10, alignItems: 'center' }}
+                        >
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </SafeAreaView>
     );
 }

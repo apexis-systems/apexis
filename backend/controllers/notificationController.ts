@@ -10,10 +10,15 @@ export const listNotifications = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        const { project_id, type } = req.query;
+        const { project_id, project_ids, type } = req.query;
         const activeRole = authUser.role;
 
         const where: any = { user_id: authUser.user_id };
+
+        // Parse multi-value project IDs (comma-separated)
+        const requestedProjectIds: number[] = project_ids
+            ? (project_ids as string).split(',').map(Number).filter(Boolean)
+            : project_id && project_id !== 'all' ? [Number(project_id)] : [];
 
         // 1. Determine projects matching the active role or memberships
         let roleProjectIds: number[] = [];
@@ -40,20 +45,20 @@ export const listNotifications = async (req: Request, res: Response) => {
         }
 
         if (activeRole !== 'superadmin') {
-            if (project_id && project_id !== 'all') {
-                if (!roleProjectIds.includes(Number(project_id))) {
-                    return res.status(200).json({ notifications: [] });
-                }
-                where.project_id = project_id;
+            if (requestedProjectIds.length > 0) {
+                const allowed = requestedProjectIds.filter(id => roleProjectIds.includes(id));
+                if (allowed.length === 0) return res.status(200).json({ notifications: [] });
+                where.project_id = allowed.length === 1 ? allowed[0] : { [Op.in]: allowed };
             } else {
-                // Return notifications for role-matched projects OR system notifications (project_id is null)
                 where[Op.or] = [
                     { project_id: { [Op.in]: roleProjectIds } },
                     { project_id: null }
                 ];
             }
-        } else if (project_id && project_id !== 'all') {
-            where.project_id = project_id;
+        } else if (requestedProjectIds.length > 0) {
+            where.project_id = requestedProjectIds.length === 1
+                ? requestedProjectIds[0]
+                : { [Op.in]: requestedProjectIds };
         }
 
         if (type && type !== 'all') {

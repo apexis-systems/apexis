@@ -60,7 +60,7 @@ export default function DashboardScreen() {
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [profileUri, setProfileUri] = useState<string | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
+  const [isSwitching, setIsSwitching] = useState<string | null>(null);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -114,7 +114,7 @@ export default function DashboardScreen() {
       // Request notification permissions and register token on home screen
       registerForPushNotificationsAsync();
 
-      // Listen for notification interactions
+      // Listen for notification interactions while app is foregrounded or backgrounded
       const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
         const { type } = response.notification.request.content.data;
         const data = response.notification.request.content.data;
@@ -126,6 +126,17 @@ export default function DashboardScreen() {
       };
     }
   }, [user, selectedOrgId]);
+
+  // Handle cold boot push notification click
+  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+  useEffect(() => {
+    if (user && lastNotificationResponse && lastNotificationResponse.notification.request.content.data) {
+        // Debounce or ensure we only navigate once per notification
+        const type = lastNotificationResponse.notification.request.content.data.type as string;
+        const data = lastNotificationResponse.notification.request.content.data;
+        handleNotificationNavigation(type, data, router);
+    }
+  }, [lastNotificationResponse, user]);
 
   useEffect(() => {
     if (!hasSeenTour && user && !isTourActive) {
@@ -351,7 +362,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 4 }}>
-                {`${((user as any).organization?.name || 'APEXISpro').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXISpro').slice(1)}`}
+                {`${((user as any).organization?.name || 'APEXISpro™').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXISpro™').slice(1)}`}
               </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -380,12 +391,13 @@ export default function DashboardScreen() {
                   { id: 'client', label: 'Client', icon: 'user' }
                 ].map((role) => {
                   const isActive = user.role === role.id;
+                  const isThisSwitching = isSwitching === role.id;
                   return (
                     <TouchableOpacity
                       key={role.id}
                       onPress={async () => {
                         if (isActive || isSwitching) return;
-                        setIsSwitching(true);
+                        setIsSwitching(role.id);
                         try {
                           const res = await switchContext({ role: role.id });
                           if (res.token) {
@@ -394,7 +406,7 @@ export default function DashboardScreen() {
                         } catch (err: any) {
                           Alert.alert('Role Switch Failed', err?.response?.data?.error || 'You do not have access to this role.');
                         } finally {
-                          setIsSwitching(false);
+                          setIsSwitching(null);
                         }
                       }}
                       style={{
@@ -407,11 +419,11 @@ export default function DashboardScreen() {
                         borderRadius: 20,
                         borderWidth: 1,
                         borderColor: isActive ? colors.primary : colors.border,
-                        opacity: isSwitching ? 0.7 : 1
+                        opacity: isSwitching && !isThisSwitching ? 0.6 : 1
                       }}
                     >
-                      {isSwitching && isActive ? (
-                        <ActivityIndicator size={12} color="#fff" />
+                      {isThisSwitching ? (
+                        <ActivityIndicator size={12} color={isActive ? '#fff' : colors.primary} />
                       ) : (
                         <Feather name={role.icon as any} size={12} color={isActive ? '#fff' : colors.textMuted} />
                       )}
