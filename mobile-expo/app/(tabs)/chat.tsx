@@ -284,9 +284,16 @@ export default function ChatListScreen() {
                 {/* Chat Info */}
                 <View style={{ flex: 1, marginLeft: 12, justifyContent: 'center' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={1}>
-                            {displayLabel}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={1}>
+                                {displayLabel}
+                            </Text>
+                            {item.type === 'direct' && otherMember?.user?.organization?.name && (
+                                <View style={{ backgroundColor: colors.border, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 8, color: colors.textMuted, fontWeight: '800' }}>{otherMember.user.organization.name}</Text>
+                                </View>
+                            )}
+                        </View>
                         <Text style={{ fontSize: 10, color: colors.textMuted }}>
                             {time}
                         </Text>

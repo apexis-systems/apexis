@@ -21,6 +21,10 @@ export default {
         type: Sequelize.STRING,
         allowNull: false,
       },
+      logo: {
+        type: Sequelize.STRING,
+        allowNull: true,
+      },
       plan_id: {
         type: Sequelize.INTEGER,
         allowNull: false,

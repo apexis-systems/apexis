@@ -1,7 +1,7 @@
 import axios from "axios";
 import Cookies from "js-cookie";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002/api";
 
 // For authenticated requests
 export const PrivateAxios = axios.create({
@@ -29,6 +29,25 @@ PrivateAxios.interceptors.request.use(
         return config;
     },
     function (error) {
+        return Promise.reject(error);
+    }
+);
+
+PrivateAxios.interceptors.response.use(
+    function (response) {
+        return response;
+    },
+    function (error) {
+        const code = error?.response?.data?.code;
+        if (typeof window !== "undefined" && code === "SUBSCRIPTION_LOCKED") {
+            const path = window.location.pathname || "";
+            const parts = path.split("/").filter(Boolean);
+            const role = parts[0] || "admin";
+            const billingPath = `/${role}/billing`;
+            if (path !== billingPath) {
+                window.location.href = billingPath;
+            }
+        }
         return Promise.reject(error);
     }
 );

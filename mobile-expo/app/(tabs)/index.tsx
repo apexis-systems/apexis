@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView, Alert } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -20,20 +20,25 @@ import { useTranslation } from 'react-i18next';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadOrganizationLogo, fetchSecureLogo, getOrganizations } from '@/services/organizationService';
+import { updateUserProfilePic } from '@/services/userService';
+import { switchContext } from '@/services/authService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 import MainHeader from '@/components/shared/MainHeader';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { getSecureFileUrl } from '@/services/fileService';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
 import { handleNotificationNavigation } from '@/utils/navigation';
+import { UsageAlert } from '@/components/shared/UsageAlert';
+import { useUsage } from '@/contexts/UsageContext';
 
 export default function DashboardScreen() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, login } = useAuth();
   const { colors, isDark } = useTheme();
   const { unreadNotificationCount } = useSocket();
   const { t } = useTranslation();
   const router = useRouter();
   const { isTourActive, startTour, hasSeenTour, registerSpotlight } = useTour();
+  const { checkLimit } = useUsage();
 
   const [projects, setProjects] = useState<any[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -54,6 +59,8 @@ export default function DashboardScreen() {
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [profileUri, setProfileUri] = useState<string | null>(null);
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -64,17 +71,24 @@ export default function DashboardScreen() {
     // We need a small delay to ensure the layout is settled
     setTimeout(() => {
       headerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('dashboardHeader', { x: x + w / 2, y: y + h - 20, r: 100 });
+        registerSpotlight('dashboardHeader', { x: x + w / 2, y: y + h / 2 + 43, w: w + 10, h: h + 100, r: 16 });
       });
-      statsRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('dashboardStats', { x: x + w / 2, y: y + h / 2, r: 160 });
-      });
+      // statsRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+      //   registerSpotlight('dashboardStats', { x: x + w / 2, y: y + h / 2, w: w + 4, h: h + 10, r: 12 });
+      // });
       projectListRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        // Spotlight the first project card
-        registerSpotlight('projectCard', { x: x + (Platform.OS === 'ios' ? 50 : 58), y: y + (Platform.OS === 'ios' ? 40 : 45), r: 60 });
+        // Shifting left (decreasing offset) and increasing w/h
+        registerSpotlight('projectCard', { 
+            x: x + (Platform.OS === 'ios' ? 30 : 40), 
+            y: y + (Platform.OS === 'ios' ? 40 : 50), 
+            w: 90, 
+            h: 120, 
+            r: 16 
+        });
       });
       createButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('createProjectButton', { x: x + w / 2, y: y + h / 2, r: 45 });
+        // Also adding dimensions for the create button
+        registerSpotlight('createProjectButton', { x: x + w / 2, y: y + h / 2, w: w, h: h, r: 14 });
       });
     }, 500);
   }, [registerSpotlight]);
@@ -165,7 +179,10 @@ export default function DashboardScreen() {
     try {
       const url = orgId ? `/projects?organization_id=${orgId}` : '/projects';
       const res = await PrivateAxios.get(url);
-      setProjects(res.data.projects || []);
+      const sortedProjects = (res.data.projects || []).sort((a: any, b: any) => 
+        (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+      );
+      setProjects(sortedProjects);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     }
@@ -197,13 +214,13 @@ export default function DashboardScreen() {
       setIsCreating(false);
       setNewProject({ name: '', description: '', start_date: '', end_date: '' });
       fetchProjects();
-    } catch (e) {
-      console.error("Failed to create project:", e);
+    } catch (e: any) {
+      const message = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Failed to create project';
+      Alert.alert('Create Project Failed', message);
     } finally {
       setIsSubmitting(false);
     }
   };
-
 
   const handleLogoUpload = async () => {
     if (user?.role !== 'admin') return;
@@ -241,6 +258,42 @@ export default function DashboardScreen() {
       setIsUploadingLogo(false);
     }
   };
+  
+  const handleProfilePicUpload = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      setIsUploadingProfile(true);
+      const asset = result.assets[0];
+      const formData = new FormData();
+      formData.append('profile_pic', {
+        uri: asset.uri,
+        type: asset.mimeType || 'image/jpeg',
+        name: asset.fileName || 'profile.jpg',
+      } as any);
+
+      const res = await updateUserProfilePic(formData);
+      if (res.profile_pic) {
+        updateUser({ profile_pic: res.profile_pic });
+        const uri = await getSecureFileUrl(res.profile_pic);
+        setProfileUri(uri);
+      }
+      setIsProfilePreviewOpen(false);
+      Alert.alert('Success', 'Profile picture updated successfully');
+    } catch (e) {
+      console.error("Profile pic upload error:", e);
+      Alert.alert('Error', 'Failed to upload profile picture');
+    } finally {
+      setIsUploadingProfile(false);
+    }
+  };
 
   const roleSubtitle =
     user.role === 'superadmin'
@@ -255,6 +308,7 @@ export default function DashboardScreen() {
   return (
     <>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+        <UsageAlert />
         <MainHeader
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search projects by name..."
@@ -297,7 +351,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 4 }}>
-                {`${((user as any).organization?.name || 'APEXIS').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXIS').slice(1)}`}
+                {`${((user as any).organization?.name || 'APEXISpro').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXISpro').slice(1)}`}
               </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -317,6 +371,57 @@ export default function DashboardScreen() {
               <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
                 {`${roleSubtitle} • ${user.email || user.phone_number}`}
               </Text>
+
+              {/* Role Selection Buttons */}
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+                {[
+                  { id: 'admin', label: 'Admin', icon: 'shield' },
+                  { id: 'contributor', label: 'Contributor', icon: 'edit-3' },
+                  { id: 'client', label: 'Client', icon: 'user' }
+                ].map((role) => {
+                  const isActive = user.role === role.id;
+                  return (
+                    <TouchableOpacity
+                      key={role.id}
+                      onPress={async () => {
+                        if (isActive || isSwitching) return;
+                        setIsSwitching(true);
+                        try {
+                          const res = await switchContext({ role: role.id });
+                          if (res.token) {
+                            await login(res.token);
+                          }
+                        } catch (err: any) {
+                          Alert.alert('Role Switch Failed', err?.response?.data?.error || 'You do not have access to this role.');
+                        } finally {
+                          setIsSwitching(false);
+                        }
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: isActive ? colors.primary : colors.surface,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor: isActive ? colors.primary : colors.border,
+                        opacity: isSwitching ? 0.7 : 1
+                      }}
+                    >
+                      {isSwitching && isActive ? (
+                        <ActivityIndicator size={12} color="#fff" />
+                      ) : (
+                        <Feather name={role.icon as any} size={12} color={isActive ? '#fff' : colors.textMuted} />
+                      )}
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : colors.textMuted }}>
+                        {role.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           </View>
 
@@ -331,21 +436,21 @@ export default function DashboardScreen() {
                 key={i}
                 style={{
                   flex: 1,
-                  backgroundColor: '#fff',
+                  backgroundColor: colors.surface,
                   paddingVertical: 12,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: '#e5e7eb',
+                  borderColor: colors.border,
                   alignItems: 'center',
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.05,
+                  shadowOpacity: isDark ? 0.3 : 0.05,
                   shadowRadius: 2,
                   elevation: 1
                 }}
               >
-                <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>{stat.count}</Text>
-                <Text style={{ fontSize: 10, color: '#6b7280', marginTop: 2, fontWeight: '600' }}>{stat.label}</Text>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{stat.count}</Text>
+                <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontWeight: '600' }}>{stat.label}</Text>
               </View>
             ))}
           </View>
@@ -370,8 +475,8 @@ export default function DashboardScreen() {
                 <Feather name="bar-chart-2" size={18} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Admin Analytics</Text>
-                <Text style={{ fontSize: 10, color: colors.textMuted }}>Company-wide project intelligence</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('dashboard.adminAnalyticsTitle')}</Text>
+                <Text style={{ fontSize: 10, color: colors.textMuted }}>{t('dashboard.adminAnalyticsSubtitle')}</Text>
               </View>
               <Feather name="chevron-right" size={16} color={colors.primary} />
             </TouchableOpacity>
@@ -443,28 +548,38 @@ export default function DashboardScreen() {
                 >
                   {project.name}
                 </Text>
-                {/* Stats */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="file-text" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalDocs, 10) || 0}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="camera" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalPhotos, 10) || 0}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                    <Feather name="folder" size={8} color={colors.textMuted} />
-                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{parseInt(project.totalFolders, 10) || 0}</Text>
-                  </View>
-                </View>
+                {/* Company / Client Name */}
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontSize: 8,
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    fontStyle: 'italic'
+                  }}
+                >
+                  {project.description || 'No Company/Client Name'}
+                </Text>
               </TouchableOpacity>
             ))}
 
             {/* Add Create Project card — admin only, but show for everyone during tour */}
             {(user.role === 'admin' || isTourActive) && (
               <TouchableOpacity
-                onPress={() => setIsCreating(true)}
+                onPress={() => {
+                    if (!isTourActive && !checkLimit('projects')) {
+                        Alert.alert(
+                            "Limit Reached", 
+                            "You have reached your project limit. Please upgrade your plan to create more projects.",
+                            [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Upgrade", onPress: () => router.push('/subscription') }
+                            ]
+                        );
+                        return;
+                    }
+                    setIsCreating(true);
+                }}
                 style={{ width: '22%', alignItems: 'center', gap: 4 }}
               >
                 <View
@@ -492,7 +607,7 @@ export default function DashboardScreen() {
                     lineHeight: 13,
                   }}
                 >
-                  Create Project
+                  {t('dashboard.createProject')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -501,7 +616,7 @@ export default function DashboardScreen() {
           {filteredProjects.length === 0 && (
             <View style={{ marginTop: 40, alignItems: 'center' }}>
               <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                {searchQuery ? 'No projects match your search.' : t('dashboard.noProjects')}
+                {searchQuery ? t('dashboard.noProjectsSearch') : t('dashboard.noProjects')}
               </Text>
             </View>
           )}
@@ -535,10 +650,10 @@ export default function DashboardScreen() {
                     onChangeText={(text) => setNewProject({ ...newProject, name: text })}
                   />
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Description (max 50)</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Company Name/Client Name (max 50)</Text>
                   <TextInput
                     style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
-                    placeholder="Short description"
+                    placeholder="Enter Company/Client Name"
                     placeholderTextColor={colors.textMuted}
                     value={newProject.description}
                     maxLength={50}
@@ -629,11 +744,13 @@ export default function DashboardScreen() {
         visible={isProfilePreviewOpen}
         onClose={() => setIsProfilePreviewOpen(false)}
         logoSource={profileUri ? { uri: profileUri } : null}
-        canChange={false}
-        onChangePress={() => { }}
+        canChange={true}
+        onChangePress={handleProfilePicUpload}
+        uploading={isUploadingProfile}
         isCircular={true}
         title="Profile Picture"
         subtitle="This picture helps your team identify you on the platform."
+        buttonText="Change Photo"
       />
 
       {/* Org Selection Modal for Superadmin */}

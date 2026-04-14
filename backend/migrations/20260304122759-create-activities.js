@@ -31,7 +31,7 @@ export default {
         onDelete: 'CASCADE'
       },
       type: {
-        type: Sequelize.ENUM('upload', 'edit', 'delete', 'share', 'upload_photo'),
+        type: Sequelize.ENUM('upload', 'edit', 'delete', 'share', 'upload_photo', 'uploaded', 'comment'),
         allowNull: false,
       },
       description: {

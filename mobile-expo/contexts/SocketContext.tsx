@@ -84,11 +84,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let newSocket: Socket | null = null;
 
         if (isLoggedIn) {
-            const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
-            const socketUrl = backendUrl.replace('/api', '');
+            const socketUrl = process.env.EXPO_PUBLIC_SOCKET_URL || 'http://localhost:5002';
 
             newSocket = io(socketUrl, {
-                transports: ['websocket'],
+                transports: ['polling', 'websocket'],
+                forceNew: true,
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 2000,
             });
 
             newSocket.on('connect', () => {

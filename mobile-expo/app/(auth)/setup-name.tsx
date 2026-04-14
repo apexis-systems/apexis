@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import { View, TouchableOpacity, ScrollView, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +25,22 @@ export default function SetupNameScreen() {
 
         setIsLoading(true);
         setError('');
+
+        // Safety check: Ensure token is committed to SecureStore
+        // This helps avoid race conditions where navigation to setup-name
+        // happens faster than SecureStore's async write.
+        let token = null;
+        for (let i = 0; i < 5; i++) {
+            token = await SecureStore.getItemAsync('token');
+            if (token) break;
+            await new Promise(r => setTimeout(r, 300)); // 300ms * 5 = 1.5s total wait if needed
+        }
+
+        if (!token) {
+            setError('Session sync error. Please try signing in again.');
+            setIsLoading(false);
+            return;
+        }
 
         try {
             await updateUserName({ name: name.trim() });
@@ -53,7 +70,7 @@ export default function SetupNameScreen() {
                 >
                     <View style={{ alignItems: 'center', marginBottom: 40 }}>
                         <Image source={require('../../assets/images/app-icon.png')} style={{ width: 80, height: 80, marginBottom: 20 }} resizeMode="contain" />
-                        <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text, textAlign: 'center', marginBottom: 8 }}>Welcome to Apexis!</Text>
+                        <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text, textAlign: 'center', marginBottom: 8 }}>Welcome to APEXISpro!</Text>
                         <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center' }}>Please enter your full name to continue.</Text>
                     </View>
 

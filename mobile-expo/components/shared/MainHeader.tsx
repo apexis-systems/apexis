@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TouchableOpacity, Image, Modal, TextInput } from 'react-native';
+import { View, TouchableOpacity, Image, Modal, TextInput, Linking } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -35,9 +35,9 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
         if (isTourActive) {
             setTimeout(() => {
                 bellRef.current?.measureInWindow((x, y, w, h) => {
-                    registerSpotlight('notificationsIcon', { x: x + w / 2, y: y + h / 2, r: 35 });
+                    registerSpotlight('notificationsIcon', { x: w + 145, y: h, r: 35 });
                 });
-            }, 1000);
+            }, 50);
         }
     }, [isTourActive, registerSpotlight]);
 
@@ -86,7 +86,10 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                                 resizeMode="cover"
                             />
                         </View>
-                        <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, letterSpacing: 0.5 }}>APEXIS</Text>
+                        <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, letterSpacing: 0.5 }}>
+                            APEXIS
+                            <Text className="font-angelica" style={{ fontSize: 10, textTransform: 'lowercase' }}>pro</Text>
+                        </Text>
                     </TouchableOpacity>
 
                     {/* {showBack && (
@@ -234,7 +237,8 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
+                            // onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
+                            onPress={() => Linking.openURL('mailto:support@apexis.in')}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
                         >
                             <Feather name="message-square" size={16} color={colors.textMuted} />

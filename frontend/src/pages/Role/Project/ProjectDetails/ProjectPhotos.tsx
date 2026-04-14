@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -12,13 +13,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
-import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder } from '@/services/folderService';
+import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
 import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
 
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
 
 import { Checkbox } from '@/components/ui/Checkbox';
+import FileViewer from '@/components/shared/FileViewer';
+import { formatFileSize } from '@/lib/format';
 
 interface ProjectPhotosProps {
   project: Project;
@@ -28,18 +31,14 @@ interface ProjectPhotosProps {
 const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  if (!project) return null;
-
   const [photos, setPhotos] = useState<any[]>([]);
-  // Initialize from URL ?folder= param for back-navigation restoration
   const [selectedFolder, setRawSelectedFolder] = useState<string | null>(
-    searchParams?.get('folder') || null
+    searchParams?.get('folder') || searchParams?.get('folderId') || null
   );
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [shareItem, setShareItem] = useState<any | null>(null);
-  const [expandedPhoto, setExpandedPhoto] = useState<string | null>(null);
+  const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
 
   // Selection state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -48,11 +47,15 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
   const [editFolder, setEditFolder] = useState<any | null>(null);
-
+  const [folderToDelete, setFolderToDelete] = useState<any | null>(null);
+  const [showDeleteConflict, setShowDeleteConflict] = useState(false);
+  const [movingContentsOf, setMovingContentsOf] = useState<any | null>(null);
 
   // View state
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
+
+  if (!project) return null;
 
   // Sync selectedFolder to URL so returnUrl always encodes correct folder
   const setSelectedFolder = (folderId: string | null) => {
@@ -69,9 +72,17 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     }
   }, [project?.id]);
 
+  useEffect(() => {
+    if (selectedFolder) {
+      setSortBy('date');
+    } else {
+      setSortBy('name');
+    }
+  }, [selectedFolder]);
+
   // Sync state from URL for tab switching / back navigation
   useEffect(() => {
-    const folderId = searchParams?.get('folder') || null;
+    const folderId = searchParams?.get('folder') || searchParams?.get('folderId') || null;
     if (folderId !== selectedFolder) {
       setRawSelectedFolder(folderId);
     }
@@ -210,6 +221,52 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     } catch (e) {
       toast.error("Failed to rename folder");
     }
+  };
+
+  const handleDeleteFolder = async (folder: any, e: React.MouseEvent, force: boolean = false) => {
+    e?.stopPropagation();
+    if (!force) {
+      if (!confirm(`Are you sure you want to delete folder "${folder.name}"?`)) return;
+    }
+
+    try {
+      await deleteFolder(folder.id, force);
+      toast.success(`Folder "${folder.name}" deleted`);
+      setShowDeleteConflict(false);
+      await importFolders(); // Refetch
+    } catch (e: any) {
+      const data = e.response?.data;
+      if (data?.hasContent) {
+        setFolderToDelete(folder);
+        setShowDeleteConflict(true);
+      } else {
+        const msg = data?.error || "Failed to delete folder";
+        toast.error(msg);
+      }
+    }
+  };
+
+  const handleRecursiveDelete = async () => {
+    if (!folderToDelete) return;
+    handleDeleteFolder(folderToDelete, null as any, true);
+  };
+
+  const handleMoveContents = () => {
+    if (!folderToDelete) return;
+    
+    // Find direct children
+    const childFolders = folders.filter(f => String(f.parent_id) === String(folderToDelete.id));
+    const childFiles = photos.filter(p => String(p.folder_id) === String(folderToDelete.id));
+    
+    if (childFolders.length === 0 && childFiles.length === 0) {
+      toast.info("Folder is already empty");
+      setShowDeleteConflict(false);
+      return;
+    }
+
+    setMovingContentsOf(folderToDelete);
+    setShowDeleteConflict(false);
+    setShowMoveDialog(true);
   };
 
 
@@ -378,7 +435,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         {sortedFolders.map((folder) => {
           const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
@@ -390,8 +447,41 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 if (isSelectionMode) toggleSelection('folder', folder.id);
                 else setSelectedFolder(folder.id);
               }}
-              className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-colors ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
+              className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
             >
+              {!isSelectionMode && (
+                <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
+                  {(user.role === 'admin' || user.role === 'superadmin') && (
+                    <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                      {folder.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
+                    </button>
+                  )}
+                  {(user.role === 'admin' || user.role === 'superadmin') && (
+                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Move folder">
+                      <Move className="h-2.5 w-2.5 text-muted-foreground" />
+                    </button>
+                  )}
+                  {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
+                    <>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
+                        className="rounded-full p-1 hover:bg-secondary transition-colors" 
+                        title="Rename folder"
+                      >
+                        <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteFolder(folder, e)} 
+                        className="rounded-full p-1 hover:bg-destructive/10 transition-colors" 
+                        title="Delete folder"
+                      >
+                        <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
               {isSelectionMode && (
                 <div className="absolute top-2 right-2 z-10">
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
@@ -405,27 +495,6 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 <span className="text-[9px] text-muted-foreground mr-1">
                   {folderPhotos.length} photos{subFolders.length > 0 ? `, ${subFolders.length} folder${subFolders.length === 1 ? '' : 's'}` : ''}
                 </span>
-                {(user.role === 'admin' || user.role === 'superadmin') && !isSelectionMode && (
-                  <div className="flex items-center gap-1">
-                    <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded p-1 hover:bg-secondary transition-colors">
-                      {folder.client_visible !== false ? <Eye className="h-3 w-3 text-accent" /> : <EyeOff className="h-3 w-3 text-muted-foreground" />}
-                    </button>
-                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded p-1 hover:bg-secondary transition-colors" title="Move folder">
-                      <Move className="h-3 w-3 text-muted-foreground" />
-                    </button>
-                    {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
-                        className="rounded p-1 hover:bg-secondary transition-colors" 
-                        title="Rename folder"
-                      >
-                        <Pencil className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    )}
-
-                  </div>
-
-                )}
               </div>
             </button>
           );
@@ -449,7 +518,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       />
 
 
-      <div className={viewMode === 'grid' ? "grid grid-cols-5 gap-0.5" : "space-y-1"}>
+      <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-0.5" : "space-y-1"}>
         {sortedPhotos.map((photo) => {
           const isSelected = selectedFiles.has(photo.id);
 
@@ -473,13 +542,13 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   onClick={(e) => {
                     if (!isSelectionMode) {
                       e.stopPropagation();
-                      window.open(photo.downloadUrl, '_blank');
+                      setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
                     }
                   }}
                 >
                   <p className="text-[10px] font-semibold truncate">{photo.file_name}</p>
                   <p className="text-[9px] text-muted-foreground">
-                    {photo.file_size_mb} MB • {new Date(photo.created_at).toLocaleDateString()}
+                    {formatFileSize(photo.file_size_mb)} • {new Date(photo.created_at).toLocaleDateString()}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -488,7 +557,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       <button onClick={(e) => { e.stopPropagation(); setShareItem(photo); }} className="rounded-md p-1 hover:bg-secondary">
                         <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
-                      {user.role === 'admin' && (
+                      {(user.role === 'admin' || user.role === 'superadmin') && (
                         <>
                           <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title="Toggle client visibility">
                             {photo.client_visible !== false ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -521,7 +590,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           return (
             <div
               key={photo.id}
-              className={`relative aspect-square bg-secondary cursor-pointer transition-all ${isSelected ? 'ring-2 ring-accent ring-inset overflow-hidden' : ''}`}
+              className={`relative aspect-square bg-secondary cursor-pointer transition-all group ${isSelected ? 'ring-2 ring-accent ring-inset overflow-hidden' : ''}`}
               onClick={() => {
                 if (isSelectionMode) toggleSelection('file', photo.id);
               }}
@@ -532,7 +601,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     e.stopPropagation();
                     toggleSelection('file', photo.id);
                   } else {
-                    window.open(photo.downloadUrl, '_blank');
+                    setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
                   }
                 }}
                 className="absolute inset-0 flex items-center justify-center overflow-hidden"
@@ -540,21 +609,21 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 <img src={photo.downloadUrl} alt={photo.file_name} className={`w-full h-full object-cover ${isSelected ? 'opacity-80' : ''}`} />
               </button>
 
-              <div className="absolute top-0.5 right-0.5 flex gap-0.5">
+              <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
                 {isSelectionMode ? (
-                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} className="bg-card/80 backdrop-blur-sm" />
+                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} />
                 ) : (
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShareItem(photo); }}
-                      className="rounded-full bg-card/80 p-0.5 backdrop-blur-sm"
+                      className="rounded-full p-1 hover:bg-secondary transition-colors"
                     >
                       <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                     </button>
-                    {user.role === 'admin' && (
+                    {(user.role === 'admin' || user.role === 'superadmin') && (
                       <button
                         onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
-                        className="rounded-full bg-card/80 p-0.5 backdrop-blur-sm"
+                        className="rounded-full p-1 hover:bg-secondary transition-colors"
                         title={`Toggle client visibility (Currently: ${photo.client_visible !== false ? 'Visible' : 'Hidden'})`}
                       >
                         {photo.client_visible !== false ? (
@@ -567,10 +636,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
                       <button
                         onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
-                        className="rounded-full bg-card/80 p-0.5 backdrop-blur-sm hover:text-destructive"
+                        className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
                         title="Delete photo"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-2.5 w-2.5 text-destructive" />
                       </button>
                     )}
                   </>
@@ -588,17 +657,13 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         })}
       </div>
 
-      {/* Expanded photo comment */}
-      {
-        expandedPhoto && (
-          <div className="mt-2 rounded-lg border border-border bg-card p-3">
-            <p className="text-xs font-medium text-foreground mb-1">
-              {visiblePhotos.find((p) => p.id === expandedPhoto)?.file_name}
-            </p>
-            <CommentThread targetId={expandedPhoto} targetType="photo" />
-          </div>
-        )
-      }
+      <FileViewer
+        files={sortedPhotos}
+        initialIndex={viewerState.index}
+        open={viewerState.open}
+        onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
+        user={user}
+      />
 
       {
         currentFolders.length === 0 && visiblePhotos.length === 0 && (
@@ -646,7 +711,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 >
                   <Move className="h-3.5 w-3.5 mr-1" /> Move
                 </Button>
-                {user.role === 'admin' && (
+                {(user.role === 'admin' || user.role === 'superadmin') && (
                   <div className="flex items-center gap-1 border-l border-border pl-2">
                     <Button
                       size="sm"
@@ -683,17 +748,79 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         open={showMoveDialog}
         onOpenChange={(open: boolean) => {
           setShowMoveDialog(open);
-          if (!open) setMovingItem(null);
+          if (!open) {
+            setMovingItem(null);
+            setMovingContentsOf(null);
+          }
         }}
         project={project}
         item={movingItem}
-        selectedItems={{ folders: Array.from(selectedFolders), files: Array.from(selectedFiles) }}
-        onMoveComplete={() => {
+        selectedItems={movingContentsOf ? {
+          folders: folders.filter(f => String(f.parent_id) === String(movingContentsOf.id)).map(f => f.id),
+          files: photos.filter(p => String(p.folder_id) === String(movingContentsOf.id)).map(p => p.id)
+        } : { folders: Array.from(selectedFolders), files: Array.from(selectedFiles) }}
+        onMoveComplete={async () => {
+          if (movingContentsOf) {
+            // After moving contents, delete the original folder
+            try {
+              await deleteFolder(movingContentsOf.id, false);
+              toast.success(`Folder "${movingContentsOf.name}" deleted after moving contents`);
+            } catch (err) {
+              toast.error("Contents moved, but failed to delete empty folder");
+            }
+          }
           importFolders();
           clearSelection();
+          setMovingContentsOf(null);
         }}
         type="photo"
       />
+
+      <Dialog open={showDeleteConflict} onOpenChange={setShowDeleteConflict}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <div className="flex items-center gap-3 text-destructive mb-2">
+              <div className="p-2 bg-destructive/10 rounded-full">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <DialogTitle>Folder Not Empty</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm">
+              The folder <strong>{folderToDelete?.name}</strong> contains files or subfolders. 
+              How would you like to proceed?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-4">
+            <Button
+              variant="outline"
+              className="justify-start h-auto py-3 px-4 border-destructive/20 hover:bg-destructive/5 hover:text-destructive text-xs"
+              onClick={handleRecursiveDelete}
+            >
+              <Trash2 className="h-4 w-4 mr-3" />
+              <div className="text-left">
+                <p className="font-semibold">Delete Everything</p>
+                <p className="text-[10px] opacity-70">Permanently remove folder and all its contents</p>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start h-auto py-3 px-4 text-xs"
+              onClick={handleMoveContents}
+            >
+              <Move className="h-4 w-4 mr-3" />
+              <div className="text-left">
+                <p className="font-semibold">Move Contents First</p>
+                <p className="text-[10px] opacity-70">Select another path for the items inside</p>
+              </div>
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" className="text-xs" onClick={() => setShowDeleteConflict(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 };

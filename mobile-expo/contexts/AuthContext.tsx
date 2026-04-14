@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, UserRole } from '@/types';
 import * as SecureStore from 'expo-secure-store';
-import { getMe } from '@/services/authService';
+import { getMe, revokeAllWebSessions } from '@/services/authService';
 
 interface AuthContextType {
     user: User | null;
@@ -43,20 +43,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isPendingName = isNamePending(user);
 
     const logout = useCallback(async () => {
+        try {
+            // Attempt to revoke all web sessions before clearing local state
+            await revokeAllWebSessions().catch(err => console.warn("Failed to revoke web sessions on logout:", err));
+        } catch (e) {
+            // Silently fail if revocation fails, we still want to log out locally
+        }
         setUser(null);
         await SecureStore.deleteItemAsync('token');
+        await SecureStore.deleteItemAsync('subscriptionLocked');
     }, []);
 
-    const fetchUser = useCallback(async () => {
-        setIsLoading(true);
+    const fetchUser = useCallback(async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         try {
             const token = await SecureStore.getItemAsync('token');
             if (!token) {
-                setIsLoading(false);
+                if (showLoading) setIsLoading(false);
                 return;
             }
             const res = await getMe();
             if (res?.user) {
+                const isLocked = !!res?.organization?.subscription_locked;
+                if (isLocked) {
+                    await SecureStore.setItemAsync('subscriptionLocked', 'true');
+                } else {
+                    await SecureStore.deleteItemAsync('subscriptionLocked');
+                }
                 setUser({ ...res.user, organization: res.organization, project_id: res.project_id });
             }
         } catch (e: any) {
@@ -65,12 +78,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             logout();
         } finally {
-            setIsLoading(false);
+            if (showLoading) setIsLoading(false);
         }
     }, [logout]);
 
     useEffect(() => {
-        fetchUser();
+        fetchUser(true);
     }, [fetchUser]);
 
     const login = useCallback(async (token: string) => {
@@ -78,6 +91,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const res = await getMe();
             if (res?.user) {
+                const isLocked = !!res?.organization?.subscription_locked;
+                if (isLocked) {
+                    await SecureStore.setItemAsync('subscriptionLocked', 'true');
+                } else {
+                    await SecureStore.deleteItemAsync('subscriptionLocked');
+                }
                 const fullUser = { ...res.user, organization: res.organization, project_id: res.project_id };
                 setUser(fullUser);  // isPendingName derives from this automatically
                 return fullUser as User;

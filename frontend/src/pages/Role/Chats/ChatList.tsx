@@ -230,7 +230,14 @@ export default function ChatList() {
                                 {/* Info */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between mb-0.5">
-                                        <span className="font-semibold text-foreground text-sm truncate">{displayName}</span>
+                                        <div className="flex items-center gap-2 truncate">
+                                            <span className="font-semibold text-foreground text-sm truncate">{displayName}</span>
+                                            {!isGroup && otherMember?.user?.organization?.name && (
+                                                <span className="px-1.5 py-0.5 bg-muted rounded text-[8px] font-bold text-muted-foreground uppercase">
+                                                    {otherMember.user.organization.name}
+                                                </span>
+                                            )}
+                                        </div>
                                         <span className="text-xs text-muted-foreground shrink-0 ml-2">
                                             {new Date(chat.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>

@@ -18,7 +18,7 @@ export default {
                 onDelete: 'CASCADE',
             },
             type: {
-                type: Sequelize.ENUM('daily', 'weekly'),
+                type: Sequelize.ENUM('daily', 'weekly', 'monthly'),
                 allowNull: false,
             },
             period_start: {
@@ -62,7 +62,7 @@ export default {
         });
 
         // Unique constraint: one report per project per type per day/week
-        await queryInterface.addIndex('reports', ['project_id', 'type', 'period_start'], {
+        await queryInterface.addIndex('reports', ['project_id', 'type', 'period_start', 'period_end'], {
             unique: true,
             name: 'reports_project_type_period_unique',
         });

@@ -11,10 +11,19 @@ interface ShareDialogProps {
   itemName: string;
   downloadUrl?: string;
   fileType?: string;
+  projectName?: string;
+  role?: string;
 }
 
-const ShareDialog = ({ open, onOpenChange, itemName, downloadUrl, fileType }: ShareDialogProps) => {
+const ShareDialog = ({ open, onOpenChange, itemName, downloadUrl, fileType, projectName, role }: ShareDialogProps) => {
   const shareUrl = downloadUrl || `https://app.apexis.in/shared/${encodeURIComponent(itemName)}`;
+
+  const getCustomMessage = () => {
+    if (projectName && role) {
+      return `You've been invited to access the project "${projectName}" on Apexis as a "${role}".\n\nClick the link below to securely login to your project:\n${shareUrl}`;
+    }
+    return `Check out: ${itemName}\n${shareUrl}`;
+  };
 
   const copyLink = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -23,14 +32,14 @@ const ShareDialog = ({ open, onOpenChange, itemName, downloadUrl, fileType }: Sh
   };
 
   const shareWhatsApp = () => {
-    const encoded = encodeURIComponent(`Check out: ${itemName}\n${shareUrl}`);
+    const encoded = encodeURIComponent(getCustomMessage());
     window.open(`https://wa.me/?text=${encoded}`, '_blank');
     onOpenChange(false);
   };
 
   const shareEmail = () => {
-    const subject = encodeURIComponent(`Shared: ${itemName}`);
-    const body = encodeURIComponent(`Here is a shared file from APEXIS:\n\n${itemName}\n${shareUrl}`);
+    const subject = encodeURIComponent(projectName ? `Invitation: ${projectName}` : `Shared: ${itemName}`);
+    const body = encodeURIComponent(getCustomMessage());
     window.open(`mailto:?subject=${subject}&body=${body}`);
     onOpenChange(false);
   };

@@ -8,11 +8,14 @@ import { uploadFile } from '@/services/fileService';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, ChevronDown, MapPin, Tag } from 'lucide-react';
+import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, ChevronDown, MapPin, Tag, Camera } from 'lucide-react';
+import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { createActivity } from '@/services/activityService';
 import CreateFolderDialog from '../Project/ProjectDetails/CreateFolderDialog';
+import { getApiErrorMessage } from '@/helpers/apiError';
+import { useUsage } from '@/contexts/UsageContext';
 
 function UploadInner() {
     const { user } = useAuth();
@@ -38,6 +41,8 @@ function UploadInner() {
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
     const [done, setDone] = useState(false);
     const [doneType, setDoneType] = useState<'documents' | 'photos'>('documents');
+    
+    const { usageData, checkLimit, refreshUsage } = useUsage();
 
     // Section collapsed state
     const [metaOpen, setMetaOpen] = useState(false);
@@ -46,6 +51,28 @@ function UploadInner() {
     const [showCreateFolder, setShowCreateFolder] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [filePreviews, setFilePreviews] = useState<(string | null)[]>([]);
+    const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
+
+    const dataUrlToBlob = (dataUrl: string) => {
+        const arr = dataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        return new Blob([u8arr], { type: mime });
+    };
+
+    const handleAnnotateSave = (annotatedDataUrl: string) => {
+        if (annotatingIdx === null) return;
+        const blob = dataUrlToBlob(annotatedDataUrl);
+        const fileName = files[annotatingIdx]?.name || `annotated_${Date.now()}.jpg`;
+        const file = new File([blob], fileName, { type: 'image/jpeg' });
+        setFiles(prev => { const copy = [...prev]; copy[annotatingIdx] = file; return copy; });
+        setFilePreviews(prev => { const copy = [...prev]; copy[annotatingIdx] = annotatedDataUrl; return copy; });
+        setAnnotatingIdx(null);
+    };
 
     // Prefill from URL params (navigated from project folder)
     useEffect(() => {
@@ -152,6 +179,16 @@ function UploadInner() {
                 if (detectedType === 'photos') setMetaOpen(true);
                 else setMetaOpen(false);
             }
+            // Generate previews for image files
+            selectedFiles.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = () => setFilePreviews(prev => [...prev, reader.result as string]);
+                    reader.readAsDataURL(file);
+                } else {
+                    setFilePreviews(prev => [...prev, null]);
+                }
+            });
         }
     };
 
@@ -179,6 +216,7 @@ function UploadInner() {
     const removeFile = (index: number) => {
         const newFiles = files.filter((_, i) => i !== index);
         setFiles(newFiles);
+        setFilePreviews(prev => prev.filter((_, i) => i !== index));
         if (newFiles.length > 0 && !urlType) {
             const allImages = newFiles.every(f => f.type.startsWith('image/'));
             setUploadType(allImages ? 'photos' : 'documents');
@@ -191,6 +229,35 @@ function UploadInner() {
     const handleUpload = async () => {
         if (files.length === 0) { toast.error('Please select at least one file to upload'); return; }
         if (!selectedProject) { toast.error('Please select a project'); return; }
+        
+        // 1. Check if subscription is locked
+        if (usageData?.plan.access?.isLocked) {
+            toast.error("Subscription Locked", {
+                description: "Your plan has expired. Please renew to continue uploading files.",
+                action: {
+                    label: "Billing",
+                    onClick: () => router.push('/Role/Billing')
+                }
+            });
+            return;
+        }
+
+        // 2. Proactive storage check
+        const totalSizeMb = files.reduce((acc, f) => acc + (f.size / (1024 * 1024)), 0);
+        const currentUsedMb = usageData?.usage.storage_mb || 0;
+        const limitMb = usageData?.plan.limits.storage_limit_mb || 1024; // fallback
+
+        if (currentUsedMb + totalSizeMb > limitMb) {
+            toast.error("Storage Limit Exceeded", {
+                description: `You are trying to upload ${totalSizeMb.toFixed(2)}MB, but only ${Math.max(0, limitMb - currentUsedMb).toFixed(2)}MB is remaining.`,
+                action: {
+                    label: "Upgrade",
+                    onClick: () => router.push('/Role/Billing/Plans')
+                }
+            });
+            return;
+        }
+
         const effectiveType = uploadType || (files.every(f => f.type.startsWith('image/')) ? 'photos' : 'documents');
 
         setIsUploading(true);
@@ -207,6 +274,9 @@ function UploadInner() {
                 }
                 return uploadFile(formData);
             }));
+
+            // Refresh usage after successful upload
+            refreshUsage();
 
             await createActivity({
                 project_id: selectedProject,
@@ -229,7 +299,7 @@ function UploadInner() {
             toast.success('Files uploaded successfully!');
         } catch (error) {
             console.error('Upload Error', error);
-            toast.error('Failed to upload files');
+            toast.error(getApiErrorMessage(error, 'Failed to upload files'));
         } finally {
             setIsUploading(false);
         }
@@ -302,16 +372,42 @@ function UploadInner() {
                         )}
                     </div>
                     {files.length > 0 && (
-                        <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                            {files.map((f, i) => (
-                                <div key={f.name + i} className="flex items-center justify-between bg-secondary/50 rounded-lg p-2 px-3">
-                                    <span className="text-xs truncate w-5/6 text-foreground">{f.name}</span>
-                                    <button onClick={() => removeFile(i)} className="p-1 hover:bg-secondary rounded-full flex-shrink-0">
-                                        <X className="h-3 w-3 text-muted-foreground" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
+                        isPhotos ? (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                                {files.map((f, i) => (
+                                    <div key={f.name + i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border group">
+                                        {filePreviews[i] ? (
+                                            <img src={filePreviews[i]!} alt="Preview" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-secondary flex items-center justify-center">
+                                                <Camera className="h-5 w-5 text-muted-foreground" />
+                                            </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            {filePreviews[i] && (
+                                                <button onClick={() => setAnnotatingIdx(i)} className="bg-accent p-1.5 rounded-full hover:scale-110 transition-transform">
+                                                    <Camera className="h-3 w-3 text-white" />
+                                                </button>
+                                            )}
+                                            <button onClick={() => removeFile(i)} className="bg-destructive p-1.5 rounded-full hover:scale-110 transition-transform">
+                                                <X className="h-3 w-3 text-white" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                                {files.map((f, i) => (
+                                    <div key={f.name + i} className="flex items-center justify-between bg-secondary/50 rounded-lg p-2 px-3">
+                                        <span className="text-xs truncate w-5/6 text-foreground">{f.name}</span>
+                                        <button onClick={() => removeFile(i)} className="p-1 hover:bg-secondary rounded-full flex-shrink-0">
+                                            <X className="h-3 w-3 text-muted-foreground" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )
                     )}
                 </div>
             </div>
@@ -545,6 +641,14 @@ function UploadInner() {
                 onCreateFolder={handleCreateFolder}
                 type={uploadType || 'documents'}
             />
+
+            {annotatingIdx !== null && filePreviews[annotatingIdx] && (
+                <ImageAnnotator
+                    imageSrc={filePreviews[annotatingIdx]!}
+                    onSave={handleAnnotateSave}
+                    onCancel={() => setAnnotatingIdx(null)}
+                />
+            )}
         </div>
     );
 }

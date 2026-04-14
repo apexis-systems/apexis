@@ -2,7 +2,8 @@ import { getIO } from '../socket.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import db from '../models/index.ts';
 import PDFDocument from 'pdfkit';
@@ -13,16 +14,6 @@ import { sendNotification } from '../utils/notificationUtils.ts';
 export const activeExports = new Map<number, { startTime: number, statusText: string, etaMs?: number }>();
 
 const { projects, folders, files, organizations } = db;
-
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || "ap-south-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    }
-});
-
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -452,7 +443,7 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     const logoH = 32;
     const blockTop = 15;
     doc.font(brandFont).fontSize(20);
-    const brandTextW = doc.widthOfString('APEXIS');
+    const brandTextW = doc.widthOfString('APEXISpro');
     doc.font('Helvetica-Bold').fontSize(5.5);
     const tagW = doc.widthOfString(taglineStr);
     const gap = 10;
@@ -468,7 +459,7 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     }
 
     doc.font(brandFont).fontSize(20).fillColor(BRAND.orange);
-    doc.text('APEXIS', textLeft, blockTop + 4, { lineBreak: false });
+    doc.text('APEXISpro', textLeft, blockTop + 4, { lineBreak: false });
     doc.font('Helvetica-Bold').fontSize(5.5).fillColor(BRAND.muted);
     // Moved from +24 to +28 to increase the vertical gap with the BRAND text (as per user tweak)
     doc.text(taglineStr, textLeft + (brandTextW - tagW) / 2 + 3, blockTop + 28, { lineBreak: false });
@@ -508,7 +499,7 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
     const logoH = 64;
     const blockTop = 100;
     doc.font(brandFont).fontSize(48);
-    const brandTextW = doc.widthOfString('APEXIS');
+    const brandTextW = doc.widthOfString('APEXISpro');
     const taglineStr = 'RECORD · REPORT · RELEASE .';
     doc.font('Helvetica').fontSize(10);
     const tagW = doc.widthOfString(taglineStr);
@@ -521,7 +512,7 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
     }
 
     doc.font(brandFont).fontSize(48).fillColor(BRAND.orange);
-    doc.text('APEXIS', (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
+    doc.text('APEXISpro', (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
 
     doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.muted);
     doc.text(taglineStr, (pageWidth - tagW) / 2, blockTop + logoH + 85, { lineBreak: false });
@@ -665,7 +656,7 @@ const drawStyledTable = (doc: any, title: string, headers: { text: string, w: nu
     const ensureSpace = (h: number) => {
         if (doc.y + h > contentBottom) {
             doc.addPage();
-            doc.y = 85; // Reserve space for compact header (rule ends at 70, +15px gap)
+            doc.y = 85; // Reserve space for header
             return true;
         }
         return false;
@@ -680,7 +671,7 @@ const drawStyledTable = (doc: any, title: string, headers: { text: string, w: nu
     doc.moveDown(0.5);
 
     // Header
-    ensureSpace(20);
+    ensureSpace(25);
     const headY = doc.y;
     doc.save().roundedRect(left, headY, r - left, 20, 4).fill(BRAND.tableHeader).restore();
     let currX = left;
@@ -697,21 +688,37 @@ const drawStyledTable = (doc: any, title: string, headers: { text: string, w: nu
         doc.y += 20;
     } else {
         rows.forEach((row, i) => {
-            const rowH = 20;
-            doc.y += 3.5; // Top margin 2
-            if (ensureSpace(rowH)) {
-                // Redraw table header on new page if needed (simplified here)
+            // Calculate height needed for this row
+            const cellVerticalPadding = 6;
+            const textOptions = (width: number) => ({ width: width - 12, lineBreak: true });
+            
+            let maxRowH = 20; // fallback min
+            let startRowX = left;
+            row.forEach((cell, j) => {
+                const h = doc.heightOfString(String(cell || ' '), textOptions(headers[j].w)) + (cellVerticalPadding * 2);
+                if (h > maxRowH) maxRowH = h;
+            });
+
+            if (ensureSpace(maxRowH + 4)) {
+                // After page break, we might want to redraw header, but for now just continue
             }
+
             const y = doc.y;
             if (i % 2 !== 1) {
-                doc.save().roundedRect(left, y, r - left, rowH, 4).fill(BRAND.tableRowAlt).restore();
+                doc.save().roundedRect(left, y, r - left, maxRowH, 4).fill(BRAND.tableRowAlt).restore();
             }
+
             let rowX = left;
             row.forEach((cell, j) => {
-                doc.font('Helvetica').fontSize(8.5).fillColor(BRAND.ink).text(String(cell || ' '), rowX + 6, y + 6, { width: headers[j].w - 12, lineBreak: false });
+                doc.font('Helvetica').fontSize(8.5).fillColor(BRAND.ink).text(
+                    String(cell || ' '), 
+                    rowX + 6, 
+                    y + cellVerticalPadding, 
+                    textOptions(headers[j].w)
+                );
                 rowX += headers[j].w;
             });
-            doc.y = y + rowH;
+            doc.y = y + maxRowH + 2; // small gap between rows
         });
     }
     doc.moveDown(1);
@@ -740,9 +747,9 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
     doc.text(prefix, m.left, textY, { lineBreak: false });
 
     doc.font(brandFont).fontSize(10).fillColor(BRAND.orange);
-    const wb = doc.widthOfString('APEXIS');
+    const wb = doc.widthOfString('APEXISpro');
     // Nudged -2 to align better with the baseline of the other text
-    doc.text('APEXIS', m.left + wp, textY - 2.5, { lineBreak: false });
+    doc.text('APEXISpro', m.left + wp, textY - 2.5, { lineBreak: false });
 
     doc.font('Helvetica').fontSize(7).fillColor(BRAND.muted);
     doc.text(' — CONSTRUCTION COMMUNICATION PLATFORM', m.left + wp + wb, textY, { lineBreak: false });
@@ -758,7 +765,7 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
 export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'Apexis Engineering Consultants';
+    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
@@ -797,11 +804,16 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
         const summary = (report.summary || {}) as any;
 
         // 1. Files
-        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
+            i + 1, 
+            d.folder ? `${d.folder}/${d.title}` : d.title, 
+            d.user || ' ', 
+            d.date || ' '
+        ]);
         const fileW = r - left;
-        drawStyledTable(doc, 'SECTION 1 - FILES UPLOADED THIS WEEK', [
+        drawStyledTable(doc, 'SECTION 1 - FILES UPLOADED TODAY', [
             { text: '#', w: fileW * 0.08 },
-            { text: 'File Name', w: fileW * 0.52 },
+            { text: 'File Path', w: fileW * 0.52 },
             { text: 'Uploaded By', w: fileW * 0.2 },
             { text: 'Date', w: fileW * 0.16 }
         ], fileRows);
@@ -850,7 +862,7 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
 export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'Apexis Engineering Consultants';
+    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
@@ -896,11 +908,16 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
 
         // Section 2 - Files
         const summary = (report.summary || {}) as any;
-        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
+            i + 1, 
+            d.folder ? `${d.folder}/${d.title}` : d.title, 
+            d.user || ' ', 
+            d.date || ' '
+        ]);
         const fileW = r - left;
         drawStyledTable(doc, 'SECTION 2 - FILES UPLOADED THIS WEEK', [
             { text: '#', w: fileW * 0.08 },
-            { text: 'File Name', w: fileW * 0.52 },
+            { text: 'File Path', w: fileW * 0.52 },
             { text: 'Uploaded By', w: fileW * 0.2 },
             { text: 'Date', w: fileW * 0.16 }
         ], fileRows);
@@ -970,7 +987,7 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
 export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'Apexis Engineering Consultants';
+    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
@@ -1024,10 +1041,15 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         const tblW = r - left;
         // Section 2 - Files
         const summary = (report.summary || {}) as any;
-        const fileRows = (summary.document_titles || []).slice(0, 10).map((d: any, i: number) => [i + 1, d.title || ' ', d.user || ' ', d.date || ' ']);
+        const fileRows = (summary.document_titles || []).slice(0, 50).map((d: any, i: number) => [
+            i + 1, 
+            d.folder ? `${d.folder}/${d.title}` : d.title, 
+            d.user || ' ', 
+            d.date || ' '
+        ]);
         drawStyledTable(doc, 'SECTION 2 — FILES UPLOADED THIS MONTH', [
             { text: '#', w: tblW * 0.08 },
-            { text: 'File Name', w: tblW * 0.52 },
+            { text: 'File Path', w: tblW * 0.52 },
             { text: 'Uploaded By', w: tblW * 0.24 },
             { text: 'Date', w: tblW * 0.16 }
         ], fileRows);

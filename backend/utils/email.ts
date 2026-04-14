@@ -14,7 +14,7 @@ const transporter = nodemailer.createTransport({
 export const sendEmail = async (to: string, subject: string, content: string, isHtml = false) => {
     try {
         const info = await transporter.sendMail({
-            from: `"Apexis" <${process.env.EMAIL_USER}>`,
+            from: `"APEXISpro" <${process.env.EMAIL_USER}>`,
             to,
             subject,
             [isHtml ? "html" : "text"]: content,

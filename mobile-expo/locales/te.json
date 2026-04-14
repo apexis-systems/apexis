@@ -9,17 +9,24 @@
             },
             "stats": {
                 "projects": "ప్రాజెక్ట్‌లు",
+                "folders": "ఫోల్డర్లు",
                 "documents": "పత్రాలు",
                 "photos": "ఫోటోలు"
             },
+            "adminAnalyticsTitle": "అడ్మిన్ అనలిటిక్స్",
+            "adminAnalyticsSubtitle": "కంపెనీ-వ్యాప్తంగా ప్రాజెక్ట్ అవగాహన",
+            "createProject": "ప్రాజెక్ట్ సృష్టించండి",
             "yourProjects": "మీ ప్రాజెక్ట్‌లు",
-            "noProjects": "ప్రాజెక్ట్‌లు లేవు"
+            "noProjects": "ప్రాజెక్ట్‌లు లేవు",
+            "noProjectsSearch": "మీ శోధనకు సరిపోయే ప్రాజెక్ట్‌లు లేవు."
         },
         "tabs": {
             "home": "హోమ్",
             "scan": "స్కాన్",
             "upload": "అప్‌లోడ్",
             "activity": "కార్యకలాపం",
+            "chat": "చాట్",
+            "settings": "సెట్టింగ్‌లు",
             "profile": "ప్రొఫైల్"
         }
     }

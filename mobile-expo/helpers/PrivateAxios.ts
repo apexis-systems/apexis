@@ -1,7 +1,8 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { DeviceEventEmitter } from 'react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5002/api';
 
 console.log(API_URL)
 
@@ -22,7 +23,18 @@ export const PrivateAxios = axios.create({
 PrivateAxios.interceptors.request.use(
     async (config) => {
         try {
-            const token = await SecureStore.getItemAsync('token');
+            let token = await SecureStore.getItemAsync('token');
+            if (!token) {
+                // Minor retry delay if token was just refreshed or set
+                await new Promise(r => setTimeout(r, 250));
+                token = await SecureStore.getItemAsync('token');
+                
+                // One more final attempt if still null, total wait 750ms
+                if (!token) {
+                    await new Promise(r => setTimeout(r, 500));
+                    token = await SecureStore.getItemAsync('token');
+                }
+            }
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
@@ -32,6 +44,22 @@ PrivateAxios.interceptors.request.use(
         return config;
     },
     (error) => {
+        return Promise.reject(error);
+    }
+);
+
+PrivateAxios.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const code = error?.response?.data?.code;
+        if (code === 'SUBSCRIPTION_LOCKED') {
+            try {
+                await SecureStore.setItemAsync('subscriptionLocked', 'true');
+            } catch (secureStoreError) {
+                console.error('Failed to persist subscription lock state', secureStoreError);
+            }
+            DeviceEventEmitter.emit('subscription-locked');
+        }
         return Promise.reject(error);
     }
 );

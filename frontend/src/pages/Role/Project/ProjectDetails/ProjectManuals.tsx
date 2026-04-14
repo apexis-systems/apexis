@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Manual, ManualType, getManuals, uploadManual, deleteManual } from '@/services/manualService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { getApiErrorMessage } from '@/helpers/apiError';
 
 interface Props { project: Project; }
 
@@ -59,7 +60,7 @@ const ProjectManuals = ({ project }: Props) => {
       const manual = await uploadManual(form);
       setItems(prev => [manual, ...prev]);
       toast.success('Uploaded successfully');
-    } catch { toast.error('Upload failed'); }
+    } catch (error) { toast.error(getApiErrorMessage(error, 'Upload failed')); }
     finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; setShowUpload(false); }
   };
 

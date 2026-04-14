@@ -56,7 +56,7 @@ export const triggerReport = async (projectId: string | number, type: 'daily' | 
 
 export const getReportShareUrl = async (id: number): Promise<string> => {
     try {
-        const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
+        const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5002/api';
         return `${API_URL}/reports/${id}/share`;
     } catch (error) {
         console.error("getReportShareUrl Error", error);

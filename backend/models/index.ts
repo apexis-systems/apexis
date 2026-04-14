@@ -168,6 +168,14 @@ db.users.hasMany(db.notifications, { foreignKey: 'user_id' });
 db.notifications.belongsTo(db.projects, { foreignKey: 'project_id' });
 db.projects.hasMany(db.notifications, { foreignKey: 'project_id' });
 
+// Organization <-> Transaction
+db.transactions.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.transactions, { foreignKey: 'organization_id' });
+
+// User <-> Transaction
+db.transactions.belongsTo(db.users, { foreignKey: 'user_id' });
+db.users.hasMany(db.transactions, { foreignKey: 'user_id' });
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
@@ -189,6 +197,7 @@ export const rooms = db.rooms;
 export const room_members = db.room_members;
 export const chat_messages = db.chat_messages;
 export const notifications = db.notifications;
+export const transactions = db.transactions;
 
 export { sequelize, Sequelize };
 export default db;

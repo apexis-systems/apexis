@@ -131,6 +131,16 @@ export const getQrSession = async () => {
     }
 };
 
+export const revokeQrSession = async (sessionId: string) => {
+    try {
+        const response = await PrivateAxios.delete(`/qr/sessions/${sessionId}`);
+        return response.data;
+    } catch (error) {
+        console.error("revokeQrSession Error", error);
+        throw error;
+    }
+};
+
 export const verifyInvitation = async (token: string) => {
     try {
         const response = await PublicAxios.get(`/auth/verify-invitation?token=${token}`);
@@ -205,9 +215,9 @@ export const getMyMemberships = async () => {
     }
 };
 
-export const switchContext = async (project_id: number, role: string) => {
+export const switchContext = async (params: { role: string; project_id?: number | null; organization_id?: number | null }) => {
     try {
-        const response = await PrivateAxios.post("/auth/switch-context", { project_id, role });
+        const response = await PrivateAxios.post("/auth/switch-context", params);
         return response.data; // { token, user: { ... } }
     } catch (error) {
         console.error("switchContext Error", error);

@@ -17,14 +17,16 @@ if (fs.existsSync(serviceAccountPath)) {
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 }
 
+let firebaseInitialized = false;
 if (serviceAccount && Object.keys(serviceAccount).length > 0) {
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
     });
+    firebaseInitialized = true;
     console.log('Firebase Admin initialized');
 } else {
     console.warn('Firebase Service Account not found. Push notifications will be disabled.');
 }
 
-export const messaging = admin.messaging();
+export const messaging = firebaseInitialized ? admin.messaging() : null;
 export default admin;

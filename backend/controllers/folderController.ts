@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
-import { folders, project_members, activities, users as UsersModel } from "../models/index.ts";
+import { folders, files, project_members, activities, users as UsersModel, projects } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { Op } from "sequelize";
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { logActivity } from "../utils/activityUtils.ts";
 
 export const createFolder = async (req: Request, res: Response) => {
     try {
@@ -34,11 +37,12 @@ export const createFolder = async (req: Request, res: Response) => {
             folder_type: folder_type || null,
         });
 
-        await activities.create({
-            project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: project_id,
+            userId: authUser.user_id,
             type: 'edit',
-            description: `Created folder "${name}"`
+            description: `Created folder "${name}"`,
+            metadata: { folderId: newFolder.id, type: folder_type === 'photo' ? 'photos' : 'documents' }
         });
 
         res.status(201).json({
@@ -102,23 +106,28 @@ export const toggleFolderVisibility = async (req: Request, res: Response) => {
         if (!folder) {
             return res.status(404).json({ error: "Folder not found" });
         }
+        const project = await projects.findByPk(folder.project_id);
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
 
         folder.client_visible = client_visible;
         await folder.save();
 
         if (client_visible) {
-            // Notify clients in the organization
-            const clients = await UsersModel.findAll({
-                where: { organization_id: authUser.organization_id, role: 'client' }
+            // Notify clients who actually belong to this project.
+            const clients = await project_members.findAll({
+                where: { project_id: folder.project_id, role: 'client' },
+                attributes: ['user_id']
             });
 
             for (const client of clients) {
                 await sendNotification({
-                    userId: (client as any).id,
+                    userId: Number((client as any).user_id),
                     title: 'New Folder Available',
                     body: `A new folder "${folder.name}" is now visible to you.`,
                     type: 'folder_visibility',
-                    data: { folderId: String(folder.id), projectId: String(folder.project_id) }
+                    data: { folderId: String(folder.id), projectId: String(folder.project_id), type: folder.folder_type || 'documents' }
                 });
             }
         }
@@ -167,11 +176,12 @@ export const bulkUpdateFolders = async (req: Request, res: Response) => {
         if (ids.length > 0) {
             const firstFolder = await folders.findByPk(ids[0]);
             if (firstFolder) {
-                await activities.create({
-                    project_id: firstFolder.project_id,
-                    user_id: authUser.user_id,
+                await logActivity({
+                    projectId: firstFolder.project_id,
+                    userId: authUser.user_id,
                     type: 'edit',
-                    description: `Bulk updated ${ids.length} folders`
+                    description: `Bulk updated ${ids.length} folders`,
+                    metadata: { folderId: firstFolder.id, type: firstFolder.folder_type === 'photo' ? 'photos' : 'documents' }
                 });
             }
         }
@@ -218,11 +228,12 @@ export const updateFolder = async (req: Request, res: Response) => {
         folder.name = name;
         await folder.save();
 
-        await activities.create({
-            project_id: folder.project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: folder.project_id,
+            userId: authUser.user_id,
             type: 'edit',
-            description: `Renamed folder from "${oldName}" to "${name}"`
+            description: `Renamed folder from "${oldName}" to "${name}"`,
+            metadata: { folderId: folder.id, type: folder.folder_type === 'photo' ? 'photos' : 'documents' }
         });
 
         res.status(200).json({
@@ -235,3 +246,90 @@ export const updateFolder = async (req: Request, res: Response) => {
     }
 };
 
+export const deleteFolder = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { folderId } = req.params;
+        const { forceDelete } = req.body;
+
+        const folder = await folders.findByPk(folderId);
+        if (!folder) {
+            return res.status(404).json({ error: "Folder not found" });
+        }
+
+        // Authorization: Admins or Project Contributors
+        if (authUser.role !== "admin" && authUser.role !== "contributor") {
+            return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can delete folders" });
+        }
+
+        if (authUser.role === "contributor") {
+            const access = await project_members.findOne({
+                where: { user_id: authUser.user_id, project_id: folder.project_id }
+            });
+            if (!access || access.role !== "contributor") {
+                return res.status(403).json({ error: "Forbidden: You do not have contributor access to this project" });
+            }
+        }
+
+        // Check if folder has content
+        const fileCount = await files.count({ where: { folder_id: folderId } });
+        const subfolderCount = await folders.count({ where: { parent_id: folderId } });
+
+        if (fileCount > 0 || subfolderCount > 0) {
+            if (!forceDelete) {
+                return res.status(400).json({ error: "Cannot delete a folder that is not empty", hasContent: true });
+            }
+
+            // Recursive deletion logic
+            const deleteRecursively = async (fId: any) => {
+                // Get all files in this folder
+                const folderFiles = await files.findAll({ where: { folder_id: fId } });
+                for (const file of folderFiles) {
+                    try {
+                        // Delete from S3
+                        const command = new DeleteObjectCommand({
+                            Bucket: BUCKET_NAME,
+                            Key: file.file_url
+                        });
+                        await s3Client.send(command);
+                    } catch (s3Err) {
+                        console.error(`Failed to delete S3 object for file ${file.id}:`, s3Err);
+                    }
+                    await file.destroy();
+                }
+
+                // Get all subfolders
+                const subfolders = await folders.findAll({ where: { parent_id: fId } });
+                for (const sub of subfolders) {
+                    await deleteRecursively(sub.id);
+                }
+                
+                // Finally delete the folder itself (except the root target which is handled at the end)
+                if (fId !== folderId) {
+                    await folders.destroy({ where: { id: fId } });
+                }
+            };
+
+            await deleteRecursively(folderId);
+        }
+
+        const folderName = folder.name;
+        const project_id = folder.project_id;
+        await folder.destroy();
+
+        await logActivity({
+            projectId: project_id,
+            userId: authUser.user_id,
+            type: 'edit',
+            description: `Deleted folder "${folderName}" ${forceDelete ? '(recursively)' : ''}`,
+            metadata: { folderId: folder.id, type: folder.folder_type === 'photo' ? 'photos' : 'documents' }
+        });
+
+        res.status(200).json({ message: "Folder deleted successfully" });
+    } catch (error) {
+        console.error("Delete Folder Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

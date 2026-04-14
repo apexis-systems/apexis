@@ -26,6 +26,16 @@ export default {
           onDelete: "CASCADE"
         }
       },
+      project_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "projects",
+          key: "id",
+        },
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE",
+      },
       file_url: {
         type: Sequelize.STRING,
         allowNull: false,
@@ -51,6 +61,16 @@ export default {
           onUpdate: "CASCADE",
           onDelete: "CASCADE"
         }
+      },
+      client_visible: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      do_not_follow: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
       createdAt: {
         type: Sequelize.DATE,

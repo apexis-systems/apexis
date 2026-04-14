@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useUsage } from '@/contexts/UsageContext';
 import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X, Copy, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getProjects, createProject } from '@/services/projectService';
@@ -10,12 +11,14 @@ import { getOrgOverview, uploadOrgLogo, getSecureFileUrl, getOrganizations } fro
 import { toast } from 'sonner';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import { getApiErrorMessage } from '@/helpers/apiError';
 
 export default function Dashboard() {
     const auth = useAuth() || {};
     const user = auth.user;
     const router = useRouter();
     const { t } = useLanguage();
+    const { checkLimit } = useUsage();
 
     const [projects, setProjects] = useState<any[]>([]);
     const [isCreating, setIsCreating] = useState(false);
@@ -92,7 +95,10 @@ export default function Dashboard() {
     const fetchProjects = async (orgId?: string) => {
         try {
             const data = await getProjects(orgId);
-            setProjects(data.projects || []);
+            const sortedProjects = (data.projects || []).sort((a: any, b: any) => 
+                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+            );
+            setProjects(sortedProjects);
         } catch (e) {
             console.error("Failed to fetch projects", e);
         }
@@ -100,6 +106,18 @@ export default function Dashboard() {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!checkLimit('projects')) {
+            toast.error("Limit Reached: You have reached your project limit. Please upgrade your plan to create more projects.", {
+                action: {
+                    label: 'Upgrade',
+                    onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
+                },
+                duration: 5000,
+            });
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             await createProject(newProject);
@@ -109,7 +127,7 @@ export default function Dashboard() {
             toast.success('Project created successfully');
         } catch (e: any) {
             console.error("Failed to create project", e);
-            toast.error(e.response?.data?.error || 'Failed to create project');
+            toast.error(getApiErrorMessage(e, 'Failed to create project'));
         } finally {
             setIsSubmitting(false);
         }
@@ -248,11 +266,11 @@ export default function Dashboard() {
                     {user.role === 'superadmin' && orgData && (
                         <>
                             <div className="rounded-xl bg-card border border-border p-5">
-                                <div className="text-sm text-muted-foreground">Org Users</div>
+                                <div className="text-sm text-muted-foreground">{t('org_users')}</div>
                                 <div className="mt-1 text-3xl font-bold text-foreground">{orgData.users?.length || 0}</div>
                             </div>
                             <div className="rounded-xl bg-card border border-border p-5">
-                                <div className="text-sm text-muted-foreground">All Projects</div>
+                                <div className="text-sm text-muted-foreground">{t('all_projects')}</div>
                                 <div className="mt-1 text-3xl font-bold text-foreground">{orgData.projects?.length || 0}</div>
                             </div>
                         </>
@@ -278,7 +296,7 @@ export default function Dashboard() {
 
             <div id="projects-list-header" className="flex items-center justify-between gap-4 mb-4">
                 <h2 className="text-lg font-bold text-foreground">
-                    {user.role === 'superadmin' ? "Organization Projects" : t('your_projects')}
+                    {user.role === 'superadmin' ? t('organization_projects') : t('your_projects')}
                 </h2>
                 <div className="flex items-center gap-3">
                     {user.role === 'superadmin' && (
@@ -287,7 +305,7 @@ export default function Dashboard() {
                             value={selectedOrgId}
                             onChange={(e) => setSelectedOrgId(e.target.value)}
                         >
-                            <option value="">All Organizations</option>
+                            <option value="">{t('all_organizations')}</option>
                             {organizations.map(org => (
                                 <option key={org.id} value={org.id}>{org.name}</option>
                             ))}
@@ -298,7 +316,7 @@ export default function Dashboard() {
                             onClick={() => setIsCreating(!isCreating)}
                             className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                         >
-                            <Plus className="h-4 w-4" /> Create Project
+                            <Plus className="h-4 w-4" /> {t('create_project')}
                         </button>
                     )}
                 </div>
@@ -320,11 +338,12 @@ export default function Dashboard() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Description (max 50)</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">Company Name/Client Name (max 50)</label>
                             <input
                                 type="text"
                                 maxLength={50}
                                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-border/80"
+                                placeholder="Enter Company/Client Name"
                                 value={newProject.description}
                                 onChange={e => setNewProject({ ...newProject, description: e.target.value })}
                             />
@@ -386,9 +405,8 @@ export default function Dashboard() {
                             {project.name}
                         </h3>
 
-                        <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
-                            {project.description || 'No Description'}
+                        <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground italic">
+                            {project.description || 'No Company/Client Name'}
                         </div>
 
                         <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">

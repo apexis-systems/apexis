@@ -15,6 +15,13 @@ export interface User {
         id: string;
         name: string;
         logo: string;
+        plan_name: string;
+        plan_end_date: string;
+        subscription_locked?: boolean;
+        subscription_in_grace_period?: boolean;
+        subscription_plan_end_date?: string;
+        subscription_grace_end_date?: string;
+        subscription_grace_days_remaining?: number;
     };
 }
 

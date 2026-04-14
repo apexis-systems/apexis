@@ -1,20 +1,23 @@
 import type { Request, Response } from "express";
-import { 
-    users, 
-    projects, 
-    project_members, 
-    room_members, 
-    notifications, 
-    activities, 
-    snags, 
+import {
+    users,
+    projects,
+    project_members,
+    room_members,
+    notifications,
+    activities,
+    snags,
     rfis,
-    sequelize 
+    organizations,
+    sequelize
 } from "../models/index.ts";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import sharp from 'sharp';
 import { Op } from "sequelize";
+import { getIO } from "../socket.ts";
 
 export const inviteUser = async (req: Request, res: Response) => {
     try {
@@ -49,13 +52,16 @@ export const inviteUser = async (req: Request, res: Response) => {
             });
             isNewUser = true;
         } else {
-            // User exists. If they are invited to a project, we'll add the association below.
-            // If they are invited as an 'admin' but are already an 'admin' elsewhere, 
-            // the current schema only supports one organization_id in the User table.
-            
-            if (role === 'admin' && user.organization_id && user.organization_id !== authUser.organization_id) {
-                // Return a specific error if they are already an admin of another org
-                return res.status(400).json({ error: "User is already an administrator for another organization." });
+            // User exists.
+            if (user.organization_id && user.organization_id !== authUser.organization_id) {
+                return res.status(400).json({
+                    error: "User is already registered with another organization. Cross-organization invitations are not permitted for security reasons."
+                });
+            }
+
+            // If user exists but has no organization (invited but not registered), assign current one
+            if (!user.organization_id) {
+                await user.update({ organization_id: authUser.organization_id });
             }
         }
 
@@ -77,6 +83,13 @@ export const inviteUser = async (req: Request, res: Response) => {
                 // Already a member with different role, update it or leave it?
                 // For now, let's allow updating to the new invited role
                 await existingMembership.update({ role });
+            }
+
+            // Emit socket event to refresh project stats (counts) in real-time
+            try {
+                getIO().to(`project-${actualProjectId}`).emit('project-stats-updated', { projectId: String(actualProjectId) });
+            } catch (ioErr) {
+                console.error('Socket emit error (non-fatal):', ioErr);
             }
         }
 
@@ -126,10 +139,18 @@ export const getOrgUsers = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
-        let whereCondition: any = { organization_id: authUser.organization_id };
+        // 1. Find all organizations the user belongs to
+        const myProjectOrgs = await project_members.findAll({
+            where: { user_id: authUser.user_id },
+            include: [{ model: projects, as: 'project', attributes: ['organization_id'] }]
+        }).then((pms: any) => pms.map((pm: any) => pm.project?.organization_id).filter(Boolean));
+
+        const myOrgs = [...new Set([authUser.organization_id, ...myProjectOrgs].filter(Boolean))];
+
+        let whereCondition: any = { organization_id: { [Op.in]: myOrgs } };
 
         if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
-            // Non-admins: Only see users who share a project with them
+            // Non-admins: Only see users who share a project with them in ANY of their orgs
             const myProjectIds = await project_members.findAll({
                 where: { user_id: authUser.user_id },
                 attributes: ['project_id']
@@ -145,7 +166,8 @@ export const getOrgUsers = async (req: Request, res: Response) => {
 
         const orgUsers = await users.findAll({
             where: whereCondition,
-            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt']
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt', 'organization_id'],
+            include: [{ model: organizations, attributes: ['name'] }]
         });
 
         res.status(200).json({ users: orgUsers });
@@ -211,16 +233,16 @@ export const deleteUser = async (req: Request, res: Response) => {
         if (error.name === 'SequelizeForeignKeyConstraintError') {
             const table = error.table || '';
             let details = "This user is referenced by other project data.";
-            
+
             if (table === 'files' || table === 'folders') {
                 details = `User cannot be removed because they have created ${table}. Please deactivate the user instead or reassign their data.`;
             } else if (table === 'rfis' || table === 'projects') {
                 details = `User cannot be removed because they are the creator of ${table}.`;
             }
 
-            return res.status(400).json({ 
-                error: "Conflict: User has critical project data", 
-                details 
+            return res.status(400).json({
+                error: "Conflict: User has critical project data",
+                details
             });
         }
 
@@ -229,14 +251,7 @@ export const deleteUser = async (req: Request, res: Response) => {
 };
 
 
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'ap-south-2',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    },
-});
-const BUCKET = process.env.S3_BUCKET_NAME || 'apexis-bucket';
+
 
 export const updatePushToken = async (req: Request, res: Response) => {
     try {
@@ -246,6 +261,15 @@ export const updatePushToken = async (req: Request, res: Response) => {
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
         if (!token) return res.status(400).json({ error: "Token is required" });
 
+        // 1. Remove this token from any other users to prevent cross-account notifications on shared devices
+        await users.update({ fcm_token: null }, {
+            where: {
+                fcm_token: token,
+                id: { [Op.ne]: authUser.user_id }
+            }
+        });
+
+        // 2. Set the token for the current user
         await users.update({ fcm_token: token }, { where: { id: authUser.user_id } });
 
         res.status(200).json({ message: "Push token updated successfully" });
@@ -270,7 +294,7 @@ export const updateProfilePic = async (req: Request, res: Response) => {
         const key = `profiles/${authUser.user_id}/${Date.now()}.jpg`;
 
         await s3Client.send(new PutObjectCommand({
-            Bucket: BUCKET,
+            Bucket: BUCKET_NAME,
             Key: key,
             ContentType: 'image/jpeg',
             Body: fileBuffer,

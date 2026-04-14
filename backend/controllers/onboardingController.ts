@@ -6,7 +6,8 @@ import redis from "../config/redis.ts";
 import { users, organizations, plans } from "../models/index.ts";
 import { Op } from "sequelize";
 import { sendEmail } from "../utils/email.ts";
-import { normalizePhone, isValidPhone } from "../utils/sms.ts";
+import { normalizePhone, isValidPhone, isIndianPhone } from "../utils/sms.ts";
+
 
 const OTP_TTL = 300; // 5 minutes
 
@@ -86,8 +87,9 @@ export const superadminVerifyOtp = async (req: Request, res: Response) => {
         const token = jwt.sign(
             {
                 user_id: newUser.id,
+                name: newUser.name,
                 role: newUser.role,
-                organization_id: newUser.organization_id // 1
+                organization_id: newUser.organization_id
             },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
@@ -113,7 +115,7 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
         }
 
         if (phone && !isValidPhone(phone)) {
-            return res.status(400).json({ error: "Invalid phone number. Please enter a 10-digit number." });
+            return res.status(400).json({ error: "Invalid phone number. Please include your country code (e.g. +971501234567)." });
         }
 
         const normalizedPhone = phone ? normalizePhone(phone) : null;
@@ -128,7 +130,7 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
             }
         });
 
-        if (existingUser) {
+        if (existingUser && existingUser.role === "admin") {
             return res.status(400).json({ error: "Email or Phone already registered" });
         }
 
@@ -138,7 +140,7 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
         console.log("OTP", otp);
         const otpHash = await bcrypt.hash(otp, 10);
 
-        const identifier = (verification_method === 'phone' && phone) ? phone : (email || phone);
+        const identifier = (verification_method === 'phone' && normalizedPhone) ? normalizedPhone : (normalizedEmail || normalizedPhone);
         const redisKey = `otp:signup:admin:${identifier}`;
         await redis.set(
             redisKey,
@@ -157,6 +159,13 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
         const method = verification_method || (phone ? 'phone' : 'email');
 
         if (method === 'phone' && normalizedPhone) {
+            // Guard: phone OTP (Fast2SMS) only works for Indian numbers
+            if (!isIndianPhone(normalizedPhone)) {
+                await redis.del(redisKey);
+                return res.status(400).json({
+                    error: "Phone OTP is only supported for Indian numbers. Please use email verification."
+                });
+            }
             const { sendOTP } = await import("../utils/sms.ts");
             await sendOTP(normalizedPhone, otp);
         } else if (method === 'email' && email) {
@@ -198,24 +207,40 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
 
         const now = new Date();
         const endDate = new Date();
-        endDate.setDate(now.getDate() + 14);
+        endDate.setDate(now.getDate() + 60);
 
-        const [plan] = await plans.findOrCreate({
-            where: { id: 1 },
-            defaults: {
-                name: "Free Plan",
-                price: 0,
-                storage_limit_mb: 100,
-                duration_days: 14
-            }
+        // Find the Freemium plan (synced from our seeds)
+        let plan = await plans.findOne({ 
+            where: { name: "Freemium" } 
         });
+
+        // Fallback: create it if it somehow doesn't exist yet
+        if (!plan) {
+            plan = await plans.create({
+                name: "Freemium",
+                price: 0,
+                storage_limit_mb: 500,
+                duration_days: 60,
+                project_limit: 1,
+                contributor_limit: 2,
+                client_limit: 1,
+                max_snags: 15,
+                max_rfis: 15,
+                can_export_reports: false,
+                can_share_media: false,
+                can_export_handover: false
+            });
+        }
 
         const [organization] = await organizations.findOrCreate({
             where: { name: organization_name },
             defaults: {
-                plan_id: plan.id, // Default Free Plan ID
+                plan_id: plan.id,
+                plan_name: plan.name,
+                plan_price: plan.price,
                 plan_start_date: now,
-                plan_end_date: endDate
+                plan_end_date: endDate,
+                storage_limit_mb: plan.storage_limit_mb
             }
         });
 
@@ -227,23 +252,48 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
         });
         const isPrimary = adminCount === 0;
 
-        const newUser = await users.create({
-            organization_id: organization.id,
-            name,
-            email: savedEmail,
-            phone_number: savedPhone,
-            password: password_hash,
-            role: "admin",
-            is_primary: isPrimary,
-            email_verified: !!savedEmail,
-            phone_verified: !!savedPhone,
+        // Check if user already exists (e.g. they were a contributor/client)
+        let user = await users.findOne({
+            where: {
+                [Op.or]: [
+                    savedEmail ? { email: savedEmail } : null,
+                    savedPhone ? { phone_number: savedPhone } : null
+                ].filter(Boolean) as any[]
+            }
         });
+
+        if (user) {
+            await user.update({
+                organization_id: organization.id,
+                name,
+                password: password_hash,
+                role: "admin",
+                is_primary: isPrimary,
+                email_verified: user.email_verified || !!savedEmail,
+                phone_verified: user.phone_verified || !!savedPhone,
+            });
+        } else {
+            user = await users.create({
+                organization_id: organization.id,
+                name,
+                email: savedEmail,
+                phone_number: savedPhone,
+                password: password_hash,
+                role: "admin",
+                is_primary: isPrimary,
+                email_verified: !!savedEmail,
+                phone_verified: !!savedPhone,
+            });
+        }
+
+        const newUser = user; // for downstream consistency
 
         await redis.del(redisKey);
 
         const token = jwt.sign(
             {
                 user_id: newUser.id,
+                name: newUser.name,
                 role: newUser.role,
                 organization_id: newUser.organization_id
             },

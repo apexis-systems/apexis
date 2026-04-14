@@ -10,9 +10,10 @@ interface Props {
     width?: number;
     height?: number;
     onZoomStateChange?: (isZoomed: boolean) => void;
+    onTap?: () => void;
 }
 
-export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H, onZoomStateChange }: Props) {
+export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H, onZoomStateChange, onTap }: Props) {
     const scale = useSharedValue(1);
     const savedScale = useSharedValue(1);
     const translateX = useSharedValue(0);
@@ -81,6 +82,12 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
             }
         });
 
+    const singleTap = Gesture.Tap()
+        .numberOfTaps(1)
+        .onEnd(() => {
+            if (onTap) runOnJS(onTap)();
+        });
+
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [
             { translateX: translateX.value },
@@ -91,7 +98,8 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
 
     // Combine gestures using deeply nested Simultaneous approach
     const innerGestures = Gesture.Simultaneous(pinch, pan);
-    const all = Gesture.Simultaneous(doubleTap, innerGestures);
+    const taps = Gesture.Exclusive(doubleTap, singleTap);
+    const all = Gesture.Simultaneous(taps, innerGestures);
 
     return (
         <GestureDetector gesture={all}>

@@ -7,13 +7,14 @@ import { PrivateAxios } from '@/helpers/PrivateAxios';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders } from '@/services/folderService';
+import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import { WebView } from 'react-native-webview';
+import { formatFileSize } from '@/helpers/format';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -27,6 +28,9 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     const [newFolderName, setNewFolderName] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [showEditFolder, setShowEditFolder] = useState(false);
+    const [editingFolderId, setEditingFolderId] = useState<number | null>(null);
+    const [editFolderName, setEditFolderName] = useState('');
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
@@ -37,6 +41,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
     const [selectedFiles, setSelectedFiles] = useState<Set<string | number>>(new Set());
     const [showMoveDialog, setShowMoveDialog] = useState(false);
     const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
+    const [movingContentsOf, setMovingContentsOf] = useState<any | null>(null);
 
     // PDF Viewer state
     const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
@@ -73,6 +78,14 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
             setActiveProjectContext(project.id, selectedFolder, 'document');
         }
     }, [project?.id, selectedFolder]);
+
+    useEffect(() => {
+        if (selectedFolder) {
+            setSortBy('date');
+        } else {
+            setSortBy('name');
+        }
+    }, [selectedFolder]);
 
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
@@ -241,6 +254,84 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const handleUpdateFolder = async () => {
+        if (!editFolderName.trim() || !editingFolderId) return;
+        setSubmitting(true);
+        try {
+            const data = await updateFolder(editingFolderId, editFolderName.trim());
+            if (data.folder) {
+                setFolders(prev => prev.map(f => f.id === editingFolderId ? data.folder : f));
+                setShowEditFolder(false);
+                setEditFolderName('');
+                setEditingFolderId(null);
+            }
+        } catch {
+            Alert.alert('Error', 'Failed to rename folder');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDelete = async (folder: any, force = false) => {
+        try {
+            await deleteFolder(folder.id, force);
+            setFolders(prev => prev.filter(f => f.id !== folder.id));
+            if (selectedFolder === String(folder.id)) {
+                setSelectedFolder(folder.parent_id ? String(folder.parent_id) : null);
+            }
+        } catch (e: any) {
+            const data = e.response?.data;
+            if (data?.hasContent) {
+                Alert.alert(
+                    'Folder Not Empty',
+                    `"${folder.name}" contains files or subfolders. How would you like to proceed?`,
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Move Contents',
+                            onPress: () => {
+                                const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
+                                const childFiles = docs.filter(p => String(p.folder_id) === String(folder.id));
+
+                                if (childFolders.length === 0 && childFiles.length === 0) {
+                                    Alert.alert("Info", "Folder is already empty");
+                                    return;
+                                }
+
+                                setMovingContentsOf(folder);
+                                setMovingItem(null);
+                                setShowMoveDialog(true);
+                            }
+                        },
+                        {
+                            text: 'Delete Everything',
+                            style: 'destructive',
+                            onPress: () => handleDelete(folder, true)
+                        }
+                    ]
+                );
+            } else {
+                const msg = data?.error || 'Failed to delete folder';
+                Alert.alert('Error', msg);
+            }
+        }
+    };
+
+    const confirmDeleteFolder = (folder: any) => {
+        Alert.alert(
+            'Delete Folder',
+            `Are you sure you want to delete "${folder.name}"?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => handleDelete(folder)
+                }
+            ]
+        );
     };
 
     const getBreadcrumbs = () => {
@@ -433,7 +524,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                     </TouchableOpacity>
                 </View>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                     {sortedFolders.map((folder) => {
                         const count = docs.filter((d) => d.folder_id === folder.id).length;
                         const subcount = folders.filter((f) => f.parent_id === folder.id).length;
@@ -442,7 +533,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                             <View
                                 key={folder.id}
                                 style={{
-                                    width: '31.5%',
+                                    width: '24%',
                                     aspectRatio: 1,
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -481,13 +572,19 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 )}
                                 <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>{count} files{subcount > 0 ? ` · ${subcount} folders` : ''}</Text>
-                                {(user.role === 'admin' || user.role === 'superadmin') && !isSelectionMode && (
-                                    <TouchableOpacity
-                                        onPress={() => toggleFolderVis(folder)}
-                                        style={{ position: 'absolute', bottom: 6, right: 6, padding: 4, zIndex: 10 }}
-                                    >
-                                        <Feather name={folder.client_visible !== false ? 'eye' : 'eye-off'} size={12} color={folder.client_visible !== false ? colors.primary : colors.textMuted} />
-                                    </TouchableOpacity>
+                                {/* Folder Visibility Icon - Indicator/Toggle */}
+                                {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
+                                    <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
+                                        <TouchableOpacity
+                                            onPress={() => toggleFolderVis(folder)}
+                                        >
+                                            <Feather
+                                                name={folder.client_visible !== false ? 'eye' : 'eye-off'}
+                                                size={14}
+                                                color={folder.client_visible !== false ? colors.primary : colors.textMuted}
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
                                 )}
                             </View>
                         );
@@ -501,7 +598,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                     </View>
                 )}
 
-                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 6 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 4 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
                     {sortedDocs.map((doc) => {
                         const isSelected = selectedFiles.has(doc.id);
                         if (viewMode === 'grid') {
@@ -509,7 +606,7 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                 <View
                                     key={doc.id}
                                     style={{
-                                        width: '23%',
+                                        width: '24%',
                                         aspectRatio: 1,
                                         backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
                                         borderRadius: 10,
@@ -540,30 +637,19 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                         </View>
                                     )}
                                     <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: colors.text, textAlign: 'center' }}>{doc.file_name}</Text>
-                                    <View style={{ position: 'absolute', top: 2, right: 2, flexDirection: 'column', gap: 2, zIndex: 30 }}>
-                                        {!isSelectionMode && (
-                                            <>
-                                                <TouchableOpacity onPress={() => handleShare(doc)} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
-                                                    <Feather name="share-2" size={9} color="#fff" />
-                                                </TouchableOpacity>
-                                                {(user.role === 'admin' || user.role === 'superadmin') && (
-                                                    <>
-                                                        <TouchableOpacity onPress={() => toggleDocVisibility(doc)} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
-                                                            <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={9} color={doc.client_visible !== false ? colors.primary : "#fff"} />
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity onPress={() => toggleDocDoNotFollow(doc)} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
-                                                            <Feather name="shield" size={9} color={doc.do_not_follow ? '#ef4444' : "#fff"} />
-                                                        </TouchableOpacity>
-                                                    </>
-                                                )}
-                                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
-                                                    <TouchableOpacity onPress={() => deleteDoc(doc.id)} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 3 }}>
-                                                        <Feather name="trash-2" size={9} color="#ef4444" />
-                                                    </TouchableOpacity>
-                                                )}
-                                            </>
-                                        )}
-                                    </View>
+                                    {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
+                                        <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 30 }}>
+                                            <TouchableOpacity
+                                                onPress={() => toggleDocVisibility(doc)}
+                                            >
+                                                <Feather
+                                                    name={doc.client_visible !== false ? 'eye' : 'eye-off'}
+                                                    size={14}
+                                                    color={doc.client_visible !== false ? colors.primary : colors.textMuted}
+                                                />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
                                     {doc.do_not_follow && (
                                         <View style={{
                                             position: 'absolute',
@@ -639,30 +725,20 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                                                 </View>
                                             )}
                                         </View>
-                                        <Text style={{ fontSize: 9, color: colors.textMuted }}>{doc.file_size_mb} MB</Text>
+                                        <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
-                                        {!isSelectionMode && (
-                                            <>
-                                                <TouchableOpacity onPress={() => handleShare(doc)} style={{ padding: 4 }}>
-                                                    <Feather name="share-2" size={14} color="#666" />
-                                                </TouchableOpacity>
-                                                {(user.role === 'admin' || user.role === 'superadmin') && (
-                                                    <>
-                                                        <TouchableOpacity onPress={() => toggleDocVisibility(doc)} style={{ padding: 4 }}>
-                                                            <Feather name={doc.client_visible !== false ? 'eye' : 'eye-off'} size={14} color={doc.client_visible !== false ? colors.primary : colors.textMuted} />
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity onPress={() => toggleDocDoNotFollow(doc)} style={{ padding: 4 }}>
-                                                            <Feather name="shield" size={14} color={doc.do_not_follow ? '#ef4444' : colors.textMuted} />
-                                                        </TouchableOpacity>
-                                                    </>
-                                                )}
-                                                {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && String(doc.created_by) === String(user.id) && (
-                                                    <TouchableOpacity onPress={() => deleteDoc(doc.id)} style={{ padding: 4 }}>
-                                                        <Feather name="trash-2" size={14} color="#ef4444" />
-                                                    </TouchableOpacity>
-                                                )}
-                                            </>
+                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
+                                            <TouchableOpacity
+                                                onPress={() => toggleDocVisibility(doc)}
+                                                style={{ padding: 4 }}
+                                            >
+                                                <Feather
+                                                    name={doc.client_visible !== false ? 'eye' : 'eye-off'}
+                                                    size={14}
+                                                    color={doc.client_visible !== false ? colors.primary : colors.textMuted}
+                                                />
+                                            </TouchableOpacity>
                                         )}
                                     </View>
                                 </View>
@@ -802,50 +878,164 @@ export default function ProjectDocuments({ project, user, initialFolderId }: { p
                             <Feather name="x" size={18} color={colors.text} />
                         </TouchableOpacity>
                         <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{selectedFolders.size + selectedFiles.size} selected</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 15, alignItems: 'center' }}>
-                        <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
-                            <Feather name="share-2" size={18} color={colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
-                            <Feather name="move" size={18} color={colors.primary} />
-                        </TouchableOpacity>
-                        {user.role === 'admin' && (
-                            <>
-                                <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
-                                <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
-                                    <Feather name="eye" size={18} color={colors.primary} />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 15, alignItems: 'center', paddingRight: 15 }}>
+                                {/* Share - Only if files selected */}
+                                {selectedFiles.size > 0 && (
+                                    <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
+                                        <Feather name="share-2" size={18} color={colors.primary} />
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Edit - Only if single folder selected */}
+                                {selectedFolders.size === 1 && selectedFiles.size === 0 && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            const folderId = Array.from(selectedFolders)[0];
+                                            const folder = folders.find(f => f.id === folderId);
+                                            if (folder) {
+                                                setEditingFolderId(folder.id);
+                                                setEditFolderName(folder.name);
+                                                setShowEditFolder(true);
+                                            }
+                                        }}
+                                        style={{ padding: 4 }}
+                                    >
+                                        <Feather name="edit-2" size={18} color={colors.primary} />
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Delete - Context aware */}
+                                {(() => {
+                                    let canDelete = false;
+                                    if (selectedFolders.size > 0) canDelete = true;
+                                    if (selectedFiles.size === 1 && selectedFolders.size === 0) {
+                                        const fileId = Array.from(selectedFiles)[0];
+                                        const file = docs.find(d => d.id === fileId);
+                                        if (file && (String(file.created_by) === String(user.id) || String(file.creator?.id) === String(user.id) || user.role === 'admin' || user.role === 'superadmin')) {
+                                            canDelete = true;
+                                        }
+                                    } else if (selectedFiles.size > 1) {
+                                        canDelete = user.role === 'admin' || user.role === 'superadmin';
+                                    }
+
+                                    if (canDelete) {
+                                        return (
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    if (selectedFolders.size === 1 && selectedFiles.size === 0) {
+                                                        const folderId = Array.from(selectedFolders)[0];
+                                                        const folder = folders.find(f => f.id === folderId);
+                                                        if (folder) confirmDeleteFolder(folder);
+                                                    } else if (selectedFiles.size === 1 && selectedFolders.size === 0) {
+                                                        const fileId = Array.from(selectedFiles)[0];
+                                                        const file = docs.find(d => d.id === fileId);
+                                                        if (file) deleteDoc(file.id);
+                                                    } else {
+                                                        Alert.alert("Bulk Delete", "Delete selected items?", [
+                                                            { text: "Cancel", style: "cancel" },
+                                                            {
+                                                                text: "Delete", style: "destructive", onPress: () => {
+                                                                    Alert.alert("Note", "Please delete items individually for now or use the web interface for bulk deletion.");
+                                                                }
+                                                            }
+                                                        ]);
+                                                    }
+                                                }}
+                                                style={{ padding: 4 }}
+                                            >
+                                                <Feather name="trash-2" size={18} color="#ef4444" />
+                                            </TouchableOpacity>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
+                                    <Feather name="move" size={18} color={colors.primary} />
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
-                                    <Feather name="eye-off" size={18} color={colors.primary} />
-                                </TouchableOpacity>
-                                <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
-                                <TouchableOpacity onPress={() => handleBulkDoNotFollow(true)} style={{ padding: 4 }}>
-                                    <Feather name="shield" size={18} color="#ef4444" />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleBulkDoNotFollow(false)} style={{ padding: 4 }}>
-                                    <Feather name="shield-off" size={18} color={colors.primary} />
-                                </TouchableOpacity>
-                            </>
-                        )}
+
+                                {user.role === 'admin' || user.role === 'superadmin' ? (
+                                    <>
+                                        <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
+                                        <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
+                                            <Feather name="eye" size={18} color={colors.primary} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
+                                            <Feather name="eye-off" size={18} color={colors.textMuted} />
+                                        </TouchableOpacity>
+                                        <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
+                                        <TouchableOpacity onPress={() => handleBulkDoNotFollow(true)} style={{ padding: 4 }}>
+                                            <Feather name="shield" size={18} color="#ef4444" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => handleBulkDoNotFollow(false)} style={{ padding: 4 }}>
+                                            <Feather name="shield-off" size={18} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    </>
+                                ) : null}
+                            </ScrollView>
+                        </View>
                     </View>
                 </View>
             )}
 
             <MobileMoveToFolderDialog
                 visible={showMoveDialog}
-                onClose={() => setShowMoveDialog(false)}
+                onClose={() => {
+                    setShowMoveDialog(false);
+                    setMovingContentsOf(null);
+                    setMovingItem(null);
+                }}
                 project={project}
                 item={movingItem}
-                selectedItems={{ folders: Array.from(selectedFolders), files: Array.from(selectedFiles) }}
+                selectedItems={movingContentsOf ? {
+                    folders: folders.filter(f => String(f.parent_id) === String(movingContentsOf.id)).map(f => f.id),
+                    files: docs.filter(p => String(p.folder_id) === String(movingContentsOf.id)).map(p => p.id)
+                } : {
+                    folders: Array.from(selectedFolders),
+                    files: Array.from(selectedFiles)
+                }}
                 onMoveComplete={async () => {
+                    if (movingContentsOf) {
+                        try {
+                            await deleteFolder(movingContentsOf.id, false);
+                            Alert.alert("Success", `Folder "${movingContentsOf.name}" deleted after moving contents`);
+                        } catch (err) {
+                            Alert.alert("Error", "Contents moved, but failed to delete empty folder");
+                        }
+                    }
                     const data = await getProjectFiles(project.id, 'document');
                     if (data.folderData) setFolders(data.folderData);
                     if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
                     clearSelection();
+                    setMovingContentsOf(null);
                 }}
                 type="document"
             />
+
+            {/* Rename Folder Modal */}
+            <Modal visible={showEditFolder} transparent animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
+                    <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename Folder</Text>
+                        <TextInput
+                            value={editFolderName}
+                            onChangeText={setEditFolderName}
+                            placeholder="Folder name"
+                            placeholderTextColor={colors.textMuted}
+                            style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={() => setShowEditFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleUpdateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }

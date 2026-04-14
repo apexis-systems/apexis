@@ -5,6 +5,8 @@ import { Project, UserRole } from '@/types';
 import { FileText, Calendar, Loader2, Image, TrendingUp, ChevronDown, ChevronUp, FileCheck, Download } from 'lucide-react';
 
 import { getReports, Report, triggerReport, downloadReport } from '@/services/reportService';
+import { getApiErrorMessage } from '@/helpers/apiError';
+import { toast } from 'sonner';
 
 
 interface Props { project: Project; userRole: UserRole; }
@@ -37,7 +39,7 @@ const ProjectWeeklyReports = ({ project, userRole }: Props) => {
       await triggerReport(project.id, 'weekly');
       fetchReports();
     } catch (e) {
-      console.error(e);
+      toast.error(getApiErrorMessage(e, "Failed to generate this week's report"));
     } finally {
       setGenerating(false);
     }
@@ -46,7 +48,16 @@ const ProjectWeeklyReports = ({ project, userRole }: Props) => {
   const handleDownload = async (r: Report) => {
     setDownloadingId(r.id);
     try {
-      await downloadReport(r.id, `Weekly_Report_${fmt(r.period_start).replace(/ /g, '_')}_to_${fmt(r.period_end).replace(/ /g, '_')}.pdf`);
+      const projectName = (project?.name || 'Project').replace(/\s+/g, '_');
+      const start = new Date(r.period_start);
+      const end = new Date(r.period_end);
+      const fmtDate = (d: Date) => {
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+      };
+      await downloadReport(r.id, `${projectName}_weekly_report_${fmtDate(start)} to ${fmtDate(end)}.pdf`);
     } catch (e) {
       console.error(e);
     } finally {

@@ -150,6 +150,18 @@ export const revokeWebSession = async (sessionId: string) => {
     }
 };
 
+export const revokeAllWebSessions = async () => {
+    try {
+        const response = await PrivateAxios.delete('/qr/sessions/all');
+        return response.data;
+    } catch (error: any) {
+        console.error("revokeAllWebSessions Error:", error?.response?.data || error.message);
+        // We don't necessarily want to throw and block mobile logout if web revocation fails, 
+        //, but it's good to log. For now, we'll throw so the UI can handle if needed.
+        throw error;
+    }
+};
+
 // ==========================
 // PASSWORD MANAGEMENT
 // ==========================
@@ -204,9 +216,9 @@ export const getMyMemberships = async () => {
     }
 };
 
-export const switchContext = async (project_id: number, role: string) => {
+export const switchContext = async (params: { role: string; project_id?: number | null; organization_id?: number | null }) => {
     try {
-        const response = await PrivateAxios.post('/auth/switch-context', { project_id, role });
+        const response = await PrivateAxios.post('/auth/switch-context', params);
         return response.data; // { token, user: { ... } }
     } catch (error: any) {
         console.error("switchContext Error:", error?.response?.data || error.message);

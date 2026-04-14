@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useUsage } from '@/contexts/UsageContext';
+import { useRouter } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2,
     AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera
@@ -15,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/helpers/apiError';
 import {
     RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse
 } from '@/services/rfiService';
@@ -35,6 +38,8 @@ const STATUS_CONFIG: Record<RFIStatus, { icon: any; color: string; bg: string; l
 export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const { user } = useAuth();
     const { t } = useLanguage();
+    const { checkLimit } = useUsage();
+    const router = useRouter();
 
     const [rfis, setRfis] = useState<RFI[]>([]);
     const [assignees, setAssignees] = useState<Assignee[]>([]);
@@ -57,7 +62,6 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
     const [responseBody, setResponseBody] = useState('');
     const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -137,6 +141,18 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
     const addRFI = async () => {
         if (!newTitle.trim()) { toast.error('Title is required'); return; }
+
+        if (!checkLimit('rfis')) {
+            toast.error("Limit Reached: You have reached your RFI limit. Please upgrade your plan to create more RFIs.", {
+                action: {
+                    label: 'Upgrade',
+                    onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
+                },
+                duration: 5000,
+            });
+            return;
+        }
+
         setSubmitting(true);
         try {
             const form = new FormData();
@@ -153,8 +169,8 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             resetForm();
             load();
             if (onUpdate) onUpdate();
-        } catch {
-            toast.error('Failed to create RFI');
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, 'Failed to create RFI'));
         } finally {
             setSubmitting(false);
         }
@@ -393,16 +409,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         </div>
                                     </div>
                                 ))}
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-20 h-20 border-dashed border-2 rounded-lg"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
+                                <label className="w-20 h-20 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
                                     <ImagePlus className="h-6 w-6 text-muted-foreground" />
-                                </Button>
+                                    <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+                                </label>
                             </div>
-                            <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
                         </div>
                     </div>
                     <DialogFooter>

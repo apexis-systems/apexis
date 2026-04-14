@@ -25,6 +25,7 @@ export const handleNotificationNavigation = (type: string, data: any, userRole: 
     switch (type) {
         case 'file_upload':
         case 'file_visibility':
+        case 'folder_visibility':
         case 'file_upload_admin':
             tab = 'documents';
             break;
@@ -40,7 +41,11 @@ export const handleNotificationNavigation = (type: string, data: any, userRole: 
         case 'rfi_created':
         case 'rfi_assigned':
         case 'rfi_status_update':
+        case 'rfi_comment':
             tab = 'rfi';
+            break;
+        case 'member_joined':
+            tab = 'overview';
             break;
         case 'daily_report':
         case 'weekly_report':
@@ -49,5 +54,9 @@ export const handleNotificationNavigation = (type: string, data: any, userRole: 
             break;
     }
 
-    router.push(`/${userRole}/project/${projectId}?tab=${tab}`);
+    let url = `/${userRole}/project/${projectId}?tab=${tab}`;
+    if (data?.folderId) {
+        url += `&folderId=${data.folderId}`;
+    }
+    router.push(url);
 };

@@ -3,6 +3,8 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { rfis, users, activities, projects, project_members } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
+import { logActivity } from "../utils/activityUtils.ts";
+import { addWatermark } from '../utils/watermark.ts';
 import { Op } from 'sequelize';
 import { getIO } from '../socket.ts';
 
@@ -72,18 +74,29 @@ export const createRFI = async (req: Request | any, res: Response) => {
 
         const { project_id, title, description, assigned_to, expiry_date } = req.body;
         if (!project_id || !title) return res.status(400).json({ error: 'project_id and title are required' });
+        const project = await projects.findByPk(project_id);
+        if (!project) return res.status(404).json({ error: 'Project not found' });
 
         // Photo Upload Logic
         const uploadedPhotos: string[] = [];
         if (req.files && Array.isArray(req.files)) {
             for (const file of req.files) {
+                let fileBuffer = file.buffer;
+                if (file.mimetype.startsWith('image/')) {
+                    try {
+                        fileBuffer = await addWatermark(file.buffer);
+                    } catch (err) {
+                        console.error('Watermarking failed for RFI photo:', err);
+                    }
+                }
+
                 const ext = file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
                 const key = `projects/${project_id}/rfis/${Date.now()}_${Math.random().toString(36).substr(2, 5)}${ext}`;
                 await s3Client.send(new PutObjectCommand({
                     Bucket: BUCKET,
                     Key: key,
                     ContentType: file.mimetype,
-                    Body: file.buffer,
+                    Body: fileBuffer,
                 }));
                 uploadedPhotos.push(key);
             }
@@ -115,22 +128,27 @@ export const createRFI = async (req: Request | any, res: Response) => {
             expiry_date: expiry_date ? new Date(expiry_date) : null,
         });
 
-        await activities.create({
-            project_id: Number(project_id),
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: Number(project_id),
+            userId: authUser.user_id,
             type: 'edit',
-            description: `Created RFI "${title.trim()}"`
+            description: `Created RFI "${title.trim()}"`,
+            metadata: { rfiId: rfi.id, type: 'rfi' }
         });
 
         // Notification Logic
         if (authUser.role === 'client') {
-            // Notify all Admins in org and Contributors in project
+            // Notify all admins in the project's organization and contributors in the project.
             const admins = await users.findAll({
-                where: { organization_id: authUser.organization_id, role: 'admin' }
+                where: { organization_id: project.organization_id, role: 'admin' }
             });
             const projectContributors = await project_members.findAll({
                 where: { project_id: Number(project_id), role: 'contributor' },
-                include: [{ model: users, as: 'user', attributes: ['id'] }]
+                include: [{ 
+                    model: users, 
+                    as: 'user', 
+                    attributes: ['id']
+                }]
             });
 
             const notifyUserIds = new Set<number>();
@@ -150,22 +168,25 @@ export const createRFI = async (req: Request | any, res: Response) => {
                     title: 'New RFI from Client',
                     body: `${senderName} created a new RFI: ${title}`,
                     type: 'rfi_created',
-                    data: { rfiId: String(rfi.id), projectId: String(project_id) }
+                    data: { rfiId: String(rfi.id), projectId: String(project_id), type: 'rfi' }
                 });
             }
         } else {
             // Admin/Contributor created it
             if (assigned_to) {
-                const sender = await users.findByPk(authUser.user_id);
-                const senderName = sender?.name || 'Someone';
-
-                await sendNotification({
-                    userId: Number(assigned_to),
-                    title: 'New RFI Assigned',
-                    body: `${senderName} assigned an RFI to you: ${title}`,
-                    type: 'rfi_assigned',
-                    data: { rfiId: String(rfi.id), projectId: String(project_id) }
+                const recipient = await project_members.findOne({
+                    where: { project_id: Number(project_id), user_id: Number(assigned_to) }
                 });
+                if (recipient) {
+                    const senderName = authUser.name || 'Someone';
+                    await sendNotification({
+                        userId: Number(assigned_to),
+                        title: 'New RFI Assigned',
+                        body: `${senderName} assigned an RFI to you: ${title}`,
+                        type: 'rfi_assigned',
+                        data: { rfiId: String(rfi.id), projectId: String(project_id), type: 'rfi' }
+                    });
+                }
             }
         }
 
@@ -207,11 +228,12 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         await rfi.save();
 
         if (authUser) {
-            await activities.create({
-                project_id: (rfi as any).project_id,
-                user_id: authUser.user_id,
+            await logActivity({
+                projectId: (rfi as any).project_id,
+                userId: authUser.user_id,
                 type: 'edit',
-                description: `Updated status for RFI "${(rfi as any).title}" to ${status}`
+                description: `Updated status for RFI "${(rfi as any).title}" to ${status}`,
+                metadata: { rfiId: rfi.id, type: 'rfi' }
             });
         }
 
@@ -229,23 +251,29 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         if (rfi.created_by && rfi.created_by !== authUser.user_id) notifyIds.add(rfi.created_by);
 
         if (notifyIds.size > 0) {
-            const sender = await users.findByPk(authUser.user_id);
-            const senderName = sender?.name || 'Someone';
-            
+            const validRecipients = await project_members.findAll({
+                where: {
+                    project_id: Number(rfi.project_id),
+                    user_id: { [Op.in]: Array.from(notifyIds) }
+                },
+                attributes: ['user_id']
+            });
+
+            const senderName = authUser.name || 'Someone';
             const statusLabels: Record<string, string> = {
                 open: 'Open',
                 closed: 'Closed',
                 overdue: 'Overdue'
             };
-            const friendlyStatus = statusLabels[status] || status;
+            const friendlyStatus = statusLabels[(status as string)] || status;
 
-            for (const uid of notifyIds) {
+            for (const recipient of validRecipients) {
                 await sendNotification({
-                    userId: uid,
+                    userId: Number((recipient as any).user_id),
                     title: 'RFI Status Updated',
                     body: `${senderName} updated RFI status to ${friendlyStatus}: ${rfi.title}`,
                     type: 'rfi_status_update',
-                    data: { rfiId: String(rfi.id), projectId: String(rfi.project_id) }
+                    data: { rfiId: String(rfi.id), projectId: String(rfi.project_id), type: 'rfi' }
                 });
             }
         }
@@ -282,16 +310,36 @@ export const getRFIById = async (req: Request, res: Response) => {
     }
 };
 
-// GET /rfis/assignees?project_id=X  — all users in the organization
+// GET /rfis/assignees?project_id=X  — project members plus project admins
 export const getRFIAssignees = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        if (!authUser || !authUser.organization_id) {
-            return res.status(400).json({ error: 'organization_id missing from token' });
+        const { project_id } = req.query;
+        if (!authUser) {
+            return res.status(401).json({ error: 'Unauthorized' });
         }
+        if (!project_id) return res.status(400).json({ error: 'project_id is required' });
+
+        const project = await projects.findByPk(Number(project_id));
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        const projectAssigneeIds = await project_members.findAll({
+            where: { project_id: Number(project_id) },
+            attributes: ['user_id']
+        });
+        const projectAdminIds = await users.findAll({
+            where: { organization_id: project.organization_id, role: 'admin' },
+            attributes: ['id']
+        });
+        const allowedUserIds = [
+            ...new Set([
+                ...projectAssigneeIds.map((member: any) => Number(member.user_id)),
+                ...projectAdminIds.map((admin: any) => Number(admin.id))
+            ])
+        ];
 
         const assignees = await users.findAll({
-            where: { organization_id: authUser.organization_id },
+            where: { id: { [Op.in]: allowedUserIds } },
             attributes: ['id', 'name', 'email', 'role', 'profile_pic'],
             order: [['name', 'ASC']],
         });
@@ -322,11 +370,12 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
         
         await rfi.save();
 
-        await activities.create({
-            project_id: (rfi as any).project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: (rfi as any).project_id,
+            userId: authUser.user_id,
             type: 'edit',
-            description: `Updated response for RFI "${(rfi as any).title}"`
+            description: `Updated response for RFI "${(rfi as any).title}"`,
+            metadata: { rfiId: rfi.id, type: 'rfi' }
         });
 
         // Notify creator if assignee responded
@@ -337,7 +386,7 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
                 title: 'RFI Response Received',
                 body: `${sender?.name || 'Assignee'} responded to your RFI: ${rfi.title}`,
                 type: 'rfi_comment',
-                data: { rfiId: String(rfi.id), projectId: String(rfi.project_id) }
+                data: { rfiId: String(rfi.id), projectId: String(rfi.project_id), type: 'rfi' }
             });
         }
 

@@ -5,13 +5,15 @@ interface SpotlightPosition {
     x: number;
     y: number;
     r: number;
+    w?: number;
+    h?: number;
 }
 
 interface TourContextType {
     isTourActive: boolean;
     currentStep: number;
     startTour: () => void;
-    stopTour: () => void;
+    stopTour: () => Promise<void>;
     nextStep: () => void;
     prevStep: () => void;
     hasSeenTour: boolean;

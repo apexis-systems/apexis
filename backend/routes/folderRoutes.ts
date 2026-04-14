@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createFolder, getFolders, toggleFolderVisibility, bulkUpdateFolders, updateFolder } from "../controllers/folderController.ts";
+import { createFolder, getFolders, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from "../controllers/folderController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -11,6 +11,7 @@ router.post("/create", createFolder);
 router.get("/", getFolders);
 router.put("/bulk", bulkUpdateFolders);
 router.put("/:folderId", updateFolder);
+router.delete("/:folderId", deleteFolder);
 router.put("/:folderId/visibility", toggleFolderVisibility);
 
 

@@ -13,7 +13,7 @@ import {
 } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useRef } from 'react';
-import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
+import CountryCodePicker, { countries, Country, isIndianCountry } from '@/components/CountryCodePicker';
 
 type Step = 'details' | 'otp' | 'onboarding' | 'public_onboarding';
 
@@ -38,6 +38,17 @@ export default function SignUpScreen() {
     const [showPassword, setShowPassword] = useState(false);
     const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]); // India
     const [error, setError] = useState('');
+
+    // Derived: is the selected country India (the only one supporting phone OTP)
+    const isIndian = isIndianCountry(selectedCountry);
+
+    // When user changes to a non-Indian country, force email verification
+    const handleCountrySelect = (country: Country) => {
+        setSelectedCountry(country);
+        if (!isIndianCountry(country)) {
+            setVerificationMethod('email');
+        }
+    };
 
     const { login } = useAuth();
     const router = useRouter();
@@ -82,6 +93,11 @@ export default function SignUpScreen() {
     };
 
     const handleSendOtp = async () => {
+        // For non-Indian countries, email is required
+        if (!isIndian && !email) {
+            setError('Email is required for non-Indian phone numbers');
+            return;
+        }
         if (!name || (!email && !phone) || !orgName || password.length < 6) {
             setError('Please enter Name, Org Name, Password and (Email or Phone)');
             return;
@@ -90,15 +106,23 @@ export default function SignUpScreen() {
         setIsLoading(true);
         setError('');
 
+        const digits = selectedCountry.phoneDigits;
         const cleanPhone = phone.trim().replace(selectedCountry.code, "").trim();
 
-        if (phone && !/^\d{10}$/.test(cleanPhone)) {
-            setError("Please enter a valid 10-digit phone number.");
+        if (phone && !new RegExp(`^\\d{${digits}}$`).test(cleanPhone)) {
+            setError(`Please enter a valid ${digits}-digit phone number.`);
             setIsLoading(false);
             return;
         }
 
-        const normalizedPhone = phone && /^\d{10}$/.test(cleanPhone) ? `${selectedCountry.code}${cleanPhone}` : phone?.trim();
+        const normalizedPhone = phone && new RegExp(`^\\d{${digits}}$`).test(cleanPhone)
+            ? `${selectedCountry.code}${cleanPhone}`
+            : phone?.trim();
+
+        // Determine verification method: phone OTP only available for Indian numbers
+        const effectiveMethod = isIndian
+            ? ((email && phone) ? verificationMethod : (phone ? 'phone' : 'email'))
+            : 'email';
 
         try {
             await requestAdminOtp({
@@ -107,7 +131,7 @@ export default function SignUpScreen() {
                 phone: normalizedPhone || undefined,
                 password,
                 organization_name: orgName,
-                verification_method: (email && phone) ? verificationMethod : (phone ? 'phone' : 'email')
+                verification_method: effectiveMethod
             });
             setStep('otp');
         } catch (err: any) {
@@ -126,22 +150,29 @@ export default function SignUpScreen() {
         setIsLoading(true);
         setError('');
 
+        const digits = selectedCountry.phoneDigits;
         const cleanPhone = phone.trim().replace(selectedCountry.code, "").trim();
 
-        if (phone && !/^\d{10}$/.test(cleanPhone)) {
-            setError("Please enter a valid 10-digit phone number.");
+        if (phone && !new RegExp(`^\\d{${digits}}$`).test(cleanPhone)) {
+            setError(`Please enter a valid ${digits}-digit phone number.`);
             setIsLoading(false);
             return;
         }
 
-        const normalizedPhone = phone && /^\d{10}$/.test(cleanPhone) ? `${selectedCountry.code}${cleanPhone}` : phone?.trim();
+        const normalizedPhone = phone && new RegExp(`^\\d{${digits}}$`).test(cleanPhone)
+            ? `${selectedCountry.code}${cleanPhone}`
+            : phone?.trim();
+
+        const effectiveMethod = isIndian
+            ? ((email && phone) ? verificationMethod : (phone ? 'phone' : 'email'))
+            : 'email';
 
         try {
             const res = await verifyAdminOtp({
                 email: email || undefined,
                 phone: normalizedPhone || undefined,
                 otp,
-                verification_method: (email && phone) ? verificationMethod : (phone ? 'phone' : 'email')
+                verification_method: effectiveMethod
             });
             if (res?.token) {
                 await login(res.token);
@@ -254,7 +285,7 @@ export default function SignUpScreen() {
                                     <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Create Password</Text>
                                     <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 }}>
                                         <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} textContentType="newPassword" autoComplete="password-new" style={{ flex: 1, color: colors.text }} />
-                                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
+                                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
                                     </View>
                                 </View>
                             )}
@@ -313,14 +344,31 @@ export default function SignUpScreen() {
                                 <TextInput value={name} onChangeText={setName} placeholder="John Doe" placeholderTextColor={colors.textMuted} autoCapitalize="words" textContentType="name" autoComplete="name" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
                             </View>
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Work Email</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    Work Email{!isIndian ? <Text style={{ color: '#ef4444' }}> *</Text> : ''}
+                                </Text>
                                 <TextInput value={email} onChangeText={setEmail} placeholder="you@company.com" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" textContentType="emailAddress" autoComplete="email" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                {!isIndian && (
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
+                                        Email is required for non-Indian numbers
+                                    </Text>
+                                )}
                             </View>
                             <View>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Phone Number</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                    Phone Number{!isIndian ? ' (Optional)' : ''}
+                                </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <CountryCodePicker selectedCountry={selectedCountry} onSelect={setSelectedCountry} />
-                                    <TextInput value={phone} onChangeText={setPhone} placeholder="Phone Number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
+                                    <CountryCodePicker selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
+                                    <TextInput
+                                        value={phone}
+                                        onChangeText={setPhone}
+                                        placeholder={`${selectedCountry.phoneDigits}-digit number`}
+                                        placeholderTextColor={colors.textMuted}
+                                        keyboardType="phone-pad"
+                                        maxLength={selectedCountry.phoneDigits}
+                                        style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }}
+                                    />
                                 </View>
                             </View>
                             <View>
@@ -328,14 +376,15 @@ export default function SignUpScreen() {
                                 <TextInput value={orgName} onChangeText={setOrgName} placeholder="Acme Corp" placeholderTextColor={colors.textMuted} autoCapitalize="words" style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 }} />
                             </View>
 
-                            {(email && phone) && (
+                            {/* Show verify-via picker only for Indian numbers where both email & phone are filled */}
+                            {isIndian && email && phone && (
                                 <View>
                                     <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 8 }}>Verify via</Text>
                                     <View style={{ flexDirection: 'row', gap: 8 }}>
-                                        {['email', 'phone'].map((m) => (
+                                        {(['email', 'phone'] as const).map((m) => (
                                             <TouchableOpacity
                                                 key={m}
-                                                onPress={() => setVerificationMethod(m as any)}
+                                                onPress={() => setVerificationMethod(m)}
                                                 style={{
                                                     flex: 1, height: 44, borderRadius: 10, borderWidth: 2,
                                                     borderColor: verificationMethod === m ? colors.primary : colors.border,
@@ -351,11 +400,19 @@ export default function SignUpScreen() {
                                     </View>
                                 </View>
                             )}
+                            {/* Non-Indian: show a note that email OTP will be sent */}
+                            {!isIndian && email && phone && (
+                                <View style={{ backgroundColor: colors.surface, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted, flex: 1 }}>
+                                        📧 OTP will be sent to your email – phone verification is only available for Indian numbers.
+                                    </Text>
+                                </View>
+                            )}
                             <View>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Password</Text>
                                 <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 }}>
                                     <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} textContentType="password" autoComplete="password" style={{ flex: 1, color: colors.text }} />
-                                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} /></TouchableOpacity>
                                 </View>
                             </View>
                             {error ? <Text style={{ color: '#ef4444', textAlign: 'center', fontSize: 13 }}>{error}</Text> : null}

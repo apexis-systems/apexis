@@ -29,7 +29,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type Tab = 'overview' | 'documents' | 'photos' | 'rfi' | 'reports' | 'snags' | 'sops';
 
 export default function ProjectWorkspaceScreen() {
-    const { id, tab, folderId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string }>();
+    const { id, tab, folderId: qFolderId, initialFolderId: qInitialFolderId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string; initialFolderId?: string }>();
+    const folderId = qFolderId || qInitialFolderId;
     const { user } = useAuth();
     const { colors, isDark } = useTheme();
     const router = useRouter();
@@ -83,19 +84,20 @@ export default function ProjectWorkspaceScreen() {
         }
     }, [tab]);
 
-    useEffect(() => {
-        const fetchProject = async () => {
-            try {
-                const res = await PrivateAxios.get(`/projects/${id}`);
-                setProject(res.data.project);
-            } catch (error) {
-                console.error("Failed to fetch project:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchProject();
+    const fetchProject = useCallback(async () => {
+        try {
+            const res = await PrivateAxios.get(`/projects/${id}`);
+            setProject(res.data.project);
+        } catch (error) {
+            console.error("Failed to fetch project:", error);
+        } finally {
+            setLoading(false);
+        }
     }, [id]);
+
+    useEffect(() => {
+        fetchProject();
+    }, [fetchProject]);
 
     const checkRFIs = useCallback(async () => {
         if (!id || !user?.id) return;
@@ -130,6 +132,7 @@ export default function ProjectWorkspaceScreen() {
             };
 
             socket.on('rfi-updated', handleRfiUpdate);
+            socket.on('project-stats-updated', fetchProject);
             socket.on('new-notification', (notif: any) => {
                 if (notif.type?.startsWith('rfi_')) {
                     handleRfiUpdate();
@@ -138,6 +141,7 @@ export default function ProjectWorkspaceScreen() {
 
             return () => {
                 socket.off('rfi-updated', handleRfiUpdate);
+                socket.off('project-stats-updated', fetchProject);
                 socket.off('new-notification', handleRfiUpdate);
             };
         }

@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, UserRole } from '@/types';
 import Cookies from 'js-cookie';
-import { getMe } from '@/services/authService';
+import { getMe, revokeQrSession } from '@/services/authService';
 import { io, Socket } from 'socket.io-client';
 
 interface AuthContextType {
@@ -33,12 +33,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isLoading, setIsLoading] = useState(true);
     const isLoggedIn = !!user;
 
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
+        if (typeof window !== 'undefined') {
+            const qrSessionId = localStorage.getItem('qrSessionId');
+            if (qrSessionId) {
+                // Notifying the backend that this specific QR session is ending 
+                //, so it drops off the "Linked Devices" list on the mobile app.
+                try {
+                    await revokeQrSession(qrSessionId).catch(err => console.warn("Failed to notify backend of QR logout:", err));
+                } catch (e) {
+                    // Silently fail, we still want to log out locally
+                }
+                localStorage.removeItem('qrSessionId');
+            }
+        }
         setUser(null);
         Cookies.remove('token');
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem('qrSessionId');
-        }
     }, []);
 
     const switchRole = useCallback((role: UserRole) => {
@@ -50,12 +60,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [user])
 
-    const fetchUser = useCallback(async () => {
-        setIsLoading(true);
+    const fetchUser = useCallback(async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         try {
             const token = Cookies.get('token');
             if (!token) {
-                setIsLoading(false);
+                if (showLoading) setIsLoading(false);
                 return;
             }
             const res = await getMe();
@@ -66,12 +76,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error("Failed to fetch user context", e);
             logout();
         } finally {
-            setIsLoading(false);
+            if (showLoading) setIsLoading(false);
         }
     }, [logout]);
 
     useEffect(() => {
-        fetchUser();
+        fetchUser(true);
     }, [fetchUser]);
 
     useEffect(() => {
@@ -79,9 +89,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isLoggedIn && typeof window !== 'undefined') {
             const qrSessionId = localStorage.getItem('qrSessionId');
             if (qrSessionId) {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-                const backendUrl = apiUrl.endsWith('/api') ? apiUrl.slice(0, -4) : apiUrl;
-                socket = io(backendUrl);
+                const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5002';
+                socket = io(socketUrl);
 
                 socket.on('connect', () => {
                     socket?.emit('join-qr-room', qrSessionId);

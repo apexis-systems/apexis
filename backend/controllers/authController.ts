@@ -7,6 +7,11 @@ import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
 import { normalizePhone, isValidPhone } from "../utils/sms.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
+import { getIO } from "../socket.ts";
+import {
+    checkMemberLimit,
+    getSubscriptionAccessState,
+} from "../utils/subscriptionAccess.ts";
 
 export const adminLogin = async (req: Request, res: Response) => {
     try {
@@ -48,6 +53,13 @@ export const adminLogin = async (req: Request, res: Response) => {
         );
 
 
+        // Optional FCM Token registration during login
+        const { fcmToken } = req.body;
+        if (fcmToken) {
+            await users.update({ fcm_token: null }, { where: { fcm_token: fcmToken, id: { [Op.ne]: user.id } } });
+            await user.update({ fcm_token: fcmToken });
+        }
+
         res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: user.role } });
     } catch (error) {
         console.error("Admin Login Error:", error);
@@ -88,7 +100,7 @@ export const projectLogin = async (req: Request, res: Response) => {
         const normalizedPhone = phone ? normalizePhone(phone) : null;
         const normalizedEmail = email ? email.toLowerCase() : null;
 
-        // GLOBAL SEARCH: Look for user across all organizations to support multi-org/project access
+        // Reuse the existing user record so members can join multiple projects across organizations.
         let user = await users.findOne({
             where: {
                 [Op.or]: [
@@ -102,6 +114,17 @@ export const projectLogin = async (req: Request, res: Response) => {
         let isNewUser = false;
 
         if (!user) {
+            if (roleForCode === "contributor" || roleForCode === "client") {
+                const memberLimit = await checkMemberLimit(project.organization_id, roleForCode);
+                if (!memberLimit.allowed) {
+                    return res.status(memberLimit.status).json({
+                        error: "Limit Reached",
+                        message: memberLimit.message,
+                        code: memberLimit.code,
+                    });
+                }
+            }
+
             // Auto-create user because they have valid project code and no signup is required
             user = await users.create({
                 organization_id: project.organization_id, // Default to this project's org
@@ -136,7 +159,12 @@ export const projectLogin = async (req: Request, res: Response) => {
             // Notify all existing members (admin, contributors, clients) of this project
             try {
                 const existingMembers = await project_members.findAll({
-                    where: { project_id: project.id, user_id: { [Op.ne]: user.id } }
+                    where: { project_id: project.id, user_id: { [Op.ne]: user.id } },
+                    include: [{
+                        model: users,
+                        as: 'user',
+                        attributes: ['id']
+                    }]
                 });
                 const joinerName = user.name && user.name !== 'Pending' ? user.name : (email || phone || 'Someone');
                 const roleLabel = roleForCode === 'contributor' ? 'Contributor' : 'Client';
@@ -146,7 +174,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
                 const orgAdmins = await users.findAll({
@@ -162,8 +190,15 @@ export const projectLogin = async (req: Request, res: Response) => {
                         title: `New ${roleLabel} Joined`,
                         body: `${joinerName} joined the project as a ${roleLabel}.`,
                         type: 'member_joined',
-                        data: { projectId: String(project.id) }
+                        data: { projectId: String(project.id), type: 'overview' }
                     });
+                }
+                
+                // Emit socket event to refresh project stats (counts) in real-time
+                try {
+                    getIO().to(`project-${project.id}`).emit('project-stats-updated', { projectId: String(project.id) });
+                } catch (ioErr) {
+                    console.error('Socket emit error (non-fatal):', ioErr);
                 }
             } catch (notifErr) {
                 console.error('Member join notification error (non-fatal):', notifErr);
@@ -175,12 +210,19 @@ export const projectLogin = async (req: Request, res: Response) => {
                 user_id: user.id, 
                 name: user.name, 
                 role: roleForCode, // Use the role associated with the login code
-                organization_id: user.organization_id || project.organization_id, 
+                organization_id: project.organization_id, // Active org context
                 project_id: project.id 
             },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
         );
+
+        // Optional FCM Token registration during login
+        const { fcmToken } = req.body;
+        if (fcmToken) {
+            await users.update({ fcm_token: null }, { where: { fcm_token: fcmToken, id: { [Op.ne]: user.id } } });
+            await user.update({ fcm_token: fcmToken });
+        }
 
         res.status(200).json({ 
             token, 
@@ -217,6 +259,13 @@ export const superadminLogin = async (req: Request, res: Response) => {
         );
 
 
+        // Optional FCM Token registration during login
+        const { fcmToken } = req.body;
+        if (fcmToken) {
+            await users.update({ fcm_token: null }, { where: { fcm_token: fcmToken, id: { [Op.ne]: user.id } } });
+            await user.update({ fcm_token: fcmToken });
+        }
+
         res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: "superadmin" } });
     } catch (error) {
         console.error("Superadmin Login Error:", error);
@@ -233,7 +282,13 @@ export const me = async (req: Request, res: Response) => {
 
         if (!dbUser) return res.status(404).json({ error: "User not found" });
 
-        const organization = dbUser.organization_id ? await organizations.findByPk(dbUser.organization_id) : null;
+        const activeOrgId = authUser.organization_id || dbUser.organization_id;
+        const organization = activeOrgId ? await organizations.findByPk(activeOrgId) : null;
+        const orgJson = organization ? (organization.toJSON() as any) : null;
+        const access =
+            organization && authUser.role !== "superadmin"
+                ? getSubscriptionAccessState((organization as any).plan_end_date)
+                : null;
 
         // Override the role from the database with the role from the JWT session
         // This ensures multi-role users see their current active role in the UI
@@ -244,7 +299,16 @@ export const me = async (req: Request, res: Response) => {
 
         res.status(200).json({
             user: userData,
-            organization,
+            organization: orgJson
+                ? {
+                    ...orgJson,
+                    subscription_locked: !!access?.isLocked,
+                    subscription_in_grace_period: !!access?.isInGracePeriod,
+                    subscription_plan_end_date: access?.planEndDate || null,
+                    subscription_grace_end_date: access?.graceEndDate || null,
+                    subscription_grace_days_remaining: access?.graceDaysRemaining ?? null,
+                }
+                : null,
             project_id: authUser.project_id || null
         });
     } catch (error) {
@@ -326,7 +390,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
         const normalizedEmail = email?.toLowerCase() || null;
         const normalizedPhone = phone ? normalizePhone(phone) : null;
 
-        // GLOBAL SEARCH: Look for existing user to support multi-org/project enrollment
+        // Reuse the existing user record so members can join multiple projects across organizations.
         let user = await users.findOne({
             where: {
                 [Op.or]: [
@@ -337,6 +401,17 @@ export const completePublicSignup = async (req: Request, res: Response) => {
         });
 
         if (!user) {
+            if (decoded.role === "contributor" || decoded.role === "client") {
+                const memberLimit = await checkMemberLimit(decoded.organization_id, decoded.role);
+                if (!memberLimit.allowed) {
+                    return res.status(memberLimit.status).json({
+                        error: "Limit Reached",
+                        message: memberLimit.message,
+                        code: memberLimit.code,
+                    });
+                }
+            }
+
             // Create user only if they don't exist globally
             user = await users.create({
                 organization_id: decoded.organization_id,
@@ -362,42 +437,54 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                 user_id: user.id,
                 role: decoded.role
             });
-        }
 
-        // Notify all existing project members
-        try {
-            const existingMembers = await project_members.findAll({
-                where: { project_id: project.id, user_id: { [Op.ne]: user.id } }
-            });
-            const roleLabel = decoded.role === 'contributor' ? 'Contributor' : 'Client';
-            const joinerName = user.name && user.name !== 'Pending' ? user.name : (name || email || phone || 'Someone');
-            for (const member of existingMembers) {
-                await sendNotification({
-                    userId: member.user_id,
-                    title: `New ${roleLabel} Joined`,
-                    body: `${joinerName} joined the project as a ${roleLabel}.`,
-                    type: 'member_joined',
-                    data: { projectId: String(project.id) }
+            // Notify only the relevant project members and admins in the same organization.
+            try {
+                const existingMembers = await project_members.findAll({
+                    where: { project_id: project.id, user_id: { [Op.ne]: user.id } },
+                    include: [{
+                        model: users,
+                        as: 'user',
+                        attributes: ['id']
+                    }]
                 });
-            }
-            const orgAdmins = await users.findAll({
-                where: {
-                    organization_id: decoded.organization_id,
-                    role: 'admin',
-                    id: { [Op.notIn]: [user.id, ...existingMembers.map((m: any) => m.user_id)] }
+                const roleLabel = decoded.role === 'contributor' ? 'Contributor' : 'Client';
+                const joinerName = user.name && user.name !== 'Pending' ? user.name : (name || email || phone || 'Someone');
+                for (const member of existingMembers) {
+                    await sendNotification({
+                        userId: member.user_id,
+                        title: `New ${roleLabel} Joined`,
+                        body: `${joinerName} joined the project as a ${roleLabel}.`,
+                        type: 'member_joined',
+                        data: { projectId: String(project.id), type: 'overview' }
+                    });
                 }
-            });
-            for (const admin of orgAdmins) {
-                await sendNotification({
-                    userId: admin.id,
-                    title: `New ${roleLabel} Joined`,
-                    body: `${joinerName} joined the project as a ${roleLabel}.`,
-                    type: 'member_joined',
-                    data: { projectId: String(project.id) }
+                const orgAdmins = await users.findAll({
+                    where: {
+                        organization_id: decoded.organization_id,
+                        role: 'admin',
+                        id: { [Op.notIn]: [user.id, ...existingMembers.map((m: any) => m.user_id)] }
+                    }
                 });
+                for (const admin of orgAdmins) {
+                    await sendNotification({
+                        userId: admin.id,
+                        title: `New ${roleLabel} Joined`,
+                        body: `${joinerName} joined the project as a ${roleLabel}.`,
+                        type: 'member_joined',
+                        data: { projectId: String(project.id), type: 'overview' }
+                    });
+                }
+                
+                // Emit socket event to refresh project stats (counts) in real-time
+                try {
+                    getIO().to(`project-${project.id}`).emit('project-stats-updated', { projectId: String(project.id) });
+                } catch (ioErr) {
+                    console.error('Socket emit error (non-fatal):', ioErr);
+                }
+            } catch (notifErr) {
+                console.error('Member join notification error (non-fatal):', notifErr);
             }
-        } catch (notifErr) {
-            console.error('Member join notification error (non-fatal):', notifErr);
         }
 
         res.status(201).json({ message: "Signup complete" });
@@ -481,6 +568,8 @@ export const changePassword = async (req: Request, res: Response) => {
 export const getMyMemberships = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
+        const dbUser = await users.findByPk(authUser.user_id, { attributes: ['id', 'role', 'organization_id'] });
+        
         const memberships = await project_members.findAll({
             where: { user_id: authUser.user_id },
             include: [{ 
@@ -489,7 +578,51 @@ export const getMyMemberships = async (req: Request, res: Response) => {
                 include: [{ model: organizations, attributes: ['name'] }]
             }]
         });
-        res.status(200).json({ memberships });
+
+        const results = memberships.map((m: any) => m.toJSON ? m.toJSON() : m);
+
+        // If the user's primary role is admin or superadmin, they should be able to switch back to that role 
+        // at the organization level even if they are currently in a project-specific context.
+        if (dbUser && (dbUser.role === 'admin' || dbUser.role === 'superadmin')) {
+            const primaryRole = dbUser.role;
+
+            const primaryOrganizationId = dbUser.organization_id || authUser.organization_id || null;
+            if (primaryOrganizationId) {
+                const primaryOrganization = await organizations.findByPk(primaryOrganizationId, {
+                    attributes: ['id', 'name']
+                });
+
+                const hasOrganizationLevelPrimary = results.some((m: any) =>
+                    m.role === primaryRole &&
+                    !m.project_id &&
+                    Number(m.organization_id) === Number(primaryOrganizationId)
+                );
+
+                if (!hasOrganizationLevelPrimary && primaryOrganization) {
+                    results.push({
+                        project_id: null,
+                        organization_id: primaryOrganization.id,
+                        user_id: dbUser.id,
+                        role: primaryRole,
+                        organization: primaryOrganization.toJSON ? primaryOrganization.toJSON() : primaryOrganization,
+                        project: null,
+                        context_type: 'organization'
+                    });
+                }
+            }
+        }
+
+        results.forEach((entry: any) => {
+            if (entry.project) {
+                entry.organization_id = entry.organization_id ?? entry.project.organization_id ?? null;
+                entry.organization = entry.organization ?? entry.project.organization ?? null;
+                entry.context_type = entry.context_type || 'project';
+            } else {
+                entry.context_type = entry.context_type || 'organization';
+            }
+        });
+
+        res.status(200).json({ memberships: results });
     } catch (error) {
         console.error("Get My Memberships Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -499,34 +632,65 @@ export const getMyMemberships = async (req: Request, res: Response) => {
 export const switchContext = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        const { project_id, role } = req.body;
+        const { project_id, organization_id, role } = req.body;
+        const normalizedRole = typeof role === "string" ? role.trim().toLowerCase() : "";
 
-        if (!project_id || !role) {
-            return res.status(400).json({ error: "Project ID and role are required" });
+        if (!normalizedRole) {
+            return res.status(400).json({ error: "Role is required" });
         }
-
-        const membership = await project_members.findOne({
-            where: { user_id: authUser.user_id, project_id, role }
-        });
-
-        if (!membership) {
-            return res.status(403).json({ error: "No such membership found" });
+        if (!["superadmin", "admin", "contributor", "client"].includes(normalizedRole)) {
+            return res.status(400).json({ error: "Invalid role" });
         }
 
         const user = await users.findByPk(authUser.user_id);
-        const project = await projects.findByPk(project_id);
+        const project = project_id ? await projects.findByPk(project_id) : null;
+        const targetOrganizationId = project?.organization_id || organization_id || null;
 
-        if (!user || !project) {
+        if (targetOrganizationId) {
+            const organization = await organizations.findByPk(targetOrganizationId);
+            if (!organization) return res.status(404).json({ error: "Organization not found" });
+        }
+
+        if (!user || (project_id && !project)) {
             return res.status(404).json({ error: "User or project not found" });
+        }
+
+        const isSuperadminSwitch = user.role === 'superadmin';
+        const isAdminSwitch =
+            normalizedRole === 'admin' &&
+            (user.role === 'superadmin' || (user.role === 'admin' && (!targetOrganizationId || Number(targetOrganizationId) === Number(user.organization_id))));
+        const isSuperadminRoleSwitch = normalizedRole === 'superadmin' && user.role === 'superadmin';
+
+        let membership = null;
+        if (!isAdminSwitch && !isSuperadminRoleSwitch && !isSuperadminSwitch) {
+            if (project_id) {
+                membership = await project_members.findOne({
+                    where: { user_id: authUser.user_id, project_id, role: normalizedRole }
+                });
+                if (!membership) return res.status(403).json({ error: "No such project membership found" });
+            } else {
+                let hasMembership = false;
+                if (normalizedRole === 'contributor' || normalizedRole === 'client') {
+                    const membershipDoc = await project_members.findOne({
+                        where: { user_id: authUser.user_id, role: normalizedRole }
+                    });
+                    hasMembership = !!membershipDoc;
+                }
+                
+                const isPrimaryRole = user.role === normalizedRole;
+                if (!hasMembership && !isPrimaryRole) {
+                    return res.status(403).json({ error: `You do not have any projects as a ${normalizedRole}.` });
+                }
+            }
         }
 
         const token = jwt.sign(
             {
                 user_id: user.id,
                 name: user.name,
-                role: role,
-                organization_id: project.organization_id,
-                project_id: project.id
+                role: normalizedRole,
+                organization_id: targetOrganizationId ? Number(targetOrganizationId) : null,
+                project_id: project ? project.id : null
             },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
@@ -534,7 +698,7 @@ export const switchContext = async (req: Request, res: Response) => {
 
         res.status(200).json({ 
             token, 
-            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: role }
+            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: normalizedRole }
         });
     } catch (error) {
         console.error("Switch Context Error:", error);

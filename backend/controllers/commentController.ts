@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
-import { comments, users, files, activities } from '../models/index.ts';
+import { comments, users, files, activities, project_members } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
+import { logActivity } from "../utils/activityUtils.ts";
 
 export const getComments = async (req: Request, res: Response) => {
     try {
@@ -55,28 +56,39 @@ export const addComment = async (req: Request, res: Response) => {
         // (Don't await these to keep response time fast)
         (async () => {
             try {
+                const isImage = file.file_type?.startsWith('image/');
+                const activityCategory = isImage ? 'photos' : 'documents';
+
                 // 1. Log Activity
-                await activities.create({
-                    project_id: file.project_id,
-                    user_id: authUser.user_id,
-                    type: 'comment',
-                    description: `${authUser.name} commented on photo: ${file.file_name}`
+                await logActivity({
+                    projectId: file.project_id,
+                    userId: authUser.user_id,
+                    type: isImage ? 'photo_comment' : 'comment',
+                    description: `${authUser.name} commented on ${isImage ? 'photo' : 'file'}: ${file.file_name}`,
+                    metadata: { folderId: file.folder_id, type: activityCategory }
                 });
 
                 // 2. Send Notification to File Uploader
                 // Only if uploader is NOT the commenter
                 if (file.created_by !== authUser.user_id) {
-                    await sendNotification({
-                        userId: file.created_by,
-                        title: 'New Photo Comment',
-                        body: `${authUser.name} commented on your photo: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
-                        type: 'photo_comment',
-                        data: {
-                            fileId: String(file.id),
-                            projectId: String(file.project_id),
-                            commentId: String(comment.id)
-                        }
+                    const uploaderMembership = await project_members.findOne({
+                        where: { project_id: file.project_id, user_id: file.created_by }
                     });
+                    if (uploaderMembership) {
+                        await sendNotification({
+                            userId: file.created_by,
+                            title: isImage ? 'New Photo Comment' : 'New File Comment',
+                            body: `${authUser.name} commented on your ${isImage ? 'photo' : 'file'}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
+                            type: isImage ? 'photo_comment' : 'comment',
+                            data: {
+                                fileId: String(file.id),
+                                projectId: String(file.project_id),
+                                folderId: String(file.folder_id),
+                                type: activityCategory,
+                                commentId: String(comment.id)
+                            }
+                        });
+                    }
                 }
             } catch (err) {
                 console.error('Comment notification/activity error:', err);

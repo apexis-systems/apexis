@@ -24,9 +24,9 @@ function PasswordInput({ className, ...props }: React.ComponentProps<"input">) {
                 onClick={() => setShowPassword((prev) => !prev)}
             >
                 {showPassword ? (
-                    <EyeOff className="h-4 w-4" aria-hidden="true" />
-                ) : (
                     <Eye className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
                 )}
                 <span className="sr-only">
                     {showPassword ? "Hide password" : "Show password"}

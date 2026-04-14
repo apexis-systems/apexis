@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import {
     View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image
@@ -11,7 +11,7 @@ import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loginAdmin, loginProject } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useLocalSearchParams } from 'expo-router';
+import { useGlobalSearchParams } from 'expo-router';
 import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
 
 const roles: { value: UserRole; label: string; desc: string }[] = [
@@ -31,11 +31,12 @@ export default function LoginScreen() {
     const [rememberMe, setRememberMe] = useState(false);
     const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]); // India
     const [error, setError] = useState('');
+    const [isProcessingLink, setIsProcessingLink] = useState(false);
 
     const { login, logout, isLoggedIn } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
-    const params = useLocalSearchParams<{ role?: string; code?: string }>();
+    const params = useGlobalSearchParams<{ role?: string; code?: string }>();
 
     const STORAGE_KEYS = {
         admin: 'remembered_admin_v2',
@@ -43,20 +44,35 @@ export default function LoginScreen() {
         client: 'remembered_client_v2'
     };
 
+    const hasLoggedOutForInvitation = useRef(false);
     useEffect(() => {
-        if (params.code) {
-            // Force logout if user is already logged in and enters via deep link 
-            if (isLoggedIn) {
-                logout();
+        const handleInvitation = async () => {
+            if (params.code && !hasLoggedOutForInvitation.current) {
+                setIsProcessingLink(true);
+                setProjectCode(params.code);
+                if (params.role === 'contributor' || params.role === 'client') {
+                    setSelectedRole(params.role as UserRole);
+                } else {
+                    setSelectedRole('contributor');
+                }
+
+                // If user is already logged in, we logout to allow switching
+                if (isLoggedIn) {
+                    try {
+                        await logout();
+                        // Optional: Small delay to let SecureStore sync
+                        await new Promise(r => setTimeout(r, 200));
+                    } catch (e) {
+                        console.error("Deep link logout error:", e);
+                    }
+                }
+                hasLoggedOutForInvitation.current = true;
+                setIsProcessingLink(false);
             }
-            setProjectCode(params.code);
-            if (params.role === 'contributor' || params.role === 'client') {
-                setSelectedRole(params.role as UserRole);
-            } else {
-                setSelectedRole('contributor');
-            }
-        }
-    }, [params.code, params.role, isLoggedIn]);
+        };
+
+        handleInvitation();
+    }, [params.code, params.role, isLoggedIn, logout]);
 
     useEffect(() => {
         loadStoredCredentials();
@@ -68,9 +84,12 @@ export default function LoginScreen() {
             const stored = await SecureStore.getItemAsync(key);
 
             // Always reset the fields when switching roles to avoid overlap collision
-            setIdentifier('');
-            if (selectedRole === 'admin') setPassword('');
-            else if (!params.code) setProjectCode('');
+            // EXCEPT if we have deep link params currently active
+            if (!params.code) {
+                setIdentifier('');
+                if (selectedRole === 'admin') setPassword('');
+                else setProjectCode('');
+            }
             setRememberMe(false);
 
             if (stored) {
@@ -79,7 +98,10 @@ export default function LoginScreen() {
                 if (selectedRole === 'admin') {
                     setPassword(data.secret || '');
                 } else {
-                    if (!params.code) setProjectCode(data.secret || '');
+                    // Only fill stored project code if there's NO deep link code currently active
+                    if (!projectCode && !params.code) {
+                        setProjectCode(data.secret || '');
+                    }
                 }
                 setRememberMe(true);
             }
@@ -164,7 +186,10 @@ export default function LoginScreen() {
 
                     <View style={{ alignItems: 'center', marginBottom: 40 }}>
                         <Image source={require('../../assets/images/app-icon.png')} style={{ width: 100, height: 100, marginBottom: 16 }} resizeMode="contain" />
-                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary }}>APEXIS</Text>
+                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary }}>
+                            APEXIS
+                            <Text className="font-angelica" style={{ fontSize: 18, textTransform: 'lowercase' }}>pro</Text>
+                        </Text>
                         <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>RECORD · REPORT · RELEASE</Text>
                     </View>
 
@@ -227,7 +252,7 @@ export default function LoginScreen() {
                                         style={{ flex: 1, color: colors.text }}
                                     />
                                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                                        <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
+                                        <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} />
                                     </TouchableOpacity>
                                 </View>
                                 <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={{ marginTop: 6 }}>
@@ -260,8 +285,12 @@ export default function LoginScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity onPress={handleLogin} disabled={isLoading} style={{ height: 52, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 20, opacity: isLoading ? 0.7 : 1 }}>
-                        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>}
+                    <TouchableOpacity 
+                        onPress={handleLogin} 
+                        disabled={isLoading || isProcessingLink} 
+                        style={{ height: 52, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 20, opacity: (isLoading || isProcessingLink) ? 0.7 : 1 }}
+                    >
+                        {(isLoading || isProcessingLink) ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>}
                     </TouchableOpacity>
 
                     {selectedRole === 'admin' && (

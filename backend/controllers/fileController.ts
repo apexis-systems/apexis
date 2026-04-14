@@ -2,16 +2,20 @@ import type { Request, Response } from "express";
 import 'multer';
 
 import db from "../models/index.ts";
-const { files, folders, project_members, activities, users } = db;
+const { files, folders, project_members, activities, users, organizations, projects } = db;
 
 import { Op } from "sequelize";
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from 'sharp';
+import { addWatermark } from "../utils/watermark.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { users as UsersModel } from "../models/index.ts";
 import { PDFDocument } from 'pdf-lib';
 import { getIO } from '../socket.ts';
+import { logActivity } from "../utils/activityUtils.ts";
+import { checkStorageLimit, checkSubscriptionStatus } from "../utils/subscriptionAccess.ts";
 
 interface MulterFile {
     buffer: Buffer;
@@ -20,23 +24,34 @@ interface MulterFile {
     size: number;
 }
 
-
-
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || "ap-south-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    }
-});
-
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
-
 // Helper to check access
-const checkProjectAccess = async (userId: number, projectId: number) => {
-    return await project_members.findOne({
+const checkProjectAccess = async (userId: number, projectId: number, role: string, orgId?: number | null) => {
+    // 1. Check explicit project membership
+    const membership = await project_members.findOne({
         where: { user_id: userId, project_id: projectId }
     });
+    if (membership) return membership;
+
+    // 2. If not a member, check if they are an admin of the project's organization
+    if (role === 'admin' || role === 'superadmin') {
+        const project = await projects.findByPk(projectId);
+        if (project && (role === 'superadmin' || project.organization_id === orgId)) {
+            return { role: 'admin' }; // Synthetic membership
+        }
+    }
+    return null;
+};
+
+// Helper to update organization storage usage
+const updateOrganizationStorage = async (organizationId: number, sizeMb: number) => {
+    try {
+        await organizations.increment('storage_used_mb', {
+            by: sizeMb,
+            where: { id: organizationId }
+        });
+    } catch (err) {
+        console.error("Error updating organization storage:", err);
+    }
 };
 
 export const uploadFile = async (req: Request | any, res: Response) => {
@@ -45,9 +60,28 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
         const { folder_id, project_id, skipActivity } = req.body;
+        const project = await projects.findByPk(project_id);
 
-        if (!(req as any).file) {
-            return res.status(400).json({ error: "No file uploaded" });
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
+
+        // Check subscription status and storage limit
+        const subscriptionCheck = await checkSubscriptionStatus(project.organization_id);
+        if (!subscriptionCheck.allowed) {
+            return res.status(subscriptionCheck.status).json({
+                error: subscriptionCheck.message,
+                code: (subscriptionCheck as any).code
+            });
+        }
+
+        const fileSizeMb = (req as any).file.size / (1024 * 1024);
+        const storageCheck = await checkStorageLimit(project.organization_id, fileSizeMb);
+        if (!storageCheck.allowed) {
+            return res.status(storageCheck.status).json({
+                error: storageCheck.message,
+                code: storageCheck.code
+            });
         }
 
         const file_name = (req as any).file.originalname;
@@ -55,10 +89,10 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const file_size_mb = Math.max(1, Math.round((req as any).file.size / (1024 * 1024)));
 
         // Ensure contributors have access to this project
-        if (authUser.role === "contributor") {
-            const access = await checkProjectAccess(authUser.user_id, project_id);
-            if (!access || access.role !== "contributor") {
-                return res.status(403).json({ error: "Forbidden: Not a contributor to this project" });
+        if (authUser.role === "contributor" || authUser.role === "client") {
+            const access = await checkProjectAccess(authUser.user_id, project_id, authUser.role, authUser.organization_id);
+            if (!access) {
+                return res.status(403).json({ error: "Forbidden: No access to this project" });
             }
         }
 
@@ -77,61 +111,12 @@ export const uploadFile = async (req: Request | any, res: Response) => {
 
         // Apply compression and watermarking only to images
         if (file_type.startsWith('image/')) {
-            const timestamp = new Date().toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata',
-                dateStyle: 'medium',
-                timeStyle: 'short'
-            });
-
             try {
-                const image = sharp((req as any).file.buffer);
-                const metadata = await image.metadata();
-                const originalWidth = metadata.width || 1280;
-                const finalWidth = Math.min(originalWidth, 1280);
-
-                // Dynamically adjust font size to width
-                const fontSize = Math.max(12, Math.min(22, Math.round(finalWidth * 0.02)));
-                const bandHeight = Math.round(fontSize * 4);
-                const svgWidth = finalWidth;
-                const svgHeight = bandHeight;
-
-                // Professional formatting
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
-                const timeStr = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase();
-
-                const yPos1 = Math.round(fontSize * 1.5); // Primary line
-                const yPos2 = Math.round(fontSize * 3.0); // Secondary line (reserved)
-
-                const svgOverlay = `
-                    <svg width="${svgWidth}" height="${svgHeight}">
-                        <style>
-                            .text { fill: #1a1a1a; font-size: ${fontSize}px; font-family: sans-serif; font-weight: 800; letter-spacing: 0.5px; }
-                            .sub { fill: #999; font-size: ${Math.round(fontSize * 0.7)}px; font-family: sans-serif; }
-                        </style>
-                        <text x="20" y="${yPos1}" class="text">${dateStr}   |   ${timeStr}</text>
-                        <text x="20" y="${yPos2}" class="sub"></text>
-                    </svg>
-                `;
-
-                fileBuffer = await image
-                    .resize({ width: 1280, withoutEnlargement: true })
-                    .extend({
-                        bottom: bandHeight,
-                        background: { r: 255, g: 255, b: 255, alpha: 1 }
-                    })
-                    .composite([{
-                        input: Buffer.from(svgOverlay),
-                        gravity: 'southwest'
-                    }])
-                    .jpeg({ quality: 85 })
-                    .toBuffer();
-
+                fileBuffer = await addWatermark(req.file.buffer);
                 // Force extension to jpg since we are converting
                 finalFileName = file_name.replace(/\.[^/.]+$/, "") + ".jpg";
             } catch (sharpErr) {
-                console.error("Sharp processing failed, falling back to original", sharpErr);
-                // Fallback to original buffer if sharp fails
+                console.error("Watermarking failed, falling back to original", sharpErr);
             }
         }
 
@@ -155,9 +140,29 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
         });
 
-        // Send notifications to project members
+        const isImage = file_type.startsWith('image/');
+        const activityCategory = isImage ? 'photos' : 'documents';
+        const notificationType = isImage ? 'photo_upload' : 'file_upload';
+
+        // Log Activity
+        await logActivity({
+            projectId: parseInt(project_id, 10),
+            userId: authUser.user_id,
+            type: isImage ? 'photo_upload' : 'upload',
+            description: `Uploaded ${finalFileName}`,
+            metadata: { folderId: finalFolderId, type: activityCategory }
+        });
+
+        // Notify project members based on project membership
         const members = await project_members.findAll({
-            where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
+            where: { 
+                project_id: parseInt(project_id, 10), 
+                user_id: { [Op.ne]: authUser.user_id } 
+            },
+            include: [{
+                model: UsersModel,
+                attributes: ['id', 'name']
+            }]
         });
 
         // Fallback for name if missing from token
@@ -172,33 +177,34 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             notifiedUserIds.add(member.user_id);
             await sendNotification({
                 userId: member.user_id,
-                title: 'New File Uploaded',
+                title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
                 body: `${senderName} uploaded ${finalFileName}`,
-                type: 'file_upload',
-                data: { fileId: String(newFile.id), projectId: String(project_id) }
+                type: notificationType,
+                data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
             });
 
         }
 
 
-        // Notify Admins in the organization (if they weren't already notified as project members)
+        // Notify Admins in the organization
         try {
             const admins = await UsersModel.findAll({
                 where: {
-                    organization_id: authUser.organization_id,
+                    organization_id: project.organization_id,
                     role: 'admin',
                     id: { [Op.notIn]: Array.from(notifiedUserIds).concat(authUser.user_id) }
                 }
             });
 
+            const adminNotificationType = isImage ? 'photo_upload' : 'file_upload_admin';
+
             for (const adminUser of admins) {
                 await sendNotification({
                     userId: adminUser.id,
-                    title: 'New File Uploaded',
+                    title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
                     body: `${senderName} uploaded ${finalFileName}`,
-
-                    type: 'file_upload_admin',
-                    data: { fileId: String(newFile.id), projectId: String(project_id) }
+                    type: adminNotificationType,
+                    data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
                 });
             }
         } catch (err) {
@@ -217,6 +223,9 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             message: "File uploaded successfully",
             file: newFile
         });
+
+        // Update organization storage usage
+        await updateOrganizationStorage(project.organization_id, file_size_mb);
     } catch (error) {
         console.error("Upload File Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -229,12 +238,10 @@ export const listFiles = async (req: Request, res: Response) => {
         const { projectId } = req.params;
         const { folder_type } = req.query;
 
-        // Verify access if contributor or client
-        if (authUser.role === "contributor" || authUser.role === "client") {
-            const access = await checkProjectAccess(authUser.user_id, Number(projectId));
-            if (!access) {
-                return res.status(403).json({ error: "Forbidden: No access to this project" });
-            }
+        // Verify access
+        const access = await checkProjectAccess(authUser.user_id, Number(projectId), authUser.role, authUser.organization_id);
+        if (!access) {
+            return res.status(403).json({ error: "Forbidden: No access to this project" });
         }
 
         // Get all folders for this project
@@ -320,14 +327,17 @@ export const deleteFile = async (req: Request, res: Response) => {
 
         await s3Client.send(command);
 
-        await activities.create({
-            project_id: file.project_id,
-            user_id: authUser.user_id,
+        await logActivity({
+            projectId: file.project_id,
+            userId: authUser.user_id,
             type: 'delete',
             description: `Deleted ${file.file_name}`
         });
 
         await file.destroy();
+
+        // Update organization storage usage (decrement)
+        await updateOrganizationStorage(authUser.organization_id, -file.file_size_mb);
 
         res.status(200).json({ message: "File deleted successfully" });
     } catch (error) {
@@ -352,19 +362,24 @@ export const toggleFileVisibility = async (req: Request, res: Response) => {
         if (!file) {
             return res.status(404).json({ error: "File not found" });
         }
+        const project = await projects.findByPk(file.project_id);
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
 
         file.client_visible = client_visible;
         await file.save();
 
         if (client_visible) {
-            // Notify clients in the organization
-            const clients = await UsersModel.findAll({
-                where: { organization_id: authUser.organization_id, role: 'client' }
+            // Notify clients who actually belong to this project.
+            const clients = await project_members.findAll({
+                where: { project_id: file.project_id, role: 'client' },
+                attributes: ['user_id']
             });
 
             for (const client of clients) {
                 await sendNotification({
-                    userId: (client as any).id,
+                    userId: Number((client as any).user_id),
                     title: 'New File Available',
                     body: `A new file "${file.file_name}" is now visible to you.`,
                     type: 'file_visibility',
@@ -497,9 +512,9 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
         if (ids.length > 0) {
             const firstFile = await files.findByPk(ids[0]);
             if (firstFile) {
-                await activities.create({
-                    project_id: firstFile.project_id,
-                    user_id: authUser.user_id,
+                await logActivity({
+                    projectId: firstFile.project_id,
+                    userId: authUser.user_id,
                     type: 'edit',
                     description: `Bulk updated ${ids.length} files`
                 });
@@ -520,9 +535,30 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
         const { project_id, folder_id, mode, file_name, location, tags, is_doc_mode } = req.body;
+        const project = await projects.findByPk(project_id);
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
 
+        // Check subscription status and storage limit
+        const subscriptionCheck = await checkSubscriptionStatus(project.organization_id);
+        if (!subscriptionCheck.allowed) {
+            return res.status(subscriptionCheck.status).json({
+                error: subscriptionCheck.message,
+                code: (subscriptionCheck as any).code
+            });
+        }
 
         const scanFiles = (req as any).files as MulterFile[];
+        const totalIncomingSizeMb = (scanFiles || []).reduce((acc, f) => acc + (f.size / (1024 * 1024)), 0);
+
+        const storageCheck = await checkStorageLimit(project.organization_id, totalIncomingSizeMb);
+        if (!storageCheck.allowed) {
+            return res.status(storageCheck.status).json({
+                error: storageCheck.message,
+                code: storageCheck.code
+            });
+        }
 
 
         if (!scanFiles || !Array.isArray(scanFiles) || scanFiles.length === 0) {
@@ -531,7 +567,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
         // Access check
         if (authUser.role === "contributor") {
-            const access = await checkProjectAccess(authUser.user_id, project_id);
+            const access = await checkProjectAccess(authUser.user_id, project_id, authUser.role, authUser.organization_id);
             if (!access || access.role !== "contributor") {
                 return res.status(403).json({ error: "Forbidden: Not a contributor to this project" });
             }
@@ -602,6 +638,15 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 });
 
                 createdFiles.push(newFile);
+
+                // Log Activity for Scan
+                await logActivity({
+                    projectId: parseInt(project_id, 10),
+                    userId: authUser.user_id,
+                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
+                    description: `Uploaded scan: ${individualFileName}`,
+                    metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                });
             }
         } else {
             // mode === 'single' or empty -> merge all into one PDF
@@ -663,6 +708,15 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             });
 
             createdFiles.push(newFile);
+
+            // Log Activity for Scan
+            await logActivity({
+                projectId: parseInt(project_id, 10),
+                userId: authUser.user_id,
+                type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
+                description: `Uploaded scan: ${finalFileName}`,
+                metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+            });
         }
 
         res.status(200).json({
@@ -672,10 +726,21 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             file: isSeparate ? createdFiles[0] : createdFiles[0]
         });
 
-        // Notifications for Scans
+        // Update organization storage usage
+        const totalFilesSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
+        await updateOrganizationStorage(project.organization_id, totalFilesSizeMb);
+
+        // Notify project members based on project membership, not the user's home organization.
         try {
             const members = await project_members.findAll({
-                where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } }
+                where: { 
+                    project_id: parseInt(project_id, 10), 
+                    user_id: { [Op.ne]: authUser.user_id } 
+                },
+                include: [{
+                    model: UsersModel,
+                    attributes: ['id', 'name']
+                }]
             });
 
             let senderName = authUser.name;
@@ -696,7 +761,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     title: notificationTitle,
                     body: notificationBody,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                    data: { projectId: String(project_id) }
+                    data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
 
             }
@@ -704,7 +769,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             // Also notify organization admins (if they are not project members)
             const orgAdmins = await users.findAll({
                 where: {
-                    organization_id: authUser.organization_id,
+                    organization_id: project.organization_id,
                     role: 'admin',
                     id: { [Op.ne]: authUser.user_id }
                 }
@@ -720,7 +785,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     title: notificationTitle,
                     body: notificationBody,
                     type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                    data: { projectId: String(project_id) }
+                    data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                 });
 
             }

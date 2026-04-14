@@ -9,6 +9,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Manual, ManualType, getManuals, uploadManual, deleteManualApi } from '@/services/manualService';
+import { parseApiError } from '@/helpers/apiError';
 
 interface Props { project: any; }
 
@@ -87,7 +88,8 @@ export default function ProjectManuals({ project }: Props) {
             setPickedFile(null);
             setSelectedType('manual');
         } catch (e) {
-            Alert.alert('Error', 'Upload failed. Please try again.');
+            const { message, code } = parseApiError(e, 'Upload failed. Please try again.');
+            Alert.alert(code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
         } finally {
             setSubmitting(false);
         }

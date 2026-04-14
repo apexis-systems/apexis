@@ -46,8 +46,8 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
                 if (savedTheme !== null) {
                     setIsDark(savedTheme === 'dark');
                 } else {
-                    // Default to system only on first run, otherwise default to light
-                    setIsDark(systemColorScheme === 'dark');
+                    // Always default to light for first-time users as requested
+                    setIsDark(false);
                 }
             } catch (error) {
                 console.error('Error loading theme:', error);

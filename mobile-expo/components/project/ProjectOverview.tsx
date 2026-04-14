@@ -15,6 +15,7 @@ import { getSecureFileUrl } from '@/services/fileService';
 
 import { useSocket } from '@/contexts/SocketContext';
 import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers } from '@/services/projectService';
+import { parseApiError } from '@/helpers/apiError';
 
 interface Props {
     project: Project;
@@ -60,8 +61,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
                     if (m.user.profile_pic) {
                         try {
-                           const url = await getSecureFileUrl(m.user.profile_pic);
-                           return { ...m, secure_pic: url };
+                            const url = await getSecureFileUrl(m.user.profile_pic);
+                            return { ...m, secure_pic: url };
                         } catch { return m; }
                     }
                     return m;
@@ -115,7 +116,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             const shareUrl = role === 'contributor' ? data.contributorLink : data.clientLink;
             await Share.share({
                 title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
-                message: `You've been invited to access a project on Apexis!\nClick the link below to securely login to your project:\n\n${shareUrl}`,
+                message: `You've been invited to access the project "${project.name}" on Apexis as a "${role}".\n\nClick the link below to securely login to your project:\n${shareUrl}`,
             });
         } catch (e) {
             console.error('Share error:', e);
@@ -150,7 +151,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         setExportTimerMs(Date.now() - data.activeExport.startTime);
                     }
                 }
-            }).catch(() => {});
+            }).catch(() => { });
     }, [projectId, userRole]);
 
     // Socket Listener
@@ -161,7 +162,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
         const handleExportStatus = (data: any) => {
             if (data.projectId !== projectId) return;
-            
+
             if (!isExporting && data.statusType === 'progress') {
                 setIsExporting(true);
                 setExportTimerMs(0);
@@ -171,8 +172,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             setExportStatusText(data.status);
 
             if (data.etaMs !== undefined) {
-               setIsCountingDown(true);
-               setExportTimerMs(data.etaMs);
+                setIsCountingDown(true);
+                setExportTimerMs(data.etaMs);
             }
 
             if (data.statusType === 'success') {
@@ -221,7 +222,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     setPhotosCount(photos);
                     setDocsCount(docs);
                 })
-                .catch(() => {})
+                .catch(() => { })
                 .finally(() => setCounting(false));
         };
 
@@ -241,7 +242,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             setIsCountingDown(false);
             await exportHandoverPackage(projectId);
         } catch (e: any) {
-            Alert.alert("Error", 'Failed to trigger export');
+            const { message, code } = parseApiError(e, 'Failed to trigger export');
+            Alert.alert(code === 'FEATURE_RESTRICTED' ? 'Feature Restricted' : code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
             setIsExporting(false);
         }
     };
@@ -362,67 +364,67 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
                 {/* Project Access Codes — admin only (contributor/client codes are stripped from API response) */}
                 {userRole === 'admin' && (
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                    {[
-                        { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0 },
-                        { label: 'Client Code', value: (project as any).client_code, id: 'client_code', count: (project as any).totalClients || 0 },
-                    ].map((item) => (
-                        <View
-                            key={item.id}
-                            style={{
-                                flex: 1,
-                                borderRadius: 16,
-                                backgroundColor: colors.surface,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                padding: 12,
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.05,
-                                shadowRadius: 4,
-                                elevation: 1,
-                            }}
-                        >
-                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
-                                {item.label}
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
-                                    {item.value || '—'}
-                                </Text>
-                                {item.value ? (
-                                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                                        <TouchableOpacity
-                                            onPress={() => handleCopy(item.value!, item.id)}
-                                            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
-                                        >
-                                            <Feather
-                                                name={copiedId === item.id ? "check" : "copy"}
-                                                size={14}
-                                                color={copiedId === item.id ? "#22c55e" : colors.textMuted}
-                                            />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            onPress={() => handleShareLink(item.id === 'cont_code' ? 'contributor' : 'client', item.value!)}
-                                            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
-                                        >
-                                            <Feather name="share-2" size={14} color={colors.primary} />
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : null}
-                            </View>
-                            <TouchableOpacity 
-                                onPress={() => setMemberModalType(item.id === 'cont_code' ? 'contributor' : 'client')}
-                                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                        {[
+                            { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0 },
+                            { label: 'Client Code', value: (project as any).client_code, id: 'client_code', count: (project as any).totalClients || 0 },
+                        ].map((item) => (
+                            <View
+                                key={item.id}
+                                style={{
+                                    flex: 1,
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 12,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 4,
+                                    elevation: 1,
+                                }}
                             >
-                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
-                                    {item.count} active {item.id === 'cont_code' ? (item.count === 1 ? 'contributor' : 'contributors') : (item.count === 1 ? 'client' : 'clients')}
+                                <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
+                                    {item.label}
                                 </Text>
-                                <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
-                            </TouchableOpacity>
-                        </View>
-                    ))}
-                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
+                                        {item.value || '—'}
+                                    </Text>
+                                    {item.value ? (
+                                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                                            <TouchableOpacity
+                                                onPress={() => handleCopy(item.value!, item.id)}
+                                                style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                            >
+                                                <Feather
+                                                    name={copiedId === item.id ? "check" : "copy"}
+                                                    size={14}
+                                                    color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                                />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => handleShareLink(item.id === 'cont_code' ? 'contributor' : 'client', item.value!)}
+                                                style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                            >
+                                                <Feather name="share-2" size={14} color={colors.primary} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : null}
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => setMemberModalType(item.id === 'cont_code' ? 'contributor' : 'client')}
+                                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+                                >
+                                    <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                        {item.count} active {item.id === 'cont_code' ? (item.count === 1 ? 'contributor' : 'contributors') : (item.count === 1 ? 'client' : 'clients')}
+                                    </Text>
+                                    <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </View>
                 )}
 
                 {/* Quick Actions */}
@@ -505,7 +507,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                 <Text style={{ fontSize: 11, color: colors.textMuted }}>Generated {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
                                             </View>
                                         </View>
-                                        
+
                                         <View style={{ flexDirection: 'row', gap: 8 }}>
                                             <TouchableOpacity
                                                 onPress={() => handleShareFile(latestExport.url)}
@@ -606,4 +608,3 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         </ScrollView>
     );
 };
-

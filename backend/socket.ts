@@ -74,11 +74,16 @@ export const initIO = (httpServer: HTTPServer) => {
         });
 
         socket.on('send-message', (data: { roomId: string | number; text: string; senderId: number; senderName: string; createdAt: Date }) => {
-            io.to(`room-${String(data.roomId)}`).emit('new-message', data);
+            const roomName = `room-${String(data.roomId)}`;
+            console.log(`[SOCKET] Message in ${roomName} from ${data.senderId}`);
+            io.to(roomName).emit('new-message', data);
         });
 
         socket.on('typing', (data: { roomId: string | number; userName: string }) => {
-            socket.to(`room-${String(data.roomId)}`).emit('user-typing', data);
+            const roomName = `room-${String(data.roomId)}`;
+            // Broadcast to others in the room
+            socket.to(roomName).emit('user-typing', data);
+            // console.log(`[SOCKET] User ${data.userName} typing in ${roomName}`);
         });
     });
 

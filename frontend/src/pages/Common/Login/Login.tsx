@@ -52,9 +52,8 @@ const Login = () => {
                 setQrSessionId(sessionId);
 
                 // 2. Connect to the socket server
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-                const backendUrl = apiUrl.endsWith('/api') ? apiUrl.slice(0, -4) : apiUrl;
-                socket = io(backendUrl);
+                const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5002';
+                socket = io(socketUrl);
 
                 socket.on('connect', () => {
                     // 3. Join the room specific to our UUID
@@ -89,11 +88,13 @@ const Login = () => {
         }
 
         return () => {
-            if (socket) {
-                socket.disconnect();
-            }
             if (expiryTimer) {
                 clearTimeout(expiryTimer);
+            }
+            if (socket) {
+                socket.off('connect');
+                socket.off('qr-authorized');
+                socket.disconnect();
             }
         };
     }, [loginMode, qrRefreshTrigger]);
@@ -156,8 +157,11 @@ const Login = () => {
                         <img src="/app-icon.png" alt="Apexis Logo" className="h-28 w-28 object-contain" />
                     </div>
                     <div className='flex flex-col items-center'>
-                        <h1 className="text-4xl tracking-[0.1em] text-accent font-angelica uppercase">APEXIS</h1>
-                        <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground">
+                        <h1 className="text-4xl tracking-[0.1em] text-primary font-angelica flex items-center gap-1">
+                            APEXIS
+                            <span className="text-xl lowercase mt-3 font-angelica">pro</span>
+                        </h1>
+                        <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground uppercase">
                             RECORD · REPORT · RELEASE
                         </p>
                     </div>
@@ -171,16 +175,16 @@ const Login = () => {
                             <div className="flex flex-col md:flex-row min-h-[500px]">
                                 {/* Left Side: Scan Instructions */}
                                 <div className="flex-1 p-8 sm:p-14 border-b md:border-b-0 md:border-r border-border/40 flex flex-col">
-                                <h2 className="text-[28px] font-bold text-foreground mb-10 tracking-tight uppercase text-center md:text-left font-montserrat">Scan to log in</h2>
+                                    <h2 className="text-[28px] font-bold text-foreground mb-10 tracking-tight uppercase text-center md:text-left font-montserrat">Scan to log in</h2>
 
                                     <div className="space-y-8 flex-1">
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">1</div>
-                                            <p className="text-[17px] text-foreground leading-snug pt-0.5 font-montserrat">Open the <span className="text-accent inline-flex items-center gap-1.5 bg-accent/5 px-2 py-0.5 rounded-md font-angelica uppercase tracking-widest">APEXIS</span> mobile app & log in</p>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5 font-montserrat">Open the <span className="text-primary inline-flex items-center gap-0.5 bg-primary/5 px-2 py-0.5 rounded-md font-angelica tracking-widest">APEXIS<span className="text-[10px] lowercase pt-0.5 font-angelica">pro</span></span> mobile app & log in</p>
                                         </div>
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">2</div>
-                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Go to <span className="font-semibold text-foreground">Profile &gt; Linked Devices &gt; Link a Device</span></p>
+                                            <p className="text-[17px] text-foreground leading-snug pt-0.5">Go to <span className="font-semibold text-foreground">Settings &gt; Linked Devices &gt; Link a Device</span></p>
                                         </div>
                                         <div className="flex items-start gap-5">
                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-sm font-semibold text-foreground mt-0.5">3</div>
@@ -242,7 +246,7 @@ const Login = () => {
                                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                                     <div className="bg-white p-1.5 rounded-2xl flex items-center justify-center shadow-sm" style={{ width: 62, height: 62 }}>
                                                         <div className="w-full h-full rounded-xl flex items-center justify-center overflow-hidden">
-                                                            <img src="/app-icon.png" alt="Apexis" className="w-full h-full object-contain" />
+                                                            <img src="/app-icon.png" alt="APEXISpro" className="w-full h-full object-contain" />
                                                         </div>
                                                     </div>
                                                 </div>
