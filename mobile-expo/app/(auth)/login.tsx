@@ -45,36 +45,58 @@ export default function LoginScreen() {
     };
 
     const hasLoggedOutForInvitation = useRef(false);
+    // Initialized BEFORE any effect runs so the credential loader can
+    // check it synchronously on its very first execution.
+    const isInvitationMode = useRef(!!params.code);
+
     useEffect(() => {
         const handleInvitation = async () => {
             if (params.code && !hasLoggedOutForInvitation.current) {
+                // Mark invitation mode immediately so the credential loader
+                // (which may fire concurrently) knows to stay out of the way.
+                isInvitationMode.current = true;
                 setIsProcessingLink(true);
-                setProjectCode(params.code);
-                if (params.role === 'contributor' || params.role === 'client') {
-                    setSelectedRole(params.role as UserRole);
-                } else {
-                    setSelectedRole('contributor');
-                }
 
-                // If user is already logged in, we logout to allow switching
+                // Set role first so the correct field is shown
+                const deepRole: UserRole =
+                    params.role === 'contributor' || params.role === 'client'
+                        ? (params.role as UserRole)
+                        : 'contributor';
+                setSelectedRole(deepRole);
+                setProjectCode(params.code);
+
+                // If user is already logged in, log out to allow switching account
                 if (isLoggedIn) {
                     try {
                         await logout();
-                        // Optional: Small delay to let SecureStore sync
-                        await new Promise(r => setTimeout(r, 200));
+                        // Give SecureStore time to flush before we write the new token
+                        await new Promise(r => setTimeout(r, 300));
                     } catch (e) {
                         console.error("Deep link logout error:", e);
                     }
                 }
+
                 hasLoggedOutForInvitation.current = true;
+
+                // Re-assert after the logout await — intermediate re-renders
+                // triggered by isLoggedIn changing can reset these values.
+                setSelectedRole(deepRole);
+                setProjectCode(params.code);
                 setIsProcessingLink(false);
             }
         };
 
         handleInvitation();
-    }, [params.code, params.role, isLoggedIn, logout]);
+    // Intentionally exclude isLoggedIn/logout: we snapshot them inside the
+    // effect. Including them would re-fire the effect after logout() resolves
+    // and could create a second conflicting execution.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [params.code, params.role]);
 
     useEffect(() => {
+        // During an invitation deep-link flow, skip loading stored credentials
+        // entirely — we never want remembered data to overwrite the deep-link code.
+        if (isInvitationMode.current) return;
         loadStoredCredentials();
     }, [selectedRole]);
 
@@ -98,8 +120,10 @@ export default function LoginScreen() {
                 if (selectedRole === 'admin') {
                     setPassword(data.secret || '');
                 } else {
-                    // Only fill stored project code if there's NO deep link code currently active
-                    if (!projectCode && !params.code) {
+                    // Only fill stored project code when not in a deep-link invitation flow.
+                    // (isInvitationMode also guards the entire function entry above, but
+                    // this extra check makes the intent explicit.)
+                    if (!isInvitationMode.current) {
                         setProjectCode(data.secret || '');
                     }
                 }
