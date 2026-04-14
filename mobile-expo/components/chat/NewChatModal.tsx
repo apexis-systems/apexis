@@ -74,7 +74,8 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             }, Platform.OS === 'ios' ? 350 : 50);
         } catch (err: any) {
             console.error("Failed to create direct chat", err);
-            Alert.alert('Error', err?.response?.data?.message || err.message || 'Failed to start chat');
+            const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to start chat';
+            Alert.alert('Unable to Start Chat', errorMsg);
         } finally {
             setSubmitting(false);
             setSubmittingUserId(null);
@@ -114,7 +115,8 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             }, Platform.OS === 'ios' ? 350 : 50);
         } catch (err: any) {
             console.error("Failed to create chat", err);
-            Alert.alert('Error', err?.response?.data?.message || err.message || 'Failed to create chat');
+            const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to create chat';
+            Alert.alert('Unable to Create Chat', errorMsg);
         } finally {
             setSubmitting(false);
         }

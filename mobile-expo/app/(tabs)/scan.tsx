@@ -91,7 +91,7 @@ export default function ScanScreen() {
             // Fix orientation for iOS
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [],
+                [{ resize: { width: 1280 } }],
                 { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
             );
 

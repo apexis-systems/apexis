@@ -178,9 +178,16 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     }, [detailModalVisible, createModalVisible, filterModalVisible, statusFilter, fetchRFIs, fetchAssignees, previewImage, annotatingImageIndex, cameraVisible])
   );
 
-  const handleImageSelection = () => {
+  const handleImageSelection = async () => {
     if (!cameraPermission?.granted) {
-      requestCameraPermission();
+      const res = await requestCameraPermission();
+      if (!res.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Camera permission is needed to take RFI photos. Please enable it in your device settings."
+        );
+        return;
+      }
     }
     setCameraVisible(true);
   };
@@ -194,7 +201,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     setIsCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 0.9,
         base64: false,
         exif: true,
       });
@@ -204,8 +211,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       // Fix orientation and format for iOS compatibility
       const manipulated = await ImageManipulator.manipulateAsync(
         photo.uri,
-        [],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: 1280 } }],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
       );
 
       const newIdx = selectedImages.length;
@@ -230,12 +237,24 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: remaining,
-      quality: 0.7,
+      quality: 0.9,
     });
 
     if (!result.canceled) {
-      const newUris = result.assets.map(a => a.uri);
-      setSelectedImages([...selectedImages, ...newUris].slice(0, 3));
+      const processedUris = [];
+      for (const asset of result.assets) {
+        try {
+          const manipulated = await ImageManipulator.manipulateAsync(
+            asset.uri,
+            [{ resize: { width: 1280 } }],
+            { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          processedUris.push(manipulated.uri);
+        } catch (e) {
+          processedUris.push(asset.uri);
+        }
+      }
+      setSelectedImages([...selectedImages, ...processedUris].slice(0, 3));
     }
   };
 

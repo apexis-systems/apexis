@@ -230,10 +230,33 @@ export default function UploadScreen() {
 
             if (result.canceled || !result.assets?.length) return;
 
-            const queue: FileProgress[] = result.assets.map((a: any) => ({
-                asset: { uri: a.uri, fileName: a.fileName || a.uri.split('/').pop(), type: a.mimeType || 'image/jpeg', size: a.fileSize || 0 },
-                progress: 0, status: 'pending', anim: new Animated.Value(0), source: isDocMode ? 'scan' : 'gallery',
-            }));
+            const queue: FileProgress[] = [];
+            for (const asset of result.assets) {
+                let uri = asset.uri;
+                try {
+                    const manipulated = await ImageManipulator.manipulateAsync(
+                        uri,
+                        [{ resize: { width: 1280 } }],
+                        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                    );
+                    uri = manipulated.uri;
+                } catch (e) {
+                    console.warn('Gallery ImageManipulator failed:', e);
+                }
+
+                queue.push({
+                    asset: { 
+                        uri, 
+                        fileName: asset.fileName || uri.split('/').pop(), 
+                        type: 'image/jpeg', 
+                        size: asset.fileSize || 0 
+                    },
+                    progress: 0, 
+                    status: 'pending', 
+                    anim: new Animated.Value(0), 
+                    source: isDocMode ? 'scan' : 'gallery',
+                });
+            }
 
             addToQueue(queue);
         } catch (error) {
@@ -251,10 +274,35 @@ export default function UploadScreen() {
             });
             if (result.canceled || !result.assets?.length) return;
 
-            const queue: FileProgress[] = result.assets.map((a) => ({
-                asset: { uri: a.uri, fileName: a.name, type: a.mimeType, size: a.size },
-                progress: 0, status: 'pending', anim: new Animated.Value(0), source: 'document',
-            }));
+            const queue: FileProgress[] = [];
+            
+            for (const a of result.assets) {
+                let uri = a.uri;
+                let mimeType = a.mimeType || 'application/octet-stream';
+
+                // If it's an image picked from files, enforce the same 1280px resolution
+                if (mimeType.startsWith('image/')) {
+                    try {
+                        const manipulated = await ImageManipulator.manipulateAsync(
+                            uri,
+                            [{ resize: { width: 1280 } }],
+                            { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                        );
+                        uri = manipulated.uri;
+                        mimeType = 'image/jpeg'; // Standardize to JPEG after manipulation
+                    } catch (e) {
+                        console.warn('Document picker image manipulation failed:', e);
+                    }
+                }
+
+                queue.push({
+                    asset: { uri, fileName: a.name, type: mimeType, size: a.size },
+                    progress: 0, 
+                    status: 'pending', 
+                    anim: new Animated.Value(0), 
+                    source: 'document',
+                });
+            }
             addToQueue(queue);
         } catch (err) {
             console.error('pickDocument error:', err);
@@ -299,7 +347,7 @@ export default function UploadScreen() {
             // Fix orientation for iOS items
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [],
+                [{ resize: { width: 1280 } }],
                 { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
             );
 
@@ -365,8 +413,8 @@ export default function UploadScreen() {
                     try {
                         const manipulated = await ImageManipulator.manipulateAsync(
                             uri,
-                            [],
-                            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                            [{ resize: { width: 1280 } }],
+                            { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
                         );
                         uri = manipulated.uri;
                     } catch (e) {
