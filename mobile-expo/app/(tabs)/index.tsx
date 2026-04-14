@@ -114,7 +114,7 @@ export default function DashboardScreen() {
       // Request notification permissions and register token on home screen
       registerForPushNotificationsAsync();
 
-      // Listen for notification interactions
+      // Listen for notification interactions while app is foregrounded or backgrounded
       const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
         const { type } = response.notification.request.content.data;
         const data = response.notification.request.content.data;
@@ -126,6 +126,17 @@ export default function DashboardScreen() {
       };
     }
   }, [user, selectedOrgId]);
+
+  // Handle cold boot push notification click
+  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+  useEffect(() => {
+    if (user && lastNotificationResponse && lastNotificationResponse.notification.request.content.data) {
+        // Debounce or ensure we only navigate once per notification
+        const type = lastNotificationResponse.notification.request.content.data.type as string;
+        const data = lastNotificationResponse.notification.request.content.data;
+        handleNotificationNavigation(type, data, router);
+    }
+  }, [lastNotificationResponse, user]);
 
   useEffect(() => {
     if (!hasSeenTour && user && !isTourActive) {

@@ -487,18 +487,19 @@ export default function UploadScreen() {
                     const item = itemsToUpload[i];
                     
                     const formData = new FormData();
+                    formData.append('project_id', selectedProject!);
+                    formData.append('folder_id', (selectedFolder === 'root' ? '' : selectedFolder) || '');
+                    formData.append('file_tag', 'photo');
+                    formData.append('client_visible', String(true));
+                    formData.append('skipActivity', 'true');
+                    if (photoLocation) formData.append('location', photoLocation);
+                    if (photoTags) formData.append('tags', photoTags);
+                    
                     formData.append('file', {
                         uri: item.asset.uri,
                         name: item.asset.fileName || `photo_${i}.jpg`,
                         type: item.asset.type || 'image/jpeg',
                     } as any);
-                    formData.append('project_id', selectedProject!);
-                    formData.append('folder_id', (selectedFolder === 'root' ? '' : selectedFolder) || '');
-                    formData.append('file_tag', 'photo');
-                    formData.append('client_visible', String(true));
-                    if (photoLocation) formData.append('location', photoLocation);
-                    if (photoTags) formData.append('tags', photoTags);
-                    formData.append('skipActivity', 'true');
 
                     await uploadFileWithProgress(
                         formData,

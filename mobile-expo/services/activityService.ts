@@ -23,9 +23,14 @@ export const getActivities = async (filters: {
     }
 };
 
-export const createActivity = async (payload: { project_id: string; type: string; description: string, metadata?: string }) => {
+export const createActivity = async (payload: { project_id: string; type: string; description: string; metadata?: string | object }) => {
     try {
-        const res = await PrivateAxios.post('/activities', payload);
+        // If metadata is a string (JSON-encoded), decode it first so backend receives an object
+        const body: any = { ...payload };
+        if (typeof payload.metadata === 'string') {
+            try { body.metadata = JSON.parse(payload.metadata); } catch { /* keep as string */ }
+        }
+        const res = await PrivateAxios.post('/activities', body);
         return res.data;
     } catch (error) {
         console.error('createActivity API error:', error);

@@ -120,18 +120,46 @@ export const getActivities = async (req: Request | any, res: Response) => {
 export const createActivity = async (req: Request | any, res: Response) => {
     try {
         const userId = req.user.user_id;
-        const { project_id, type, description } = req.body;
+        const { project_id, type, description, metadata } = req.body;
 
         if (!project_id || !type || !description) {
             return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Deduplication guard: prevent double-logging same type for same project+user within 10 seconds
+        const tenSecondsAgo = new Date(Date.now() - 10 * 1000);
+        const recent = await activities.findOne({
+            where: {
+                project_id: parseInt(project_id, 10),
+                user_id: userId,
+                type,
+                createdAt: { [Op.gte]: tenSecondsAgo }
+            },
+            order: [['createdAt', 'DESC']]
+        });
+
+        if (recent) {
+            // Already logged this action recently — return the existing one instead of creating a duplicate
+            return res.status(200).json({ message: 'Activity already logged', activity: recent, deduplicated: true });
+        }
+
+        // Parse metadata if it's a JSON string
+        let parsedMetadata: any = undefined;
+        if (metadata) {
+            if (typeof metadata === 'string') {
+                try { parsedMetadata = JSON.parse(metadata); } catch { parsedMetadata = undefined; }
+            } else {
+                parsedMetadata = metadata;
+            }
         }
 
         const newActivity = await logActivity({
             projectId: parseInt(project_id, 10),
             userId,
             type,
-            description
-        } as any);
+            description,
+            metadata: parsedMetadata
+        });
 
         res.status(201).json({ message: 'Activity logged successfully', activity: newActivity });
     } catch (error) {
