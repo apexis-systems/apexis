@@ -12,7 +12,7 @@ import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } fr
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import { formatFileSize } from '@/helpers/format';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';

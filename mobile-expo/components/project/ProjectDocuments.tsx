@@ -7,7 +7,7 @@ import { PrivateAxios } from '@/helpers/PrivateAxios';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
