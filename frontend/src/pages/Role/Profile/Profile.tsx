@@ -3,7 +3,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-
 import { Button } from '@/components/ui/button';
 import { LogOut, Shield, User, Camera, Loader2, X, ArrowLeft, Briefcase } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
@@ -11,7 +10,7 @@ import { updateUserProfilePic, updateUserName } from '@/services/userService';
 import { getSecureFileUrl } from '@/services/fileService';
 import { uploadOrganizationLogo, updateOrganization } from '@/services/organizationService';
 import { toast } from 'sonner';
-import { changePassword, getMyMemberships, switchContext } from '@/services/authService';
+import { changePassword, getMyMemberships } from '@/services/authService';
 import ProfilePreviewModal from '@/components/shared/ProfilePreviewModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,7 +27,6 @@ const Profile = () => {
     const { t } = useLanguage();
     
     const [memberships, setMemberships] = useState<any[]>([]);
-    const [isSwitchingRole, setIsSwitchingRole] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -257,30 +255,6 @@ const Profile = () => {
         }
     };
 
-    const roleSwitcherItems = [
-        { id: 'admin', label: 'Admin', icon: Shield },
-        { id: 'contributor', label: 'Contributor', icon: User },
-        { id: 'client', label: 'Client', icon: Briefcase },
-    ];
-
-    const handleSwitchRole = async (roleId: string) => {
-        if (user.role === roleId || isSwitchingRole || !login) return;
-        setIsSwitchingRole(roleId);
-        try {
-            const res = await switchContext({ role: roleId });
-            if (res.token) {
-                const loggedInUser = await login(res.token);
-                const nextRole = loggedInUser?.role || roleId;
-                router.push(`/${nextRole}/profile`);
-                toast.success(`Switched to ${roleId.charAt(0).toUpperCase() + roleId.slice(1)} role`);
-            }
-        } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'You do not have access to this role.');
-        } finally {
-            setIsSwitchingRole(null);
-        }
-    };
-
     return (
         <div className="p-8 max-w-lg mx-auto">
             <div className="flex flex-col items-center text-center mb-8">
@@ -336,33 +310,10 @@ const Profile = () => {
                 )}
 
                 <p className="text-sm text-muted-foreground">{user.email || user.phone_number}</p>
-                {/* Role Switcher — same as SiteHeader */}
-                <div className="mt-3 flex items-center gap-1.5">
-                    {roleSwitcherItems.map((role) => {
-                        const isActive = user.role === role.id;
-                        const Icon = role.icon;
-                        return (
-                            <button
-                                key={role.id}
-                                onClick={() => handleSwitchRole(role.id)}
-                                disabled={!!isSwitchingRole}
-                                className={cn(
-                                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all border',
-                                    isActive
-                                        ? 'bg-primary text-primary-foreground border-primary'
-                                        : 'bg-secondary/50 text-muted-foreground border-transparent hover:border-border hover:bg-secondary'
-                                )}
-                            >
-                                {isSwitchingRole === role.id ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                    <Icon className="h-3 w-3" />
-                                )}
-                                <span>{role.label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
+                <span className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                    <Shield className="h-3 w-3" />
+                    {(user.role as string).charAt(0).toUpperCase() + (user.role as string).slice(1)}
+                </span>
             </div>
 
             <div className="space-y-4 mb-8">

@@ -60,7 +60,7 @@ export default function DashboardScreen() {
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [profileUri, setProfileUri] = useState<string | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
+  const [isSwitching, setIsSwitching] = useState<string | null>(null);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -391,12 +391,13 @@ export default function DashboardScreen() {
                   { id: 'client', label: 'Client', icon: 'user' }
                 ].map((role) => {
                   const isActive = user.role === role.id;
+                  const isThisSwitching = isSwitching === role.id;
                   return (
                     <TouchableOpacity
                       key={role.id}
                       onPress={async () => {
                         if (isActive || isSwitching) return;
-                        setIsSwitching(true);
+                        setIsSwitching(role.id);
                         try {
                           const res = await switchContext({ role: role.id });
                           if (res.token) {
@@ -405,7 +406,7 @@ export default function DashboardScreen() {
                         } catch (err: any) {
                           Alert.alert('Role Switch Failed', err?.response?.data?.error || 'You do not have access to this role.');
                         } finally {
-                          setIsSwitching(false);
+                          setIsSwitching(null);
                         }
                       }}
                       style={{
@@ -418,11 +419,11 @@ export default function DashboardScreen() {
                         borderRadius: 20,
                         borderWidth: 1,
                         borderColor: isActive ? colors.primary : colors.border,
-                        opacity: isSwitching ? 0.7 : 1
+                        opacity: isSwitching && !isThisSwitching ? 0.6 : 1
                       }}
                     >
-                      {isSwitching && isActive ? (
-                        <ActivityIndicator size={12} color="#fff" />
+                      {isThisSwitching ? (
+                        <ActivityIndicator size={12} color={isActive ? '#fff' : colors.primary} />
                       ) : (
                         <Feather name={role.icon as any} size={12} color={isActive ? '#fff' : colors.textMuted} />
                       )}
