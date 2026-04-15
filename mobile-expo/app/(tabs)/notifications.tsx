@@ -7,7 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { handleNotificationNavigation } from '@/utils/navigation';
+import { navigateFromNotification } from '@/utils/navigation';
 import { getProjects } from '@/services/projectService';
 import { getOrgUsers } from '@/services/userService';
 
@@ -229,7 +229,7 @@ export default function NotificationsScreen() {
             ]}
             onPress={() => {
                 markRead(item.id);
-                handleNotificationNavigation(item.type, item.data, router);
+                navigateFromNotification(String(item.id), item.type, item.data, router);
             }}
         >
             <View style={[styles.iconContainer, {

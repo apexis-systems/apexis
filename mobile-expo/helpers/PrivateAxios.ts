@@ -2,9 +2,13 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { DeviceEventEmitter } from 'react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5002/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? 'http://localhost:5002/api' : '');
 
-console.log(API_URL)
+if (__DEV__) {
+    console.log('[Dev] API_URL:', API_URL);
+} else {
+    console.log('[Prod] API_URL:', API_URL);
+}
 
 export const PublicAxios = axios.create({
     baseURL: API_URL,

@@ -1,4 +1,5 @@
-import { organizations, plans, users, projects } from "../models/index.ts";
+import { organizations, plans, users, projects, project_members, Sequelize } from "../models/index.ts";
+import { Op } from "sequelize";
 
 export const SUBSCRIPTION_GRACE_DAYS = 4;
 
@@ -72,9 +73,30 @@ export const checkMemberLimit = async (
 
   const limit =
     role === "contributor" ? org.plan.contributor_limit : org.plan.client_limit;
-  const currentUsage = await users.count({
+
+  // Comprehensive counting: include users associated via project_members OR organization_id
+  const projectIds = (
+    await projects.findAll({
+      where: { organization_id: org.id },
+      attributes: ["id"],
+    })
+  ).map((p: any) => p.id);
+
+  // Users in this organization's projects
+  const projectMemberIds = await project_members.findAll({
+    where: { project_id: { [Op.in]: projectIds }, role },
+    attributes: [[Sequelize.fn("DISTINCT", Sequelize.col("user_id")), "user_id"]],
+    raw: true,
+  }).then((pms: any[]) => pms.map(pm => pm.user_id));
+
+  // Users directly assigned to this organization
+  const directOrgUserIds = await users.findAll({
     where: { organization_id: org.id, role },
-  });
+    attributes: ["id"],
+    raw: true,
+  }).then((us: any[]) => us.map(u => u.id));
+
+  const currentUsage = new Set([...projectMemberIds, ...directOrgUserIds]).size;
 
   if (currentUsage >= limit) {
     const roleLabel = role === "contributor" ? "Contributor" : "Client";

@@ -27,7 +27,7 @@ import MainHeader from '@/components/shared/MainHeader';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { getSecureFileUrl } from '@/services/fileService';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
-import { handleNotificationNavigation } from '@/utils/navigation';
+import { navigateFromNotification } from '@/utils/navigation';
 import { UsageAlert } from '@/components/shared/UsageAlert';
 import { useUsage } from '@/contexts/UsageContext';
 
@@ -99,44 +99,45 @@ export default function DashboardScreen() {
     }
   }, [isTourActive, measureAndRegister]);
 
+  // Fetch projects / org data whenever user or selectedOrgId changes
   useEffect(() => {
     if (user) {
       if (user.role === 'superadmin') {
         fetchOrganizations();
       }
       fetchProjects(selectedOrgId);
-      // Handle setting initial logo
       const orgs = (user as any).organizations || (user as any).organization;
       if (orgs?.logo) {
         setLocalLogoKey(orgs.logo);
       }
-      
-      // Request notification permissions and register token on home screen
-      registerForPushNotificationsAsync();
-
-      // Listen for notification interactions while app is foregrounded or backgrounded
-      const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
-        const { type } = response.notification.request.content.data;
-        const data = response.notification.request.content.data;
-        handleNotificationNavigation(type, data, router);
-      });
-
-      return () => {
-        responseListener.remove();
-      };
     }
   }, [user, selectedOrgId]);
 
-  // Handle cold boot push notification click
-  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+  // Register push token once when the user is available (isolated from selectedOrgId)
   useEffect(() => {
-    if (user && lastNotificationResponse && lastNotificationResponse.notification.request.content.data) {
-        // Debounce or ensure we only navigate once per notification
-        const type = lastNotificationResponse.notification.request.content.data.type as string;
-        const data = lastNotificationResponse.notification.request.content.data;
-        handleNotificationNavigation(type, data, router);
+    if (user) {
+      registerForPushNotificationsAsync();
     }
-  }, [lastNotificationResponse, user]);
+  }, [user?.id]);
+
+  // Foreground / background notification tap listener.
+  // Cross-component deduplication is handled by the module-level singleton in navigation.ts,
+  // so a background tap handled here won't double-fire via _layout.tsx's useLastNotificationResponse.
+  useEffect(() => {
+    if (!user) return;
+
+    const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
+      const notifId = response.notification.request.identifier;
+      const data = response.notification.request.content.data;
+      const type = data?.type as string;
+      // navigateFromNotification checks the shared singleton — safe against double-firing
+      navigateFromNotification(notifId, type, data, router);
+    });
+
+    return () => {
+      responseListener.remove();
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!hasSeenTour && user && !isTourActive) {
