@@ -14,7 +14,7 @@ import { io, Socket } from 'socket.io-client';
 import { QrCode, Monitor, Download, ChevronRight, Lock } from 'lucide-react';
 const Login = () => {
     // Mode toggle
-    const [loginMode, setLoginMode] = useState<'qr' | 'email'>('email');
+    const [loginMode, setLoginMode] = useState<'qr' | 'email'>('qr');
 
     // Email/Password State
     const [email, setEmail] = useState('');

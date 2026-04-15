@@ -37,6 +37,11 @@ export default function ImageAnnotator({ uri, onSave, onCancel }: Props) {
   const viewShotRef = useRef<any>(null);
   const currentPathRef = useRef<string>('');
   const lastPoint = useRef({ x: 0, y: 0 });
+  const selectedColorRef = useRef<string>('#ef4444');
+
+  React.useEffect(() => {
+    selectedColorRef.current = selectedColor;
+  }, [selectedColor]);
 
   React.useEffect(() => {
     if (!uri) return;
@@ -83,7 +88,7 @@ export default function ImageAnnotator({ uri, onSave, onCancel }: Props) {
         if (!currentPathRef.current) return;
         const { locationX, locationY } = evt.nativeEvent;
         const finalPath = `${currentPathRef.current} L${locationX.toFixed(1)},${locationY.toFixed(1)}`;
-        setPaths((prev) => [...prev, { d: finalPath, color: selectedColor }]);
+        setPaths((prev) => [...prev, { d: finalPath, color: selectedColorRef.current }]);
         currentPathRef.current = '';
         setCurrentPath('');
       },

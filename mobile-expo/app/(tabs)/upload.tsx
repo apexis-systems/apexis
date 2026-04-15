@@ -14,7 +14,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import Constants from 'expo-constants';
 import { parseApiError } from '@/helpers/apiError';
-import ImageAnnotator from '@/components/common/ImageAnnotator';
 
 let DocumentScanner: any;
 try {
@@ -92,8 +91,6 @@ export default function UploadScreen() {
     const [newFolderName, setNewFolderName] = useState('');
     const [creatingFolder, setCreatingFolder] = useState(false);
     const [isLoadingFolders, setIsLoadingFolders] = useState(false);
-    const [pendingAnnotation, setPendingAnnotation] = useState<{ uri: string; fileName: string; type: string } | null>(null);
-    const [annotatingQueueIdx, setAnnotatingQueueIdx] = useState<number | null>(null);
 
     // State: Environment warnings
     const [hasWarnedScanner, setHasWarnedScanner] = useState(false);
@@ -362,11 +359,15 @@ export default function UploadScreen() {
                     progress: 0, status: 'pending', anim: new Animated.Value(0), source: 'scan',
                 }]);
             } else {
-                setPendingAnnotation({
-                    uri: manipulated.uri,
-                    fileName: manipulated.uri.split('/').pop() || `capture_${Date.now()}.jpg`,
-                    type: 'image/jpeg',
-                });
+                addToQueue([{
+                    asset: {
+                        uri: manipulated.uri,
+                        fileName: manipulated.uri.split('/').pop() || `capture_${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        size: 0
+                    },
+                    progress: 0, status: 'pending', anim: new Animated.Value(0), source: 'camera',
+                }]);
             }
 
         } catch (error: any) {
@@ -720,12 +721,7 @@ export default function UploadScreen() {
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingTop: 8, paddingRight: 12 }}>
                                     {fileQueue.map((item, idx) => (
                                         <View key={idx} style={{ position: 'relative' }}>
-                                            <TouchableOpacity onPress={() => setAnnotatingQueueIdx(idx)}>
-                                                <Image source={{ uri: item.asset.uri }} style={{ width: 56, height: 56, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }} />
-                                                <View style={{ position: 'absolute', bottom: 3, left: 3, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 7, padding: 3 }}>
-                                                    <Feather name="edit-2" size={10} color="#fff" />
-                                                </View>
-                                            </TouchableOpacity>
+                                            <Image source={{ uri: item.asset.uri }} style={{ width: 56, height: 56, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }} />
                                             <TouchableOpacity
                                                 onPress={() => setFileQueue(prev => prev.filter((_, i) => i !== idx))}
                                                 style={{
@@ -800,33 +796,6 @@ export default function UploadScreen() {
                         <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Next ({fileQueue.length})</Text>
                         <Feather name="arrow-right" size={20} color="#fff" />
                     </TouchableOpacity>
-                )}
-
-                {/* Annotator: after camera capture (auto-opens) */}
-                {pendingAnnotation && (
-                    <ImageAnnotator
-                        uri={pendingAnnotation.uri}
-                        onSave={(newUri) => {
-                            addToQueue([{ asset: { uri: newUri, fileName: pendingAnnotation.fileName, type: pendingAnnotation.type, size: 0 }, progress: 0, status: 'pending', anim: new Animated.Value(0), source: 'camera' }]);
-                            setPendingAnnotation(null);
-                        }}
-                        onCancel={() => {
-                            addToQueue([{ asset: { uri: pendingAnnotation.uri, fileName: pendingAnnotation.fileName, type: pendingAnnotation.type, size: 0 }, progress: 0, status: 'pending', anim: new Animated.Value(0), source: 'camera' }]);
-                            setPendingAnnotation(null);
-                        }}
-                    />
-                )}
-
-                {/* Annotator: tap-to-edit existing queue thumbnail */}
-                {annotatingQueueIdx !== null && fileQueue[annotatingQueueIdx] && (
-                    <ImageAnnotator
-                        uri={fileQueue[annotatingQueueIdx].asset.uri}
-                        onSave={(newUri) => {
-                            setFileQueue(prev => { const next = [...prev]; next[annotatingQueueIdx] = { ...next[annotatingQueueIdx], asset: { ...next[annotatingQueueIdx].asset, uri: newUri } }; return next; });
-                            setAnnotatingQueueIdx(null);
-                        }}
-                        onCancel={() => setAnnotatingQueueIdx(null)}
-                    />
                 )}
             </SafeAreaView>
         );
