@@ -4,10 +4,11 @@ import { startExportProcess, activeExports } from "../services/exportService.ts"
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { projects, users, folders, files, organizations, project_members, Sequelize } from "../models/index.ts";
+import { projects, users, folders, files, organizations, project_members, room_members, rooms, notifications, sequelize, Sequelize } from "../models/index.ts";
 import { Op, fn, col, literal } from "sequelize";
 
 import { checkProjectLimit } from "../utils/subscriptionAccess.ts";
+import { getIO } from "../socket.ts";
 
 // Helper to generate 6-character random alphanumeric code
 const generateCode = () => {
@@ -437,5 +438,80 @@ export const getProjectMembers = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Get Project Members Error:", error);
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const removeProjectMember = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id: projectId, userId } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            await t.rollback();
+            return res.status(403).json({ error: "Only admins can remove project members" });
+        }
+
+        const project = await projects.findOne({
+            where: { id: projectId, organization_id: authUser.organization_id },
+            transaction: t as any,
+        });
+        if (!project) {
+            await t.rollback();
+            return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        const membership = await project_members.findOne({
+            where: { project_id: projectId, user_id: userId },
+            transaction: t as any,
+        });
+
+        if (!membership) {
+            await t.rollback();
+            return res.status(404).json({ error: "Project member not found" });
+        }
+
+        const memberRole = (membership as any).role;
+        if (memberRole !== 'contributor' && memberRole !== 'client') {
+            await t.rollback();
+            return res.status(400).json({ error: "Only contributors and clients can be removed" });
+        }
+
+        await project_members.destroy({
+            where: { project_id: projectId, user_id: userId },
+            transaction: t as any,
+        });
+
+        const projectRooms = await rooms.findAll({
+            where: { project_id: projectId },
+            attributes: ['id'],
+            transaction: t as any,
+        });
+
+        const roomIds = projectRooms.map((room: any) => room.id);
+        if (roomIds.length > 0) {
+            await room_members.destroy({
+                where: { user_id: userId, room_id: { [Op.in]: roomIds } },
+                transaction: t as any,
+            });
+        }
+
+        await notifications.destroy({
+            where: { user_id: userId, project_id: projectId },
+            transaction: t as any,
+        });
+
+        try {
+            getIO().to(`project-${projectId}`).emit('project-stats-updated', { projectId: String(projectId) });
+        } catch (ioErr) {
+            console.error('Socket emit error (non-fatal):', ioErr);
+        }
+
+        await t.commit();
+        return res.status(200).json({ message: "Project member removed successfully" });
+    } catch (error) {
+        await t.rollback();
+        console.error("Remove Project Member Error:", error);
+        return res.status(500).json({ error: "Internal server error" });
     }
 };

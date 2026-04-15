@@ -5,7 +5,6 @@ import {
     project_members,
     room_members,
     notifications,
-    activities,
     snags,
     rfis,
     organizations,
@@ -218,24 +217,40 @@ export const deleteUser = async (req: Request, res: Response) => {
 
         if (String(userToDelete.id) === String(authUser.user_id)) {
             await t.rollback();
-            return res.status(400).json({ error: "You cannot delete yourself" });
+            return res.status(400).json({ error: "You cannot remove yourself" });
         }
 
-        // 1. Delete membership/notification records (Safe to delete)
+        if (["admin", "superadmin"].includes(userToDelete.role)) {
+            await t.rollback();
+            return res.status(400).json({ error: "Admins cannot be removed from projects" });
+        }
+
+        const memberships = await project_members.findAll({
+            where: { user_id: id },
+            attributes: ['project_id'],
+            transaction: t,
+        });
+        const affectedProjectIds = memberships.map((m: any) => m.project_id);
+
+        // Remove the user from all projects they currently belong to.
         await project_members.destroy({ where: { user_id: id }, transaction: t });
         await room_members.destroy({ where: { user_id: id }, transaction: t });
         await notifications.destroy({ where: { user_id: id }, transaction: t });
-        await activities.destroy({ where: { user_id: id }, transaction: t });
 
         // 2. Nullify assignees (Safe to nullify)
         await snags.update({ assigned_to: null }, { where: { assigned_to: id }, transaction: t });
         await rfis.update({ assigned_to: null }, { where: { assigned_to: id }, transaction: t });
 
-        // 3. Attempt to delete the user
-        await userToDelete.destroy({ transaction: t });
+        for (const projectId of affectedProjectIds) {
+            try {
+                getIO().to(`project-${projectId}`).emit('project-stats-updated', { projectId: String(projectId) });
+            } catch (ioErr) {
+                console.error('Socket emit error (non-fatal):', ioErr);
+            }
+        }
 
         await t.commit();
-        res.status(200).json({ message: "User removed successfully" });
+        res.status(200).json({ message: "Project access removed successfully" });
     } catch (error: any) {
         await t.rollback();
         console.error("Delete User Error:", error);

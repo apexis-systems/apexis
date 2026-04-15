@@ -80,3 +80,13 @@ export const getProjectMembers = async (id: string | number) => {
         throw error;
     }
 };
+
+export const removeProjectMember = async (projectId: string | number, userId: string | number) => {
+    try {
+        const response = await PrivateAxios.delete(`/projects/${projectId}/members/${userId}`);
+        return response.data;
+    } catch (error) {
+        console.error("removeProjectMember Error", error);
+        throw error;
+    }
+};

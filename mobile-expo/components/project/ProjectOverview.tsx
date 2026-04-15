@@ -14,7 +14,7 @@ import { getSnags } from '@/services/snagService';
 import { getSecureFileUrl } from '@/services/fileService';
 
 import { useSocket } from '@/contexts/SocketContext';
-import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember } from '@/services/projectService';
 import { parseApiError } from '@/helpers/apiError';
 
 interface Props {
@@ -51,6 +51,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [memberModalType, setMemberModalType] = useState<'contributor' | 'client' | null>(null);
     const [members, setMembers] = useState<any[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
+    const [removingMemberId, setRemovingMemberId] = useState<string | number | null>(null);
 
     useEffect(() => {
         if (!memberModalType || !projectId) return;
@@ -72,6 +73,50 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             .catch(() => Alert.alert("Error", "Failed to load members"))
             .finally(() => setLoadingMembers(false));
     }, [memberModalType, projectId]);
+
+    const refreshMembers = async () => {
+        if (!memberModalType || !projectId) return;
+        const data = await getProjectMembers(projectId);
+        const fetchedMembers = data.members.filter((m: any) => m.role === memberModalType);
+        const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
+            if (m.user.profile_pic) {
+                try {
+                    const url = await getSecureFileUrl(m.user.profile_pic);
+                    return { ...m, secure_pic: url };
+                } catch { return m; }
+            }
+            return m;
+        }));
+        setMembers(membersWithPics);
+    };
+
+    const handleRemoveMember = async (member: any) => {
+        if (!projectId || !member?.user?.id) return;
+        Alert.alert(
+            'Remove project access?',
+            `Remove ${member.user.name} from this ${memberModalType} list? Their account will stay in the organization.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setRemovingMemberId(member.user.id);
+                            await removeProjectMember(projectId, member.user.id);
+                            await refreshMembers();
+                            Alert.alert('Success', 'Project access removed.');
+                        } catch (e) {
+                            const { message } = parseApiError(e, 'Failed to remove project access');
+                            Alert.alert('Error', message);
+                        } finally {
+                            setRemovingMemberId(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
 
     // Export State
@@ -573,10 +618,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         ) : members.length === 0 ? (
                             <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 40 }}>No active {memberModalType}s found</Text>
                         ) : (
-                            members.map((m, idx) => (
-                                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                                    {m.secure_pic ? (
-                                        <Image source={{ uri: m.secure_pic }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background }} />
+                                members.map((m, idx) => (
+                                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                        {m.secure_pic ? (
+                                            <Image source={{ uri: m.secure_pic }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background }} />
                                     ) : (
                                         <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
                                             <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primary }}>{m.user.name?.charAt(0).toUpperCase()}</Text>
@@ -597,11 +642,32 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                     <Text style={{ fontSize: 12, color: colors.textMuted }}>{m.user.phone_number}</Text>
                                                 </View>
                                             )}
+                                            </View>
                                         </View>
+                                        <TouchableOpacity
+                                            onPress={() => handleRemoveMember(m)}
+                                            disabled={removingMemberId === m.user.id}
+                                            style={{
+                                                width: 40,
+                                                height: 40,
+                                                borderRadius: 20,
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                                borderWidth: 1,
+                                                borderColor: 'rgba(239, 68, 68, 0.18)',
+                                                opacity: removingMemberId === m.user.id ? 0.5 : 1,
+                                            }}
+                                        >
+                                            {removingMemberId === m.user.id ? (
+                                                <ActivityIndicator size="small" color="#ef4444" />
+                                            ) : (
+                                                <Feather name="trash-2" size={16} color="#ef4444" />
+                                            )}
+                                        </TouchableOpacity>
                                     </View>
-                                </View>
-                            ))
-                        )}
+                                ))
+                            )}
                     </ScrollView>
                 </SafeAreaView>
             </Modal>

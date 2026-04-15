@@ -7,15 +7,15 @@ export default {
       {
         name: 'Freemium',
         price: 0,
-        storage_limit_mb: 500,
+        storage_limit_mb: 2000,
         duration_days: 60,
-        project_limit: 1,
-        contributor_limit: 2,
-        client_limit: 1,
-        max_snags: 15,
-        max_rfis: 15,
-        can_export_reports: false,
-        can_share_media: false,
+        project_limit: 10,
+        contributor_limit: 50,
+        client_limit: 25,
+        max_snags: 100,
+        max_rfis: 200,
+        can_export_reports: true,
+        can_share_media: true,
         can_export_handover: false,
       },
       {
@@ -77,21 +77,21 @@ export default {
     ];
 
     for (const plan of newPlansData) {
-        const now = new Date();
-        
-        // Check if plan exists by name
-        const [existing] = await queryInterface.sequelize.query(
-            `SELECT id FROM plans WHERE name = ? LIMIT 1`,
-            { replacements: [plan.name] }
-        );
+      const now = new Date();
 
-        if (existing.length > 0) {
-            // Update existing plan
-            await queryInterface.bulkUpdate('plans', { ...plan, updated_at: now }, { id: existing[0].id });
-        } else {
-            // Insert new plan
-            await queryInterface.bulkInsert('plans', [{ ...plan, created_at: now, updated_at: now }]);
-        }
+      // Check if plan exists by name
+      const [existing] = await queryInterface.sequelize.query(
+        `SELECT id FROM plans WHERE name = ? LIMIT 1`,
+        { replacements: [plan.name] }
+      );
+
+      if (existing.length > 0) {
+        // Update existing plan
+        await queryInterface.bulkUpdate('plans', { ...plan, updated_at: now }, { id: existing[0].id });
+      } else {
+        // Insert new plan
+        await queryInterface.bulkInsert('plans', [{ ...plan, created_at: now, updated_at: now }]);
+      }
     }
   },
 

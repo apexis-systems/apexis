@@ -122,11 +122,11 @@ const UserManagement = () => {
         setDeleting(true);
         try {
             await deleteUser(deleteUserObj.id);
-            toast.success("User removed successfully");
+            toast.success("Project access removed successfully");
             setDeleteUserObj(null);
             fetchUsers();
         } catch (error: any) {
-            toast.error(getApiErrorMessage(error, "Failed to remove user"));
+            toast.error(getApiErrorMessage(error, "Failed to remove project access"));
         } finally {
             setDeleting(false);
         }
@@ -369,7 +369,7 @@ const UserManagement = () => {
                                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        {!u.is_primary && u.id !== user.id && (
+                                        {!u.is_primary && u.id !== user.id && u.role !== 'admin' && u.role !== 'superadmin' && (
                                             <button onClick={() => setDeleteUserObj(u)} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </button>
@@ -392,9 +392,9 @@ const UserManagement = () => {
             <Dialog open={!!deleteUserObj} onOpenChange={(open) => !open && setDeleteUserObj(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Remove User?</DialogTitle>
+                        <DialogTitle>Remove Project Access?</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to remove <span className="font-bold text-foreground">{deleteUserObj?.name || deleteUserObj?.email || deleteUserObj?.phone_number}</span>? This action cannot be undone.
+                            Are you sure you want to remove <span className="font-bold text-foreground">{deleteUserObj?.name || deleteUserObj?.email || deleteUserObj?.phone_number}</span> from their project access? The user account will stay in the organization.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-2 sm:gap-0">
@@ -405,7 +405,7 @@ const UserManagement = () => {
                             disabled={deleting}
                             className="rounded-xl px-6"
                         >
-                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove User"}
+                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove Access"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

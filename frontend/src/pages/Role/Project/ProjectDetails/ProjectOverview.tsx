@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3, ChevronRight, Mail, Phone } from 'lucide-react';
+import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3, ChevronRight, Mail, Phone, Trash2 } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember } from '@/services/projectService';
 import { useSocket } from '@/contexts/SocketContext';
 import { getReports, Report } from '@/services/reportService';
 import { getFiles, getSecureFileUrl } from '@/services/fileService';
@@ -38,6 +38,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
   const [memberModalType, setMemberModalType] = useState<'contributor' | 'client' | null>(null);
   const [members, setMembers] = useState<any[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | number | null>(null);
 
   useEffect(() => {
     if (!memberModalType || !project?.id) return;
@@ -59,6 +60,31 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       .catch((e) => toast.error("Failed to load members"))
       .finally(() => setLoadingMembers(false));
   }, [memberModalType, project?.id]);
+
+  const handleRemoveMember = async (member: any) => {
+    if (!project?.id || !member?.user?.id) return;
+    try {
+      setRemovingMemberId(member.user.id);
+      await removeProjectMember(project.id, member.user.id);
+      toast.success('Project access removed');
+      const refreshed = await getProjectMembers(project.id);
+      const fetchedMembers = refreshed.members.filter((m: any) => m.role === memberModalType);
+      const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
+        if (m.user.profile_pic) {
+          try {
+            const url = await getSecureFileUrl(m.user.profile_pic);
+            return { ...m, secure_pic: url };
+          } catch { return m; }
+        }
+        return m;
+      }));
+      setMembers(membersWithPics);
+    } catch (e: any) {
+      toast.error(getApiErrorMessage(e, 'Failed to remove project access'));
+    } finally {
+      setRemovingMemberId(null);
+    }
+  };
 
 
   // Export state
@@ -458,9 +484,19 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                            )}
                            {m.user.phone_number && (
                              <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Phone className="h-3 w-3 text-accent" />{m.user.phone_number}</span>
-                           )}
+                          )}
                         </div>
                      </div>
+                     {memberModalType && (
+                        <button
+                          onClick={() => handleRemoveMember(m)}
+                          disabled={removingMemberId === m.user.id}
+                          className="shrink-0 rounded-xl border border-destructive/20 bg-destructive/5 p-2.5 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                          title="Remove from project"
+                        >
+                          {removingMemberId === m.user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </button>
+                     )}
                   </div>
                 ))
              )}
