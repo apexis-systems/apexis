@@ -219,15 +219,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       return;
     }
 
-    Alert.alert(
-      'Add Photo',
-      'Choose how you want to add an image to this RFI.',
-      [
-        { text: 'Take Photo', onPress: openCamera },
-        { text: 'Upload from Files', onPress: pickImageFiles },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    await openCamera();
   };
 
   const openCamera = async () => {

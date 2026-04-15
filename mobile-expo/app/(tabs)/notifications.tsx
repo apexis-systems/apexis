@@ -41,6 +41,7 @@ export default function NotificationsScreen() {
     const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [selectedType, setSelectedType] = useState<string>('all');
+    const [showHistory, setShowHistory] = useState(false);
 
     // Modal state
     const [activeModal, setActiveModal] = useState<'project' | 'user' | null>(null);
@@ -71,12 +72,16 @@ export default function NotificationsScreen() {
     useFocusEffect(
         useCallback(() => {
             const onBackPress = () => {
+                if (showHistory) {
+                    setShowHistory(false);
+                    return true;
+                }
                 router.back();
                 return true;
             };
             const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
             return () => subscription.remove();
-        }, [router])
+        }, [router, showHistory])
     );
 
     useEffect(() => {
@@ -99,6 +104,7 @@ export default function NotificationsScreen() {
         try {
             setLoading(true);
             const params: string[] = [];
+            if (showHistory) params.push('hours=48');
             if (selectedProjectIds.length === 1) params.push(`project_id=${selectedProjectIds[0]}`);
             else if (selectedProjectIds.length > 1) params.push(`project_ids=${selectedProjectIds.join(',')}`);
             if (selectedType !== 'all') params.push(`type=${selectedType}`);
@@ -107,7 +113,8 @@ export default function NotificationsScreen() {
             const res = await PrivateAxios.get(url);
             const data = res.data.notifications || [];
 
-            let unread = data.filter((n: any) => !n.is_read && matchesTypeFilter(n, selectedType));
+            let unread = showHistory ? data : data.filter((n: any) => !n.is_read);
+            unread = unread.filter((n: any) => matchesTypeFilter(n, selectedType));
 
             // Filter by user if multi-select is active
             if (selectedUserIds.length > 0) {
@@ -118,7 +125,7 @@ export default function NotificationsScreen() {
 
             setNotifications(unread);
 
-            if (selectedProjectIds.length === 0 && selectedType === 'all' && selectedUserIds.length === 0) {
+            if (!showHistory && selectedProjectIds.length === 0 && selectedType === 'all' && selectedUserIds.length === 0) {
                 setUnreadNotificationCount(data.filter((n: any) => !n.is_read).length);
             }
         } catch (error) {
@@ -153,7 +160,7 @@ export default function NotificationsScreen() {
 
     useEffect(() => {
         fetchNotifications();
-    }, [selectedProjectIds, selectedUserIds, selectedType]);
+    }, [selectedProjectIds, selectedUserIds, selectedType, showHistory]);
 
     useEffect(() => {
         if (socket) {
@@ -164,13 +171,13 @@ export default function NotificationsScreen() {
                     selectedUserIds.includes(String(notif.sender_id ?? notif.userId ?? notif.user_id ?? ''));
 
                 if (matchesProject && matchesType && matchesUser) {
-                    setNotifications(prev => [notif, ...prev]);
+                    setNotifications(prev => showHistory ? [notif, ...prev] : [notif, ...prev].filter(n => !n.is_read));
                 }
             };
             socket.on('new-notification', handleNewNotif);
             return () => { socket.off('new-notification', handleNewNotif); };
         }
-    }, [socket, selectedProjectIds, selectedUserIds, selectedType]);
+    }, [socket, selectedProjectIds, selectedUserIds, selectedType, showHistory]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -181,7 +188,10 @@ export default function NotificationsScreen() {
     const markRead = async (id: number) => {
         try {
             await PrivateAxios.patch(`/notifications/${id}/read`);
-            setNotifications(prev => prev.filter(n => n.id !== id));
+            setNotifications(prev => showHistory
+                ? prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+                : prev.filter(n => n.id !== id)
+            );
             setUnreadNotificationCount(prev => Math.max(0, prev - 1));
         } catch (error) {
             console.error('Failed to mark read:', error);
@@ -194,6 +204,30 @@ export default function NotificationsScreen() {
     ];
 
     const displayNotifications = isTourActive ? DUMMY_NOTIFICATIONS : notifications;
+    const historyButton = (
+        <TouchableOpacity
+            onPress={() => setShowHistory(prev => !prev)}
+            style={{
+                alignSelf: 'center',
+                marginTop: 16,
+                marginBottom: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+            }}
+        >
+            <Feather name="clock" size={14} color={colors.primary} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>
+                {showHistory ? 'Back to unread' : 'History'}
+            </Text>
+        </TouchableOpacity>
+    );
 
     const toggleProject = (id: number) => {
         setSelectedProjectIds(prev =>
@@ -387,8 +421,18 @@ export default function NotificationsScreen() {
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Ionicons name="notifications-off-outline" size={64} color={colors.textMuted} style={{ opacity: 0.3 }} />
-                            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No notifications yet</Text>
+                            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                                {showHistory ? 'No notifications in History' : 'No notifications yet'}
+                            </Text>
+                            {historyButton}
                         </View>
+                    }
+                    ListFooterComponent={
+                        notifications.length > 0 ? (
+                            <View style={{ paddingHorizontal: 14, paddingTop: 8, paddingBottom: 24 }}>
+                                {historyButton}
+                            </View>
+                        ) : null
                     }
                 />
             )}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Bell, Clock, Loader2, Filter, CheckCircle } from 'lucide-react';
+import { Bell, Clock, Loader2, Filter, CheckCircle, History } from 'lucide-react';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 import { getOrganizations } from '@/services/superadminService';
 import { getProjects } from '@/services/projectService';
@@ -30,6 +30,7 @@ const NotificationsPage = () => {
     const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [selectedType, setSelectedType] = useState<string>('all');
+    const [showHistory, setShowHistory] = useState(false);
 
     const [loading, setLoading] = useState(true);
 
@@ -86,6 +87,7 @@ const NotificationsPage = () => {
         setLoading(true);
         try {
             const params = new URLSearchParams();
+            if (showHistory) params.append('hours', '48');
             if (selectedProjectIds.length === 1) params.append('project_id', selectedProjectIds[0]);
             else if (selectedProjectIds.length > 1) params.append('project_ids', selectedProjectIds.join(','));
             if (selectedType !== 'all') params.append('type', selectedType);
@@ -93,8 +95,11 @@ const NotificationsPage = () => {
             const res = await PrivateAxios.get(`/notifications?${params.toString()}`);
             const all = res.data.notifications || [];
 
+            // Default view shows unread only; history shows all notifications in the last 48 hours.
+            let filtered = showHistory ? all : all.filter((n: any) => !n.is_read);
+            filtered = filtered.filter((n: any) => matchesTypeFilter(n, selectedType));
+
             // Filter by user if multi-select is active
-            let filtered = all.filter((n: any) => !n.is_read && matchesTypeFilter(n, selectedType));
             if (selectedUserIds.length > 0) {
                 filtered = filtered.filter((n: any) =>
                     selectedUserIds.includes(String(n.sender_id ?? n.userId ?? n.user_id ?? ''))
@@ -103,8 +108,8 @@ const NotificationsPage = () => {
 
             setNotifications(filtered);
             
-            // Sync unread count globally if viewing "all"
-            if (selectedProjectIds.length === 0 && selectedType === 'all' && selectedUserIds.length === 0) {
+            // Sync unread count globally if viewing the default unread inbox.
+            if (!showHistory && selectedProjectIds.length === 0 && selectedType === 'all' && selectedUserIds.length === 0) {
                 setUnreadNotificationCount(all.filter((n: any) => !n.is_read).length);
             }
         } catch (error) {
@@ -116,13 +121,16 @@ const NotificationsPage = () => {
 
     useEffect(() => {
         fetchNotifications();
-    }, [user, selectedProjectIds, selectedUserIds, selectedType]);
+    }, [user, selectedProjectIds, selectedUserIds, selectedType, showHistory]);
 
     const markReadAndNavigate = async (notif: any) => {
         try {
             await PrivateAxios.patch(`/notifications/${notif.id}/read`);
-            // Remove from local state immediately
-            setNotifications(prev => prev.filter(n => n.id !== notif.id));
+            // Remove from unread inbox; keep history visible but mark it read.
+            setNotifications(prev => showHistory
+                ? prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n)
+                : prev.filter(n => n.id !== notif.id)
+            );
             setUnreadNotificationCount(prev => Math.max(0, prev - 1));
             
             // Navigate
@@ -146,6 +154,15 @@ const NotificationsPage = () => {
 
     const projectOptions = projectsList.map(p => ({ label: p.name, value: String(p.id) }));
     const userOptions = usersList.map(u => ({ label: u.name, value: String(u.id) }));
+    const historyButton = (
+        <button
+            onClick={() => setShowHistory(prev => !prev)}
+            className="mx-auto mt-5 flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-secondary/40 transition-colors"
+        >
+            <History className="h-3.5 w-3.5 text-accent" />
+            {showHistory ? 'Back to unread' : 'History'}
+        </button>
+    );
 
     return (
         <div className="max-w-4xl p-8 mx-auto">
@@ -255,10 +272,15 @@ const NotificationsPage = () => {
             {!loading && notifications.length === 0 && (
                 <div className="mt-12 text-center py-12 bg-secondary/20 rounded-2xl border border-dashed border-border">
                     <Bell className="mx-auto h-8 w-8 text-muted-foreground/20" />
-                    <p className="mt-2 text-sm text-muted-foreground">No new notifications</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        {showHistory ? 'No notifications in the last 48 hours' : 'No new notifications'}
+                    </p>
                     <p className="text-xs text-muted-foreground/60 mt-1">You're all caught up!</p>
+                    {historyButton}
                 </div>
             )}
+
+            {!loading && notifications.length > 0 && historyButton}
         </div>
     );
 };
