@@ -113,8 +113,12 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
         try {
             const token = await SecureStore.getItemAsync('token');
             const url = await getReportShareUrl(report.id);
-            const fileUri = `${FileSystem.documentDirectory}report_${report.id}.pdf`;
-            
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            const d = new Date(report.period_start);
+            const month = d.toLocaleString('default', { month: 'long' });
+            const fileName = `project_${project.id}_monthly_report_${month}-${d.getFullYear()}.pdf`;
+            const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+
             const { uri } = await FileSystem.downloadAsync(
                 url,
                 fileUri,
