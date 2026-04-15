@@ -244,18 +244,6 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }, [viewerOpen, isSelectionMode, selectedFolder, goBack])
     );
 
-    const goNext = () => {
-        const next = Math.min(viewerIndex + 1, sortedPhotos.length - 1);
-        setViewerIndex(next);
-        flatListRef.current?.scrollToIndex({ index: next, animated: true });
-    };
-
-    const goPrev = () => {
-        const prev = Math.max(viewerIndex - 1, 0);
-        setViewerIndex(prev);
-        flatListRef.current?.scrollToIndex({ index: prev, animated: true });
-    };
-
     const handleSharePhoto = async () => {
         const photo = sortedPhotos[viewerIndex];
         if (!photo?.downloadUrl) return;
@@ -1085,24 +1073,6 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 </View>
                             )}
                         />
-
-                        {/* Prev / Next arrows */}
-                        {showViewerUI && viewerIndex > 0 && (
-                            <TouchableOpacity
-                                onPress={goPrev}
-                                style={{ position: 'absolute', left: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
-                            >
-                                <Feather name="chevron-left" size={26} color="#fff" />
-                            </TouchableOpacity>
-                        )}
-                        {showViewerUI && viewerIndex < sortedPhotos.length - 1 && (
-                            <TouchableOpacity
-                                onPress={goNext}
-                                style={{ position: 'absolute', right: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
-                            >
-                                <Feather name="chevron-right" size={26} color="#fff" />
-                            </TouchableOpacity>
-                        )}
 
                         {/* Bottom panel: info + comments */}
                         {showViewerUI && (
