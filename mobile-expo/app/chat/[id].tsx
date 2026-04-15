@@ -599,8 +599,8 @@ export default function ChatDetailScreen() {
             {/* Chat Area */}
             <KeyboardAvoidingView
                 style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 90}
+                behavior="padding"
+                keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 0}
             >
                 {loading ? (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -644,7 +644,7 @@ export default function ChatDetailScreen() {
                 {/* Input Area */}
 
 
-                <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.background, paddingHorizontal: 0, paddingVertical: 0 }}>
+                <View style={{ backgroundColor: colors.background, paddingBottom: insets.bottom }}>
                     {/* Emoji Bar */}
                     {showEmojis && (
                         <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 10, paddingHorizontal: 16 }}>
@@ -742,7 +742,7 @@ export default function ChatDetailScreen() {
                             )}
                         </TouchableOpacity>
                     </View>
-                </SafeAreaView>
+                </View>
 
                 <ChatCameraModal
                     visible={isCameraVisible}

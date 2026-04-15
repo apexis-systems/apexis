@@ -3,23 +3,21 @@ import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
   Modal, ScrollView, TextInput, Alert, Image, StyleSheet, Platform
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useFocusEffect, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as DocumentPicker from 'expo-document-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as MediaLibrary from 'expo-media-library';
 import { Project, User } from '@/types';
 import {
   getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
-import { getAssignees, Assignee } from '@/services/snagService';
+import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 import { parseApiError } from '@/helpers/apiError';
 
@@ -37,9 +35,10 @@ const statusConfig = {
 };
 
 export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const MAX_RFI_IMAGES = 4;
   const [rfis, setRfis] = useState<RFI[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'overdue'>('all');
@@ -66,8 +65,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [cameraVisible, setCameraVisible] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraSessionKey, setCameraSessionKey] = useState(0);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = React.useRef<CameraView>(null);
 
@@ -111,7 +111,42 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         router.setParams({ rfiId: undefined });
       }
     }
-  }, [initialRfiId, rfis]);
+  }, [initialRfiId, rfis, router]);
+
+  useEffect(() => {
+    if (!cameraVisible) {
+      setCameraReady(false);
+      return;
+    }
+
+    let active = true;
+
+    const prepareCamera = async () => {
+      if (!cameraPermission?.granted) {
+        const res = await requestCameraPermission();
+        if (!res.granted) return;
+      }
+
+      setCameraReady(false);
+      setCameraSessionKey(prev => prev + 1);
+
+      const timer = setTimeout(() => {
+        if (active) setCameraReady(true);
+      }, 250);
+
+      return () => clearTimeout(timer);
+    };
+
+    let cleanup: void | (() => void);
+    prepareCamera().then(result => {
+      cleanup = result;
+    });
+
+    return () => {
+      active = false;
+      if (cleanup) cleanup();
+    };
+  }, [cameraVisible, cameraPermission?.granted, requestCameraPermission]);
 
   const projectId = Number(project.id);
 
@@ -179,12 +214,29 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   );
 
   const handleImageSelection = async () => {
+    if (selectedImages.length >= MAX_RFI_IMAGES) {
+      Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
+      return;
+    }
+
+    Alert.alert(
+      'Add Photo',
+      'Choose how you want to add an image to this RFI.',
+      [
+        { text: 'Take Photo', onPress: openCamera },
+        { text: 'Upload from Files', onPress: pickImageFiles },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const openCamera = async () => {
     if (!cameraPermission?.granted) {
       const res = await requestCameraPermission();
       if (!res.granted) {
         Alert.alert(
-          "Permission Required",
-          "Camera permission is needed to take RFI photos. Please enable it in your device settings."
+          'Permission Required',
+          'Camera permission is needed to take RFI photos. Please enable it in your device settings.'
         );
         return;
       }
@@ -192,10 +244,50 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     setCameraVisible(true);
   };
 
+  const pickImageFiles = async () => {
+    const remaining = MAX_RFI_IMAGES - selectedImages.length;
+    if (remaining <= 0) {
+      Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
+      return;
+    }
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const nextUris: string[] = [];
+
+      for (const asset of result.assets.slice(0, remaining)) {
+        let uri = asset.uri;
+        try {
+          const manipulated = await ImageManipulator.manipulateAsync(
+            uri,
+            [{ resize: { width: 1920 } }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          uri = manipulated.uri;
+        } catch (e) {
+          console.warn('RFI file image manipulation failed:', e);
+        }
+        nextUris.push(uri);
+      }
+
+      setSelectedImages(prev => [...prev, ...nextUris].slice(0, MAX_RFI_IMAGES));
+    } catch (error) {
+      console.error('pickImageFiles error', error);
+      Alert.alert('Error', 'Failed to pick image from files.');
+    }
+  };
+
   const capturePhoto = async () => {
     if (!cameraRef.current || isCapturing) return;
-    if (selectedImages.length >= 3) {
-      Alert.alert('Limit Exceeded', 'Maximum 3 photos allowed');
+    if (selectedImages.length >= MAX_RFI_IMAGES) {
+      Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
       return;
     }
     setIsCapturing(true);
@@ -224,37 +316,6 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       Alert.alert('Camera Error', e?.message || 'Failed to capture photo');
     } finally {
       setIsCapturing(false);
-    }
-  };
-
-  const pickFromGallery = async () => {
-    const remaining = 3 - selectedImages.length;
-    if (remaining <= 0) {
-      Alert.alert('Limit Exceeded', 'Maximum 3 photos allowed');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: remaining,
-      quality: 0.9,
-    });
-
-    if (!result.canceled) {
-      const processedUris = [];
-      for (const asset of result.assets) {
-        try {
-          const manipulated = await ImageManipulator.manipulateAsync(
-            asset.uri,
-            [{ resize: { width: 1920 } }],
-            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          processedUris.push(manipulated.uri);
-        } catch (e) {
-          processedUris.push(asset.uri);
-        }
-      }
-      setSelectedImages([...selectedImages, ...processedUris].slice(0, 3));
     }
   };
 
@@ -1030,16 +1091,16 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       >
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <View style={{ flex: 1 }}>
-            {cameraPermission?.granted ? (
+            {cameraPermission?.granted && cameraReady ? (
               <>
-                <CameraView style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
+                <CameraView key={cameraSessionKey} style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
 
                 {/* Header Overlay */}
                 <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
                   <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
                     <Feather name="x" size={24} color="#fff" />
                   </TouchableOpacity>
-                  <Text style={cameraStyles.headerTitle}>Take RFI Photos</Text>
+                  <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
                   <View style={{ width: 60 }} />
                 </View>
 
@@ -1069,11 +1130,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   )}
 
                   <View style={cameraStyles.shutterRow}>
-                    <TouchableOpacity onPress={pickFromGallery} style={cameraStyles.sideBtn}>
+                    <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
                       <View style={cameraStyles.iconCircle}>
-                        <Feather name="image" size={24} color="#fff" />
+                        <Feather name="file-plus" size={24} color="#fff" />
                       </View>
-                      <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                      <Text style={cameraStyles.btnLabel}>Files</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
@@ -1117,10 +1178,16 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
               </>
             ) : (
               <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
-                <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
-                </TouchableOpacity>
+                {cameraPermission?.granted ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                    <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             )}
           </View>
