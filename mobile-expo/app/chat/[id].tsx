@@ -708,8 +708,8 @@ export default function ChatDetailScreen() {
                         </View>
                     )}
 
-                    <View style={{ paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'flex-end' }}>
-                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, minHeight: 48 }}>
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 0, height: 44 }}>
                             <TouchableOpacity
                                 onPress={() => setShowEmojis(!showEmojis)}
                                 style={{ padding: 4 }}
@@ -727,7 +727,8 @@ export default function ChatDetailScreen() {
                                 placeholder="Message..."
                                 placeholderTextColor={colors.textMuted}
                                 multiline
-                                style={{ flex: 1, color: colors.text, fontSize: 16, marginHorizontal: 8, maxHeight: 100, paddingTop: Platform.OS === 'ios' ? 4 : 0 }}
+                                textAlignVertical="center"
+                                style={{ flex: 1, color: colors.text, fontSize: 16, marginHorizontal: 8, maxHeight: 100, paddingVertical: 0, height: 44, lineHeight: 20 }}
                             />
 
                             <TouchableOpacity onPress={pickDocument} style={{ padding: 4 }}>
@@ -744,12 +745,12 @@ export default function ChatDetailScreen() {
                         <TouchableOpacity
                             onPress={handleSend}
                             disabled={isUploading}
-                            style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 8, opacity: isUploading ? 0.6 : 1 }}
+                            style={{ width: 44, height: 44, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 8, opacity: isUploading ? 0.6 : 1 }}
                         >
                             {isUploading ? (
                                 <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                                <Feather name="send" size={20} color="#fff" style={{ marginLeft: 2, marginTop: 2 }} />
+                                <Feather name="send" size={20} color="#fff" style={{ transform: [{ translateY: 0.5 }] }} />
                             )}
                         </TouchableOpacity>
                     </View>

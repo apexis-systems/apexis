@@ -73,12 +73,12 @@ export default function UsageScreen() {
                     headerStyle: { backgroundColor: colors.background },
                     headerTintColor: colors.text,
                     headerLeft: () => (
-                        <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+                        <TouchableOpacity onPress={() => router.back()} style={{ alignItems: 'center', justifyContent: 'center', marginLeft: 10 }}>
                             <Feather name="arrow-left" size={24} color={colors.text} />
                         </TouchableOpacity>
                     ),
                     headerRight: () => (
-                        <TouchableOpacity onPress={refreshUsage} style={{ marginRight: 10 }}>
+                        <TouchableOpacity onPress={refreshUsage} style={{ alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
                             <Feather name="refresh-cw" size={20} color={colors.text} />
                         </TouchableOpacity>
                     )

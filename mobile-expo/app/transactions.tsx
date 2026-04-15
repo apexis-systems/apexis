@@ -128,7 +128,7 @@ export default function TransactionsScreen() {
                     headerStyle: { backgroundColor: colors.background },
                     headerTintColor: colors.text,
                     headerLeft: () => (
-                        <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+                        <TouchableOpacity onPress={() => router.back()} style={{ alignItems: 'center', justifyContent: 'center', marginLeft: 10 }}>
                             <Feather name="arrow-left" size={24} color={colors.text} />
                         </TouchableOpacity>
                     )
