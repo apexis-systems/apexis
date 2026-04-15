@@ -37,6 +37,8 @@ const getWeekNumber = (dateStr: string): number => {
 export default function ProjectOverview({ project, userRole, onUpdate, onActionPress }: Props) {
     const { colors } = useTheme();
     const projectId = (project as any)?.id;
+    const canManageMembers = userRole === 'admin' || userRole === 'superadmin';
+    const isClient = userRole === 'client';
 
     const [photosCount, setPhotosCount] = useState<number>(0);
     const [docsCount, setDocsCount] = useState<number>(0);
@@ -368,8 +370,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {/* Stats Grid — 2×2 */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                     {[
-                        { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
-                        { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
+                        ...(isClient ? [] : [
+                            { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
+                            { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
+                        ]),
                         { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount), id: 'documents' },
                         { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount), id: 'photos' },
                     ].map((item) => {
@@ -406,6 +410,86 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         );
                     })}
                 </View>
+
+                {isClient && (
+                    <View style={{ gap: 12 }}>
+                        <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Client Project Code
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 }}>
+                                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, flex: 1 }}>
+                                    {(project as any).client_code || '—'}
+                                </Text>
+                                {(project as any).client_code && (
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <TouchableOpacity onPress={() => handleCopy((project as any).client_code, 'client')} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
+                                            <Feather name={copiedId === 'client' ? "check" : "copy"} size={16} color={copiedId === 'client' ? "#22c55e" : colors.textMuted} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => handleShareLink('client', (project as any).client_code)} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
+                                            <Feather name="share-2" size={16} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setMemberModalType('client')}
+                                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}
+                            >
+                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                    {(project as any).totalClients || 0} active {((project as any).totalClients || 0) === 1 ? 'client' : 'clients'}
+                                </Text>
+                                <Feather name="chevron-right" size={12} color={colors.primary} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                {/* Project Members */}
+                {userRole === 'contributor' && (
+                    <View style={{ gap: 12 }}>
+                        {/* <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                            Project Members
+                        </Text> */}
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            {[
+                                { label: 'Contributors', count: (project as any).totalContributors || 0, type: 'contributor' as const },
+                                { label: 'Clients', count: (project as any).totalClients || 0, type: 'client' as const },
+                            ].map((item) => (
+                                <TouchableOpacity
+                                    key={item.type}
+                                    onPress={() => setMemberModalType(item.type)}
+                                    style={{
+                                        flex: 1,
+                                        borderRadius: 16,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        padding: 12,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.05,
+                                        shadowRadius: 4,
+                                        elevation: 1,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
+                                        {item.label}
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
+                                            {item.count}
+                                        </Text>
+                                        <Feather name="chevron-right" size={14} color={colors.primary} />
+                                    </View>
+                                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 6 }}>
+                                        View project {item.type}s
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                )}
 
                 {/* Project Access Codes — admin only (contributor/client codes are stripped from API response) */}
                 {userRole === 'admin' && (
@@ -474,11 +558,18 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
                 {/* Quick Actions */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {[
-                        { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
-                        { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
-                        { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
-                    ].map((action) => (
+                    {(
+                        isClient
+                            ? [
+                                { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
+                                { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
+                            ]
+                            : [
+                                { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
+                                { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
+                                { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
+                            ]
+                    ).map((action) => (
                         <TouchableOpacity
                             key={action.id}
                             onPress={() => onActionPress && onActionPress(action.id)}
@@ -644,27 +735,29 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                             )}
                                             </View>
                                         </View>
-                                        <TouchableOpacity
-                                            onPress={() => handleRemoveMember(m)}
-                                            disabled={removingMemberId === m.user.id}
-                                            style={{
-                                                width: 40,
-                                                height: 40,
-                                                borderRadius: 20,
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                                                borderWidth: 1,
-                                                borderColor: 'rgba(239, 68, 68, 0.18)',
-                                                opacity: removingMemberId === m.user.id ? 0.5 : 1,
-                                            }}
-                                        >
-                                            {removingMemberId === m.user.id ? (
-                                                <ActivityIndicator size="small" color="#ef4444" />
-                                            ) : (
-                                                <Feather name="trash-2" size={16} color="#ef4444" />
-                                            )}
-                                        </TouchableOpacity>
+                                        {canManageMembers && (
+                                            <TouchableOpacity
+                                                onPress={() => handleRemoveMember(m)}
+                                                disabled={removingMemberId === m.user.id}
+                                                style={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    borderRadius: 20,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                                    borderWidth: 1,
+                                                    borderColor: 'rgba(239, 68, 68, 0.18)',
+                                                    opacity: removingMemberId === m.user.id ? 0.5 : 1,
+                                                }}
+                                            >
+                                                {removingMemberId === m.user.id ? (
+                                                    <ActivityIndicator size="small" color="#ef4444" />
+                                                ) : (
+                                                    <Feather name="trash-2" size={16} color="#ef4444" />
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
                                 ))
                             )}

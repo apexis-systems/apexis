@@ -42,7 +42,7 @@ export default function Project({ id }: ProjectProps) {
     const isClient = user?.role === 'client';
     const searchParams = useSearchParams();
     const urlTab = searchParams?.get('tab') as TabKey | null;
-    const [activeTab, setActiveTab] = useState<TabKey>(urlTab || (isClient ? 'documents' : 'overview'));
+    const [activeTab, setActiveTab] = useState<TabKey>(urlTab || 'overview');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editModalFocus, setEditModalFocus] = useState<'start_date' | 'end_date' | null>(null);
 
@@ -140,15 +140,13 @@ export default function Project({ id }: ProjectProps) {
     }
 
     const navItems = [
-        { key: 'overview' as TabKey, label: t('project_overview'), icon: LayoutDashboard, adminOnly: true },
+        { key: 'overview' as TabKey, label: t('project_overview'), icon: LayoutDashboard },
         { key: 'documents' as TabKey, label: t('documents'), icon: FileText },
         { key: 'photos' as TabKey, label: t('photos'), icon: Camera },
         { key: 'reports' as TabKey, label: 'Reports', icon: ClipboardList, adminOnly: true },
-
-        { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle, adminOnly: true },
-
-        { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle },
-        { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen, adminOnly: true },
+        { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle },
+        { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle, adminOnly: true },
+        { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen },
     ];
 
     const visibleNav = navItems.filter((item) => !(item.adminOnly && isClient));
@@ -207,11 +205,11 @@ export default function Project({ id }: ProjectProps) {
                 <div className="flex items-center justify-between mb-6">
 
                     <h2 className="text-lg font-bold text-foreground">
-                        {visibleNav.find((n) => n.key === activeTab)?.label}
+                        {visibleNav.find((n) => n.key === activeTab)?.label || (activeTab === 'reports' ? 'Reports' : '')}
                     </h2>
                 </div>
 
-                {activeTab === 'overview' && !isClient && (
+                {activeTab === 'overview' && (
                     <ProjectOverview
                         project={project}
                         userRole={user.role}
@@ -225,7 +223,7 @@ export default function Project({ id }: ProjectProps) {
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} />}
-                {activeTab === 'reports' && !isClient && <ProjectReports project={project} userRole={user.role} />}
+                {activeTab === 'reports' && <ProjectReports project={project} userRole={user.role} />}
 
                 {activeTab === 'snags' && <ProjectSnagList project={project} />}
 
@@ -245,4 +243,3 @@ export default function Project({ id }: ProjectProps) {
         </div>
     );
 }
-

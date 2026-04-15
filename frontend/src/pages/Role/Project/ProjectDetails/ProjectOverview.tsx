@@ -19,12 +19,14 @@ interface ProjectOverviewProps {
   project: Project;
   userRole: UserRole;
   onProjectUpdate?: (updated: Project) => void;
-  onTabChange?: (tab: 'documents' | 'photos' | 'reports') => void;
+  onTabChange?: (tab: 'documents' | 'photos' | 'reports' | 'snags') => void;
   onEditClick?: (field?: 'start_date' | 'end_date') => void;
 }
 
 const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEditClick }: ProjectOverviewProps) => {
   if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">Loading project overview...</div>;
+  const canManageMembers = userRole === 'admin' || userRole === 'superadmin';
+  const isClient = userRole === 'client';
 
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -268,26 +270,30 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
-        <div 
-          className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
-          onClick={() => onEditClick?.('start_date')}
-        >
-          <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
-            <CalendarDays className="h-4 w-4" />
-            <span className="text-xs">Start Date</span>
-          </div>
-          <div className="mt-1 text-sm font-semibold">{project.start_date ? new Date(project.start_date).toLocaleDateString() : '—'}</div>
-        </div>
-        <div 
-          className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
-          onClick={() => onEditClick?.('end_date')}
-        >
-          <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
-            <CalendarDays className="h-4 w-4" />
-            <span className="text-xs">End Date</span>
-          </div>
-          <div className="mt-1 text-sm font-semibold">{project.end_date ? new Date(project.end_date).toLocaleDateString() : '—'}</div>
-        </div>
+        {!isClient && (
+          <>
+            <div 
+              className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
+              onClick={() => onEditClick?.('start_date')}
+            >
+              <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
+                <CalendarDays className="h-4 w-4" />
+                <span className="text-xs">Start Date</span>
+              </div>
+              <div className="mt-1 text-sm font-semibold">{project.start_date ? new Date(project.start_date).toLocaleDateString() : '—'}</div>
+            </div>
+            <div 
+              className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
+              onClick={() => onEditClick?.('end_date')}
+            >
+              <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
+                <CalendarDays className="h-4 w-4" />
+                <span className="text-xs">End Date</span>
+              </div>
+              <div className="mt-1 text-sm font-semibold">{project.end_date ? new Date(project.end_date).toLocaleDateString() : '—'}</div>
+            </div>
+          </>
+        )}
         <div 
           className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
           onClick={() => onTabChange?.('documents')}
@@ -309,6 +315,89 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : photosCount}</div>
         </div>
       </div>
+
+      {isClient && (
+        <>
+          <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Client Project Code</div>
+            <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
+              <span className="font-mono text-sm font-bold text-foreground">{project.client_code || '—'}</span>
+              {project.client_code && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleCopy(project.client_code, 'client')}
+                    className="p-1.5 hover:bg-secondary rounded-md transition-colors"
+                    title="Copy Code"
+                  >
+                    {copiedId === 'client' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                  <button
+                    onClick={() => handleShareLink('client', project.client_code)}
+                    className="p-1.5 hover:bg-secondary rounded-md transition-colors text-accent"
+                    title="Share Access Link"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setMemberModalType('client')}
+              className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+            >
+              {(project as any).totalClients || 0} active {(project as any).totalClients === 1 ? 'client' : 'clients'}
+              <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => onTabChange?.('reports')}
+              className="rounded-lg border border-border bg-secondary/20 p-3 text-left hover:bg-secondary/40 transition-colors"
+            >
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Reports</div>
+              <div className="mt-1 text-lg font-bold text-foreground">{reports.length}</div>
+              <div className="mt-1 text-[10px] text-muted-foreground">View reports</div>
+            </button>
+            <button
+              onClick={() => onTabChange?.('snags')}
+              className="rounded-lg border border-border bg-secondary/20 p-3 text-left hover:bg-secondary/40 transition-colors"
+            >
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Snags</div>
+              <div className="mt-1 text-lg font-bold text-foreground">View</div>
+              <div className="mt-1 text-[10px] text-muted-foreground">Open issues</div>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Project Members */}
+      {userRole === 'contributor' && (
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              onClick={() => setMemberModalType('contributor')}
+              className="text-left rounded-lg border border-border bg-secondary/20 p-3 hover:bg-secondary/40 transition-colors"
+            >
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Contributors</div>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-lg font-bold text-foreground">{(project as any).totalContributors || 0}</span>
+                <ChevronRight className="h-4 w-4 text-accent" />
+              </div>
+            </button>
+            <button
+              onClick={() => setMemberModalType('client')}
+              className="text-left rounded-lg border border-border bg-secondary/20 p-3 hover:bg-secondary/40 transition-colors"
+            >
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Clients</div>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-lg font-bold text-foreground">{(project as any).totalClients || 0}</span>
+                <ChevronRight className="h-4 w-4 text-accent" />
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Admin Display Codes */}
       {userRole === 'admin' && (
@@ -487,7 +576,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                           )}
                         </div>
                      </div>
-                     {memberModalType && (
+                     {canManageMembers && memberModalType && (
                         <button
                           onClick={() => handleRemoveMember(m)}
                           disabled={removingMemberId === m.user.id}

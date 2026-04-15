@@ -265,8 +265,12 @@ export const getProjectById = async (req: Request, res: Response) => {
 
         let projectOutput = project.toJSON ? project.toJSON() : project;
 
-        // Strip sensitive codes for non-admins
-        if (authUser.role !== "admin") {
+        // Strip sensitive codes by role
+        if (authUser.role === "client") {
+            delete projectOutput.contributor_code;
+        } else if (authUser.role === "contributor") {
+            delete projectOutput.client_code;
+        } else if (authUser.role !== "admin" && authUser.role !== "superadmin") {
             delete projectOutput.contributor_code;
             delete projectOutput.client_code;
         }
@@ -382,24 +386,57 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:4000";
 
-        if (!authUser || authUser.role !== "admin") {
-            return res.status(403).json({ error: "Only admins can get share links" });
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const project = await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+        const requestedRole = typeof role === "string" ? role : undefined;
+        const project =
+            authUser.role === "client"
+                ? await projects.findByPk(id)
+                : authUser.role === "superadmin"
+                    ? await projects.findOne({ where: { id } })
+                    : await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
 
         if (!project) {
             return res.status(404).json({ error: "Project not found or not authorized" });
         }
 
+        if (authUser.role === "client") {
+            if (requestedRole && requestedRole !== "client") {
+                return res.status(403).json({ error: "Only client share links are available" });
+            }
+
+            const membership = await project_members.findOne({
+                where: {
+                    project_id: id,
+                    user_id: authUser.user_id,
+                    role: "client",
+                },
+            });
+
+            if (!membership) {
+                return res.status(403).json({ error: "Not authorized to view share links for this project" });
+            }
+
+            return res.status(200).json({
+                clientLink: `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`,
+                clientCode: project.client_code,
+            });
+        }
+
+        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
+            return res.status(403).json({ error: "Only admins can get share links" });
+        }
+
         const response: any = {};
         
-        if (!role || role === 'contributor') {
+        if (!requestedRole || requestedRole === 'contributor') {
             response.contributorLink = `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
             response.contributorCode = project.contributor_code;
         }
         
-        if (!role || role === 'client') {
+        if (!requestedRole || requestedRole === 'client') {
             response.clientLink = `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`;
             response.clientCode = project.client_code;
         }
@@ -416,13 +453,30 @@ export const getProjectMembers = async (req: Request, res: Response) => {
         const { id } = req.params;
         const authUser = (req as any).user;
 
-        if (!authUser || authUser.role !== "admin") {
-            return res.status(403).json({ error: "Only admins can view project members" });
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const project = await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+        const project = await projects.findOne({ where: { id } });
         if (!project) {
-            return res.status(404).json({ error: "Project not found or not authorized" });
+            return res.status(404).json({ error: "Project not found" });
+        }
+
+        const isSameOrgAdmin = authUser.role === "admin" && Number(project.organization_id) === Number(authUser.organization_id);
+        const isSuperadmin = authUser.role === "superadmin";
+
+        if (!isSuperadmin && !isSameOrgAdmin) {
+            const membership = await project_members.findOne({
+                where: {
+                    project_id: id,
+                    user_id: authUser.user_id,
+                    role: authUser.role,
+                },
+            });
+
+            if (!membership) {
+                return res.status(403).json({ error: "Not authorized to view project members" });
+            }
         }
 
         const members = await project_members.findAll({

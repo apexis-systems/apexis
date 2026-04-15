@@ -80,15 +80,13 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
             {/* Add Snag button */}
-            {user?.role !== 'client' && (
-                <TouchableOpacity
-                    onPress={openAddSnag}
-                    style={{ height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
-                >
-                    <Feather name="plus" size={15} color="#fff" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Add Snag</Text>
-                </TouchableOpacity>
-            )}
+            <TouchableOpacity
+                onPress={openAddSnag}
+                style={{ height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
+            >
+                <Feather name="plus" size={15} color="#fff" />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Add Snag</Text>
+            </TouchableOpacity>
 
             {/* Snag list */}
             {loading ? (
