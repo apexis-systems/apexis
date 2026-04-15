@@ -316,13 +316,17 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       Alert.alert('Error', 'Title is required');
       return;
     }
+    if (!assignedToId) {
+      Alert.alert('Error', 'Assignee is required');
+      return;
+    }
     setSubmitting(true);
     try {
       const formData = new FormData();
       formData.append('project_id', String(projectId));
       formData.append('title', title.trim());
       formData.append('description', description.trim());
-      if (assignedToId) formData.append('assigned_to', String(assignedToId));
+      formData.append('assigned_to', String(assignedToId));
       if (expiryDate) formData.append('expiry_date', expiryDate.toISOString());
 
       selectedImages.forEach((uri, index) => {
@@ -627,7 +631,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </View>
                   )}
 
-                  {((String(selectedRFI.assigned_to) === String(user.id)) || user.role === 'admin') && selectedRFI.status !== 'closed' && (
+                  {String(selectedRFI.assigned_to) === String(user.id) && selectedRFI.status !== 'closed' && (
                     <View style={{ marginBottom: 20, gap: 12 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? 'Update Response' : 'Provide Response'}</Text>
                       <TextInput
@@ -664,7 +668,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </View>
                   )}
 
-                  {user.role !== 'client' && (
+                {String(selectedRFI.assigned_to) === String(user.id) && (
                     <View style={{ gap: 12 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Update Status</Text>
                       <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -769,7 +773,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 </View>
 
                 <View>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To *</Text>
                   {/* Dropdown trigger */}
                   <TouchableOpacity
                     onPress={() => setShowAssigneeDropdown(true)}
@@ -788,7 +792,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
                       {assignedToId
                         ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
-                        : 'Select assignee (optional)'}
+                        : 'Select assignee *'}
                     </Text>
                     <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
                   </TouchableOpacity>
@@ -913,28 +917,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
               borderColor: colors.border,
             }}>
               <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To *</Text>
               </View>
               <ScrollView style={{ maxHeight: 320 }}>
-                {/* None option */}
-                <TouchableOpacity
-                  onPress={() => { setAssignedToId(null); setShowAssigneeDropdown(false); }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingHorizontal: 16,
-                    paddingVertical: 14,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 14, color: assignedToId === null ? colors.primary : colors.textMuted, fontWeight: assignedToId === null ? '700' : '400' }}>
-                    None (Unassigned)
-                  </Text>
-                  {assignedToId === null && <Feather name="check" size={16} color={colors.primary} />}
-                </TouchableOpacity>
-
                 {assignees.map((a) => (
                   <TouchableOpacity
                     key={a.id}

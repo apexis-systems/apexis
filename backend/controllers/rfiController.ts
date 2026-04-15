@@ -73,9 +73,30 @@ export const createRFI = async (req: Request | any, res: Response) => {
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
         const { project_id, title, description, assigned_to, expiry_date } = req.body;
-        if (!project_id || !title) return res.status(400).json({ error: 'project_id and title are required' });
+        if (!project_id || !title || !assigned_to) {
+            return res.status(400).json({ error: 'project_id, title and assigned_to are required' });
+        }
         const project = await projects.findByPk(project_id);
         if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        const assigneeId = Number(assigned_to);
+        if (!Number.isFinite(assigneeId)) {
+            return res.status(400).json({ error: 'assigned_to must be a valid user id' });
+        }
+
+        const assignee = await users.findByPk(assigneeId);
+        if (!assignee) {
+            return res.status(404).json({ error: 'Assignee not found' });
+        }
+
+        const validAssignee = await project_members.findOne({
+            where: { project_id: Number(project_id), user_id: assigneeId }
+        });
+        const isProjectAdmin = assignee.role === 'admin' && assignee.organization_id === project.organization_id;
+        const isSuperAdmin = assignee.role === 'superadmin';
+        if (!validAssignee && !isProjectAdmin && !isSuperAdmin) {
+            return res.status(400).json({ error: 'Assignee must belong to the project or organization' });
+        }
 
         // Photo Upload Logic
         const uploadedPhotos: string[] = [];
@@ -104,23 +125,17 @@ export const createRFI = async (req: Request | any, res: Response) => {
 
         // Logic for client visibility
         let is_client_visible = false;
-        let assigneeRole = null;
-
         if (authUser.role === 'client') {
             is_client_visible = true;
-        } else if (assigned_to) {
-            const assignee = await users.findByPk(assigned_to);
-            assigneeRole = assignee?.role;
-            if (assigneeRole === 'client') {
-                is_client_visible = true;
-            }
+        } else if (assignee.role === 'client') {
+            is_client_visible = true;
         }
 
         const rfi = await rfis.create({
             project_id: Number(project_id),
             title: title.trim(),
             description: description?.trim() || null,
-            assigned_to: assigned_to ? Number(assigned_to) : null,
+            assigned_to: assigneeId,
             created_by: authUser.user_id,
             status: 'open',
             is_client_visible,
@@ -173,21 +188,14 @@ export const createRFI = async (req: Request | any, res: Response) => {
             }
         } else {
             // Admin/Contributor created it
-            if (assigned_to) {
-                const recipient = await project_members.findOne({
-                    where: { project_id: Number(project_id), user_id: Number(assigned_to) }
-                });
-                if (recipient) {
-                    const senderName = authUser.name || 'Someone';
-                    await sendNotification({
-                        userId: Number(assigned_to),
-                        title: 'New RFI Assigned',
-                        body: `${senderName} assigned an RFI to you: ${title}`,
-                        type: 'rfi_assigned',
-                        data: { rfiId: String(rfi.id), projectId: String(project_id), type: 'rfi' }
-                    });
-                }
-            }
+            const senderName = authUser.name || 'Someone';
+            await sendNotification({
+                userId: assigneeId,
+                title: 'New RFI Assigned',
+                body: `${senderName} assigned an RFI to you: ${title}`,
+                type: 'rfi_assigned',
+                data: { rfiId: String(rfi.id), projectId: String(project_id), type: 'rfi' }
+            });
         }
 
         const full = await rfis.findByPk((rfi as any).id, {
@@ -223,6 +231,11 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
 
         const rfi = await rfis.findByPk(id);
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+
+        if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
+        if (Number(rfi.assigned_to) !== Number(authUser.user_id)) {
+            return res.status(403).json({ error: 'Only the assignee can update RFI status' });
+        }
 
         (rfi as any).status = status;
         await rfi.save();
@@ -360,9 +373,10 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
 
         const rfi = await rfis.findByPk(id);
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+        if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        if (authUser.role !== 'admin' && rfi.assigned_to !== authUser.user_id && rfi.created_by !== authUser.user_id) {
-            return res.status(403).json({ error: 'Unauthorized to update response' });
+        if (Number(rfi.assigned_to) !== Number(authUser.user_id)) {
+            return res.status(403).json({ error: 'Only the assignee can update the response' });
         }
 
         if (response !== undefined) (rfi as any).response = response;
