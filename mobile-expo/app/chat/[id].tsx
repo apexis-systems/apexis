@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert, StatusBar } from 'react-native';
+import { View, FlatList, TouchableOpacity, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert, StatusBar, Keyboard } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -44,6 +44,7 @@ export default function ChatDetailScreen() {
     const pulseAnim = useRef(new Animated.Value(0.3)).current;
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
     const flatListRef = useRef<FlatList>(null);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
 
     const [attachment, setAttachment] = useState<any>(null);
     const [annotatingImage, setAnnotatingImage] = useState<any>(null);
@@ -200,6 +201,22 @@ export default function ChatDetailScreen() {
         }
     }, [socket, isConnected, room?.id, user?.id]);
 
+    useEffect(() => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+        const showSub = Keyboard.addListener(showEvent as any, (event) => {
+            setKeyboardHeight(event?.endCoordinates?.height || 0);
+        });
+        const hideSub = Keyboard.addListener(hideEvent as any, () => {
+            setKeyboardHeight(0);
+        });
+
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     const handleSend = async () => {
         if (!message.trim() && !attachment) return;
@@ -597,41 +614,41 @@ export default function ChatDetailScreen() {
         </View>
 
             {/* Chat Area */}
-            <KeyboardAvoidingView
-                style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}
-                behavior="padding"
-                keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 0}
-            >
+            <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}>
                 {loading ? (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                         <ActivityIndicator size="large" color={colors.primary} />
                     </View>
                 ) : (
-                    <FlatList
-                        ref={flatListRef}
-                        data={messages}
-                        keyExtractor={item => String(item.id)}
-                        renderItem={renderMessage}
-                        contentContainerStyle={{ paddingBottom: 20 }}
-                        onContentSizeChange={() => {
-                            if (messages.length > 0) {
-                                flatListRef.current?.scrollToEnd({ animated: true });
-                            }
-                        }}
-                        onLayout={() => {
-                            if (messages.length > 0) {
-                                flatListRef.current?.scrollToEnd({ animated: false });
-                            }
-                        }}
-                        onScrollToIndexFailed={(info) => {
-                            flatListRef.current?.scrollToOffset({
-                                offset: info.averageItemLength * info.index,
-                                animated: true
-                            });
-                        }}
-                    />
+                    <View style={{ flex: 1, paddingBottom: 96 + insets.bottom }}>
+                        <FlatList
+                            ref={flatListRef}
+                            style={{ flex: 1 }}
+                            data={messages}
+                            keyExtractor={item => String(item.id)}
+                            renderItem={renderMessage}
+                            contentContainerStyle={{ paddingBottom: 20 }}
+                            keyboardShouldPersistTaps="handled"
+                            keyboardDismissMode="on-drag"
+                            onContentSizeChange={() => {
+                                if (messages.length > 0) {
+                                    flatListRef.current?.scrollToEnd({ animated: true });
+                                }
+                            }}
+                            onLayout={() => {
+                                if (messages.length > 0) {
+                                    flatListRef.current?.scrollToEnd({ animated: false });
+                                }
+                            }}
+                            onScrollToIndexFailed={(info) => {
+                                flatListRef.current?.scrollToOffset({
+                                    offset: info.averageItemLength * info.index,
+                                    animated: true
+                                });
+                            }}
+                        />
+                    </View>
                 )}
-
 
                 {typingUser && (
                     <Animated.View style={{ paddingHorizontal: 20, paddingVertical: 4, opacity: pulseAnim }}>
@@ -641,11 +658,7 @@ export default function ChatDetailScreen() {
                     </Animated.View>
                 )}
 
-                {/* Input Area */}
-
-
-                <View style={{ backgroundColor: colors.background, paddingBottom: insets.bottom }}>
-                    {/* Emoji Bar */}
+                <View style={{ position: 'absolute', left: 0, right: 0, bottom: keyboardHeight, backgroundColor: colors.background, paddingBottom: insets.bottom }}>
                     {showEmojis && (
                         <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 10, paddingHorizontal: 16 }}>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -662,7 +675,6 @@ export default function ChatDetailScreen() {
                         </View>
                     )}
 
-                    {/* Attachment Preview */}
                     {attachment && (
                         <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -682,7 +694,6 @@ export default function ChatDetailScreen() {
                         </View>
                     )}
 
-                    {/* Reply Preview */}
                     {replyTo && (
                         <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, borderLeftWidth: 4, borderLeftColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <View style={{ flex: 1 }}>
@@ -757,7 +768,7 @@ export default function ChatDetailScreen() {
                     onClose={() => setFullScreenImage(null)}
                     uri={fullScreenImage}
                 />
-            </KeyboardAvoidingView>
+            </View>
 
             {annotatingImage && (
                 <ImageAnnotator

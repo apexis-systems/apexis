@@ -26,6 +26,7 @@
     "android": {
       "package": "com.apexis.app",
       "versionCode": 22,
+      "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.READ_MEDIA_IMAGES",
