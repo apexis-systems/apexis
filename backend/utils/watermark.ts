@@ -31,7 +31,7 @@ export const addWatermark = async (imageBuffer: Buffer, projectName: string = ''
 
         // Dynamically adjust dimensions
         const fontSize = Math.max(12, Math.round(finalWidth * 0.02)); // Removed the 22px cap for better high-res scaling
-        const bandHeight = Math.round(fontSize * 5); // Increased height for stacked text
+        const bandHeight = Math.round(fontSize * 4); // Slightly slimmer band for a cleaner footer
         const svgWidth = finalWidth;
         const svgHeight = bandHeight;
 
