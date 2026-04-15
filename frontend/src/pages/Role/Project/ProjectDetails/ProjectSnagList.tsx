@@ -160,7 +160,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
   return (
     <div className={cn(compact ? '' : 'mt-3')}>
-      {!compact && user?.role !== 'client' && (
+      {!compact && (
         <Button onClick={() => setShowAdd(true)} className="mb-3 bg-accent text-accent-foreground hover:bg-accent/90 text-xs h-9">
           <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Snag
         </Button>

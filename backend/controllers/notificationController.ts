@@ -10,7 +10,7 @@ export const listNotifications = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        const { project_id, project_ids, type } = req.query;
+        const { project_id, project_ids, type, hours } = req.query;
         const activeRole = authUser.role;
 
         const where: any = { user_id: authUser.user_id };
@@ -76,6 +76,13 @@ export const listNotifications = async (req: Request, res: Response) => {
             } else {
                 where.type = type;
             }
+        }
+
+        const parsedHours = Number(hours);
+        if (Number.isFinite(parsedHours) && parsedHours > 0) {
+            where.createdAt = {
+                [Op.gte]: new Date(Date.now() - parsedHours * 60 * 60 * 1000),
+            };
         }
 
         const data = await notifications.findAll({

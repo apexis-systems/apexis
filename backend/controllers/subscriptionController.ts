@@ -9,6 +9,7 @@ import {
   users,
   snags,
   rfis,
+  project_members,
   Sequelize,
 } from "../models/index.ts";
 import { Op } from "sequelize";
@@ -45,101 +46,101 @@ const generateInvoiceNumber = async (date: Date = new Date()) => {
 };
 
 export const createOrder = async (req: Request, res: Response) => {
-    try {
-      const { organization_id, user_id } = (req as any).user;
-      const { amount, currency, plan_name, plan_cycle } = req.body;
-      const requestedAmount = Number(amount);
+  try {
+    const { organization_id, user_id } = (req as any).user;
+    const { amount, currency, plan_name, plan_cycle } = req.body;
+    const requestedAmount = Number(amount);
 
-      if (!amount || !currency || !plan_name || !plan_cycle) {
-        return res.status(400).json({ message: "Missing required fields" });
-      }
-      if (!["monthly", "annual"].includes(String(plan_cycle))) {
-        return res.status(400).json({ message: "Invalid plan cycle" });
-      }
-
-      const selectedPlan = await plans.findOne({
-        where: { name: plan_name, is_active: true },
-      });
-      if (!selectedPlan) {
-        return res.status(404).json({ message: "Plan not found" });
-      }
-
-      const basePlanPrice = Number((selectedPlan as any).price);
-      if (!Number.isFinite(basePlanPrice) || basePlanPrice <= 0) {
-        return res.status(400).json({ message: "Invalid plan price configuration" });
-      }
-
-      const cycleMultiplier = plan_cycle === "annual" ? 12 : 1;
-      const preTaxAmount = basePlanPrice * cycleMultiplier;
-      const normalizedAmount = Number((preTaxAmount * (1 + GST_RATE)).toFixed(2));
-
-      if (
-        Number.isFinite(requestedAmount) &&
-        Math.abs(requestedAmount - normalizedAmount) > 1 &&
-        Math.abs(requestedAmount - preTaxAmount) > 1
-      ) {
-        console.warn(
-          `createOrder amount mismatch for plan "${plan_name}" (${plan_cycle}): requested=${requestedAmount}, expected=${normalizedAmount}`,
-        );
-      }
-      if (normalizedAmount > RAZORPAY_MAX_ORDER_AMOUNT_INR) {
-        return res.status(400).json({
-          message: `Amount exceeds Razorpay maximum allowed per order (INR ${RAZORPAY_MAX_ORDER_AMOUNT_INR.toLocaleString("en-IN")}).`,
-        });
-      }
-
-      // Check if organization already has this plan active
-      const org = await organizations.findByPk(organization_id);
-      if (org && org.plan_name === plan_name) {
-        const now = new Date();
-        const endDate = new Date(org.plan_end_date);
-        if (endDate > now) {
-          return res.status(400).json({
-            message: `You already have an active ${plan_name} subscription until ${endDate.toLocaleDateString()}.`,
-          });
-        }
-      }
-
-      const razorpay = new Razorpay({
-        key_id: process.env.RAZORPAY_KEY_ID!,
-        key_secret: process.env.RAZORPAY_KEY_SECRET!,
-      });
-
-      const options = {
-        amount: Math.round(normalizedAmount * 100), // convert to paise
-        currency,
-        receipt: `receipt_org_${organization_id}_${Date.now()}`,
-      };
-
-      const order = await razorpay.orders.create(options);
-
-      // Create initial transaction record
-      await transactions.create({
-        organization_id,
-        user_id: user_id,
-        subscription_tier: plan_name,
-        subscription_cycle: plan_cycle,
-        payment_amount: normalizedAmount,
-        payment_order_id: order.id,
-        payment_status: "pending",
-      });
-
-      res.status(201).json({ order });
-    } catch (error: any) {
-      console.error("Error creating order:", error);
-      const statusCode = error?.statusCode || error?.status || 500;
-      const message =
-        error?.error?.description ||
-        error?.description ||
-        error?.message ||
-        "Internal server error";
-      return res
-        .status(statusCode >= 400 && statusCode < 600 ? statusCode : 500)
-        .json({
-          message,
-          details: error?.error || undefined,
-        });
+    if (!amount || !currency || !plan_name || !plan_cycle) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
+    if (!["monthly", "annual"].includes(String(plan_cycle))) {
+      return res.status(400).json({ message: "Invalid plan cycle" });
+    }
+
+    const selectedPlan = await plans.findOne({
+      where: { name: plan_name, is_active: true },
+    });
+    if (!selectedPlan) {
+      return res.status(404).json({ message: "Plan not found" });
+    }
+
+    const basePlanPrice = Number((selectedPlan as any).price);
+    if (!Number.isFinite(basePlanPrice) || basePlanPrice <= 0) {
+      return res.status(400).json({ message: "Invalid plan price configuration" });
+    }
+
+    const cycleMultiplier = plan_cycle === "annual" ? 12 : 1;
+    const preTaxAmount = basePlanPrice * cycleMultiplier;
+    const normalizedAmount = Number((preTaxAmount * (1 + GST_RATE)).toFixed(2));
+
+    if (
+      Number.isFinite(requestedAmount) &&
+      Math.abs(requestedAmount - normalizedAmount) > 1 &&
+      Math.abs(requestedAmount - preTaxAmount) > 1
+    ) {
+      console.warn(
+        `createOrder amount mismatch for plan "${plan_name}" (${plan_cycle}): requested=${requestedAmount}, expected=${normalizedAmount}`,
+      );
+    }
+    if (normalizedAmount > RAZORPAY_MAX_ORDER_AMOUNT_INR) {
+      return res.status(400).json({
+        message: `Amount exceeds Razorpay maximum allowed per order (INR ${RAZORPAY_MAX_ORDER_AMOUNT_INR.toLocaleString("en-IN")}).`,
+      });
+    }
+
+    // Check if organization already has this plan active
+    const org = await organizations.findByPk(organization_id);
+    if (org && org.plan_name === plan_name) {
+      const now = new Date();
+      const endDate = new Date(org.plan_end_date);
+      if (endDate > now) {
+        return res.status(400).json({
+          message: `You already have an active ${plan_name} subscription until ${endDate.toLocaleDateString()}.`,
+        });
+      }
+    }
+
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID!,
+      key_secret: process.env.RAZORPAY_KEY_SECRET!,
+    });
+
+    const options = {
+      amount: Math.round(normalizedAmount * 100), // convert to paise
+      currency,
+      receipt: `receipt_org_${organization_id}_${Date.now()}`,
+    };
+
+    const order = await razorpay.orders.create(options);
+
+    // Create initial transaction record
+    await transactions.create({
+      organization_id,
+      user_id: user_id,
+      subscription_tier: plan_name,
+      subscription_cycle: plan_cycle,
+      payment_amount: normalizedAmount,
+      payment_order_id: order.id,
+      payment_status: "pending",
+    });
+
+    res.status(201).json({ order });
+  } catch (error: any) {
+    console.error("Error creating order:", error);
+    const statusCode = error?.statusCode || error?.status || 500;
+    const message =
+      error?.error?.description ||
+      error?.description ||
+      error?.message ||
+      "Internal server error";
+    return res
+      .status(statusCode >= 400 && statusCode < 600 ? statusCode : 500)
+      .json({
+        message,
+        details: error?.error || undefined,
+      });
+  }
 };
 
 export const verifyPayment = async (req: Request, res: Response) => {
@@ -306,20 +307,36 @@ export const getUsage = async (req: Request, res: Response) => {
     });
 
     // 2. Calculate Member Usage
-    const contributorCount = await users.count({
-      where: { organization_id: org.id, role: "contributor" },
-    });
-    const clientCount = await users.count({
-      where: { organization_id: org.id, role: "client" },
-    });
-
-    // 3. Calculate Snag & RFI Usage (across all projects)
+    // Comprehensive counting: include users associated via project_members OR organization_id
     const projectIds = (
       await projects.findAll({
         where: { organization_id: org.id },
         attributes: ["id"],
       })
     ).map((p: any) => p.id);
+
+    const getMemberCount = async (role: "contributor" | "client") => {
+      // Users in this organization's projects
+      const projectMemberIds = await project_members.findAll({
+        where: { project_id: { [Op.in]: projectIds }, role },
+        attributes: [[Sequelize.fn("DISTINCT", Sequelize.col("user_id")), "user_id"]],
+        raw: true,
+      }).then((pms: any[]) => pms.map(pm => pm.user_id));
+
+      // Users directly assigned to this organization
+      const directOrgUserIds = await users.findAll({
+        where: { organization_id: org.id, role },
+        attributes: ["id"],
+        raw: true,
+      }).then((us: any[]) => us.map(u => u.id));
+
+      return new Set([...projectMemberIds, ...directOrgUserIds]).size;
+    };
+
+    const contributorCount = await getMemberCount("contributor");
+    const clientCount = await getMemberCount("client");
+
+    // 3. Calculate Snag & RFI Usage (across all projects)
 
     const snagCount = await snags.count({
       where: { project_id: { [Op.in]: projectIds } },
@@ -443,7 +460,7 @@ export const getInvoice = async (req: Request, res: Response) => {
     }
 
     const buffer = await generateInvoice(Number(id));
-    
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=Invoice_${transaction.invoice_number || id}.pdf`);
     res.send(buffer);

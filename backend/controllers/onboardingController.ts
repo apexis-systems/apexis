@@ -289,16 +289,16 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
             plan = await plans.create({
                 name: "Freemium",
                 price: 0,
-                storage_limit_mb: 500,
+                storage_limit_mb: 2000,
                 duration_days: 60,
-                project_limit: 1,
-                contributor_limit: 2,
-                client_limit: 1,
-                max_snags: 15,
-                max_rfis: 15,
-                can_export_reports: false,
-                can_share_media: false,
-                can_export_handover: false
+                project_limit: 10,
+                contributor_limit: 50,
+                client_limit: 25,
+                max_snags: 100,
+                max_rfis: 200,
+                can_export_reports: true,
+                can_share_media: true,
+                can_export_handover: false,
             });
         }
 

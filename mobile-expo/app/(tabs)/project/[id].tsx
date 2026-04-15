@@ -38,7 +38,7 @@ export default function ProjectWorkspaceScreen() {
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    const [activeTab, setActiveTab] = useState<Tab>(() => user?.role === 'client' ? 'documents' : 'overview');
+    const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editModalFocus, setEditModalFocus] = useState<'start_date' | 'end_date' | null>(null);
@@ -63,7 +63,7 @@ export default function ProjectWorkspaceScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            const defaultTab = user?.role === 'client' ? 'documents' : 'overview';
+            const defaultTab = 'overview';
             const onBackPress = () => {
                 if (activeTab !== defaultTab) {
                     setActiveTab(defaultTab as Tab);
@@ -103,8 +103,8 @@ export default function ProjectWorkspaceScreen() {
         if (!id || !user?.id) return;
         try {
             const rfis = await getRFIs(Number(id));
-            const pending = rfis.some(r => 
-                (r.status === 'open' || r.status === 'overdue') && 
+            const pending = rfis.some(r =>
+                (r.status === 'open' || r.status === 'overdue') &&
                 String(r.assigned_to) === String(user.id)
             );
             setHasPendingRFI(pending);
@@ -161,7 +161,7 @@ export default function ProjectWorkspaceScreen() {
 
     type TabDef = { key: Tab; label: string; hideForClient?: boolean };
     const tabs: TabDef[] = [
-        { key: 'overview', label: 'Overview', hideForClient: true },
+        { key: 'overview', label: 'Overview' },
         { key: 'documents', label: 'Docs' },
         { key: 'photos', label: 'Photos' },
         { key: 'rfi', label: 'RFI' },
@@ -188,7 +188,7 @@ export default function ProjectWorkspaceScreen() {
                         {project.name.charAt(0).toUpperCase() + project.name.slice(1)}
                     </Text>
                     {user.role === 'admin' && (
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             onPress={() => { setIsEditModalOpen(true); setEditModalFocus(null); }}
                             style={{ padding: 4 }}
                         >
@@ -271,7 +271,7 @@ export default function ProjectWorkspaceScreen() {
 
             {/* Tab Content */}
             <View style={{ flex: 1 }}>
-                {activeTab === 'overview' && user.role !== 'client' && (
+                {activeTab === 'overview' && (
                     <ProjectOverview
                         project={project}
                         userRole={user.role}
@@ -291,6 +291,28 @@ export default function ProjectWorkspaceScreen() {
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} initialFileId={fileId} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} initialFileId={fileId || photoId} />}
+                {activeTab === 'snags' && (
+                    <View style={{ flex: 1 }}>
+                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                <Feather name="arrow-left" size={20} color={colors.text} />
+                            </TouchableOpacity>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
+                        </View>
+                        <ProjectSnagList project={project} initialSnagId={snagId} />
+                    </View>
+                )}
+                {activeTab === 'sops' && (
+                    <View style={{ flex: 1 }}>
+                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                <Feather name="arrow-left" size={20} color={colors.text} />
+                            </TouchableOpacity>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>SOPs & Manuals</Text>
+                        </View>
+                        <ProjectManuals project={project} />
+                    </View>
+                )}
                 {activeTab === 'rfi' && <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />}
 
                 {/* Internal / Hidden Tabs */}
@@ -336,28 +358,6 @@ export default function ProjectWorkspaceScreen() {
 
                     </View>
                 )}
-                {activeTab === 'snags' && (
-                    <View style={{ flex: 1 }} {...panHandlers}>
-                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
-                                <Feather name="arrow-left" size={20} color={colors.text} />
-                            </TouchableOpacity>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
-                        </View>
-                        <ProjectSnagList project={project} initialSnagId={snagId} />
-                    </View>
-                )}
-                {activeTab === 'sops' && (
-                    <View style={{ flex: 1 }} {...panHandlers}>
-                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
-                                <Feather name="arrow-left" size={20} color={colors.text} />
-                            </TouchableOpacity>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>SOPs & Manuals</Text>
-                        </View>
-                        <ProjectManuals project={project} />
-                    </View>
-                )}
 
             </View>
 
@@ -371,4 +371,3 @@ export default function ProjectWorkspaceScreen() {
         </SafeAreaView>
     );
 }
-

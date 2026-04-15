@@ -33,8 +33,8 @@ export const sendNotification = async ({
         // 2. Fetch user for FCM token
         const user = await users.findByPk(userId);
 
-        // 3. Push Notification (FCM) - Only if OFFLINE
-        if (user?.fcm_token) {
+        // 3. Push Notification (FCM) - Only if user has a token AND Firebase is initialized
+        if (user?.fcm_token && messaging) {
             try {
                 await messaging.send({
                     notification: { title, body },

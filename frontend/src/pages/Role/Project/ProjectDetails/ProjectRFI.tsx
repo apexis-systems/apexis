@@ -157,6 +157,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
     const addRFI = async () => {
         if (!newTitle.trim()) { toast.error('Title is required'); return; }
+        if (!newAssignee) { toast.error('Assignee is required'); return; }
 
         if (!checkLimit('rfis')) {
             toast.error("Limit Reached: You have reached your RFI limit. Please upgrade your plan to create more RFIs.", {
@@ -175,7 +176,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             form.append('project_id', String(project.id));
             form.append('title', newTitle.trim());
             form.append('description', newDescription.trim());
-            if (newAssignee) form.append('assigned_to', newAssignee);
+            form.append('assigned_to', newAssignee);
             if (newExpiryDate) form.append('expiry_date', newExpiryDate);
             newPhotos.forEach(photo => form.append('photos', photo));
 
@@ -395,9 +396,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                             <Textarea value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder="Provide more context..." className="min-h-[100px]" />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Assign To</label>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Assign To *</label>
                             <Select value={newAssignee} onValueChange={setNewAssignee}>
-                                <SelectTrigger><SelectValue placeholder="Select assignee" /></SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Select assignee *" /></SelectTrigger>
                                 <SelectContent>
                                     {assignees.map(a => (
                                         <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.role})</SelectItem>
@@ -490,7 +491,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 )}
 
-                                {((String(selectedRFI.assigned_to) === String(user?.id)) || user?.role === 'admin') && selectedRFI.status !== 'closed' && (
+                                {String(selectedRFI.assigned_to) === String(user?.id) && selectedRFI.status !== 'closed' && (
                                     <div className="space-y-3 pt-4 border-t border-border">
                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                                             {selectedRFI.response ? 'Update Response' : 'Provide Response'}
@@ -528,7 +529,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 )}
 
-                                {user?.role !== 'client' && (
+                                {String(selectedRFI.assigned_to) === String(user?.id) && (
                                     <div className="pt-4 border-t border-border space-y-3">
                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Update Status</p>
                                         <div className="flex gap-2">

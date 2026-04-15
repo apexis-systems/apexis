@@ -19,6 +19,7 @@ import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Removed local ZoomableImage
 
@@ -26,6 +27,7 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectPhotos({ project, user, initialFolderId, initialFileId }: { project: any; user: any; initialFolderId?: string; initialFileId?: string }) {
     const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
@@ -241,18 +243,6 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             return () => subscription.remove();
         }, [viewerOpen, isSelectionMode, selectedFolder, goBack])
     );
-
-    const goNext = () => {
-        const next = Math.min(viewerIndex + 1, sortedPhotos.length - 1);
-        setViewerIndex(next);
-        flatListRef.current?.scrollToIndex({ index: next, animated: true });
-    };
-
-    const goPrev = () => {
-        const prev = Math.max(viewerIndex - 1, 0);
-        setViewerIndex(prev);
-        flatListRef.current?.scrollToIndex({ index: prev, animated: true });
-    };
 
     const handleSharePhoto = async () => {
         const photo = sortedPhotos[viewerIndex];
@@ -1084,28 +1074,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             )}
                         />
 
-                        {/* Prev / Next arrows */}
-                        {showViewerUI && viewerIndex > 0 && (
-                            <TouchableOpacity
-                                onPress={goPrev}
-                                style={{ position: 'absolute', left: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
-                            >
-                                <Feather name="chevron-left" size={26} color="#fff" />
-                            </TouchableOpacity>
-                        )}
-                        {showViewerUI && viewerIndex < sortedPhotos.length - 1 && (
-                            <TouchableOpacity
-                                onPress={goNext}
-                                style={{ position: 'absolute', right: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
-                            >
-                                <Feather name="chevron-right" size={26} color="#fff" />
-                            </TouchableOpacity>
-                        )}
-
                         {/* Bottom panel: info + comments */}
                         {showViewerUI && (
                             <KeyboardAvoidingView
-                                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
                             >
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
@@ -1159,7 +1131,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             </TouchableOpacity>
                                         </View>
                                     )}
-                                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: Platform.OS === 'android' ? 16 : 32, marginTop: 6 }}>
+                                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
                                         <TextInput
                                             value={commentText}
                                             onChangeText={setCommentText}
@@ -1179,6 +1151,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         </TouchableOpacity>
                                     </View>
                                 </View>
+                                {/* Safe-area spacer: covers Android nav bar (gesture or 3-button) and iOS home indicator */}
+                                <View style={{ height: Math.max(insets.bottom, 0) }} />
                                 </View>
                             </KeyboardAvoidingView>
                         )}

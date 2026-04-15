@@ -5,7 +5,7 @@ import { verifyToken } from '../middleware/verifyToken.ts';
 const router = Router();
 
 router.get('/', verifyToken, listNotifications);
+router.patch('/read-all', verifyToken, markAllRead);   // ← must be before /:id/read
 router.patch('/:id/read', verifyToken, markAsRead);
-router.patch('/read-all', verifyToken, markAllRead);
 
 export default router;

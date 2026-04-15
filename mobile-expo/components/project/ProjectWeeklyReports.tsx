@@ -113,8 +113,14 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
         try {
             const token = await SecureStore.getItemAsync('token');
             const url = await getReportShareUrl(report.id);
-            const fileUri = `${FileSystem.documentDirectory}report_${report.id}.pdf`;
-            
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            const s = new Date(report.period_start);
+            const e = new Date(report.period_end);
+            const startStr = `${pad(s.getDate())}-${pad(s.getMonth() + 1)}-${s.getFullYear()}`;
+            const endStr = `${pad(e.getDate())}-${pad(e.getMonth() + 1)}-${e.getFullYear()}`;
+            const fileName = `project_${project.id}_weekly_report_${startStr}_to_${endStr}.pdf`;
+            const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+
             const { uri } = await FileSystem.downloadAsync(
                 url,
                 fileUri,

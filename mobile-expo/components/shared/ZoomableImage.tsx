@@ -52,6 +52,7 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
         });
 
     const pan = Gesture.Pan()
+        .enabled(isZoomed)
         .maxPointers(1)
         .onUpdate((e) => {
             if (savedScale.value > 1) {
@@ -84,6 +85,7 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
 
     const singleTap = Gesture.Tap()
         .numberOfTaps(1)
+        .maxDistance(12)
         .onEnd(() => {
             if (onTap) runOnJS(onTap)();
         });
