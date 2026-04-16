@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Platform, View } from 'react-native';
+import { Platform, View, StatusBar } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { HapticTab } from '@/components/haptic-tab';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +22,8 @@ const TabBarIcon = ({ name, color, spotlightId, size = 22 }: any) => {
       const timer = setTimeout(() => {
         ref.current?.measureInWindow((x, y, w, h) => {
           if (w > 0) {
-            registerSpotlight(spotlightId, { x: x + w / 2, y: y + h / 2, r: 40 });
+            const androidStatusBarOffset = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+            registerSpotlight(spotlightId, { x: x + w / 2, y: y + h / 2 + androidStatusBarOffset, r: 40 });
           }
         });
       }, 1500);
