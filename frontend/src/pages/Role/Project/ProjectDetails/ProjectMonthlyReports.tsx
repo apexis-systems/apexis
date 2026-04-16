@@ -50,9 +50,9 @@ const ProjectMonthlyReports = ({ project, userRole }: Props) => {
     try {
       const projectName = (project?.name || 'Project').replace(/\s+/g, '_');
       const start = new Date(r.period_start);
-      const monthName = start.toLocaleDateString('en-GB', { month: 'long' }).toLowerCase();
+      const monthName = start.toLocaleDateString('en-GB', { month: 'long' });
       const year = start.getFullYear();
-      await downloadReport(r.id, `${projectName}_monthly_${monthName}-${year}.pdf`);
+      await downloadReport(r.id, `${projectName}_monthly_report_${monthName}-${year}.pdf`);
     } catch (e) {
       console.error(e);
     } finally {

@@ -3,7 +3,6 @@ import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, A
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
-import { PrivateAxios } from '@/helpers/PrivateAxios';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';

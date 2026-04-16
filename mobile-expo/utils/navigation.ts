@@ -1,4 +1,5 @@
 import { Router } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 
 /**
  * Module-level singleton — tracks the last notification ID that was navigated.
@@ -25,6 +26,12 @@ export const navigateFromNotification = (
         return;
     }
     _lastHandledNotificationId = notificationId;
+    
+    // Clear the native notification badge when the user interacts with a notification
+    Notifications.setBadgeCountAsync(0).catch(err => {
+        console.warn('Failed to clear badge count:', err);
+    });
+
     handleNotificationNavigation(type, data, router);
 };
 

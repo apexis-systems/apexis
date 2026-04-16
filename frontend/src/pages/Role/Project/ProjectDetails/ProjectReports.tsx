@@ -50,7 +50,11 @@ const ProjectReports = ({ project, userRole }: Props) => {
   const handleDownload = async (r: Report) => {
     setDownloadingId(r.id);
     try {
-      const projectName = (project?.name || 'Project').replace(/\s+/g, '_');
+      const sanitize = (name?: string | number) => {
+        const raw = String(name ?? project?.name ?? project?.id ?? 'project');
+        return raw.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+      };
+      const base = `${sanitize(project?.name ?? project?.id)}`;
       const start = new Date(r.period_start);
       const end = new Date(r.period_end);
       
@@ -61,13 +65,13 @@ const ProjectReports = ({ project, userRole }: Props) => {
         return `${dd}-${mm}-${yyyy}`;
       };
 
-      let filename = `${projectName}_${activeType}_report_${fmtDate(start)}.pdf`;
+      let filename = `${base}_daily_report_${fmtDate(start)}.pdf`;
       if (activeType === 'weekly') {
-        filename = `${projectName}_weekly_report_${fmtDate(start)} to ${fmtDate(end)}.pdf`;
+        filename = `${base}_weekly_report_${fmtDate(start)}_to_${fmtDate(end)}.pdf`;
       } else if (activeType === 'monthly') {
         const monthName = start.toLocaleDateString('en-GB', { month: 'long' }).toLowerCase();
         const year = start.getFullYear();
-        filename = `${projectName}_monthly_${monthName}-${year}.pdf`;
+        filename = `${base}_monthly_report_${monthName}-${year}.pdf`;
       }
 
       await downloadReport(r.id, filename);

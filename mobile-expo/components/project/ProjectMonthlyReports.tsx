@@ -115,8 +115,13 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
             const url = await getReportShareUrl(report.id);
             const pad = (n: number) => n.toString().padStart(2, '0');
             const d = new Date(report.period_start);
-            const month = d.toLocaleString('default', { month: 'long' });
-            const fileName = `project_${project.id}_monthly_report_${month}-${d.getFullYear()}.pdf`;
+            const month = d.toLocaleString('default', { month: 'long' }).toLowerCase();
+            const sanitize = (name?: string | number) => {
+                const raw = String(name ?? project?.name ?? project?.id ?? 'project');
+                return raw.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+            };
+            const base = `${sanitize(project?.name ?? project?.id)}`;
+            const fileName = `${base}_monthly_report_${month}-${d.getFullYear()}.pdf`;
             const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
             const { uri } = await FileSystem.downloadAsync(
