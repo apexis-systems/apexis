@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from './AuthContext';
+
 
 interface SpotlightPosition {
     x: number;
@@ -59,16 +59,7 @@ export const TourProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const registerSpotlight = useCallback((id: string, pos: SpotlightPosition) => {
         setSpotlights(prev => ({ ...prev, [id]: pos }));
     }, []);
-    const { isLoggedIn } = useAuth();
-
-    // Reset tour state on logout for testing/fresh sessions
-    React.useEffect(() => {
-        if (!isLoggedIn) {
-            setHasSeenTourState(false);
-            AsyncStorage.removeItem('hasSeenTour');
-        }
-    }, [isLoggedIn]);
-
+    
     // Initial check
     React.useEffect(() => {
         const check = async () => {
