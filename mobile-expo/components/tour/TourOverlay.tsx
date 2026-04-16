@@ -8,7 +8,7 @@ import Svg, { Defs, Mask, Rect, Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedProps, withTiming, useAnimatedStyle, interpolate } from 'react-native-reanimated';
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('screen');
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 interface TourStep {
@@ -69,7 +69,7 @@ export const TOUR_STEPS: TourStep[] = [
         description: 'Stay updated with important alerts and team mentions.',
         spotlightId: 'notificationsIcon',
         shape: 'circle',
-        defaultPos: { x: width - 62, y: 40, r: 35 },
+        defaultPos: { x: width - 62, y: 40, r: 28 },
     },
     {
         id: 6,
@@ -147,7 +147,7 @@ export default function TourOverlay() {
 
     const handleNext = async () => {
         if (currentStep === 3) router.push('/activity');
-        if (currentStep === 4) router.push('/notifications');
+        if (currentStep === 4) router.push('/(tabs)');
         if (currentStep === 5) router.push('/chat');
         if (currentStep === 6) router.push('/settings');
 
@@ -167,7 +167,7 @@ export default function TourOverlay() {
     if (!isTourActive || !step) return null;
 
     return (
-        <Modal transparent visible={isTourActive} animationType="none">
+        <Modal transparent visible={isTourActive} animationType="none" statusBarTranslucent={true}>
             <View style={styles.container}>
                 <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
                     <Defs>
@@ -209,7 +209,8 @@ export default function TourOverlay() {
 
 const styles = StyleSheet.create({
     container: {
-        flex: 1,
+        width,
+        height,
     },
     tooltip: {
         position: 'absolute',

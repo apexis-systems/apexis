@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView, Alert, StatusBar } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -70,25 +70,26 @@ export default function DashboardScreen() {
   const measureAndRegister = useCallback(() => {
     // We need a small delay to ensure the layout is settled
     setTimeout(() => {
+      const androidStatusBarOffset = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+      
       headerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('dashboardHeader', { x: x + w / 2, y: y + h / 2 + 43, w: w + 10, h: h + 100, r: 16 });
+        // Adding StatusBar height on Android to compensate for the translucent Modal
+        const yPos = y + h / 2 + 43 + (Platform.OS === 'android' ? androidStatusBarOffset : 0);
+        registerSpotlight('dashboardHeader', { x: x + w / 2, y: yPos, w: w + 10, h: h + 100, r: 16 });
       });
-      // statsRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-      //   registerSpotlight('dashboardStats', { x: x + w / 2, y: y + h / 2, w: w + 4, h: h + 10, r: 12 });
-      // });
+
       projectListRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        // Shifting left (decreasing offset) and increasing w/h
-        registerSpotlight('projectCard', {
-          x: x + (Platform.OS === 'ios' ? 30 : 40),
-          y: y + (Platform.OS === 'ios' ? 40 : 50),
-          w: 90,
-          h: 120,
-          r: 16
+        registerSpotlight('projectCard', { 
+            x: x + (Platform.OS === 'ios' ? 40 : 40), 
+            y: y + (Platform.OS === 'ios' ? 53 : 50) + (Platform.OS === 'android' ? androidStatusBarOffset : 0), 
+            w: 90, 
+            h: 120, 
+            r: 16 
         });
       });
       createButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        // Also adding dimensions for the create button
-        registerSpotlight('createProjectButton', { x: x + w / 2, y: y + h / 2, w: w, h: h, r: 14 });
+        const yPos = y + h / 2 + (Platform.OS === 'android' ? androidStatusBarOffset : 0);
+        registerSpotlight('createProjectButton', { x: x + w / 2, y: yPos, w: w, h: h, r: 14 });
       });
     }, 500);
   }, [registerSpotlight]);

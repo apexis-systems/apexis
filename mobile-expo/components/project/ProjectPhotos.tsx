@@ -162,10 +162,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     // ── Scroll viewer to correct index when opened ──────────────────────────
     useEffect(() => {
-        if (viewerOpen) {
+        if (viewerOpen && sortedPhotos.length > 0) {
             // Small delay to ensure FlatList is mounted
             const t = setTimeout(() => {
-                flatListRef.current?.scrollToIndex({ index: viewerIndex, animated: false });
+                if (viewerIndex >= 0 && viewerIndex < sortedPhotos.length) {
+                    flatListRef.current?.scrollToIndex({ index: viewerIndex, animated: false });
+                }
             }, 50);
             return () => clearTimeout(t);
         }
@@ -1142,11 +1144,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         <TouchableOpacity
                                             onPress={handleAddComment}
                                             disabled={addingComment || !commentText.trim()}
-                                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                            style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
                                         >
                                             {addingComment
                                                 ? <ActivityIndicator size="small" color="#fff" />
-                                                : <Feather name="send" size={14} color="#fff" />
+                                                : <Feather name="send" size={14} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
                                             }
                                         </TouchableOpacity>
                                     </View>
