@@ -173,7 +173,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     // Initial Export Status Fetch
     useEffect(() => {
-        if (userRole !== 'admin' || !projectId) return;
+        if ((userRole !== 'admin' && userRole !== 'superadmin') || !projectId) return;
 
         // Reset export state when project changes to prevent leakage
         setIsExporting(false);
@@ -203,7 +203,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     // Socket Listener
     useEffect(() => {
-        if (!socket || userRole !== 'admin') return;
+        if (!socket || (userRole !== 'admin' && userRole !== 'superadmin')) return;
 
         let timerInterval: ReturnType<typeof setInterval>;
 
@@ -445,49 +445,72 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     </View>
                 )}
 
-                {/* Project Members */}
+                {/* Project Members & Codes */}
                 {userRole === 'contributor' && (
-                    <View style={{ gap: 12 }}>
-                        {/* <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                            Project Members
-                        </Text> */}
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            {[
-                                { label: 'Contributors', count: (project as any).totalContributors || 0, type: 'contributor' as const },
-                                { label: 'Clients', count: (project as any).totalClients || 0, type: 'client' as const },
-                            ].map((item) => (
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                        {[
+                            { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0, type: 'contributor' as const },
+                            { label: 'Client List', value: null, id: 'client_list', count: (project as any).totalClients || 0, type: 'client' as const },
+                        ].map((item) => (
+                            <View
+                                key={item.id}
+                                style={{
+                                    flex: 1,
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 12,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 4,
+                                    elevation: 1,
+                                }}
+                            >
+                                <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
+                                    {item.label}
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
+                                        {item.value || '—'}
+                                    </Text>
+                                    {item.value ? (
+                                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                                            <TouchableOpacity
+                                                onPress={() => handleCopy(item.value!, item.id)}
+                                                style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                            >
+                                                <Feather
+                                                    name={copiedId === item.id ? "check" : "copy"}
+                                                    size={14}
+                                                    color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                                />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => handleShareLink('contributor', item.value!)}
+                                                style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                            >
+                                                <Feather name="share-2" size={14} color={colors.primary} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : (
+                                        <View style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}>
+                                            <Feather name="users" size={14} color={colors.textMuted} />
+                                        </View>
+                                    )}
+                                </View>
                                 <TouchableOpacity
-                                    key={item.type}
                                     onPress={() => setMemberModalType(item.type)}
-                                    style={{
-                                        flex: 1,
-                                        borderRadius: 16,
-                                        backgroundColor: colors.surface,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        padding: 12,
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 2 },
-                                        shadowOpacity: 0.05,
-                                        shadowRadius: 4,
-                                        elevation: 1,
-                                    }}
+                                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
                                 >
-                                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
-                                        {item.label}
+                                    <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                        {item.count} active {item.type === 'contributor' ? (item.count === 1 ? 'contributor' : 'contributors') : (item.count === 1 ? 'client' : 'clients')}
                                     </Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
-                                            {item.count}
-                                        </Text>
-                                        <Feather name="chevron-right" size={14} color={colors.primary} />
-                                    </View>
-                                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 6 }}>
-                                        View project {item.type}s
-                                    </Text>
+                                    <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
                                 </TouchableOpacity>
-                            ))}
-                        </View>
+                            </View>
+                        ))}
                     </View>
                 )}
 

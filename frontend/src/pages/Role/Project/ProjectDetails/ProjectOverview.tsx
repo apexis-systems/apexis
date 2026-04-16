@@ -99,7 +99,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
 
   // Load latest export
   useEffect(() => {
-    if (userRole !== 'admin' || !project?.id) return;
+    if ((userRole !== 'admin' && userRole !== 'superadmin') || !project?.id) return;
     getLatestExport(project.id)
       .then(data => {
         if (data.downloadUrl) {
@@ -122,7 +122,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
 
   // Socket listener for export progress
   useEffect(() => {
-    if (!socket || userRole !== 'admin') return;
+    if (!socket || (userRole !== 'admin' && userRole !== 'superadmin')) return;
 
     let timerInterval: NodeJS.Timeout;
 
@@ -371,36 +371,65 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         </>
       )}
 
-      {/* Project Members */}
+      {/* Project Members & Codes */}
       {userRole === 'contributor' && (
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Access Codes</h3>
           <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => setMemberModalType('contributor')}
-              className="text-left rounded-lg border border-border bg-secondary/20 p-3 hover:bg-secondary/40 transition-colors"
-            >
-              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Contributors</div>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <span className="text-lg font-bold text-foreground">{(project as any).totalContributors || 0}</span>
-                <ChevronRight className="h-4 w-4 text-accent" />
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Contributor Code</span>
+              <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
+                <span className="font-mono text-sm font-bold text-foreground">{(project as any).contributor_code || '—'}</span>
+                {(project as any).contributor_code && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleCopy((project as any).contributor_code, 'contributor')}
+                      className="p-1.5 hover:bg-secondary rounded-md transition-colors"
+                      title="Copy Code"
+                    >
+                      {copiedId === 'contributor' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                    </button>
+                    <button
+                      onClick={() => handleShareLink('contributor', (project as any).contributor_code)}
+                      className="p-1.5 hover:bg-secondary rounded-md transition-colors text-accent"
+                      title="Share Access Link"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
-            </button>
-            <button
-              onClick={() => setMemberModalType('client')}
-              className="text-left rounded-lg border border-border bg-secondary/20 p-3 hover:bg-secondary/40 transition-colors"
-            >
-              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Clients</div>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <span className="text-lg font-bold text-foreground">{(project as any).totalClients || 0}</span>
-                <ChevronRight className="h-4 w-4 text-accent" />
+              <span 
+                 className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                 onClick={() => setMemberModalType('contributor')}
+              >
+                  {(project as any).totalContributors || 0} active {(project as any).totalContributors === 1 ? 'contributor' : 'contributors'}
+                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+              </span>
+            </div>
+            
+            <div className="flex flex-col gap-1 justify-center">
+               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Client List</span>
+               <div className="flex items-center justify-between bg-card/50 border border-border/50 border-dashed rounded-lg px-3 py-2">
+                <span className="text-xs text-muted-foreground italic">Code Restricted</span>
+                <div className="p-1.5 opacity-30">
+                  <Share2 className="h-4 w-4" />
+                </div>
               </div>
-            </button>
+              <span 
+                 className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                 onClick={() => setMemberModalType('client')}
+              >
+                  {(project as any).totalClients || 0} active {(project as any).totalClients === 1 ? 'client' : 'clients'}
+                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+              </span>
+            </div>
           </div>
         </div>
       )}
 
       {/* Admin Display Codes */}
-      {userRole === 'admin' && (
+      {(userRole === 'admin' || userRole === 'superadmin') && (
         <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Access Codes</h3>
           <div className="grid grid-cols-2 gap-4">
@@ -472,7 +501,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
 
 
       {/* Handover */}
-      {userRole === 'admin' && (
+      {(userRole === 'admin' || userRole === 'superadmin') && (
         <div className="rounded-xl border border-border bg-card p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground">Final Handover Report</h3>
