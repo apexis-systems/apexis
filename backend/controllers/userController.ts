@@ -111,14 +111,22 @@ export const inviteUser = async (req: Request, res: Response) => {
             }
         }
 
+        const org = await organizations.findByPk(authUser.organization_id);
+        const organization_name = org ? org.name : "your organization";
+
         await sendEmail(
             email,
-            `Invitation to join Apexis as ${roleName}`,
-            `<h1>Welcome to Apexis</h1>
-             <p>You have been invited as a <strong>${roleName}</strong> for your organization.</p>
-             <p>Please click the link below to securely login to your project in the Apexis mobile app:</p>
-             <a href="${inviteUrl}" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Login to Project</a>
-             <p>If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>`,
+            `Invitation to join APEXISpro™ as ${roleName}`,
+            `<div style="font-family: Arial, Helvetica, sans-serif; color: #14213d;">
+                <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 20px;">
+                    APEXIS <span style="font-size: 16px;">PRO™</span>
+                </div>
+                <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Welcome to APEXIS<span style="font-size: 14px;">PRO™</span></h1>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 12px;">You have been invited to join <strong>"${organization_name}"</strong> on APEXIS <span style="font-size: 13px;">PRO™</span>.</p>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Please click the link below to securely login to your project in the APEXIS<span style="font-size: 13px;">PRO™</span> mobile app:</p>
+                <a href="${inviteUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Login to Project</a>
+                <p style="font-size: 14px; color: #64748b; margin-top: 24px;">If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>
+             </div>`,
             true
         );
 

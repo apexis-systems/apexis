@@ -13,7 +13,7 @@ const { width, height } = Dimensions.get('window');
 const SLIDES = [
     {
         id: '1',
-        title: 'APEXISpro',
+        title: 'APEXIS PRO',
         subtitle: 'Construction Communication Infrastructure',
         description: 'APEXIS transforms informal site communication into structured, professional project documentation.',
         icon: 'layers',
@@ -84,10 +84,10 @@ export default function OnboardingScreen() {
                                 entering={FadeInDown.duration(600).delay(300)}
                                 style={[styles.title, { color: colors.text, fontFamily: 'Angelica' }]}
                             >
-                                {item.title === 'APEXISpro' ? (
+                                {item.title === 'APEXIS PRO' ? (
                                     <Text style={{ fontSize: 42, color: colors.text, fontFamily: 'Angelica' }}>
                                         APEXIS
-                                        <Text style={{ fontSize: 22, textTransform: 'lowercase', fontFamily: 'Angelica' }}>pro™</Text>
+                                        <Text style={{ fontSize: 22, textTransform: 'uppercase', fontFamily: 'Angelica' }}>PRO™</Text>
                                     </Text>
                                 ) : item.title}
                             </Animated.Text>
