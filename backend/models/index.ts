@@ -102,7 +102,7 @@ db.comments.belongsTo(db.comments, { as: 'parent', foreignKey: 'parent_id' });
 db.comments.hasMany(db.comments, { as: 'replies', foreignKey: 'parent_id' });
 
 // Project <-> Report
-db.reports.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.reports.belongsTo(db.projects, { foreignKey: 'project_id', as: 'project' });
 db.projects.hasMany(db.reports, { foreignKey: 'project_id' });
 
 // Project <-> Snag

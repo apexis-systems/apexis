@@ -10,6 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { navigateFromNotification } from '@/utils/navigation';
 import { getProjects } from '@/services/projectService';
 import { getOrgUsers } from '@/services/userService';
+import * as Notifications from 'expo-notifications';
 
 interface Notification {
     id: number;
@@ -71,6 +72,11 @@ export default function NotificationsScreen() {
 
     useFocusEffect(
         useCallback(() => {
+            // Clear the native notification badge when the screen is focused
+            Notifications.setBadgeCountAsync(0).catch(err => {
+                console.warn('Failed to clear badge count:', err);
+            });
+
             const onBackPress = () => {
                 if (showHistory) {
                     setShowHistory(false);

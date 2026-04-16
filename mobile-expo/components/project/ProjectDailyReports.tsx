@@ -118,7 +118,12 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
             const pad = (n: number) => n.toString().padStart(2, '0');
             const d = new Date(report.period_start);
             const dateStr = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
-            const fileName = `project_${project.id}_daily_report_${dateStr}.pdf`;
+            const sanitize = (name?: string | number) => {
+                const raw = String(name ?? project?.name ?? project?.id ?? 'project');
+                return raw.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+            };
+            const base = `${sanitize(project?.name ?? project?.id)}`;
+            const fileName = `${base}_daily_report_${dateStr}.pdf`;
             const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
             const { uri } = await FileSystem.downloadAsync(

@@ -57,7 +57,7 @@ const ProjectWeeklyReports = ({ project, userRole }: Props) => {
         const yyyy = d.getFullYear();
         return `${dd}-${mm}-${yyyy}`;
       };
-      await downloadReport(r.id, `${projectName}_weekly_report_${fmtDate(start)} to ${fmtDate(end)}.pdf`);
+      await downloadReport(r.id, `${projectName}_weekly_report_${fmtDate(start)}_to_${fmtDate(end)}.pdf`);
     } catch (e) {
       console.error(e);
     } finally {
