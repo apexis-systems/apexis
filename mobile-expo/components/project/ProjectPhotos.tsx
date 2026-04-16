@@ -681,10 +681,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 <TouchableOpacity
                                                     onPress={() => toggleFolderVis(folder)}
                                                 >
-                                                    <Feather 
-                                                        name={folder.client_visible !== false ? 'eye' : 'eye-off'} 
-                                                        size={14} 
-                                                        color={folder.client_visible !== false ? colors.primary : colors.textMuted} 
+                                                    <Feather
+                                                        name={folder.client_visible !== false ? 'eye' : 'eye-off'}
+                                                        size={14}
+                                                        color={folder.client_visible !== false ? colors.primary : colors.textMuted}
                                                     />
                                                 </TouchableOpacity>
                                             </View>
@@ -743,10 +743,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             <TouchableOpacity
                                                 onPress={() => togglePhotoVisibility(photo)}
                                             >
-                                                <Feather 
-                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'} 
-                                                    size={14} 
-                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted} 
+                                                <Feather
+                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'}
+                                                    size={14}
+                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted}
                                                 />
                                             </TouchableOpacity>
                                         </View>
@@ -803,10 +803,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 onPress={() => togglePhotoVisibility(photo)}
                                                 style={{ padding: 6 }}
                                             >
-                                                <Feather 
-                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'} 
-                                                    size={16} 
-                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted} 
+                                                <Feather
+                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'}
+                                                    size={16}
+                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted}
                                                 />
                                             </TouchableOpacity>
                                         )}
@@ -1083,78 +1083,100 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
                             >
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
-                                <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
-                                        {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
-                                    </Text>
-                                    {sortedPhotos[viewerIndex]?.location
-                                        ? <Text style={{ color: '#aaa', fontSize: 10, marginTop: 2 }}>📍 {sortedPhotos[viewerIndex].location}</Text>
-                                        : null
-                                    }
-                                </View>
-
-                                <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
-                                    <Text style={{ color: '#aaa', fontSize: 10, fontWeight: '700', marginBottom: 6 }}>
-                                        💬 COMMENTS ({photoComments.length})
-                                    </Text>
-                                    {commentLoading ? (
-                                        <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
-                                    ) : (
-                                        <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
-                                            {photoComments.length === 0 && (
-                                                <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>No comments yet. Be the first!</Text>
-                                            )}
-                                            {photoComments.map((c: any) => (
-                                                <View key={c.id} style={{ marginBottom: 8 }}>
-                                                    <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
-                                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                            <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
-                                                            <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                                <Text style={{ color: '#888', fontSize: 9 }}>↩ Reply</Text>
-                                                            </TouchableOpacity>
+                                    <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
+                                            {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
+                                        </Text>
+                                        
+                                        {(sortedPhotos[viewerIndex]?.location || sortedPhotos[viewerIndex]?.tags) && (
+                                            <View style={{ marginTop: 8, gap: 8 }}>
+                                                {sortedPhotos[viewerIndex]?.location && (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(249,115,22,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Feather name="map-pin" size={11} color="#f97316" />
                                                         </View>
-                                                        <Text style={{ color: '#ddd', fontSize: 11 }}>{c.text}</Text>
+                                                        <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{sortedPhotos[viewerIndex].location}</Text>
                                                     </View>
-                                                    {c.replies?.map((r: any) => (
-                                                        <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
-                                                            <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || 'User'}</Text>
-                                                            <Text style={{ color: '#ccc', fontSize: 10 }}>{r.text}</Text>
+                                                )}
+                                                
+                                                {sortedPhotos[viewerIndex]?.tags && (
+                                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                                                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Feather name="tag" size={11} color="#fff" />
                                                         </View>
-                                                    ))}
-                                                </View>
-                                            ))}
-                                        </ScrollView>
-                                    )}
-                                    {replyTo && (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                            <Text style={{ color: colors.primary, fontSize: 9 }}>Replying to comment</Text>
-                                            <TouchableOpacity onPress={() => setReplyTo(null)}>
-                                                <Text style={{ color: '#888', fontSize: 9 }}>✕ Cancel</Text>
+                                                        {sortedPhotos[viewerIndex].tags.split(',').map((tag: string, tidx: number) => (
+                                                            <View key={tidx} style={{ backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+                                                                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '600' }}>{tag.trim()}</Text>
+                                                            </View>
+                                                        ))}
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
+                                        <Text style={{ color: '#aaa', fontSize: 10, fontWeight: '700', marginBottom: 6 }}>
+                                            💬 COMMENTS ({photoComments.length})
+                                        </Text>
+                                        {commentLoading ? (
+                                            <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
+                                        ) : (
+                                            <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
+                                                {photoComments.length === 0 && (
+                                                    <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>No comments yet. Be the first!</Text>
+                                                )}
+                                                {photoComments.map((c: any) => (
+                                                    <View key={c.id} style={{ marginBottom: 8 }}>
+                                                        <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
+                                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                                                                <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
+                                                                <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                                                                    <Text style={{ color: '#888', fontSize: 9 }}>↩ Reply</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                            <Text style={{ color: '#ddd', fontSize: 11 }}>{c.text}</Text>
+                                                        </View>
+                                                        {c.replies?.map((r: any) => (
+                                                            <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
+                                                                <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || 'User'}</Text>
+                                                                <Text style={{ color: '#ccc', fontSize: 10 }}>{r.text}</Text>
+                                                            </View>
+                                                        ))}
+                                                    </View>
+                                                ))}
+                                            </ScrollView>
+                                        )}
+                                        {replyTo && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                <Text style={{ color: colors.primary, fontSize: 9 }}>Replying to comment</Text>
+                                                <TouchableOpacity onPress={() => setReplyTo(null)}>
+                                                    <Text style={{ color: '#888', fontSize: 9 }}>✕ Cancel</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+                                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
+                                            <TextInput
+                                                value={commentText}
+                                                onChangeText={setCommentText}
+                                                placeholder="Add a comment…"
+                                                placeholderTextColor="#555"
+                                                style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
+                                            />
+                                            <TouchableOpacity
+                                                onPress={handleAddComment}
+                                                disabled={addingComment || !commentText.trim()}
+                                                style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                                {addingComment
+                                                    ? <ActivityIndicator size="small" color="#fff" />
+                                                    : <Feather name="send" size={14} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
+                                                }
                                             </TouchableOpacity>
                                         </View>
-                                    )}
-                                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
-                                        <TextInput
-                                            value={commentText}
-                                            onChangeText={setCommentText}
-                                            placeholder="Add a comment…"
-                                            placeholderTextColor="#555"
-                                            style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
-                                        />
-                                        <TouchableOpacity
-                                            onPress={handleAddComment}
-                                            disabled={addingComment || !commentText.trim()}
-                                            style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
-                                        >
-                                            {addingComment
-                                                ? <ActivityIndicator size="small" color="#fff" />
-                                                : <Feather name="send" size={14} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
-                                            }
-                                        </TouchableOpacity>
                                     </View>
-                                </View>
-                                {/* Safe-area spacer: covers Android nav bar (gesture or 3-button) and iOS home indicator */}
-                                <View style={{ height: Math.max(insets.bottom, 0) }} />
+                                    {/* Safe-area spacer: covers Android nav bar (gesture or 3-button) and iOS home indicator */}
+                                    <View style={{ height: Math.max(insets.bottom, 0) }} />
                                 </View>
                             </KeyboardAvoidingView>
                         )}

@@ -58,7 +58,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { folder_id, project_id, skipActivity } = req.body;
+        const { folder_id, project_id, skipActivity, location, tags } = req.body;
         const project = await projects.findByPk(project_id);
 
         if (!project) {
@@ -137,6 +137,8 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             file_type,
             file_size_mb,
             created_by: authUser.user_id,
+            location: location || null,
+            tags: tags || null,
         });
 
         const isImage = file_type.startsWith('image/');
