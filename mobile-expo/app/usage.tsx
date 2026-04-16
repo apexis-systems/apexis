@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Dimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -15,7 +15,7 @@ export default function UsageScreen() {
     const { colors } = useTheme();
     const router = useRouter();
     const { usageData, loading: usageLoading, refreshUsage } = useUsage();
-    const { user } = useAuth() as any;
+    const insets = useSafeAreaInsets();
 
     if (usageLoading && !usageData) {
         return (
@@ -66,24 +66,16 @@ export default function UsageScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
-            <Stack.Screen 
-                options={{ 
-                    title: 'Resource Usage',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: colors.background },
-                    headerTintColor: colors.text,
-                    headerLeft: () => (
-                        <TouchableOpacity onPress={() => router.back()} style={{ alignItems: 'center', justifyContent: 'center', marginLeft: 10 }}>
-                            <Feather name="arrow-left" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                    ),
-                    headerRight: () => (
-                        <TouchableOpacity onPress={refreshUsage} style={{ alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                            <Feather name="refresh-cw" size={20} color={colors.text} />
-                        </TouchableOpacity>
-                    )
-                }} 
-            />
+            <Stack.Screen options={{ headerShown: false }} />
+            <View style={[styles.customHeader, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.headerIconBtn}>
+                    <Feather name="arrow-left" size={24} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Resource Usage</Text>
+                <TouchableOpacity onPress={refreshUsage} style={styles.headerIconBtn}>
+                    <Feather name="refresh-cw" size={20} color={colors.text} />
+                </TouchableOpacity>
+            </View>
             
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {/* Current Plan Summary */}
@@ -230,5 +222,24 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 16,
         fontWeight: '800',
+    },
+    customHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 12,
+        paddingBottom: 10,
+    },
+    headerIconBtn: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerTitle: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 18,
+        fontWeight: '700',
     }
 });

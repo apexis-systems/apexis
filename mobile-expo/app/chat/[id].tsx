@@ -728,7 +728,16 @@ export default function ChatDetailScreen() {
                                 placeholderTextColor={colors.textMuted}
                                 multiline
                                 textAlignVertical="center"
-                                style={{ flex: 1, color: colors.text, fontSize: 16, marginHorizontal: 8, maxHeight: 100, paddingVertical: 0, height: 44, lineHeight: 20 }}
+                                style={{ 
+                                    flex: 1, 
+                                    color: colors.text, 
+                                    fontSize: 16, 
+                                    marginHorizontal: 8, 
+                                    maxHeight: 100, 
+                                    paddingVertical: Platform.OS === 'ios' ? 10 : 0, 
+                                    height: 44, 
+                                    lineHeight: 20 
+                                }}
                             />
 
                             <TouchableOpacity onPress={pickDocument} style={{ padding: 4 }}>
@@ -750,7 +759,7 @@ export default function ChatDetailScreen() {
                             {isUploading ? (
                                 <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                                <Feather name="send" size={20} color="#fff" style={{ transform: [{ translateY: 0.5 }] }} />
+                                <Feather name="send" size={20} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
                             )}
                         </TouchableOpacity>
                     </View>
