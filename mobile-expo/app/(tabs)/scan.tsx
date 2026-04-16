@@ -91,8 +91,8 @@ export default function ScanScreen() {
             // Fix orientation for iOS
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [],
-                { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+                [{ resize: { width: 1920 } }],
+                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
             );
 
             // --- Apply document scan (B&W) enhancement ---

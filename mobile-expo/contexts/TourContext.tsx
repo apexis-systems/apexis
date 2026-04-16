@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
 interface SpotlightPosition {
     x: number;
     y: number;
@@ -58,7 +59,7 @@ export const TourProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const registerSpotlight = useCallback((id: string, pos: SpotlightPosition) => {
         setSpotlights(prev => ({ ...prev, [id]: pos }));
     }, []);
-
+    
     // Initial check
     React.useEffect(() => {
         const check = async () => {

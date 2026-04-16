@@ -14,7 +14,7 @@ import { getSnags } from '@/services/snagService';
 import { getSecureFileUrl } from '@/services/fileService';
 
 import { useSocket } from '@/contexts/SocketContext';
-import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember } from '@/services/projectService';
 import { parseApiError } from '@/helpers/apiError';
 
 interface Props {
@@ -37,6 +37,8 @@ const getWeekNumber = (dateStr: string): number => {
 export default function ProjectOverview({ project, userRole, onUpdate, onActionPress }: Props) {
     const { colors } = useTheme();
     const projectId = (project as any)?.id;
+    const canManageMembers = userRole === 'admin' || userRole === 'superadmin';
+    const isClient = userRole === 'client';
 
     const [photosCount, setPhotosCount] = useState<number>(0);
     const [docsCount, setDocsCount] = useState<number>(0);
@@ -51,6 +53,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [memberModalType, setMemberModalType] = useState<'contributor' | 'client' | null>(null);
     const [members, setMembers] = useState<any[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
+    const [removingMemberId, setRemovingMemberId] = useState<string | number | null>(null);
 
     useEffect(() => {
         if (!memberModalType || !projectId) return;
@@ -72,6 +75,50 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             .catch(() => Alert.alert("Error", "Failed to load members"))
             .finally(() => setLoadingMembers(false));
     }, [memberModalType, projectId]);
+
+    const refreshMembers = async () => {
+        if (!memberModalType || !projectId) return;
+        const data = await getProjectMembers(projectId);
+        const fetchedMembers = data.members.filter((m: any) => m.role === memberModalType);
+        const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
+            if (m.user.profile_pic) {
+                try {
+                    const url = await getSecureFileUrl(m.user.profile_pic);
+                    return { ...m, secure_pic: url };
+                } catch { return m; }
+            }
+            return m;
+        }));
+        setMembers(membersWithPics);
+    };
+
+    const handleRemoveMember = async (member: any) => {
+        if (!projectId || !member?.user?.id) return;
+        Alert.alert(
+            'Remove project access?',
+            `Remove ${member.user.name} from this ${memberModalType} list? Their account will stay in the organization.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setRemovingMemberId(member.user.id);
+                            await removeProjectMember(projectId, member.user.id);
+                            await refreshMembers();
+                            Alert.alert('Success', 'Project access removed.');
+                        } catch (e) {
+                            const { message } = parseApiError(e, 'Failed to remove project access');
+                            Alert.alert('Error', message);
+                        } finally {
+                            setRemovingMemberId(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
 
     // Export State
@@ -126,7 +173,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     // Initial Export Status Fetch
     useEffect(() => {
-        if (userRole !== 'admin' || !projectId) return;
+        if ((userRole !== 'admin' && userRole !== 'superadmin') || !projectId) return;
 
         // Reset export state when project changes to prevent leakage
         setIsExporting(false);
@@ -156,7 +203,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     // Socket Listener
     useEffect(() => {
-        if (!socket || userRole !== 'admin') return;
+        if (!socket || (userRole !== 'admin' && userRole !== 'superadmin')) return;
 
         let timerInterval: ReturnType<typeof setInterval>;
 
@@ -323,8 +370,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {/* Stats Grid — 2×2 */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                     {[
-                        { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
-                        { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
+                        ...(isClient ? [] : [
+                            { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
+                            { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
+                        ]),
                         { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount), id: 'documents' },
                         { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount), id: 'photos' },
                     ].map((item) => {
@@ -361,6 +410,109 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         );
                     })}
                 </View>
+
+                {isClient && (
+                    <View style={{ gap: 12 }}>
+                        <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Client Project Code
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 }}>
+                                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, flex: 1 }}>
+                                    {(project as any).client_code || '—'}
+                                </Text>
+                                {(project as any).client_code && (
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <TouchableOpacity onPress={() => handleCopy((project as any).client_code, 'client')} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
+                                            <Feather name={copiedId === 'client' ? "check" : "copy"} size={16} color={copiedId === 'client' ? "#22c55e" : colors.textMuted} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => handleShareLink('client', (project as any).client_code)} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
+                                            <Feather name="share-2" size={16} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setMemberModalType('client')}
+                                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}
+                            >
+                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                    {(project as any).totalClients || 0} active {((project as any).totalClients || 0) === 1 ? 'client' : 'clients'}
+                                </Text>
+                                <Feather name="chevron-right" size={12} color={colors.primary} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                {/* Project Members & Codes */}
+                {userRole === 'contributor' && (
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                        {[
+                            { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0, type: 'contributor' as const },
+                            { label: 'Client List', value: null, id: 'client_list', count: (project as any).totalClients || 0, type: 'client' as const },
+                        ].map((item) => (
+                            <View
+                                key={item.id}
+                                style={{
+                                    flex: 1,
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 12,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 4,
+                                    elevation: 1,
+                                }}
+                            >
+                                <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
+                                    {item.label}
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
+                                        {item.value || '—'}
+                                    </Text>
+                                    {item.value ? (
+                                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                                            <TouchableOpacity
+                                                onPress={() => handleCopy(item.value!, item.id)}
+                                                style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                            >
+                                                <Feather
+                                                    name={copiedId === item.id ? "check" : "copy"}
+                                                    size={14}
+                                                    color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                                />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => handleShareLink('contributor', item.value!)}
+                                                style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                            >
+                                                <Feather name="share-2" size={14} color={colors.primary} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : (
+                                        <View style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}>
+                                            <Feather name="users" size={14} color={colors.textMuted} />
+                                        </View>
+                                    )}
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => setMemberModalType(item.type)}
+                                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+                                >
+                                    <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                        {item.count} active {item.type === 'contributor' ? (item.count === 1 ? 'contributor' : 'contributors') : (item.count === 1 ? 'client' : 'clients')}
+                                    </Text>
+                                    <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </View>
+                )}
 
                 {/* Project Access Codes — admin only (contributor/client codes are stripped from API response) */}
                 {userRole === 'admin' && (
@@ -429,11 +581,18 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
                 {/* Quick Actions */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {[
-                        { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
-                        { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
-                        { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
-                    ].map((action) => (
+                    {(
+                        isClient
+                            ? [
+                                { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
+                                { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
+                            ]
+                            : [
+                                { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
+                                { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
+                                { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
+                            ]
+                    ).map((action) => (
                         <TouchableOpacity
                             key={action.id}
                             onPress={() => onActionPress && onActionPress(action.id)}
@@ -573,10 +732,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         ) : members.length === 0 ? (
                             <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 40 }}>No active {memberModalType}s found</Text>
                         ) : (
-                            members.map((m, idx) => (
-                                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                                    {m.secure_pic ? (
-                                        <Image source={{ uri: m.secure_pic }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background }} />
+                                members.map((m, idx) => (
+                                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                        {m.secure_pic ? (
+                                            <Image source={{ uri: m.secure_pic }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background }} />
                                     ) : (
                                         <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
                                             <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primary }}>{m.user.name?.charAt(0).toUpperCase()}</Text>
@@ -597,11 +756,34 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                     <Text style={{ fontSize: 12, color: colors.textMuted }}>{m.user.phone_number}</Text>
                                                 </View>
                                             )}
+                                            </View>
                                         </View>
+                                        {canManageMembers && (
+                                            <TouchableOpacity
+                                                onPress={() => handleRemoveMember(m)}
+                                                disabled={removingMemberId === m.user.id}
+                                                style={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    borderRadius: 20,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                                    borderWidth: 1,
+                                                    borderColor: 'rgba(239, 68, 68, 0.18)',
+                                                    opacity: removingMemberId === m.user.id ? 0.5 : 1,
+                                                }}
+                                            >
+                                                {removingMemberId === m.user.id ? (
+                                                    <ActivityIndicator size="small" color="#ef4444" />
+                                                ) : (
+                                                    <Feather name="trash-2" size={16} color="#ef4444" />
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
-                                </View>
-                            ))
-                        )}
+                                ))
+                            )}
                     </ScrollView>
                 </SafeAreaView>
             </Modal>

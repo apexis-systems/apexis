@@ -4,10 +4,11 @@ import { startExportProcess, activeExports } from "../services/exportService.ts"
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { projects, users, folders, files, organizations, project_members, Sequelize } from "../models/index.ts";
+import { projects, users, folders, files, organizations, project_members, room_members, rooms, notifications, sequelize, Sequelize } from "../models/index.ts";
 import { Op, fn, col, literal } from "sequelize";
 
 import { checkProjectLimit } from "../utils/subscriptionAccess.ts";
+import { getIO } from "../socket.ts";
 
 // Helper to generate 6-character random alphanumeric code
 const generateCode = () => {
@@ -243,10 +244,17 @@ export const getProjectById = async (req: Request, res: Response) => {
 
         // Restrict access for non-superadmins
         if (authUser.role === "admin" && project.organization_id !== authUser.organization_id) {
-            return res.status(403).json({ error: "Forbidden: Not part of organization" });
+            // Check if the user is a member of this project (perhaps with a different role)
+            const membership = await project_members.findOne({
+                where: { project_id: project.id, user_id: authUser.user_id }
+            });
+            if (!membership) {
+                return res.status(403).json({ error: "Forbidden: Not part of organization" });
+            }
         }
+
         if (authUser.role === "contributor" || authUser.role === "client") {
-            // Check if user is a member of this project in the database
+            // Check if user is a member of this project in the database with the active role
             const membership = await project_members.findOne({
                 where: { project_id: project.id, user_id: authUser.user_id, role: authUser.role }
             });
@@ -257,8 +265,12 @@ export const getProjectById = async (req: Request, res: Response) => {
 
         let projectOutput = project.toJSON ? project.toJSON() : project;
 
-        // Strip sensitive codes for non-admins
-        if (authUser.role !== "admin") {
+        // Strip sensitive codes by role
+        if (authUser.role === "client") {
+            delete projectOutput.contributor_code;
+        } else if (authUser.role === "contributor") {
+            delete projectOutput.client_code;
+        } else if (authUser.role !== "admin" && authUser.role !== "superadmin") {
             delete projectOutput.contributor_code;
             delete projectOutput.client_code;
         }
@@ -374,24 +386,70 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:4000";
 
-        if (!authUser || authUser.role !== "admin") {
-            return res.status(403).json({ error: "Only admins can get share links" });
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const project = await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+        const requestedRole = typeof role === "string" ? role : undefined;
+        const project =
+            authUser.role === "client" || authUser.role === "contributor"
+                ? await projects.findByPk(id)
+                : authUser.role === "superadmin"
+                    ? await projects.findOne({ where: { id } })
+                    : await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
 
         if (!project) {
             return res.status(404).json({ error: "Project not found or not authorized" });
         }
 
+        if (authUser.role === "client" || authUser.role === "contributor") {
+            const requestedRoleForNonAdmin = authUser.role as "client" | "contributor";
+
+            if (requestedRole && requestedRole !== requestedRoleForNonAdmin) {
+                return res.status(403).json({ error: `Only ${requestedRoleForNonAdmin} share links are available` });
+            }
+
+            const membership = await project_members.findOne({
+                where: {
+                    project_id: id,
+                    user_id: authUser.user_id,
+                    role: requestedRoleForNonAdmin,
+                },
+            });
+
+            if (!membership) {
+                return res.status(403).json({ error: "Not authorized to view share links for this project" });
+            }
+
+            const shareUrl = requestedRoleForNonAdmin === "client" 
+                ? `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`
+                : `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
+            const shareCode = requestedRoleForNonAdmin === "client" ? project.client_code : project.contributor_code;
+
+            const response: any = {};
+            if (requestedRoleForNonAdmin === "client") {
+                response.clientLink = shareUrl;
+                response.clientCode = shareCode;
+            } else {
+                response.contributorLink = shareUrl;
+                response.contributorCode = shareCode;
+            }
+
+            return res.status(200).json(response);
+        }
+
+        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
+            return res.status(403).json({ error: "Only admins can get share links" });
+        }
+
         const response: any = {};
         
-        if (!role || role === 'contributor') {
+        if (!requestedRole || requestedRole === 'contributor') {
             response.contributorLink = `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
             response.contributorCode = project.contributor_code;
         }
         
-        if (!role || role === 'client') {
+        if (!requestedRole || requestedRole === 'client') {
             response.clientLink = `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`;
             response.clientCode = project.client_code;
         }
@@ -408,13 +466,30 @@ export const getProjectMembers = async (req: Request, res: Response) => {
         const { id } = req.params;
         const authUser = (req as any).user;
 
-        if (!authUser || authUser.role !== "admin") {
-            return res.status(403).json({ error: "Only admins can view project members" });
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const project = await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+        const project = await projects.findOne({ where: { id } });
         if (!project) {
-            return res.status(404).json({ error: "Project not found or not authorized" });
+            return res.status(404).json({ error: "Project not found" });
+        }
+
+        const isSameOrgAdmin = authUser.role === "admin" && Number(project.organization_id) === Number(authUser.organization_id);
+        const isSuperadmin = authUser.role === "superadmin";
+
+        if (!isSuperadmin && !isSameOrgAdmin) {
+            const membership = await project_members.findOne({
+                where: {
+                    project_id: id,
+                    user_id: authUser.user_id,
+                    role: authUser.role,
+                },
+            });
+
+            if (!membership) {
+                return res.status(403).json({ error: "Not authorized to view project members" });
+            }
         }
 
         const members = await project_members.findAll({
@@ -430,5 +505,80 @@ export const getProjectMembers = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Get Project Members Error:", error);
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const removeProjectMember = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id: projectId, userId } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            await t.rollback();
+            return res.status(403).json({ error: "Only admins can remove project members" });
+        }
+
+        const project = await projects.findOne({
+            where: { id: projectId, organization_id: authUser.organization_id },
+            transaction: t as any,
+        });
+        if (!project) {
+            await t.rollback();
+            return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        const membership = await project_members.findOne({
+            where: { project_id: projectId, user_id: userId },
+            transaction: t as any,
+        });
+
+        if (!membership) {
+            await t.rollback();
+            return res.status(404).json({ error: "Project member not found" });
+        }
+
+        const memberRole = (membership as any).role;
+        if (memberRole !== 'contributor' && memberRole !== 'client') {
+            await t.rollback();
+            return res.status(400).json({ error: "Only contributors and clients can be removed" });
+        }
+
+        await project_members.destroy({
+            where: { project_id: projectId, user_id: userId },
+            transaction: t as any,
+        });
+
+        const projectRooms = await rooms.findAll({
+            where: { project_id: projectId },
+            attributes: ['id'],
+            transaction: t as any,
+        });
+
+        const roomIds = projectRooms.map((room: any) => room.id);
+        if (roomIds.length > 0) {
+            await room_members.destroy({
+                where: { user_id: userId, room_id: { [Op.in]: roomIds } },
+                transaction: t as any,
+            });
+        }
+
+        await notifications.destroy({
+            where: { user_id: userId, project_id: projectId },
+            transaction: t as any,
+        });
+
+        try {
+            getIO().to(`project-${projectId}`).emit('project-stats-updated', { projectId: String(projectId) });
+        } catch (ioErr) {
+            console.error('Socket emit error (non-fatal):', ioErr);
+        }
+
+        await t.commit();
+        return res.status(200).json({ message: "Project member removed successfully" });
+    } catch (error) {
+        await t.rollback();
+        console.error("Remove Project Member Error:", error);
+        return res.status(500).json({ error: "Internal server error" });
     }
 };

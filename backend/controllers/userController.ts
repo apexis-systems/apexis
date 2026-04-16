@@ -5,7 +5,6 @@ import {
     project_members,
     room_members,
     notifications,
-    activities,
     snags,
     rfis,
     organizations,
@@ -112,14 +111,22 @@ export const inviteUser = async (req: Request, res: Response) => {
             }
         }
 
+        const org = await organizations.findByPk(authUser.organization_id);
+        const organization_name = org ? org.name : "your organization";
+
         await sendEmail(
             email,
-            `Invitation to join Apexis as ${roleName}`,
-            `<h1>Welcome to Apexis</h1>
-             <p>You have been invited as a <strong>${roleName}</strong> for your organization.</p>
-             <p>Please click the link below to securely login to your project in the Apexis mobile app:</p>
-             <a href="${inviteUrl}" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Login to Project</a>
-             <p>If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>`,
+            `Invitation to join APEXISpro™ as ${roleName}`,
+            `<div style="font-family: Arial, Helvetica, sans-serif; color: #14213d;">
+                <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 20px;">
+                    APEXIS <span style="font-size: 16px;">PRO™</span>
+                </div>
+                <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Welcome to APEXIS<span style="font-size: 14px;">PRO™</span></h1>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 12px;">You have been invited to join <strong>"${organization_name}"</strong> on APEXIS <span style="font-size: 13px;">PRO™</span>.</p>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Please click the link below to securely login to your project in the APEXIS<span style="font-size: 13px;">PRO™</span> mobile app:</p>
+                <a href="${inviteUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Login to Project</a>
+                <p style="font-size: 14px; color: #64748b; margin-top: 24px;">If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>
+             </div>`,
             true
         );
 
@@ -150,7 +157,7 @@ export const getOrgUsers = async (req: Request, res: Response) => {
         let whereCondition: any = { organization_id: { [Op.in]: myOrgs } };
 
         if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
-            // Non-admins: Only see users who share a project with them in ANY of their orgs
+            // Non-admins: See users who share a project with them, PLUS all admins of their org
             const myProjectIds = await project_members.findAll({
                 where: { user_id: authUser.user_id },
                 attributes: ['project_id']
@@ -161,12 +168,22 @@ export const getOrgUsers = async (req: Request, res: Response) => {
                 attributes: ['user_id']
             }).then((pms: any[]) => pms.map((pm: any) => pm.user_id));
 
-            whereCondition.id = { [Op.in]: [...new Set([...peerUserIds, authUser.user_id])] };
+            // Always include admins of the organizations the user belongs to,
+            // so contributors/clients can always message their project admin(s).
+            const adminUserIds = await users.findAll({
+                where: {
+                    organization_id: { [Op.in]: myOrgs },
+                    role: 'admin'
+                },
+                attributes: ['id']
+            }).then((admins: any[]) => admins.map((a: any) => a.id));
+
+            whereCondition.id = { [Op.in]: [...new Set([...peerUserIds, ...adminUserIds, authUser.user_id])] };
         }
 
         const orgUsers = await users.findAll({
             where: whereCondition,
-            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'is_primary', 'email_verified', 'phone_verified', 'createdAt', 'organization_id'],
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'profile_pic', 'is_primary', 'email_verified', 'phone_verified', 'createdAt', 'organization_id'],
             include: [{ model: organizations, attributes: ['name'] }]
         });
 
@@ -208,24 +225,40 @@ export const deleteUser = async (req: Request, res: Response) => {
 
         if (String(userToDelete.id) === String(authUser.user_id)) {
             await t.rollback();
-            return res.status(400).json({ error: "You cannot delete yourself" });
+            return res.status(400).json({ error: "You cannot remove yourself" });
         }
 
-        // 1. Delete membership/notification records (Safe to delete)
+        if (["admin", "superadmin"].includes(userToDelete.role)) {
+            await t.rollback();
+            return res.status(400).json({ error: "Admins cannot be removed from projects" });
+        }
+
+        const memberships = await project_members.findAll({
+            where: { user_id: id },
+            attributes: ['project_id'],
+            transaction: t,
+        });
+        const affectedProjectIds = memberships.map((m: any) => m.project_id);
+
+        // Remove the user from all projects they currently belong to.
         await project_members.destroy({ where: { user_id: id }, transaction: t });
         await room_members.destroy({ where: { user_id: id }, transaction: t });
         await notifications.destroy({ where: { user_id: id }, transaction: t });
-        await activities.destroy({ where: { user_id: id }, transaction: t });
 
         // 2. Nullify assignees (Safe to nullify)
         await snags.update({ assigned_to: null }, { where: { assigned_to: id }, transaction: t });
         await rfis.update({ assigned_to: null }, { where: { assigned_to: id }, transaction: t });
 
-        // 3. Attempt to delete the user
-        await userToDelete.destroy({ transaction: t });
+        for (const projectId of affectedProjectIds) {
+            try {
+                getIO().to(`project-${projectId}`).emit('project-stats-updated', { projectId: String(projectId) });
+            } catch (ioErr) {
+                console.error('Socket emit error (non-fatal):', ioErr);
+            }
+        }
 
         await t.commit();
-        res.status(200).json({ message: "User removed successfully" });
+        res.status(200).json({ message: "Project access removed successfully" });
     } catch (error: any) {
         await t.rollback();
         console.error("Delete User Error:", error);

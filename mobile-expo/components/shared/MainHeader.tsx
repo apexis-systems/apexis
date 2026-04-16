@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TouchableOpacity, Image, Modal, TextInput, Linking } from 'react-native';
+import { View, TouchableOpacity, Image, Modal, TextInput, Linking, Platform, StatusBar } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -35,9 +35,16 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
         if (isTourActive) {
             setTimeout(() => {
                 bellRef.current?.measureInWindow((x, y, w, h) => {
-                    registerSpotlight('notificationsIcon', { x: w + 145, y: h, r: 35 });
+                    if (w > 0) {
+                        const androidStatusBarOffset = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+                        registerSpotlight('notificationsIcon', { 
+                            x: x + w / 2, 
+                            y: y + h / 2 + androidStatusBarOffset, 
+                            r: 28 
+                        });
+                    }
                 });
-            }, 50);
+            }, 1000);
         }
     }, [isTourActive, registerSpotlight]);
 
@@ -88,7 +95,7 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                         </View>
                         <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, letterSpacing: 0.5 }}>
                             APEXIS
-                            <Text className="font-angelica" style={{ fontSize: 10, textTransform: 'lowercase' }}>pro</Text>
+                            <Text className="font-angelica" style={{ fontSize: 10 }}>PRO™</Text>
                         </Text>
                     </TouchableOpacity>
 

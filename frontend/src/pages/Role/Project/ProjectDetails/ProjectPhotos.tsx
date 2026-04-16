@@ -39,6 +39,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [shareItem, setShareItem] = useState<any | null>(null);
   const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
+  const [initialFileId, setInitialFileId] = useState<string | null>(searchParams?.get('fileId') || searchParams?.get('photoId') || null);
 
   // Selection state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -71,6 +72,33 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       importFolders();
     }
   }, [project?.id]);
+
+  useEffect(() => {
+    if (initialFileId && photos.length > 0) {
+      // Replicate the filtering logic here to avoid temporal dead zone from sortedPhotos
+      const currentFolderPhotosForInit = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
+      const visiblePhotosInit = user?.role === 'client' ? currentFolderPhotosForInit.filter((p: any) => p.client_visible) : currentFolderPhotosForInit;
+      const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
+        if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
+        if (sortBy === 'date') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
+        return 0;
+      });
+
+      const idx = sortedInit.findIndex((p: any) => String(p.id) === String(initialFileId));
+      if (idx !== -1) {
+        setViewerState({ open: true, index: idx });
+        setInitialFileId(null);
+        // Clear param to prevent loop
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('fileId');
+          url.searchParams.delete('photoId');
+          window.history.replaceState(null, '', url.toString());
+        }
+      }
+    }
+  }, [initialFileId, photos, selectedFolder, sortBy, user?.role]);
 
   useEffect(() => {
     if (selectedFolder) {

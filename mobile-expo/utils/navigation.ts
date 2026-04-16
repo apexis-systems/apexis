@@ -1,64 +1,104 @@
 import { Router } from 'expo-router';
 
 /**
- * Centrally handles navigation logic for various notification types.
- * Works for both in-app notification clicks and system push notification interactions.
+ * Module-level singleton — tracks the last notification ID that was navigated.
+ * Shared across ALL components (unlike per-component useRef), so even if both
+ * _layout.tsx (useLastNotificationResponse) and index.tsx
+ * (addNotificationResponseReceivedListener) fire for the same background tap,
+ * only the FIRST caller navigates and the second is silently ignored.
  */
-export const handleNotificationNavigation = (type: string, data: any, router: Router) => {
-    // Standardize data extraction (handles both snake_case and camelCase)
-    const projectId = data?.projectId || data?.project_id;
-    const roomId = data?.roomId || data?.room_id;
-    
-    console.log(`[NAV] Handling notification navigation: type=${type}`, data);
+let _lastHandledNotificationId: string | null = null;
 
-    if (type === 'chat' || type === 'group_creation') {
-        if (roomId) {
-            router.push(`/chat/${roomId}`);
-        } else {
-            router.push(`/(tabs)/chat`);
+/**
+ * Entry point for notification taps. Use this in all components instead of
+ * calling handleNotificationNavigation directly. Provides cross-component
+ * deduplication via the module-level singleton above.
+ */
+export const navigateFromNotification = (
+    notificationId: string,
+    type: string | undefined | null,
+    data: any,
+    router: Router
+) => {
+    if (!notificationId || _lastHandledNotificationId === notificationId) {
+        console.log(`[NAV] Notification ${notificationId} already handled — skipping.`);
+        return;
+    }
+    _lastHandledNotificationId = notificationId;
+    handleNotificationNavigation(type, data, router);
+};
+
+/**
+ * Core navigation logic for all notification types.
+ * Handles deep-linking to chats, project tabs (documents, photos, snags, RFI).
+ * Robust against null/undefined data — a malformed FCM payload never crashes the app.
+ */
+export const handleNotificationNavigation = (type: string | undefined | null, data: any, router: Router) => {
+    try {
+        if (!type || !data) {
+            console.warn('[NAV] handleNotificationNavigation called with no type or data — skipping.');
+            return;
         }
-        return;
-    }
 
-    if (!projectId) {
-        console.warn('[NAV] No projectId found in notification data, cannot navigate to project subspace');
-        return;
-    }
+        // Standardize data extraction (handles both snake_case and camelCase)
+        const projectId = data?.projectId || data?.project_id;
+        const roomId = data?.roomId || data?.room_id;
+        const folderId = data?.folderId || data?.folder_id;
+        const fileId = data?.fileId || data?.file_id;
+        const snagId = data?.snagId || data?.snag_id;
+        const rfiId = data?.rfiId || data?.rfi_id;
 
-    let tab = 'overview';
-    switch (type) {
-        case 'file_upload':
-        case 'file_visibility':
-        case 'folder_visibility':
-        case 'file_upload_admin':
-            tab = 'documents';
-            break;
-        case 'photo_upload':
-        case 'photo_comment':
-            tab = 'photos';
-            break;
-        case 'snag_assigned':
-        case 'snag_creation_admin':
-        case 'snag_status_update':
-            tab = 'snags';
-            break;
-        case 'rfi_created':
-        case 'rfi_assigned':
-        case 'rfi_status_update':
-        case 'rfi_comment':
-            tab = 'rfi';
-            break;
-        case 'member_joined':
-            tab = 'overview';
-            break;
-        default:
-            tab = 'overview';
-            break;
-    }
+        console.log(`[NAV] Navigating for notification type=${type}`, data);
 
-    let url = `/(tabs)/project/${projectId}?tab=${tab}`;
-    if (data?.folderId) {
-        url += `&initialFolderId=${data.folderId}`;
+        if (type === 'chat' || type === 'group_creation') {
+            router.push(roomId ? `/chat/${roomId}` : `/(tabs)/chat`);
+            return;
+        }
+
+        if (!projectId) {
+            console.warn('[NAV] No projectId in notification data — skipping project navigation.');
+            return;
+        }
+
+        let tab = 'overview';
+        let extraParams = '';
+
+        switch (type) {
+            case 'file_upload':
+            case 'file_visibility':
+            case 'folder_visibility':
+            case 'file_upload_admin':
+                tab = 'documents';
+                if (folderId) extraParams += `&initialFolderId=${folderId}`;
+                if (fileId) extraParams += `&fileId=${fileId}`;
+                break;
+            case 'photo_upload':
+            case 'photo_comment':
+                tab = 'photos';
+                if (folderId) extraParams += `&initialFolderId=${folderId}`;
+                if (fileId) extraParams += `&fileId=${fileId}`;
+                break;
+            case 'snag_assigned':
+            case 'snag_creation_admin':
+            case 'snag_status_update':
+                tab = 'snags';
+                if (snagId) extraParams += `&snagId=${snagId}`;
+                break;
+            case 'rfi_created':
+            case 'rfi_assigned':
+            case 'rfi_status_update':
+            case 'rfi_comment':
+                tab = 'rfi';
+                if (rfiId) extraParams += `&rfiId=${rfiId}`;
+                break;
+            case 'member_joined':
+            default:
+                tab = 'overview';
+                break;
+        }
+
+        router.push(`/(tabs)/project/${projectId}?tab=${tab}${extraParams}` as any);
+    } catch (err) {
+        console.error('[NAV] Unexpected error during notification navigation:', err);
     }
-    router.push(url as any);
 };

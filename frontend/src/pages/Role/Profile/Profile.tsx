@@ -3,21 +3,20 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
-import { LogOut, Shield, User, Camera, Loader2, X, ArrowLeft } from 'lucide-react';
+import { LogOut, Shield, User, Camera, Loader2, X, ArrowLeft, Briefcase } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { updateUserProfilePic, updateUserName } from '@/services/userService';
 import { getSecureFileUrl } from '@/services/fileService';
 import { uploadOrganizationLogo, updateOrganization } from '@/services/organizationService';
 import { toast } from 'sonner';
-import { changePassword, getMyMemberships, switchContext } from '@/services/authService';
+import { changePassword, getMyMemberships } from '@/services/authService';
 import ProfilePreviewModal from '@/components/shared/ProfilePreviewModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
-import { KeyRound, CheckCircle2, Edit2, Check, Briefcase, Building, Layers, RefreshCw } from 'lucide-react';
+import { KeyRound, CheckCircle2, Edit2, Check, Building, Layers, RefreshCw } from 'lucide-react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { cn } from '@/lib/utils';
@@ -28,7 +27,6 @@ const Profile = () => {
     const { t } = useLanguage();
     
     const [memberships, setMemberships] = useState<any[]>([]);
-    const [isSwitching, setIsSwitching] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -257,13 +255,6 @@ const Profile = () => {
         }
     };
 
-    const roleBadgeColor: Record<UserRole, string> = {
-        admin: 'bg-accent text-accent-foreground',
-        superadmin: 'bg-accent text-accent-foreground',
-        contributor: 'bg-primary text-primary-foreground',
-        client: 'bg-secondary text-secondary-foreground',
-    };
-
     return (
         <div className="p-8 max-w-lg mx-auto">
             <div className="flex flex-col items-center text-center mb-8">
@@ -319,7 +310,7 @@ const Profile = () => {
                 )}
 
                 <p className="text-sm text-muted-foreground">{user.email || user.phone_number}</p>
-                <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${roleBadgeColor[user.role as UserRole]}`}>
+                <span className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
                     <Shield className="h-3 w-3" />
                     {(user.role as string).charAt(0).toUpperCase() + (user.role as string).slice(1)}
                 </span>

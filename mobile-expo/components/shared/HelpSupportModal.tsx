@@ -10,7 +10,7 @@ interface Props {
 }
 
 const videos = [
-    { title: 'Getting Started with APEXISpro', duration: '3:45', type: 'video' },
+    { title: 'Getting Started with APEXISpro™', duration: '3:45', type: 'video' },
     { title: 'Uploading Documents & Photos', duration: '2:30', type: 'video' },
     { title: 'Managing Project Permissions', duration: '4:10', type: 'video' },
     { title: 'Using the Snag List', duration: '3:00', type: 'video' },

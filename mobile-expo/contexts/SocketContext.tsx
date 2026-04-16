@@ -84,7 +84,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let newSocket: Socket | null = null;
 
         if (isLoggedIn) {
-            const socketUrl = process.env.EXPO_PUBLIC_SOCKET_URL || 'http://localhost:5002';
+            const socketUrl = process.env.EXPO_PUBLIC_SOCKET_URL || (__DEV__ ? 'http://localhost:5002' : '');
+
+            if (__DEV__) {
+                console.log('[Dev] Socket URL:', socketUrl);
+            } else {
+                console.log('[Prod] Socket URL:', socketUrl);
+            }
 
             newSocket = io(socketUrl, {
                 transports: ['polling', 'websocket'],

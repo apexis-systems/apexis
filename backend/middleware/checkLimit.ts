@@ -24,14 +24,29 @@ export const checkLimit = (type: LimitType) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const authUser = req.user;
-      if (!authUser || !authUser.organization_id) {
+      let activeOrgId = authUser?.organization_id;
+
+      // If organization_id is missing from the token, try to resolve it from the project context
+      // This supports users who switch to a role globally (where org_id might be null) 
+      // but are acting on a specific project.
+      if (!activeOrgId) {
+        const projectId = req.body.project_id || req.params.id || req.query.project_id;
+        if (projectId) {
+          const project = await projects.findByPk(projectId, { attributes: ["organization_id"] });
+          if (project) {
+            activeOrgId = project.organization_id;
+          }
+        }
+      }
+
+      if (!activeOrgId) {
         return res
           .status(401)
           .json({ error: "Unauthorized: Missing organization context" });
       }
 
       // 1. Fetch Organization and its Plan
-      const org = await organizations.findByPk(authUser.organization_id, {
+      const org = await organizations.findByPk(activeOrgId, {
         include: [{ model: plans }],
       });
 

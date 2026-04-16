@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Upload, FileText, Camera, Clock, Loader2, ChevronDown } from 'lucide-react';
+import { FileText, Camera, Clock, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { getActivities } from '@/services/activityService';
 import { getOrganizations } from '@/services/superadminService';
 import { getOrgUsers } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { ActivityItem as GlobalActivityItem } from '@/types';
 import { useSocket } from '@/contexts/SocketContext';
 import { useRouter } from 'next/navigation';
@@ -43,9 +44,10 @@ const Activity = () => {
     const [projectsList, setProjectsList] = useState<any[]>([]);
 
     const [selectedOrgId, setSelectedOrgId] = useState<string>('all');
-    const [selectedUserId, setSelectedUserId] = useState<string>('all');
+    // Multi-select: empty array = "all"
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [selectedType, setSelectedType] = useState<string>(initialType);
-    const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+    const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
 
     const [loading, setLoading] = useState(true);
 
@@ -62,7 +64,7 @@ const Activity = () => {
                 const orgId = selectedOrgId !== 'all' ? selectedOrgId : undefined;
 
                 // Users
-                const usersData = await getOrgUsers(); // This currently doesn't take orgId, but backend handles it via JWT for non-superadmin
+                const usersData = await getOrgUsers();
                 setUsersList(usersData || []);
 
                 // Projects
@@ -80,12 +82,16 @@ const Activity = () => {
             if (!user) return;
             setLoading(true);
             try {
-                const filters = {
+                // Build params — send comma-separated IDs for multi-select
+                const filters: any = {
                     organization_id: selectedOrgId !== 'all' ? selectedOrgId : undefined,
-                    user_id: selectedUserId !== 'all' ? selectedUserId : undefined,
                     type: selectedType !== 'all' ? selectedType : undefined,
-                    project_id: selectedProjectId !== 'all' ? selectedProjectId : undefined,
                 };
+                if (selectedProjectIds.length === 1) filters.project_id = selectedProjectIds[0];
+                else if (selectedProjectIds.length > 1) filters.project_ids = selectedProjectIds.join(',');
+                if (selectedUserIds.length === 1) filters.user_id = selectedUserIds[0];
+                else if (selectedUserIds.length > 1) filters.user_ids = selectedUserIds.join(',');
+
                 const feed = await getActivities(filters);
 
                 // Format timestamps locally
@@ -104,7 +110,7 @@ const Activity = () => {
             }
         };
         load();
-    }, [user, selectedOrgId, selectedUserId, selectedType, selectedProjectId]);
+    }, [user, selectedOrgId, selectedUserIds, selectedType, selectedProjectIds]);
 
     // Real-time Activity Listener
     useEffect(() => {
@@ -113,8 +119,8 @@ const Activity = () => {
         const handleNewActivity = (newActivity: any) => {
             // Respect active filters
             if (selectedOrgId !== 'all' && String(newActivity.organizationId) !== selectedOrgId) return;
-            if (selectedProjectId !== 'all' && String(newActivity.projectId) !== selectedProjectId) return;
-            if (selectedUserId !== 'all' && String(newActivity.userId) !== selectedUserId) return;
+            if (selectedProjectIds.length > 0 && !selectedProjectIds.includes(String(newActivity.projectId))) return;
+            if (selectedUserIds.length > 0 && !selectedUserIds.includes(String(newActivity.userId))) return;
             if (selectedType !== 'all' && newActivity.type !== selectedType) return;
 
             // Format for display
@@ -135,9 +141,12 @@ const Activity = () => {
         return () => {
             socket.off('new-activity', handleNewActivity);
         };
-    }, [socket, selectedOrgId, selectedUserId, selectedType, selectedProjectId]);
+    }, [socket, selectedOrgId, selectedUserIds, selectedType, selectedProjectIds]);
 
     if (!user) return null;
+
+    const projectOptions = projectsList.map(p => ({ label: p.name, value: String(p.id) }));
+    const userOptions = usersList.map(u => ({ label: u.name, value: String(u.id) }));
 
     return (
         <div className="max-w-4xl p-8 mx-auto">
@@ -149,7 +158,7 @@ const Activity = () => {
 
                 <div className="flex flex-wrap gap-3">
                     {user.role === 'superadmin' && (
-                        <Select value={selectedOrgId} onValueChange={(val) => { setSelectedOrgId(val); setSelectedUserId('all'); setSelectedProjectId('all'); }}>
+                        <Select value={selectedOrgId} onValueChange={(val) => { setSelectedOrgId(val); setSelectedUserIds([]); setSelectedProjectIds([]); }}>
                             <SelectTrigger className="w-40 text-xs">
                                 <SelectValue placeholder="All Organizations" />
                             </SelectTrigger>
@@ -162,29 +171,19 @@ const Activity = () => {
                         </Select>
                     )}
 
-                    <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                        <SelectTrigger className="w-40 text-xs">
-                            <SelectValue placeholder="All Projects" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Projects</SelectItem>
-                            {projectsList.map(proj => (
-                                <SelectItem key={proj.id} value={String(proj.id)}>{proj.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <MultiSelect
+                        options={projectOptions}
+                        selected={selectedProjectIds}
+                        onChange={setSelectedProjectIds}
+                        placeholder="All Projects"
+                    />
 
-                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                        <SelectTrigger className="w-40 text-xs">
-                            <SelectValue placeholder="All Users" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Users</SelectItem>
-                            {usersList.map(u => (
-                                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <MultiSelect
+                        options={userOptions}
+                        selected={selectedUserIds}
+                        onChange={setSelectedUserIds}
+                        placeholder="All Users"
+                    />
 
                     <Select value={selectedType} onValueChange={setSelectedType}>
                         <SelectTrigger className="w-40 text-xs">

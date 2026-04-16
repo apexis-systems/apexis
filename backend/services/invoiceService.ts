@@ -34,7 +34,11 @@ const drawBrandedHeader = (doc: any, taglineStr: string) => {
     const blockTop = 25;
 
     doc.font(brandFont).fontSize(20);
-    const brandTextW = doc.widthOfString('APEXISpro');
+    const apexW = doc.widthOfString('APEXIS');
+    doc.fontSize(12);
+    const proW = doc.widthOfString('PRO™');
+    const brandTextW = apexW + proW;
+
     doc.font('Helvetica-Bold').fontSize(5.5);
     const tagW = doc.widthOfString(taglineStr);
     const gap = 10;
@@ -50,7 +54,8 @@ const drawBrandedHeader = (doc: any, taglineStr: string) => {
     }
 
     doc.font(brandFont).fontSize(20).fillColor(BRAND.orange);
-    doc.text('APEXISpro', textLeft, blockTop + 4, { lineBreak: false });
+    doc.text('APEXIS', textLeft, blockTop + 4, { lineBreak: false });
+    doc.fontSize(12).text('PRO™', textLeft + apexW, blockTop + 10, { lineBreak: false });
     doc.font('Helvetica-Bold').fontSize(5.5).fillColor(BRAND.muted);
     doc.text(taglineStr, textLeft + (brandTextW - tagW) / 2 + 3, blockTop + 28, { lineBreak: false });
 
@@ -85,8 +90,13 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number, invo
     doc.text(prefix, m.left, textY, { lineBreak: false });
 
     doc.font(brandFont).fontSize(10).fillColor(BRAND.orange);
-    const wb = doc.widthOfString('APEXISpro');
-    doc.text('APEXISpro', m.left + wp, textY - 2.5, { lineBreak: false });
+    const apexFooterW = doc.widthOfString('APEXIS');
+    doc.fontSize(7);
+    const proFooterW = doc.widthOfString('PRO™');
+    const wb = apexFooterW + proFooterW;
+    
+    doc.font(brandFont).fontSize(10).text('APEXIS', m.left + wp, textY - 2.5, { lineBreak: false });
+    doc.fontSize(7).text('PRO™', m.left + wp + apexFooterW, textY - 0.5, { lineBreak: false });
 
     doc.font('Helvetica').fontSize(7).fillColor(BRAND.muted);
     doc.text(' — CONSTRUCTION COMMUNICATION PLATFORM', m.left + wp + wb, textY, { lineBreak: false });
@@ -139,7 +149,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         const rightColX = 350;
 
         // --- 2. Company Details (Left) ---
-        doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.ink).text('ApexisPro Systems Private Limited', leftColX);
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.ink).text('APEXISpro™ Systems Private Limited', leftColX);
         doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted);
         doc.text('H.No. 10-5-37, Rose Residency');
         doc.text('Masab Tank, Hyderabad – 500028');
@@ -291,7 +301,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         };
 
         drawPayLine('Bank Name', 'HDFC Bank Ltd', 50, payY);
-        drawPayLine('Account Name', 'ApexisPro Systems Private Limited', 50 + payColW, payY);
+        drawPayLine('Account Name', 'APEXISpro™ Systems Private Limited', 50 + payColW, payY);
         drawPayLine('Account Number', '50200118128748', 50, payY + 18);
         drawPayLine('IFSC Code', 'HDFC0009817', 50 + payColW, payY + 18);
         drawPayLine('Branch', 'Bankhouse Banjarahills', 50, payY + 36);
@@ -310,7 +320,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
 
 
         doc.moveDown(0.2);
-        doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text('For ApexisPro Systems Private Limited', 50);
+        doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text('For APEXISpro™ Systems Private Limited', 50);
 
         // --- Signature Image ---
         if (fs.existsSync(ASSETS.signature)) {

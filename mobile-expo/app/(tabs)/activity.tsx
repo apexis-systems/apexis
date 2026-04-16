@@ -56,8 +56,9 @@ export default function ActivityScreen() {
     const [projectsList, setProjectsList] = useState<any[]>([]);
 
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
-    const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+    // Multi-select: empty array = "all"
+    const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [selectedType, setSelectedType] = useState<string | null>(type || null);
 
     const [activeModal, setActiveModal] = useState<'org' | 'user' | 'project' | 'type' | null>(null);
@@ -69,14 +70,11 @@ export default function ActivityScreen() {
         }
     }, [user]);
 
-    // Fetch filters (users/projects)
     useEffect(() => {
         const fetchFilters = async () => {
             try {
-                // Users
                 const u = await getOrgUsers();
                 setUsersList(u || []);
-                // Projects
                 const p = await getProjects(selectedOrgId || undefined);
                 setProjectsList(p.projects || []);
             } catch (e) {
@@ -91,21 +89,22 @@ export default function ActivityScreen() {
             if (!user) return;
             setLoading(true);
             try {
-                const filters = {
+                const filters: any = {
                     organization_id: selectedOrgId || undefined,
-                    user_id: selectedUserId || undefined,
-                    project_id: selectedProjectId || undefined,
                     type: selectedType || undefined,
                 };
-                const data = await getActivities(filters);
+                if (selectedProjectIds.length === 1) filters.project_id = selectedProjectIds[0];
+                else if (selectedProjectIds.length > 1) filters.project_ids = selectedProjectIds.join(',');
+                if (selectedUserIds.length === 1) filters.user_id = selectedUserIds[0];
+                else if (selectedUserIds.length > 1) filters.user_ids = selectedUserIds.join(',');
 
+                const data = await getActivities(filters);
                 const formatted = data.map((act: any) => ({
                     ...act,
                     timestamp: new Date(act.timestamp).toLocaleString('en-IN', {
                         dateStyle: 'medium', timeStyle: 'short'
                     })
                 }));
-
                 setActivities(formatted);
             } catch (error) {
                 console.error('Failed to load activity', error);
@@ -114,39 +113,31 @@ export default function ActivityScreen() {
             }
         };
         fetchFeed();
-    }, [user, selectedOrgId, selectedUserId, selectedProjectId, selectedType]);
+    }, [user, selectedOrgId, selectedProjectIds, selectedUserIds, selectedType]);
 
-    // Handle Real-time updates
+    // Real-time updates
     useEffect(() => {
         if (!socket) return;
-
         const handleNewActivity = (newActivity: any) => {
-            // Check filters
-            if (selectedOrgId && selectedOrgId !== 'all' && String(newActivity.organizationId) !== selectedOrgId) return;
-            if (selectedProjectId && selectedProjectId !== 'all' && String(newActivity.projectId) !== selectedProjectId) return;
-            if (selectedUserId && selectedUserId !== 'all' && String(newActivity.userId) !== selectedUserId) return;
-            if (selectedType && selectedType !== 'all' && newActivity.type !== selectedType) return;
+            if (selectedOrgId && String(newActivity.organizationId) !== selectedOrgId) return;
+            if (selectedProjectIds.length > 0 && !selectedProjectIds.includes(String(newActivity.projectId))) return;
+            if (selectedUserIds.length > 0 && !selectedUserIds.includes(String(newActivity.userId))) return;
+            if (selectedType && newActivity.type !== selectedType) return;
 
-            // Format timestamp for display
             const formatted = {
                 ...newActivity,
                 timestamp: new Date(newActivity.timestamp).toLocaleString('en-IN', {
                     dateStyle: 'medium', timeStyle: 'short'
                 })
             };
-
             setActivities(prev => {
-                // Avoid duplicates (e.g. if we refetch at the same time)
-                if (prev.some(a => a.id === newActivity.id)) return prev;
+                if (prev.some(a => a.id === formatted.id)) return prev;
                 return [formatted, ...prev];
             });
         };
-
         socket.on('new-activity', handleNewActivity);
-        return () => {
-            socket.off('new-activity', handleNewActivity);
-        };
-    }, [socket, selectedOrgId, selectedUserId, selectedProjectId, selectedType]);
+        return () => { socket.off('new-activity', handleNewActivity); };
+    }, [socket, selectedOrgId, selectedProjectIds, selectedUserIds, selectedType]);
 
     const DUMMY_ACTIVITIES = [
         { id: 'da1', type: 'upload', description: 'uploaded new floor plans', userName: 'John Doe', projectName: 'Project Alpha', timestamp: 'Just now' },
@@ -157,7 +148,32 @@ export default function ActivityScreen() {
 
     if (!user) return null;
 
-    const FilterButton = ({ label, value, onPress, title }: { label: string; value: string | null; onPress: () => void; title: string }) => (
+    // Toggle helpers for multi-select
+    const toggleProject = (id: string) => {
+        setSelectedProjectIds(prev =>
+            prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+        );
+    };
+    const toggleUser = (id: string) => {
+        setSelectedUserIds(prev =>
+            prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+        );
+    };
+
+    // Label helpers
+    const projectLabel = selectedProjectIds.length === 0
+        ? 'All'
+        : selectedProjectIds.length === 1
+            ? (projectsList.find(p => String(p.id) === selectedProjectIds[0])?.name || '...')
+            : `${selectedProjectIds.length} selected`;
+
+    const userLabel = selectedUserIds.length === 0
+        ? 'All'
+        : selectedUserIds.length === 1
+            ? (usersList.find(u => String(u.id) === selectedUserIds[0])?.name || '...')
+            : `${selectedUserIds.length} selected`;
+
+    const FilterButton = ({ label, value, onPress, title }: { label: string; value: boolean; onPress: () => void; title: string }) => (
         <TouchableOpacity
             onPress={onPress}
             style={{
@@ -187,7 +203,6 @@ export default function ActivityScreen() {
                 <Text style={{ fontSize: 24, fontWeight: '700', color: themeColors.text }}>{t('Activity') || 'Activity'}</Text>
             </View>
 
-
             <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 14 }}>
                 {/* Filters */}
                 <View style={{ marginBottom: 14 }}>
@@ -195,26 +210,26 @@ export default function ActivityScreen() {
                         {user.role === 'superadmin' && (
                             <FilterButton
                                 label="Org"
-                                value={selectedOrgId}
+                                value={!!selectedOrgId}
                                 title={selectedOrgId ? organizations.find(o => String(o.id) === selectedOrgId)?.name || '...' : 'All'}
                                 onPress={() => setActiveModal('org')}
                             />
                         )}
                         <FilterButton
                             label="Project"
-                            value={selectedProjectId}
-                            title={selectedProjectId ? projectsList.find(p => String(p.id) === selectedProjectId)?.name || '...' : 'All'}
+                            value={selectedProjectIds.length > 0}
+                            title={projectLabel}
                             onPress={() => setActiveModal('project')}
                         />
                         <FilterButton
                             label="User"
-                            value={selectedUserId}
-                            title={selectedUserId ? usersList.find(u => String(u.id) === selectedUserId)?.name || '...' : 'All'}
+                            value={selectedUserIds.length > 0}
+                            title={userLabel}
                             onPress={() => setActiveModal('user')}
                         />
                         <FilterButton
                             label="Action"
-                            value={selectedType}
+                            value={!!selectedType}
                             title={selectedType ? actionTypes.find(a => a.value === selectedType)?.label || '...' : 'All'}
                             onPress={() => setActiveModal('type')}
                         />
@@ -247,16 +262,7 @@ export default function ActivityScreen() {
                                             padding: 12,
                                         }}
                                     >
-                                        <View
-                                            style={{
-                                                width: 36,
-                                                height: 36,
-                                                borderRadius: 10,
-                                                backgroundColor: colors.bg,
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                            }}
-                                        >
+                                        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
                                             <Feather name={iconName} size={16} color={colors.icon} />
                                         </View>
                                         <View style={{ flex: 1 }}>
@@ -288,16 +294,16 @@ export default function ActivityScreen() {
                 </ScrollView>
             </View>
 
-            {/* Filter Modal (Dropdown Style) */}
+            {/* Filter Modal */}
             <Modal visible={activeModal !== null} animationType="fade" transparent>
                 <TouchableOpacity
                     activeOpacity={1}
                     onPress={() => setActiveModal(null)}
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.1)' }}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.15)' }}
                 >
                     <View style={{
                         position: 'absolute',
-                        top: 130, // Positioned below the filter row
+                        top: 130,
                         left: 14,
                         right: 14,
                         backgroundColor: themeColors.surface,
@@ -316,60 +322,137 @@ export default function ActivityScreen() {
                                 Select {activeModal === 'org' ? 'Organization' : activeModal === 'user' ? 'User' : activeModal === 'project' ? 'Project' : 'Action'}
                             </Text>
                         </View>
-                        <ScrollView style={{ maxHeight: 400 }}>
-                            <TouchableOpacity
-                                onPress={() => {
-                                    if (activeModal === 'org') { setSelectedOrgId(null); setSelectedUserId(null); setSelectedProjectId(null); }
-                                    else if (activeModal === 'user') setSelectedUserId(null);
-                                    else if (activeModal === 'project') setSelectedProjectId(null);
-                                    else if (activeModal === 'type') setSelectedType(null);
-                                    setActiveModal(null);
-                                }}
-                                style={{ padding: 15 }}
-                            >
-                                <Text style={{ fontSize: 14, color: themeColors.text }}>All {activeModal === 'org' ? 'Organizations' : activeModal === 'user' ? 'Users' : activeModal === 'project' ? 'Projects' : 'Actions'}</Text>
-                            </TouchableOpacity>
-
-                            {activeModal === 'org' && organizations.map((org) => (
+                        <ScrollView style={{ maxHeight: 380 }}>
+                            {/* "All" option */}
+                            {activeModal !== 'type' && (
                                 <TouchableOpacity
-                                    key={org.id}
-                                    onPress={() => { setSelectedOrgId(String(org.id)); setSelectedUserId(null); setSelectedProjectId(null); setActiveModal(null); }}
-                                    style={{ padding: 15, backgroundColor: selectedOrgId === String(org.id) ? themeColors.background : 'transparent' }}
+                                    onPress={() => {
+                                        if (activeModal === 'org') { setSelectedOrgId(null); setSelectedProjectIds([]); setSelectedUserIds([]); }
+                                        else if (activeModal === 'project') setSelectedProjectIds([]);
+                                        else if (activeModal === 'user') setSelectedUserIds([]);
+                                    }}
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12 }}
                                 >
-                                    <Text style={{ fontSize: 14, color: themeColors.text }}>{org.name}</Text>
+                                    <View style={{
+                                        width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+                                        borderColor: (activeModal === 'project' ? selectedProjectIds.length === 0 : activeModal === 'user' ? selectedUserIds.length === 0 : !selectedOrgId) ? '#f97316' : themeColors.border,
+                                        backgroundColor: (activeModal === 'project' ? selectedProjectIds.length === 0 : activeModal === 'user' ? selectedUserIds.length === 0 : !selectedOrgId) ? '#f97316' : 'transparent',
+                                        alignItems: 'center', justifyContent: 'center'
+                                    }}>
+                                        {(activeModal === 'project' ? selectedProjectIds.length === 0 : activeModal === 'user' ? selectedUserIds.length === 0 : !selectedOrgId) && (
+                                            <Feather name="check" size={11} color="#fff" />
+                                        )}
+                                    </View>
+                                    <Text style={{ fontSize: 14, color: themeColors.text }}>
+                                        All {activeModal === 'org' ? 'Organizations' : activeModal === 'user' ? 'Users' : 'Projects'}
+                                    </Text>
                                 </TouchableOpacity>
-                            ))}
+                            )}
 
-                            {activeModal === 'project' && projectsList.map((p) => (
-                                <TouchableOpacity
-                                    key={p.id}
-                                    onPress={() => { setSelectedProjectId(String(p.id)); setActiveModal(null); }}
-                                    style={{ padding: 15, backgroundColor: selectedProjectId === String(p.id) ? themeColors.background : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 14, color: themeColors.text }}>{p.name}</Text>
-                                </TouchableOpacity>
-                            ))}
+                            {/* Org (single-select) */}
+                            {activeModal === 'org' && organizations.map((org) => {
+                                const isSelected = selectedOrgId === String(org.id);
+                                return (
+                                    <TouchableOpacity
+                                        key={org.id}
+                                        onPress={() => { setSelectedOrgId(String(org.id)); setSelectedProjectIds([]); setSelectedUserIds([]); }}
+                                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12 }}
+                                    >
+                                        <View style={{
+                                            width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+                                            borderColor: isSelected ? '#f97316' : themeColors.border,
+                                            backgroundColor: isSelected ? '#f97316' : 'transparent',
+                                            alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            {isSelected && <Feather name="check" size={11} color="#fff" />}
+                                        </View>
+                                        <Text style={{ fontSize: 14, color: themeColors.text }}>{org.name}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
 
-                            {activeModal === 'user' && usersList.map((u) => (
-                                <TouchableOpacity
-                                    key={u.id}
-                                    onPress={() => { setSelectedUserId(String(u.id)); setActiveModal(null); }}
-                                    style={{ padding: 15, backgroundColor: selectedUserId === String(u.id) ? themeColors.background : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 14, color: themeColors.text }}>{u.name}</Text>
-                                </TouchableOpacity>
-                            ))}
+                            {/* Project (multi-select) */}
+                            {activeModal === 'project' && projectsList.map((p) => {
+                                const isSelected = selectedProjectIds.includes(String(p.id));
+                                return (
+                                    <TouchableOpacity
+                                        key={p.id}
+                                        onPress={() => toggleProject(String(p.id))}
+                                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12 }}
+                                    >
+                                        <View style={{
+                                            width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+                                            borderColor: isSelected ? '#f97316' : themeColors.border,
+                                            backgroundColor: isSelected ? '#f97316' : 'transparent',
+                                            alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            {isSelected && <Feather name="check" size={11} color="#fff" />}
+                                        </View>
+                                        <Text style={{ fontSize: 14, color: themeColors.text }}>{p.name}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
 
-                            {activeModal === 'type' && actionTypes.filter(a => a.value !== 'all').map((a) => (
-                                <TouchableOpacity
-                                    key={a.value}
-                                    onPress={() => { setSelectedType(a.value); setActiveModal(null); }}
-                                    style={{ padding: 15, backgroundColor: selectedType === a.value ? themeColors.background : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 14, color: themeColors.text }}>{a.label}</Text>
-                                </TouchableOpacity>
-                            ))}
+                            {/* User (multi-select) */}
+                            {activeModal === 'user' && usersList.map((u) => {
+                                const isSelected = selectedUserIds.includes(String(u.id));
+                                return (
+                                    <TouchableOpacity
+                                        key={u.id}
+                                        onPress={() => toggleUser(String(u.id))}
+                                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12 }}
+                                    >
+                                        <View style={{
+                                            width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+                                            borderColor: isSelected ? '#f97316' : themeColors.border,
+                                            backgroundColor: isSelected ? '#f97316' : 'transparent',
+                                            alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            {isSelected && <Feather name="check" size={11} color="#fff" />}
+                                        </View>
+                                        <Text style={{ fontSize: 14, color: themeColors.text }}>{u.name}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+
+                            {/* Type (single-select) */}
+                            {activeModal === 'type' && actionTypes.map((a) => {
+                                const isSelected = (selectedType || 'all') === a.value;
+                                return (
+                                    <TouchableOpacity
+                                        key={a.value}
+                                        onPress={() => { setSelectedType(a.value === 'all' ? null : a.value); setActiveModal(null); }}
+                                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, paddingVertical: 12 }}
+                                    >
+                                        <View style={{
+                                            width: 18, height: 18, borderRadius: 9, borderWidth: 1.5,
+                                            borderColor: isSelected ? '#f97316' : themeColors.border,
+                                            backgroundColor: isSelected ? '#f97316' : 'transparent',
+                                            alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            {isSelected && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' }} />}
+                                        </View>
+                                        <Text style={{ fontSize: 14, color: themeColors.text }}>{a.label}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </ScrollView>
+
+                        {/* Done button for multi-select modals */}
+                        {(activeModal === 'project' || activeModal === 'user') && (
+                            <TouchableOpacity
+                                onPress={() => setActiveModal(null)}
+                                style={{
+                                    margin: 10,
+                                    backgroundColor: '#f97316',
+                                    borderRadius: 8,
+                                    paddingVertical: 10,
+                                    alignItems: 'center'
+                                }}
+                            >
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Done</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </TouchableOpacity>
             </Modal>

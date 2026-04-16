@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import 'multer';
-
 import db from "../models/index.ts";
 const { files, folders, project_members, activities, users, organizations, projects } = db;
 
@@ -112,7 +111,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         // Apply compression and watermarking only to images
         if (file_type.startsWith('image/')) {
             try {
-                fileBuffer = await addWatermark(req.file.buffer);
+                fileBuffer = await addWatermark(req.file.buffer, project.name);
                 // Force extension to jpg since we are converting
                 finalFileName = file_name.replace(/\.[^/.]+$/, "") + ".jpg";
             } catch (sharpErr) {
@@ -144,72 +143,82 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const activityCategory = isImage ? 'photos' : 'documents';
         const notificationType = isImage ? 'photo_upload' : 'file_upload';
 
-        // Log Activity
-        await logActivity({
-            projectId: parseInt(project_id, 10),
-            userId: authUser.user_id,
-            type: isImage ? 'photo_upload' : 'upload',
-            description: `Uploaded ${finalFileName}`,
-            metadata: { folderId: finalFolderId, type: activityCategory }
-        });
+        // Check skipActivity explicitly
+        const shouldSkip = skipActivity === 'true' || skipActivity === true;
 
-        // Notify project members based on project membership
-        const members = await project_members.findAll({
-            where: { 
-                project_id: parseInt(project_id, 10), 
-                user_id: { [Op.ne]: authUser.user_id } 
-            },
-            include: [{
-                model: UsersModel,
-                attributes: ['id', 'name']
-            }]
-        });
-
-        // Fallback for name if missing from token
-        let senderName = authUser.name;
-        if (!senderName) {
-            const sender = await users.findByPk(authUser.user_id);
-            senderName = sender?.name || "Someone";
-        }
-
-        const notifiedUserIds = new Set<number>();
-        for (const member of members) {
-            notifiedUserIds.add(member.user_id);
-            await sendNotification({
-                userId: member.user_id,
-                title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
-                body: `${senderName} uploaded ${finalFileName}`,
-                type: notificationType,
-                data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
+        if (!shouldSkip) {
+            // Log Activity
+            await logActivity({
+                projectId: parseInt(project_id, 10),
+                userId: authUser.user_id,
+                type: isImage ? 'upload_photo' : 'upload',
+                description: `Uploaded ${finalFileName}`,
+                metadata: { folderId: finalFolderId, fileId: newFile.id, type: activityCategory }
             });
 
-        }
 
-
-        // Notify Admins in the organization
-        try {
-            const admins = await UsersModel.findAll({
+            // Notify project members based on project membership
+            const members = await project_members.findAll({
                 where: {
-                    organization_id: project.organization_id,
-                    role: 'admin',
-                    id: { [Op.notIn]: Array.from(notifiedUserIds).concat(authUser.user_id) }
-                }
+                    project_id: parseInt(project_id, 10),
+                    user_id: { [Op.ne]: authUser.user_id }
+                },
+                include: [{
+                    model: UsersModel,
+                    attributes: ['id', 'name']
+                }]
             });
 
-            const adminNotificationType = isImage ? 'photo_upload' : 'file_upload_admin';
-
-            for (const adminUser of admins) {
-                await sendNotification({
-                    userId: adminUser.id,
-                    title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
-                    body: `${senderName} uploaded ${finalFileName}`,
-                    type: adminNotificationType,
-                    data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
-                });
+            // Fallback for name if missing from token
+            let senderName = authUser.name;
+            if (!senderName) {
+                const sender = await users.findByPk(authUser.user_id);
+                senderName = sender?.name || "Someone";
             }
-        } catch (err) {
-            console.error('Error notifying admins of new file upload:', err);
-        }
+
+            const notifiedUserIds = new Set<number>();
+            for (const member of members) {
+                notifiedUserIds.add(member.user_id);
+                if (!shouldSkip) {
+                    await sendNotification({
+                        userId: member.user_id,
+                        title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
+                        body: `${senderName} uploaded ${finalFileName}`,
+                        type: notificationType,
+                        data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
+                    });
+                }
+            }
+
+
+            // Notify Admins in the organization
+            try {
+                const admins = await UsersModel.findAll({
+                    where: {
+                        organization_id: project.organization_id,
+                        role: 'admin',
+                        id: { [Op.notIn]: Array.from(notifiedUserIds).concat(authUser.user_id) }
+                    }
+                });
+
+                const adminNotificationType = isImage ? 'photo_upload' : 'file_upload_admin';
+
+                for (const adminUser of admins) {
+                    if (!shouldSkip) {
+                        await sendNotification({
+                            userId: adminUser.id,
+                            title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
+                            body: `${senderName} uploaded ${finalFileName}`,
+                            type: adminNotificationType,
+                            data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Error notifying admins of new file upload:', err);
+            }
+        } // End of skip condition
+
 
         // Broadcast live stats update to all members viewing this project
         try {
@@ -576,7 +585,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
         const folderPath = validFolderId ? validFolderId.toString() : 'root';
         const isSeparate = mode === 'separate';
-        
+        const shouldSkip = req.body.skipActivity === 'true' || req.body.skipActivity === true;
+
         const createdFiles = [];
 
         if (isSeparate) {
@@ -584,7 +594,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             for (let i = 0; i < scanFiles.length; i++) {
                 const file = scanFiles[i];
                 const pdfDoc = await PDFDocument.create();
-                
+
                 let imageBuffer = file.buffer;
                 // Use sharp to normalize image before embedding
                 try {
@@ -639,21 +649,23 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
                 createdFiles.push(newFile);
 
-                // Log Activity for Scan
-                await logActivity({
-                    projectId: parseInt(project_id, 10),
-                    userId: authUser.user_id,
-                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
-                    description: `Uploaded scan: ${individualFileName}`,
-                    metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
-                });
+                if (!shouldSkip) {
+                    // Log Activity for Scan
+                    await logActivity({
+                        projectId: parseInt(project_id, 10),
+                        userId: authUser.user_id,
+                        type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
+                        description: `Uploaded scan: ${individualFileName}`,
+                        metadata: { folderId: validFolderId, fileId: newFile.id, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                    });
+                }
             }
         } else {
             // mode === 'single' or empty -> merge all into one PDF
             const pdfDoc = await PDFDocument.create();
             for (const file of scanFiles) {
                 let imageBuffer = file.buffer;
-                
+
                 // Use sharp to normalize image before embedding in PDF
                 try {
                     imageBuffer = await sharp(file.buffer)
@@ -709,14 +721,16 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
             createdFiles.push(newFile);
 
-            // Log Activity for Scan
-            await logActivity({
-                projectId: parseInt(project_id, 10),
-                userId: authUser.user_id,
-                type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
-                description: `Uploaded scan: ${finalFileName}`,
-                metadata: { folderId: validFolderId, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
-            });
+            if (!shouldSkip) {
+                // Log Activity for Scan
+                await logActivity({
+                    projectId: parseInt(project_id, 10),
+                    userId: authUser.user_id,
+                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
+                    description: `Uploaded scan: ${finalFileName}`,
+                    metadata: { folderId: validFolderId, fileId: newFile.id, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                });
+            }
         }
 
         res.status(200).json({
@@ -733,9 +747,9 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         // Notify project members based on project membership, not the user's home organization.
         try {
             const members = await project_members.findAll({
-                where: { 
-                    project_id: parseInt(project_id, 10), 
-                    user_id: { [Op.ne]: authUser.user_id } 
+                where: {
+                    project_id: parseInt(project_id, 10),
+                    user_id: { [Op.ne]: authUser.user_id }
                 },
                 include: [{
                     model: UsersModel,
@@ -756,14 +770,15 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
 
             for (const member of members) {
-                await sendNotification({
-                    userId: member.user_id,
-                    title: notificationTitle,
-                    body: notificationBody,
-                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                    data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
-                });
-
+                if (!shouldSkip) {
+                    await sendNotification({
+                        userId: member.user_id,
+                        title: notificationTitle,
+                        body: notificationBody,
+                        type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
+                        data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                    });
+                }
             }
 
             // Also notify organization admins (if they are not project members)
@@ -779,15 +794,15 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 // Check if already notified via project members
                 if (members.some((m: any) => m.user_id === admin.id)) continue;
 
-
-                await sendNotification({
-                    userId: admin.id,
-                    title: notificationTitle,
-                    body: notificationBody,
-                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                    data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
-                });
-
+                if (!shouldSkip) {
+                    await sendNotification({
+                        userId: admin.id,
+                        title: notificationTitle,
+                        body: notificationBody,
+                        type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
+                        data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                    });
+                }
             }
         } catch (notifErr) {
             console.error("Notification Error in uploadScans:", notifErr);

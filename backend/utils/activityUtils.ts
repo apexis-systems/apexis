@@ -16,18 +16,13 @@ export const logActivity = async ({
     metadata?: any;
 }) => {
     try {
-        let finalDescription = description;
-        if (metadata) {
-            // Embed metadata invisibly (Zero-width space separator)
-            finalDescription += `\u200B\u200B${JSON.stringify(metadata)}\u200B\u200B`;
-        }
-
         // 1. Create activity in DB
         const newActivity = await activities.create({
             project_id: projectId,
             user_id: userId,
             type,
-            description: finalDescription
+            description: description,
+            metadata: metadata
         });
 
         // 2. Fetch full activity details (with user and project) for socket broadcast
@@ -51,6 +46,7 @@ export const logActivity = async ({
             id: fullActivity.id,
             type: fullActivity.type,
             description: fullActivity.description,
+            metadata: fullActivity.metadata,
             projectName: fullActivity.project ? fullActivity.project.name : 'System',
             projectId: fullActivity.project_id,
             userName: fullActivity.user ? fullActivity.user.name : 'Unknown',

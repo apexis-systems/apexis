@@ -14,8 +14,8 @@ const montserrat = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "APEXISpro",
-  description: "APEXISpro Hub application",
+  title: "APEXIS PRO™",
+  description: "APEXIS PRO™ Hub application",
   icons: {
     icon: "/favicon.ico", // Standard favicon
     apple: "/app-icon.png", // Apple touch icon

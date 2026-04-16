@@ -20,18 +20,18 @@ const getFont = async (fontPath: string): Promise<opentype.Font> => {
 
 /**
  * Adds a professional watermark band at the bottom of an image buffer.
- * Contains: DATE & TIME (left) | LOGO + APEXIS (right)
+ * New Layout: Branding (Left) | DATE & TIME + PROJECT NAME (Right)
  */
-export const addWatermark = async (imageBuffer: Buffer): Promise<Buffer> => {
+export const addWatermark = async (imageBuffer: Buffer, projectName: string = ''): Promise<Buffer> => {
     try {
         const image = sharp(imageBuffer);
         const metadata = await image.metadata();
-        const originalWidth = metadata.width || 1280;
-        const finalWidth = Math.min(originalWidth, 1280);
+        const originalWidth = metadata.width || 1920;
+        const finalWidth = Math.min(originalWidth, 1920);
 
         // Dynamically adjust dimensions
-        const fontSize = Math.max(12, Math.min(22, Math.round(finalWidth * 0.02)));
-        const bandHeight = Math.round(fontSize * 4);
+        const fontSize = Math.max(9, Math.round(finalWidth * 0.02) - 3); // Reduced size by 3 points for a smaller watermark
+        const bandHeight = Math.round(fontSize * 4); // Slightly slimmer band for a cleaner footer
         const svgWidth = finalWidth;
         const svgHeight = bandHeight;
 
@@ -46,25 +46,29 @@ export const addWatermark = async (imageBuffer: Buffer): Promise<Buffer> => {
         const logoSize = Math.round(bandHeight * 0.7);
 
         // 1. Get Brand Text Path using opentype.js (ABSOLUTE font control)
-        const brandText = "APEXIS";
-        const brandFontSize = Math.round(fontSize * 1.8);
+        const brandTextApex = "APEXIS";
+        const brandTextPro = "PRO™";
+        const brandFontSizeApex = Math.round(fontSize * 1.8);
+        const brandFontSizePro = Math.round(fontSize * 1.0);
         const font = await getFont(fontPath);
-        
-        // Measure text width to align right correctly
-        // opentype.js units: font.getAdvanceWidth(text, fontSize, options)
-        const brandTextWidth = font.getAdvanceWidth(brandText, brandFontSize);
-        
-        // Get the SVG path data
-        // .getPath(text, x, y, fontSize, options)
-        const textPathObject = font.getPath(brandText, 0, 0, brandFontSize);
-        const brandPathData = textPathObject.toPathData(2); // 2 decimal places
 
-        // Branding layout: [LOGO] [GAP] [TEXT]
+        // Measure widths
+        const apexWidth = font.getAdvanceWidth(brandTextApex, brandFontSizeApex);
+        
+        // Get paths
+        const apexPathObj = font.getPath(brandTextApex, 0, 0, brandFontSizeApex);
+        const proPathObj = font.getPath(brandTextPro, 0, 0, brandFontSizePro);
+        
+        const apexPathData = apexPathObj.toPathData(2);
+        const proPathData = proPathObj.toPathData(2);
+
+        // Branding layout (Left side)
         const gap = 3;
-        const brandingTotalWidth = logoSize + gap + brandTextWidth;
-        const logoX = svgWidth - 20 - brandingTotalWidth;
-        const textX = logoX + logoSize + gap;
-        const textY = (svgHeight / 2) + (brandFontSize / 3); // Vertical center adjustment
+        const logoX = 20;
+        const brandTextX = logoX + logoSize + gap;
+        const brandTextY = (svgHeight / 2) + (brandFontSizeApex / 3);
+        const proX = brandTextX + apexWidth + 4; // small gap between APEXIS and PRO
+        const proY = brandTextY;
 
         // 2. Create Logo Base64
         let logoBase64 = '';
@@ -72,16 +76,13 @@ export const addWatermark = async (imageBuffer: Buffer): Promise<Buffer> => {
             logoBase64 = fs.readFileSync(logoPath).toString('base64');
         }
 
-        // 3. Final Combined SVG
+        // 3. Right side layout (Project and Time)
+        const infoX = svgWidth - 20;
+
+        // 4. Final Combined SVG
         const svgOverlay = `
             <svg width="${svgWidth}" height="${svgHeight}">
-                <!-- Date/Time (Left) -->
-                <text x="20" y="50%" dominant-baseline="middle" text-anchor="start" 
-                      fill="#1a1a1a" font-family="sans-serif" font-weight="800" font-size="${fontSize}px" letter-spacing="0.5px">
-                    ${dateStr}   |   ${timeStr}
-                </text>
-                
-                <!-- Logo (Right) -->
+                <!-- Left Branding: Logo + Name -->
                 ${logoBase64 ? `
                 <image 
                     href="data:image/png;base64,${logoBase64}" 
@@ -90,14 +91,23 @@ export const addWatermark = async (imageBuffer: Buffer): Promise<Buffer> => {
                     height="${logoSize}" 
                     width="${logoSize}" 
                 />` : ''}
-                
-                <!-- Brand Text (Right) as SVG Path for perfect font control -->
-                <path d="${brandPathData}" fill="#f97415" transform="translate(${textX}, ${textY})" />
+                <path d="${apexPathData}" fill="#f97415" transform="translate(${brandTextX}, ${brandTextY})" />
+                <path d="${proPathData}" fill="#f97415" transform="translate(${proX}, ${proY})" />
+
+                <!-- Right Info: Date/Time (Top) + Project Name (Bottom) -->
+                <text x="${infoX}" y="40%" dominant-baseline="middle" text-anchor="end" 
+                      fill="#1a1a1a" font-family="sans-serif" font-weight="800" font-size="${fontSize}px" letter-spacing="0.5px">
+                    ${dateStr}  |  ${timeStr}
+                </text>
+                <text x="${infoX}" y="70%" dominant-baseline="middle" text-anchor="end" 
+                      fill="#666666" font-family="sans-serif" font-weight="600" font-size="${Math.round(fontSize * 0.9)}px">
+                    ${projectName.toUpperCase()}
+                </text>
             </svg>
         `;
 
         return await image
-            .resize({ width: 1280, withoutEnlargement: true })
+            .resize({ width: 1920, withoutEnlargement: true })
             .extend({
                 bottom: bandHeight,
                 background: { r: 255, g: 255, b: 255, alpha: 1 }
@@ -106,7 +116,7 @@ export const addWatermark = async (imageBuffer: Buffer): Promise<Buffer> => {
                 input: Buffer.from(svgOverlay),
                 gravity: 'south'
             }])
-            .jpeg({ quality: 90 })
+            .jpeg({ quality: 85 })
             .toBuffer();
     } catch (err) {
         console.error("Watermarking failed:", err);

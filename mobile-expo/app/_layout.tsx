@@ -2,7 +2,7 @@ import { Stack, useRouter, useSegments, useGlobalSearchParams } from 'expo-route
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { DeviceEventEmitter, LogBox, TextInput } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useFonts } from 'expo-font';
@@ -27,6 +27,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { useUsage } from '@/contexts/UsageContext';
+import * as Notifications from 'expo-notifications';
+import { navigateFromNotification } from '@/utils/navigation';
 
 function RootLayoutNav() {
   const { isLoggedIn, isLoading: isAuthLoading, user, isPendingName } = useAuth();
@@ -35,6 +37,23 @@ function RootLayoutNav() {
   const router = useRouter();
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [subscriptionLocked, setSubscriptionLocked] = useState(false);
+  const response = Notifications.useLastNotificationResponse();
+
+  // Handles cold-boot (app killed) notification taps.
+  // Background taps are handled by addNotificationResponseReceivedListener in index.tsx.
+  // Cross-component deduplication is managed by the module-level singleton in navigation.ts.
+  useEffect(() => {
+    if (!response || !isLoggedIn || isAuthLoading || !hasSeenOnboarding || subscriptionLocked) return;
+
+    const notifId = response.notification.request.identifier;
+    const data = response.notification.request.content.data;
+    const type = data?.type as string;
+
+    // Delay to ensure the navigator stack is fully mounted before pushing (critical for iOS cold boot)
+    setTimeout(() => {
+      navigateFromNotification(notifId, type, data, router);
+    }, 800);
+  }, [response, isLoggedIn, isAuthLoading, hasSeenOnboarding, subscriptionLocked]);
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -80,9 +99,9 @@ function RootLayoutNav() {
     const nextLocked = fromProfile || fromUsage;
     setSubscriptionLocked(nextLocked);
     if (nextLocked) {
-      SecureStore.setItemAsync('subscriptionLocked', 'true').catch(() => {});
+      SecureStore.setItemAsync('subscriptionLocked', 'true').catch(() => { });
     } else {
-      SecureStore.deleteItemAsync('subscriptionLocked').catch(() => {});
+      SecureStore.deleteItemAsync('subscriptionLocked').catch(() => { });
     }
   }, [user?.organization?.subscription_locked, usageData?.plan?.access?.isLocked]);
 

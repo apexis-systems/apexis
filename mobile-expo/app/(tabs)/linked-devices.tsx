@@ -166,7 +166,7 @@ export default function LinkedDevices() {
                 <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 24 }}>
                     <Feather name="monitor" size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
                     <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, textAlign: 'center', marginBottom: 8 }}>
-                        Use APEXISpro on your computer
+                        Use <Text className="font-angelica" style={{ color: colors.primary }}>APEXIS</Text><Text className="font-angelica" style={{ fontSize: 10, color: colors.primary }}>PRO™</Text> on your computer
                     </Text>
                     <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
                         Open web.apexis.in on your computer and scan the QR code to sign in instantly.
@@ -188,12 +188,22 @@ export default function LinkedDevices() {
                         <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text, marginBottom: 16 }}>Active Sessions</Text>
                         {activeSessions.map((session, index) => (
                             <View key={index} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: 16, borderRadius: 12, marginBottom: 12 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                     <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 10 }}>
                                         <Feather name="globe" size={20} color={colors.text} />
                                     </View>
-                                    <View>
-                                        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{session.device || "APEXIS Web API Session"}</Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>
+                                            {(session.device || "APEXIS Web API Session").startsWith("APEXIS") ? (
+                                                <>
+                                                    <Text className="font-angelica" style={{ color: colors.primary }}>APEXIS</Text>
+                                                    <Text className="font-angelica" style={{ fontSize: 10, color: colors.primary }}>PRO™</Text>
+                                                    <Text>{(session.device || " Web API Session").replace(/APEXISpro™|APEXIS/g, "")}</Text>
+                                                </>
+                                            ) : (
+                                                session.device || "Web Session"
+                                            )}
+                                        </Text>
                                         <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>Active now · Web Browser</Text>
                                     </View>
                                 </View>

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUsage } from '@/contexts/UsageContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const { user } = useAuth();
   const { checkLimit } = useUsage();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialSnagId = searchParams?.get('snagId');
   if (!project) return null;
 
   const [snags, setSnags] = useState<Snag[]>([]);
@@ -158,7 +160,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
   return (
     <div className={cn(compact ? '' : 'mt-3')}>
-      {!compact && user?.role !== 'client' && (
+      {!compact && (
         <Button onClick={() => setShowAdd(true)} className="mb-3 bg-accent text-accent-foreground hover:bg-accent/90 text-xs h-9">
           <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Snag
         </Button>
@@ -169,8 +171,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           const cfg = STATUS_CONFIG[snag.status];
           const Icon = cfg.icon;
           const photoUrl = snag.photoDownloadUrl || snag.photo_url;
+          const isTarget = initialSnagId && String(snag.id) === String(initialSnagId);
           return (
-            <div key={snag.id} className="flex items-start gap-3 rounded-lg border border-border bg-card p-3">
+            <div key={snag.id} className={cn(
+              "flex items-start gap-3 rounded-lg border p-3 transition-all",
+              isTarget ? "border-accent bg-accent/5 ring-1 ring-accent" : "border-border bg-card"
+            )}>
               {/* Status circle */}
               <button
                 onClick={() => cycleStatus(snag)}

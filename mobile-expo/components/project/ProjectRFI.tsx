@@ -3,23 +3,21 @@ import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
   Modal, ScrollView, TextInput, Alert, Image, StyleSheet, Platform
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useFocusEffect } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as DocumentPicker from 'expo-document-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as MediaLibrary from 'expo-media-library';
 import { Project, User } from '@/types';
 import {
   getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
-import { getAssignees, Assignee } from '@/services/snagService';
+import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 import { parseApiError } from '@/helpers/apiError';
 
@@ -27,6 +25,7 @@ interface Props {
   project: Project;
   user: User;
   onUpdate?: () => void;
+  initialRfiId?: string;
 }
 
 const statusConfig = {
@@ -35,9 +34,11 @@ const statusConfig = {
   overdue: { icon: 'alert-triangle', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', label: 'Overdue' },
 };
 
-export default function ProjectRFI({ project, user, onUpdate }: Props) {
-  const { colors, isDark } = useTheme();
+export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
+  const { colors } = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const MAX_RFI_IMAGES = 4;
   const [rfis, setRfis] = useState<RFI[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'overdue'>('all');
@@ -64,14 +65,18 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [cameraVisible, setCameraVisible] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraSessionKey, setCameraSessionKey] = useState(0);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = React.useRef<CameraView>(null);
 
   // Filter Modals
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [activeFilterType, setActiveFilterType] = useState<'status' | 'creator' | 'assignee' | null>(null);
+
+  // Assignee dropdown in create form
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
@@ -95,6 +100,53 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       if (selectedDate) setExpiryDate(selectedDate);
     }
   };
+
+  useEffect(() => {
+    if (initialRfiId && rfis.length > 0) {
+      const target = rfis.find(r => String(r.id) === String(initialRfiId));
+      if (target) {
+        setSelectedRFI(target);
+        setDetailModalVisible(true);
+        // Clear param to prevent loop
+        router.setParams({ rfiId: undefined });
+      }
+    }
+  }, [initialRfiId, rfis, router]);
+
+  useEffect(() => {
+    if (!cameraVisible) {
+      setCameraReady(false);
+      return;
+    }
+
+    let active = true;
+
+    const prepareCamera = async () => {
+      if (!cameraPermission?.granted) {
+        const res = await requestCameraPermission();
+        if (!res.granted) return;
+      }
+
+      setCameraReady(false);
+      setCameraSessionKey(prev => prev + 1);
+
+      const timer = setTimeout(() => {
+        if (active) setCameraReady(true);
+      }, 250);
+
+      return () => clearTimeout(timer);
+    };
+
+    let cleanup: void | (() => void);
+    prepareCamera().then(result => {
+      cleanup = result;
+    });
+
+    return () => {
+      active = false;
+      if (cleanup) cleanup();
+    };
+  }, [cameraVisible, cameraPermission?.granted, requestCameraPermission]);
 
   const projectId = Number(project.id);
 
@@ -161,23 +213,79 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
     }, [detailModalVisible, createModalVisible, filterModalVisible, statusFilter, fetchRFIs, fetchAssignees, previewImage, annotatingImageIndex, cameraVisible])
   );
 
-  const handleImageSelection = () => {
+  const handleImageSelection = async () => {
+    if (selectedImages.length >= MAX_RFI_IMAGES) {
+      Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
+      return;
+    }
+
+    await openCamera();
+  };
+
+  const openCamera = async () => {
     if (!cameraPermission?.granted) {
-      requestCameraPermission();
+      const res = await requestCameraPermission();
+      if (!res.granted) {
+        Alert.alert(
+          'Permission Required',
+          'Camera permission is needed to take RFI photos. Please enable it in your device settings.'
+        );
+        return;
+      }
     }
     setCameraVisible(true);
   };
 
+  const pickImageFiles = async () => {
+    const remaining = MAX_RFI_IMAGES - selectedImages.length;
+    if (remaining <= 0) {
+      Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
+      return;
+    }
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const nextUris: string[] = [];
+
+      for (const asset of result.assets.slice(0, remaining)) {
+        let uri = asset.uri;
+        try {
+          const manipulated = await ImageManipulator.manipulateAsync(
+            uri,
+            [{ resize: { width: 1920 } }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          uri = manipulated.uri;
+        } catch (e) {
+          console.warn('RFI file image manipulation failed:', e);
+        }
+        nextUris.push(uri);
+      }
+
+      setSelectedImages(prev => [...prev, ...nextUris].slice(0, MAX_RFI_IMAGES));
+    } catch (error) {
+      console.error('pickImageFiles error', error);
+      Alert.alert('Error', 'Failed to pick image from files.');
+    }
+  };
+
   const capturePhoto = async () => {
     if (!cameraRef.current || isCapturing) return;
-    if (selectedImages.length >= 3) {
-      Alert.alert('Limit Exceeded', 'Maximum 3 photos allowed');
+    if (selectedImages.length >= MAX_RFI_IMAGES) {
+      Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
       return;
     }
     setIsCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 0.9,
         base64: false,
         exif: true,
       });
@@ -187,8 +295,8 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       // Fix orientation and format for iOS compatibility
       const manipulated = await ImageManipulator.manipulateAsync(
         photo.uri,
-        [],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: 1920 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
       );
 
       const newIdx = selectedImages.length;
@@ -203,28 +311,13 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
     }
   };
 
-  const pickFromGallery = async () => {
-    const remaining = 3 - selectedImages.length;
-    if (remaining <= 0) {
-      Alert.alert('Limit Exceeded', 'Maximum 3 photos allowed');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: remaining,
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-      const newUris = result.assets.map(a => a.uri);
-      setSelectedImages([...selectedImages, ...newUris].slice(0, 3));
-    }
-  };
-
   const handleCreateRFI = async () => {
     if (!title.trim()) {
       Alert.alert('Error', 'Title is required');
+      return;
+    }
+    if (!assignedToId) {
+      Alert.alert('Error', 'Assignee is required');
       return;
     }
     setSubmitting(true);
@@ -233,7 +326,7 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
       formData.append('project_id', String(projectId));
       formData.append('title', title.trim());
       formData.append('description', description.trim());
-      if (assignedToId) formData.append('assigned_to', String(assignedToId));
+      formData.append('assigned_to', String(assignedToId));
       if (expiryDate) formData.append('expiry_date', expiryDate.toISOString());
 
       selectedImages.forEach((uri, index) => {
@@ -538,7 +631,7 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
                     </View>
                   )}
 
-                  {((String(selectedRFI.assigned_to) === String(user.id)) || user.role === 'admin') && selectedRFI.status !== 'closed' && (
+                  {String(selectedRFI.assigned_to) === String(user.id) && selectedRFI.status !== 'closed' && (
                     <View style={{ marginBottom: 20, gap: 12 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? 'Update Response' : 'Provide Response'}</Text>
                       <TextInput
@@ -575,7 +668,7 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
                     </View>
                   )}
 
-                  {user.role !== 'client' && (
+                {String(selectedRFI.assigned_to) === String(user.id) && (
                     <View style={{ gap: 12 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Update Status</Text>
                       <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -680,27 +773,28 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
                 </View>
 
                 <View>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                    {assignees.map((a) => (
-                      <TouchableOpacity
-                        key={a.id}
-                        onPress={() => setAssignedToId(a.id === assignedToId ? null : a.id)}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          backgroundColor: assignedToId === a.id ? colors.primary : colors.surface,
-                          borderWidth: 1,
-                          borderColor: assignedToId === a.id ? colors.primary : colors.border
-                        }}
-                      >
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: assignedToId === a.id ? '#fff' : colors.text }}>
-                          {a.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To *</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowAssigneeDropdown(true)}
+                    style={{
+                      height: 48,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: assignedToId ? colors.primary : colors.border,
+                      paddingHorizontal: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
+                      {assignedToId
+                        ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
+                        : 'Select assignee *'}
+                    </Text>
+                    <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
+                  </TouchableOpacity>
                 </View>
 
                 <View>
@@ -802,10 +896,185 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+
+            {/* Assignee Picker Modal (nested for iOS compatibility) */}
+            <Modal visible={showAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowAssigneeDropdown(false)}>
+                <TouchableOpacity
+                    activeOpacity={1}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 24 }}
+                    onPress={() => setShowAssigneeDropdown(false)}
+                >
+                    <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+                        <View style={{
+                            backgroundColor: colors.background,
+                            borderRadius: 16,
+                            overflow: 'hidden',
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                        }}>
+                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To *</Text>
+                            </View>
+                            <ScrollView style={{ maxHeight: 320 }}>
+                                {assignees.map((a) => (
+                                    <TouchableOpacity
+                                        key={a.id}
+                                        onPress={() => { setAssignedToId(a.id); setShowAssigneeDropdown(false); }}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            paddingHorizontal: 16,
+                                            paddingVertical: 14,
+                                            borderBottomWidth: 1,
+                                            borderBottomColor: colors.border,
+                                            backgroundColor: assignedToId === a.id ? colors.primary + '10' : 'transparent',
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <View style={{
+                                                width: 30,
+                                                height: 30,
+                                                borderRadius: 15,
+                                                backgroundColor: colors.primary + '20',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}>
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                                                    {a.name?.charAt(0)?.toUpperCase() || '?'}
+                                                </Text>
+                                            </View>
+                                            <Text style={{ fontSize: 14, color: assignedToId === a.id ? colors.primary : colors.text, fontWeight: assignedToId === a.id ? '700' : '400' }}>
+                                                {a.name}
+                                            </Text>
+                                        </View>
+                                        {assignedToId === a.id && <Feather name="check" size={16} color={colors.primary} />}
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* High-Fidelity Camera Modal (nested for iOS compatibility) */}
+            <Modal
+                visible={cameraVisible}
+                animationType="slide"
+                transparent={false}
+                presentationStyle="fullScreen"
+                statusBarTranslucent={true}
+                onRequestClose={() => setCameraVisible(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: '#000' }}>
+                    <View style={{ flex: 1 }}>
+                        {cameraPermission?.granted && cameraReady ? (
+                            <>
+                                <CameraView key={cameraSessionKey} style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
+
+                                {/* Header Overlay */}
+                                <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                                    <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
+                                        <Feather name="x" size={24} color="#fff" />
+                                    </TouchableOpacity>
+                                    <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                                    <View style={{ width: 60 }} />
+                                </View>
+
+                                {/* Bottom Controls Overlay */}
+                                <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                                    {/* Preview row */}
+                                    {selectedImages.length > 0 && (
+                                        <View style={cameraStyles.previewContainer}>
+                                            <ScrollView
+                                                horizontal
+                                                showsHorizontalScrollIndicator={false}
+                                                contentContainerStyle={{ gap: 14, paddingHorizontal: 20, paddingTop: 10, paddingRight: 30 }}
+                                            >
+                                                {selectedImages.map((uri, idx) => (
+                                                    <View key={idx} style={cameraStyles.previewWrapper}>
+                                                        <Image source={{ uri }} style={cameraStyles.previewThumb} />
+                                                        <TouchableOpacity
+                                                            onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
+                                                            style={cameraStyles.removeBtn}
+                                                        >
+                                                            <Feather name="x" size={12} color="#fff" />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    )}
+
+                                    <View style={cameraStyles.shutterRow}>
+                                        <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
+                                            <View style={cameraStyles.iconCircle}>
+                                                <Feather name="file-plus" size={24} color="#fff" />
+                                            </View>
+                                            <Text style={cameraStyles.btnLabel}>Files</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                                            <View style={cameraStyles.shutterOuter}>
+                                                <View style={cameraStyles.shutterInner} />
+                                            </View>
+                                            <Text style={cameraStyles.btnLabel}>Photo</Text>
+                                        </TouchableOpacity>
+
+                                        <View style={{ width: 70 }} />
+                                    </View>
+                                </View>
+
+                                {/* Floating Done Button */}
+                                {selectedImages.length > 0 && (
+                                    <TouchableOpacity
+                                        onPress={() => setCameraVisible(false)}
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: insets.bottom + 180,
+                                            right: 20,
+                                            backgroundColor: colors.primary,
+                                            paddingHorizontal: 24,
+                                            paddingVertical: 14,
+                                            borderRadius: 30,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 10,
+                                            elevation: 8,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 4 },
+                                            shadowOpacity: 0.3,
+                                            shadowRadius: 5,
+                                            zIndex: 20
+                                        }}
+                                    >
+                                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Done ({selectedImages.length})</Text>
+                                        <Feather name="arrow-right" size={20} color="#fff" />
+                                    </TouchableOpacity>
+                                )}
+                            </>
+                        ) : (
+                            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                                {cameraPermission?.granted ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <>
+                                        <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                                        <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
+                                            <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </Modal>
           </View>
         </View>
       </Modal>
-      {/* Filter Options Modal */}
+
+      {/* Filter Options Modal mark */}
       <Modal visible={filterModalVisible} animationType="fade" transparent onRequestClose={() => setFilterModalVisible(false)}>
         <TouchableOpacity
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}
@@ -901,113 +1170,7 @@ export default function ProjectRFI({ project, user, onUpdate }: Props) {
           onCancel={() => setAnnotatingImageIndex(null)}
         />
       )}
-      {/* High-Fidelity Camera Modal */}
-      <Modal
-        visible={cameraVisible}
-        animationType="slide"
-        transparent={false}
-        presentationStyle="fullScreen"
-        statusBarTranslucent={true}
-        onRequestClose={() => setCameraVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
-          <View style={{ flex: 1 }}>
-            {cameraPermission?.granted ? (
-              <>
-                <CameraView style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
 
-                {/* Header Overlay */}
-                <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
-                  <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
-                    <Feather name="x" size={24} color="#fff" />
-                  </TouchableOpacity>
-                  <Text style={cameraStyles.headerTitle}>Take RFI Photos</Text>
-                  <View style={{ width: 60 }} />
-                </View>
-
-                {/* Bottom Controls Overlay */}
-                <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
-                  {/* Preview row */}
-                  {selectedImages.length > 0 && (
-                    <View style={cameraStyles.previewContainer}>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 14, paddingHorizontal: 20, paddingTop: 10, paddingRight: 30 }}
-                      >
-                        {selectedImages.map((uri, idx) => (
-                          <View key={idx} style={cameraStyles.previewWrapper}>
-                            <Image source={{ uri }} style={cameraStyles.previewThumb} />
-                            <TouchableOpacity
-                              onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
-                              style={cameraStyles.removeBtn}
-                            >
-                              <Feather name="x" size={12} color="#fff" />
-                            </TouchableOpacity>
-                          </View>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  <View style={cameraStyles.shutterRow}>
-                    <TouchableOpacity onPress={pickFromGallery} style={cameraStyles.sideBtn}>
-                      <View style={cameraStyles.iconCircle}>
-                        <Feather name="image" size={24} color="#fff" />
-                      </View>
-                      <Text style={cameraStyles.btnLabel}>Gallery</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
-                      <View style={cameraStyles.shutterOuter}>
-                        <View style={cameraStyles.shutterInner} />
-                      </View>
-                      <Text style={cameraStyles.btnLabel}>Photo</Text>
-                    </TouchableOpacity>
-
-                    <View style={{ width: 70 }} />
-                  </View>
-                </View>
-
-                {/* Floating Done Button (like in Upload) */}
-                {selectedImages.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setCameraVisible(false)}
-                    style={{
-                      position: 'absolute',
-                      bottom: insets.bottom + 180,
-                      right: 20,
-                      backgroundColor: colors.primary,
-                      paddingHorizontal: 24,
-                      paddingVertical: 14,
-                      borderRadius: 30,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
-                      elevation: 8,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.3,
-                      shadowRadius: 5,
-                      zIndex: 20
-                    }}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Done ({selectedImages.length})</Text>
-                    <Feather name="arrow-right" size={20} color="#fff" />
-                  </TouchableOpacity>
-                )}
-              </>
-            ) : (
-              <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
-                <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

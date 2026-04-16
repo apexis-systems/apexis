@@ -684,12 +684,20 @@ export const switchContext = async (req: Request, res: Response) => {
             }
         }
 
+        // Final organization context fallback
+        // If we are switching to admin/superadmin role and have no specific project/org context,
+        // fallback to the user's primary organization from the database.
+        let finalOrgId = targetOrganizationId ? Number(targetOrganizationId) : null;
+        if (!finalOrgId && (normalizedRole === 'admin' || normalizedRole === 'superadmin')) {
+            finalOrgId = user.organization_id;
+        }
+
         const token = jwt.sign(
             {
                 user_id: user.id,
                 name: user.name,
                 role: normalizedRole,
-                organization_id: targetOrganizationId ? Number(targetOrganizationId) : null,
+                organization_id: finalOrgId,
                 project_id: project ? project.id : null
             },
             process.env.JWT_SECRET || "default_secret",

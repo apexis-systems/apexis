@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getTransactions, getInvoiceDownloadUrl } from '@/services/subscriptionService';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as SecureStore from 'expo-secure-store';
@@ -16,6 +16,7 @@ export default function TransactionsScreen() {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [sharingId, setSharingId] = useState<number | null>(null);
+    const insets = useSafeAreaInsets();
 
     useEffect(() => {
         fetchTransactions();
@@ -121,19 +122,14 @@ export default function TransactionsScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
-            <Stack.Screen 
-                options={{ 
-                    title: 'Payment History',
-                    headerShown: true,
-                    headerStyle: { backgroundColor: colors.background },
-                    headerTintColor: colors.text,
-                    headerLeft: () => (
-                        <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
-                            <Feather name="arrow-left" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                    )
-                }} 
-            />
+            <Stack.Screen options={{ headerShown: false }} />
+            <View style={[styles.customHeader, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.headerIconBtn}>
+                    <Feather name="arrow-left" size={24} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Payment History</Text>
+                <View style={{ width: 40 }} /> 
+            </View>
 
             {loading ? (
                 <View style={styles.centered}>
@@ -249,5 +245,24 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 16,
         fontWeight: '600',
+    },
+    customHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 12,
+        paddingBottom: 10,
+    },
+    headerIconBtn: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerTitle: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 18,
+        fontWeight: '700',
     }
 });

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { fileURLToPath } from "node:url";
 import redis from "../config/redis.ts";
 import { users, organizations, plans } from "../models/index.ts";
 import { Op } from "sequelize";
@@ -10,6 +11,69 @@ import { normalizePhone, isValidPhone, isIndianPhone } from "../utils/sms.ts";
 
 
 const OTP_TTL = 300; // 5 minutes
+const appLogoPath = fileURLToPath(new URL("../assets/app-icon.png", import.meta.url));
+
+const buildAdminOtpEmail = (name: string, organizationName: string, otp: string) => {
+    const safeName = name || "there";
+    const safeOrganization = organizationName || "your project";
+
+    const text = [
+        `Hello ${safeName},`,
+        "",
+        "Welcome to APEXISpro™.",
+        "Your construction communication platform.",
+        "",
+        `To access project "${safeOrganization}" on APEXISpro™ as an "Admin", your verification code is: ${otp}`,
+        "",
+        "This code is valid for 5 minutes.",
+    ].join("\n");
+
+    const html = `
+        <div style="margin:0;padding:32px 16px;background:#f5f7fb;font-family:Arial,Helvetica,sans-serif;color:#14213d;">
+            <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+                <div style="padding:32px 32px 20px;border-bottom:1px solid #eef2f7;background:#ffffff;">
+                    <div style="display:flex;align-items:center;gap:20px;">
+                        <img src="cid:apexis-app-icon" alt="Apexis PRO logo" width="56" height="56" style="display:block;border-radius:14px;" />
+                        <div style="margin-left:16px;">
+                            <div style="font-size:24px;line-height:1.2;font-weight:700;color:#0f172a;">APEXIS<span style="font-size: 16px;">PRO™</span></div>
+                            <div style="font-size:14px;line-height:1.5;color:#475569;">Record.Report.Release.</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:32px;">
+                    <p style="margin:0 0 20px;font-size:16px;line-height:1.7;">Hello ${safeName},</p>
+                    <p style="margin:0 0 16px;font-size:16px;line-height:1.7;">
+                        Welcome to <strong>APEXIS<span style="font-size: 13px;">PRO™</span></strong>.
+                    </p>
+                    <p style="margin:0 0 24px;font-size:16px;line-height:1.7;">
+                        Your construction communication platform.
+                    </p>
+                    <p style="margin:0 0 24px;font-size:16px;line-height:1.7;">
+                        To access project <strong>"${safeOrganization}"</strong> on APEXIS<span style="font-size: 13px;">PRO™</span> as an <strong>"Admin"</strong>, your verification code is:
+                    </p>
+                    <div style="margin:0 0 24px;padding:18px 20px;border-radius:14px;background:#eff6ff;border:1px solid #bfdbfe;text-align:center;">
+                        <div style="font-size:34px;line-height:1.2;letter-spacing:6px;font-weight:700;color:#1d4ed8;">${otp}</div>
+                    </div>
+                    <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#64748b;">
+                        This code is valid for 5 minutes.
+                    </p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return {
+        html,
+        text,
+        attachments: [
+            {
+                filename: "app-icon.png",
+                path: appLogoPath,
+                cid: "apexis-app-icon",
+            },
+        ],
+    };
+};
 
 // ==========================
 // SUPERADMIN ONBOARDING
@@ -169,10 +233,16 @@ export const adminRequestOtp = async (req: Request, res: Response) => {
             const { sendOTP } = await import("../utils/sms.ts");
             await sendOTP(normalizedPhone, otp);
         } else if (method === 'email' && email) {
+            const adminOtpEmail = buildAdminOtpEmail(name, organization_name, otp);
             await sendEmail(
                 email,
-                "Your Admin Verification Code",
-                `Hello ${name},\n\nWelcome to ${organization_name}! Your OTP for registration is: ${otp}\n\nIt is valid for 5 minutes.`
+                "Your APEXISpro™ Admin Access Code",
+                adminOtpEmail.html,
+                {
+                    isHtml: true,
+                    text: adminOtpEmail.text,
+                    attachments: adminOtpEmail.attachments,
+                }
             );
         } else {
             return res.status(400).json({ error: "Selected verification method is unavailable" });
@@ -219,16 +289,16 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
             plan = await plans.create({
                 name: "Freemium",
                 price: 0,
-                storage_limit_mb: 500,
+                storage_limit_mb: 2000,
                 duration_days: 60,
-                project_limit: 1,
-                contributor_limit: 2,
-                client_limit: 1,
-                max_snags: 15,
-                max_rfis: 15,
-                can_export_reports: false,
-                can_share_media: false,
-                can_export_handover: false
+                project_limit: 10,
+                contributor_limit: 50,
+                client_limit: 25,
+                max_snags: 100,
+                max_rfis: 200,
+                can_export_reports: true,
+                can_share_media: true,
+                can_export_handover: false,
             });
         }
 

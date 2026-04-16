@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView, Alert, StatusBar } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -27,7 +27,7 @@ import MainHeader from '@/components/shared/MainHeader';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { getSecureFileUrl } from '@/services/fileService';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
-import { handleNotificationNavigation } from '@/utils/navigation';
+import { navigateFromNotification } from '@/utils/navigation';
 import { UsageAlert } from '@/components/shared/UsageAlert';
 import { useUsage } from '@/contexts/UsageContext';
 
@@ -60,7 +60,7 @@ export default function DashboardScreen() {
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [profileUri, setProfileUri] = useState<string | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
+  const [isSwitching, setIsSwitching] = useState<string | null>(null);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -70,25 +70,26 @@ export default function DashboardScreen() {
   const measureAndRegister = useCallback(() => {
     // We need a small delay to ensure the layout is settled
     setTimeout(() => {
+      const androidStatusBarOffset = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+      
       headerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('dashboardHeader', { x: x + w / 2, y: y + h / 2 + 43, w: w + 10, h: h + 100, r: 16 });
+        // Adding StatusBar height on Android to compensate for the translucent Modal
+        const yPos = y + h / 2 + 43 + (Platform.OS === 'android' ? androidStatusBarOffset : 0);
+        registerSpotlight('dashboardHeader', { x: x + w / 2, y: yPos, w: w + 10, h: h + 100, r: 16 });
       });
-      // statsRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-      //   registerSpotlight('dashboardStats', { x: x + w / 2, y: y + h / 2, w: w + 4, h: h + 10, r: 12 });
-      // });
+
       projectListRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        // Shifting left (decreasing offset) and increasing w/h
         registerSpotlight('projectCard', { 
-            x: x + (Platform.OS === 'ios' ? 30 : 40), 
-            y: y + (Platform.OS === 'ios' ? 40 : 50), 
+            x: x + (Platform.OS === 'ios' ? 40 : 40), 
+            y: y + (Platform.OS === 'ios' ? 53 : 50) + (Platform.OS === 'android' ? androidStatusBarOffset : 0), 
             w: 90, 
             h: 120, 
             r: 16 
         });
       });
       createButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        // Also adding dimensions for the create button
-        registerSpotlight('createProjectButton', { x: x + w / 2, y: y + h / 2, w: w, h: h, r: 14 });
+        const yPos = y + h / 2 + (Platform.OS === 'android' ? androidStatusBarOffset : 0);
+        registerSpotlight('createProjectButton', { x: x + w / 2, y: yPos, w: w, h: h, r: 14 });
       });
     }, 500);
   }, [registerSpotlight]);
@@ -99,39 +100,51 @@ export default function DashboardScreen() {
     }
   }, [isTourActive, measureAndRegister]);
 
+  // Fetch projects / org data whenever user or selectedOrgId changes
   useEffect(() => {
     if (user) {
       if (user.role === 'superadmin') {
         fetchOrganizations();
       }
       fetchProjects(selectedOrgId);
-      // Handle setting initial logo
       const orgs = (user as any).organizations || (user as any).organization;
       if (orgs?.logo) {
         setLocalLogoKey(orgs.logo);
       }
-      
-      // Request notification permissions and register token on home screen
-      registerForPushNotificationsAsync();
-
-      // Listen for notification interactions
-      const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
-        const { type } = response.notification.request.content.data;
-        const data = response.notification.request.content.data;
-        handleNotificationNavigation(type, data, router);
-      });
-
-      return () => {
-        responseListener.remove();
-      };
     }
   }, [user, selectedOrgId]);
 
+  // Register push token once when the user is available (isolated from selectedOrgId)
+  useEffect(() => {
+    if (user) {
+      registerForPushNotificationsAsync();
+    }
+  }, [user?.id]);
+
+  // Foreground / background notification tap listener.
+  // Cross-component deduplication is handled by the module-level singleton in navigation.ts,
+  // so a background tap handled here won't double-fire via _layout.tsx's useLastNotificationResponse.
+  useEffect(() => {
+    if (!user) return;
+
+    const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
+      const notifId = response.notification.request.identifier;
+      const data = response.notification.request.content.data;
+      const type = data?.type as string;
+      // navigateFromNotification checks the shared singleton — safe against double-firing
+      navigateFromNotification(notifId, type, data, router);
+    });
+
+    return () => {
+      responseListener.remove();
+    };
+  }, [user?.id]);
+
   useEffect(() => {
     if (!hasSeenTour && user && !isTourActive) {
-        // Auto-start tour for new users after a short delay
-        const timer = setTimeout(startTour, 1000);
-        return () => clearTimeout(timer);
+      // Auto-start tour for new users after a short delay
+      const timer = setTimeout(startTour, 1000);
+      return () => clearTimeout(timer);
     }
   }, [hasSeenTour, user]);
 
@@ -179,7 +192,7 @@ export default function DashboardScreen() {
     try {
       const url = orgId ? `/projects?organization_id=${orgId}` : '/projects';
       const res = await PrivateAxios.get(url);
-      const sortedProjects = (res.data.projects || []).sort((a: any, b: any) => 
+      const sortedProjects = (res.data.projects || []).sort((a: any, b: any) =>
         (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
       );
       setProjects(sortedProjects);
@@ -193,13 +206,13 @@ export default function DashboardScreen() {
   const totalFolders = projects.reduce((sum, p) => sum + (parseInt(p.totalFolders, 10) || 0), 0);
 
   const DUMMY_PROJECTS = [
-      { id: 'd1', name: 'Alpha Construction', description: 'Infrastructure Phase 1', start_date: '2026-01-01', end_date: '2026-12-31', totalDocs: '12', totalPhotos: '45', color: colors.primary },
-      { id: 'd2', name: 'Bridge Beta', description: 'Main Span Engineering', start_date: '2026-02-01', end_date: '2026-11-30', totalDocs: '8', totalPhotos: '32', color: '#10b981' },
+    { id: 'd1', name: 'Alpha Construction', description: 'Infrastructure Phase 1', start_date: '2026-01-01', end_date: '2026-12-31', totalDocs: '12', totalPhotos: '45', color: colors.primary },
+    { id: 'd2', name: 'Bridge Beta', description: 'Main Span Engineering', start_date: '2026-02-01', end_date: '2026-11-30', totalDocs: '8', totalPhotos: '32', color: '#10b981' },
   ];
 
   const displayProjects = isTourActive ? DUMMY_PROJECTS : projects;
-  const displayStats = isTourActive 
-    ? { totalDocs: 20, totalPhotos: 77, totalFolders: 8 } 
+  const displayStats = isTourActive
+    ? { totalDocs: 20, totalPhotos: 77, totalFolders: 8 }
     : { totalDocs, totalPhotos, totalFolders };
 
   const filteredProjects = displayProjects.filter((p) =>
@@ -258,7 +271,7 @@ export default function DashboardScreen() {
       setIsUploadingLogo(false);
     }
   };
-  
+
   const handleProfilePicUpload = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -351,7 +364,13 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 4 }}>
-                {`${((user as any).organization?.name || 'APEXISpro').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXISpro').slice(1)}`}
+                {(user as any).organization?.name ? (
+                  ((user as any).organization.name).charAt(0).toUpperCase() + ((user as any).organization.name).slice(1)
+                ) : (
+                  <Text>
+                    <Text className="font-angelica" style={{ color: colors.primary }}>APEXIS</Text><Text className="font-angelica" style={{ fontSize: 9, color: colors.primary }}>PRO™</Text>
+                  </Text>
+                )}
               </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -380,12 +399,13 @@ export default function DashboardScreen() {
                   { id: 'client', label: 'Client', icon: 'user' }
                 ].map((role) => {
                   const isActive = user.role === role.id;
+                  const isThisSwitching = isSwitching === role.id;
                   return (
                     <TouchableOpacity
                       key={role.id}
                       onPress={async () => {
                         if (isActive || isSwitching) return;
-                        setIsSwitching(true);
+                        setIsSwitching(role.id);
                         try {
                           const res = await switchContext({ role: role.id });
                           if (res.token) {
@@ -394,7 +414,7 @@ export default function DashboardScreen() {
                         } catch (err: any) {
                           Alert.alert('Role Switch Failed', err?.response?.data?.error || 'You do not have access to this role.');
                         } finally {
-                          setIsSwitching(false);
+                          setIsSwitching(null);
                         }
                       }}
                       style={{
@@ -407,11 +427,11 @@ export default function DashboardScreen() {
                         borderRadius: 20,
                         borderWidth: 1,
                         borderColor: isActive ? colors.primary : colors.border,
-                        opacity: isSwitching ? 0.7 : 1
+                        opacity: isSwitching && !isThisSwitching ? 0.6 : 1
                       }}
                     >
-                      {isSwitching && isActive ? (
-                        <ActivityIndicator size={12} color="#fff" />
+                      {isThisSwitching ? (
+                        <ActivityIndicator size={12} color={isActive ? '#fff' : colors.primary} />
                       ) : (
                         <Feather name={role.icon as any} size={12} color={isActive ? '#fff' : colors.textMuted} />
                       )}
@@ -567,18 +587,18 @@ export default function DashboardScreen() {
             {(user.role === 'admin' || isTourActive) && (
               <TouchableOpacity
                 onPress={() => {
-                    if (!isTourActive && !checkLimit('projects')) {
-                        Alert.alert(
-                            "Limit Reached", 
-                            "You have reached your project limit. Please upgrade your plan to create more projects.",
-                            [
-                                { text: "Cancel", style: "cancel" },
-                                { text: "Upgrade", onPress: () => router.push('/subscription') }
-                            ]
-                        );
-                        return;
-                    }
-                    setIsCreating(true);
+                  if (!isTourActive && !checkLimit('projects')) {
+                    Alert.alert(
+                      "Limit Reached",
+                      "You have reached your project limit. Please upgrade your plan to create more projects.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Upgrade", onPress: () => router.push('/subscription') }
+                      ]
+                    );
+                    return;
+                  }
+                  setIsCreating(true);
                 }}
                 style={{ width: '22%', alignItems: 'center', gap: 4 }}
               >

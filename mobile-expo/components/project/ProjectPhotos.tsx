@@ -12,20 +12,22 @@ import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } fr
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import { formatFileSize } from '@/helpers/format';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Removed local ZoomableImage
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectPhotos({ project, user, initialFolderId }: { project: any; user: any; initialFolderId?: string }) {
+export default function ProjectPhotos({ project, user, initialFolderId, initialFileId }: { project: any; user: any; initialFolderId?: string; initialFileId?: string }) {
     const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
@@ -101,6 +103,25 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
         }
     }, [selectedFolder]);
 
+    useEffect(() => {
+        if (initialFileId && photos.length > 0) {
+            const currentFolderPhotosForInit = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
+            const visiblePhotosInit = user.role === 'client' ? currentFolderPhotosForInit.filter((p) => p.client_visible !== false) : currentFolderPhotosForInit;
+            const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
+                if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
+                if (sortBy === 'date') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
+                return 0;
+            });
+
+            const index = sortedInit.findIndex(p => String(p.id) === String(initialFileId));
+            if (index !== -1) {
+                openViewer(index);
+                router.setParams({ fileId: undefined, photoId: undefined });
+            }
+        }
+    }, [initialFileId, photos, selectedFolder, sortBy, user.role, router]);
+
 
     const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
     const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
@@ -141,10 +162,12 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
 
     // ── Scroll viewer to correct index when opened ──────────────────────────
     useEffect(() => {
-        if (viewerOpen) {
+        if (viewerOpen && sortedPhotos.length > 0) {
             // Small delay to ensure FlatList is mounted
             const t = setTimeout(() => {
-                flatListRef.current?.scrollToIndex({ index: viewerIndex, animated: false });
+                if (viewerIndex >= 0 && viewerIndex < sortedPhotos.length) {
+                    flatListRef.current?.scrollToIndex({ index: viewerIndex, animated: false });
+                }
             }, 50);
             return () => clearTimeout(t);
         }
@@ -222,18 +245,6 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
             return () => subscription.remove();
         }, [viewerOpen, isSelectionMode, selectedFolder, goBack])
     );
-
-    const goNext = () => {
-        const next = Math.min(viewerIndex + 1, sortedPhotos.length - 1);
-        setViewerIndex(next);
-        flatListRef.current?.scrollToIndex({ index: next, animated: true });
-    };
-
-    const goPrev = () => {
-        const prev = Math.max(viewerIndex - 1, 0);
-        setViewerIndex(prev);
-        flatListRef.current?.scrollToIndex({ index: prev, animated: true });
-    };
 
     const handleSharePhoto = async () => {
         const photo = sortedPhotos[viewerIndex];
@@ -1065,28 +1076,10 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                             )}
                         />
 
-                        {/* Prev / Next arrows */}
-                        {showViewerUI && viewerIndex > 0 && (
-                            <TouchableOpacity
-                                onPress={goPrev}
-                                style={{ position: 'absolute', left: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
-                            >
-                                <Feather name="chevron-left" size={26} color="#fff" />
-                            </TouchableOpacity>
-                        )}
-                        {showViewerUI && viewerIndex < sortedPhotos.length - 1 && (
-                            <TouchableOpacity
-                                onPress={goNext}
-                                style={{ position: 'absolute', right: 12, top: '50%', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, padding: 10 }}
-                            >
-                                <Feather name="chevron-right" size={26} color="#fff" />
-                            </TouchableOpacity>
-                        )}
-
                         {/* Bottom panel: info + comments */}
                         {showViewerUI && (
                             <KeyboardAvoidingView
-                                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
                             >
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
@@ -1140,7 +1133,7 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                             </TouchableOpacity>
                                         </View>
                                     )}
-                                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: Platform.OS === 'android' ? 16 : 32, marginTop: 6 }}>
+                                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
                                         <TextInput
                                             value={commentText}
                                             onChangeText={setCommentText}
@@ -1151,15 +1144,17 @@ export default function ProjectPhotos({ project, user, initialFolderId }: { proj
                                         <TouchableOpacity
                                             onPress={handleAddComment}
                                             disabled={addingComment || !commentText.trim()}
-                                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                            style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
                                         >
                                             {addingComment
                                                 ? <ActivityIndicator size="small" color="#fff" />
-                                                : <Feather name="send" size={14} color="#fff" />
+                                                : <Feather name="send" size={14} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
                                             }
                                         </TouchableOpacity>
                                     </View>
                                 </View>
+                                {/* Safe-area spacer: covers Android nav bar (gesture or 3-button) and iOS home indicator */}
+                                <View style={{ height: Math.max(insets.bottom, 0) }} />
                                 </View>
                             </KeyboardAvoidingView>
                         )}

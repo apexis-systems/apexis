@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
@@ -21,12 +20,12 @@ import { Text, TextInput } from '@/components/ui/AppText';
 //     { value: 'superadmin', label: 'Super Admin' },
 // ];
 
-const roleBadgeColor: Record<UserRole, { bg: string; text: string }> = {
-    admin: { bg: '#f97415', text: '#fff' },
-    contributor: { bg: '#3b3b3b', text: '#fff' },
-    client: { bg: '#1e1e1e', text: '#888' },
-    superadmin: { bg: '#ef4444', text: '#fff' },
-};
+
+const roleSwitcherDefs = [
+    { id: 'admin', label: 'Admin', icon: 'shield' as const },
+    { id: 'contributor', label: 'Contributor', icon: 'edit-3' as const },
+    { id: 'client', label: 'Client', icon: 'user' as const },
+];
 
 export default function ProfileScreen() {
     const { user, login, logout, updateUser } = useAuth() as any;
@@ -34,7 +33,7 @@ export default function ProfileScreen() {
     const { colors } = useTheme();
 
     const [memberships, setMemberships] = useState<any[]>([]);
-    const [isSwitching, setIsSwitching] = useState(false);
+    const [isSwitchingRole, setIsSwitchingRole] = useState<string | null>(null);
 
     const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -192,14 +191,20 @@ export default function ProfileScreen() {
         }
     };
 
-    const badge = { ...roleBadgeColor[user.role as UserRole] };
-    if (user.role === 'client') {
-        badge.bg = colors.surface;
-        badge.text = colors.textMuted;
-    }
-
-    const roleLabel = user.role.charAt(0).toUpperCase() + user.role.slice(1);
-
+    const handleSwitchRole = async (roleId: string) => {
+        if (user.role === roleId || isSwitchingRole || !login) return;
+        setIsSwitchingRole(roleId);
+        try {
+            const res = await switchContext({ role: roleId });
+            if (res.token) {
+                await login(res.token);
+            }
+        } catch (err: any) {
+            Alert.alert('Role Switch Failed', err?.response?.data?.error || 'You do not have access to this role.');
+        } finally {
+            setIsSwitchingRole(null);
+        }
+    };
     const handleLogout = () => {
         Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
             { text: 'Cancel', style: 'cancel' },
@@ -291,20 +296,39 @@ export default function ProfileScreen() {
                         )}
 
                         <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 2 }}>{user.email || user.phone_number}</Text>
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 6,
-                                marginTop: 12,
-                                borderRadius: 20,
-                                backgroundColor: badge.bg,
-                                paddingHorizontal: 14,
-                                paddingVertical: 6,
-                            }}
-                        >
-                            <Feather name="shield" size={12} color={badge.text} />
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: badge.text }}>{roleLabel}</Text>
+                        {/* Role Switcher — same as Home */}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+                            {roleSwitcherDefs.map((role) => {
+                                const isActive = user.role === role.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={role.id}
+                                        onPress={() => handleSwitchRole(role.id)}
+                                        disabled={!!isSwitchingRole}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            backgroundColor: isActive ? colors.primary : colors.surface,
+                                            paddingHorizontal: 14,
+                                            paddingVertical: 8,
+                                            borderRadius: 20,
+                                            borderWidth: 1,
+                                            borderColor: isActive ? colors.primary : colors.border,
+                                            opacity: isSwitchingRole && !isActive ? 0.6 : 1
+                                        }}
+                                    >
+                                        {isSwitchingRole === role.id ? (
+                                            <ActivityIndicator size={12} color={isActive ? '#fff' : colors.primary} />
+                                        ) : (
+                                            <Feather name={role.icon} size={12} color={isActive ? '#fff' : colors.textMuted} />
+                                        )}
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : colors.textMuted }}>
+                                            {role.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
                     </View>
 

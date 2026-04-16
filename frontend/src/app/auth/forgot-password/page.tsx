@@ -80,7 +80,10 @@ const ForgotPasswordPage = () => {
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
                     <ShieldCheck className="h-10 w-10 text-primary-foreground" />
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground uppercase font-angelica">APEXIS</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground font-angelica flex items-center justify-center gap-1">
+                    APEXIS
+                    <span className="text-sm lowercase mt-2 font-angelica">pro™</span>
+                </h1>
                 <p className="mt-1 text-sm tracking-[0.25em] text-muted-foreground uppercase">Reset Password</p>
             </div>
 

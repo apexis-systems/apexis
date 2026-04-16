@@ -23,7 +23,7 @@ const REPORT_PDF_ASSETS = {
     angelica: path.join(REPORT_PDF_ASSETS_DIR, 'fonts/Angelica-C.otf'),
 };
 
-/** Brand palette aligned with Apexis PDF templates (amber / orange accents). */
+/** Brand palette aligned with APEXIS PRO™ PDF templates (amber / orange accents). */
 const BRAND = {
     orange: '#f97415',
     orangeDark: '#c2410c',
@@ -443,7 +443,10 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     const logoH = 32;
     const blockTop = 15;
     doc.font(brandFont).fontSize(20);
-    const brandTextW = doc.widthOfString('APEXISpro');
+    const apexW = doc.widthOfString('APEXIS');
+    doc.fontSize(12);
+    const proW = doc.widthOfString('PRO™');
+    const brandTextW = apexW + proW;
     doc.font('Helvetica-Bold').fontSize(5.5);
     const tagW = doc.widthOfString(taglineStr);
     const gap = 10;
@@ -459,7 +462,8 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     }
 
     doc.font(brandFont).fontSize(20).fillColor(BRAND.orange);
-    doc.text('APEXISpro', textLeft, blockTop + 4, { lineBreak: false });
+    doc.text('APEXIS', textLeft, blockTop + 4, { lineBreak: false });
+    doc.fontSize(12).text('PRO™', textLeft + apexW, blockTop + 10, { lineBreak: false });
     doc.font('Helvetica-Bold').fontSize(5.5).fillColor(BRAND.muted);
     // Moved from +24 to +28 to increase the vertical gap with the BRAND text (as per user tweak)
     doc.text(taglineStr, textLeft + (brandTextW - tagW) / 2 + 3, blockTop + 28, { lineBreak: false });
@@ -499,7 +503,10 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
     const logoH = 64;
     const blockTop = 100;
     doc.font(brandFont).fontSize(48);
-    const brandTextW = doc.widthOfString('APEXISpro');
+    const apexCoverW = doc.widthOfString('APEXIS');
+    doc.fontSize(28);
+    const proCoverW = doc.widthOfString('PRO™');
+    const brandTextW = apexCoverW + proCoverW;
     const taglineStr = 'RECORD · REPORT · RELEASE .';
     doc.font('Helvetica').fontSize(10);
     const tagW = doc.widthOfString(taglineStr);
@@ -512,7 +519,8 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
     }
 
     doc.font(brandFont).fontSize(48).fillColor(BRAND.orange);
-    doc.text('APEXISpro', (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
+    doc.text('APEXIS', (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
+    doc.fontSize(28).text('PRO™', (pageWidth - brandTextW) / 2 + apexCoverW, blockTop + logoH + 36, { lineBreak: false });
 
     doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.muted);
     doc.text(taglineStr, (pageWidth - tagW) / 2, blockTop + logoH + 85, { lineBreak: false });
@@ -691,7 +699,7 @@ const drawStyledTable = (doc: any, title: string, headers: { text: string, w: nu
             // Calculate height needed for this row
             const cellVerticalPadding = 6;
             const textOptions = (width: number) => ({ width: width - 12, lineBreak: true });
-            
+
             let maxRowH = 20; // fallback min
             let startRowX = left;
             row.forEach((cell, j) => {
@@ -711,9 +719,9 @@ const drawStyledTable = (doc: any, title: string, headers: { text: string, w: nu
             let rowX = left;
             row.forEach((cell, j) => {
                 doc.font('Helvetica').fontSize(8.5).fillColor(BRAND.ink).text(
-                    String(cell || ' '), 
-                    rowX + 6, 
-                    y + cellVerticalPadding, 
+                    String(cell || ' '),
+                    rowX + 6,
+                    y + cellVerticalPadding,
                     textOptions(headers[j].w)
                 );
                 rowX += headers[j].w;
@@ -747,9 +755,14 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
     doc.text(prefix, m.left, textY, { lineBreak: false });
 
     doc.font(brandFont).fontSize(10).fillColor(BRAND.orange);
-    const wb = doc.widthOfString('APEXISpro');
-    // Nudged -2 to align better with the baseline of the other text
-    doc.text('APEXISpro', m.left + wp, textY - 2.5, { lineBreak: false });
+    const apexFooterW = doc.widthOfString('APEXIS');
+    doc.fontSize(7);
+    const proFooterW = doc.widthOfString('PRO™');
+    const wb = apexFooterW + proFooterW;
+
+    // Nudged -2.5 to align better with the baseline of the other text
+    doc.text('APEXIS', m.left + wp, textY - 2.5, { lineBreak: false });
+    doc.fontSize(7).text('PRO™', m.left + wp + apexFooterW, textY - 0.5, { lineBreak: false });
 
     doc.font('Helvetica').fontSize(7).fillColor(BRAND.muted);
     doc.text(' — CONSTRUCTION COMMUNICATION PLATFORM', m.left + wp + wb, textY, { lineBreak: false });
@@ -765,7 +778,7 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
 export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
+    const orgName = organization?.name || 'APEXISpro™ Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
@@ -805,9 +818,9 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
 
         // 1. Files
         const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
-            i + 1, 
-            d.folder ? `${d.folder}/${d.title}` : d.title, 
-            d.user || ' ', 
+            i + 1,
+            d.folder ? `${d.folder}/${d.title}` : d.title,
+            d.user || ' ',
             d.date || ' '
         ]);
         const fileW = r - left;
@@ -862,7 +875,7 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
 export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
+    const orgName = organization?.name || 'APEXISpro™ Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
@@ -909,9 +922,9 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
         // Section 2 - Files
         const summary = (report.summary || {}) as any;
         const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
-            i + 1, 
-            d.folder ? `${d.folder}/${d.title}` : d.title, 
-            d.user || ' ', 
+            i + 1,
+            d.folder ? `${d.folder}/${d.title}` : d.title,
+            d.user || ' ',
             d.date || ' '
         ]);
         const fileW = r - left;
@@ -987,7 +1000,7 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
 export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => {
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
-    const orgName = organization?.name || 'ApexisPro Engineering Consultants';
+    const orgName = organization?.name || 'APEXISpro™ Engineering Consultants';
 
     const margin = { top: 40, bottom: 40, left: 40, right: 40 };
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
@@ -1042,9 +1055,9 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         // Section 2 - Files
         const summary = (report.summary || {}) as any;
         const fileRows = (summary.document_titles || []).slice(0, 50).map((d: any, i: number) => [
-            i + 1, 
-            d.folder ? `${d.folder}/${d.title}` : d.title, 
-            d.user || ' ', 
+            i + 1,
+            d.folder ? `${d.folder}/${d.title}` : d.title,
+            d.user || ' ',
             d.date || ' '
         ]);
         drawStyledTable(doc, 'SECTION 2 — FILES UPLOADED THIS MONTH', [
