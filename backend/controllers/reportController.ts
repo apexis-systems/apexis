@@ -182,7 +182,7 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
 
     const targetProject = await projects.findByPk(projectId);
     const organization = await organizations.findByPk(targetProject?.organization_id);
-    const orgName = organization?.name || 'Apexis Engineering Consultants';
+    const orgName = organization?.name || 'APEXISpro™ Systems Private Limited';
 
     const clientList = members.filter((m: any) => m.role === 'client').map((m: any) => m.user?.name).filter(Boolean);
     const contributorList = members.filter((m: any) => m.role === 'contributor').map((m: any) => m.user?.name).filter(Boolean);

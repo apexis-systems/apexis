@@ -78,12 +78,12 @@ export default function DashboardScreen() {
       // });
       projectListRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
         // Shifting left (decreasing offset) and increasing w/h
-        registerSpotlight('projectCard', { 
-            x: x + (Platform.OS === 'ios' ? 30 : 40), 
-            y: y + (Platform.OS === 'ios' ? 40 : 50), 
-            w: 90, 
-            h: 120, 
-            r: 16 
+        registerSpotlight('projectCard', {
+          x: x + (Platform.OS === 'ios' ? 30 : 40),
+          y: y + (Platform.OS === 'ios' ? 40 : 50),
+          w: 90,
+          h: 120,
+          r: 16
         });
       });
       createButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
@@ -141,9 +141,9 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     if (!hasSeenTour && user && !isTourActive) {
-        // Auto-start tour for new users after a short delay
-        const timer = setTimeout(startTour, 1000);
-        return () => clearTimeout(timer);
+      // Auto-start tour for new users after a short delay
+      const timer = setTimeout(startTour, 1000);
+      return () => clearTimeout(timer);
     }
   }, [hasSeenTour, user]);
 
@@ -191,7 +191,7 @@ export default function DashboardScreen() {
     try {
       const url = orgId ? `/projects?organization_id=${orgId}` : '/projects';
       const res = await PrivateAxios.get(url);
-      const sortedProjects = (res.data.projects || []).sort((a: any, b: any) => 
+      const sortedProjects = (res.data.projects || []).sort((a: any, b: any) =>
         (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
       );
       setProjects(sortedProjects);
@@ -205,13 +205,13 @@ export default function DashboardScreen() {
   const totalFolders = projects.reduce((sum, p) => sum + (parseInt(p.totalFolders, 10) || 0), 0);
 
   const DUMMY_PROJECTS = [
-      { id: 'd1', name: 'Alpha Construction', description: 'Infrastructure Phase 1', start_date: '2026-01-01', end_date: '2026-12-31', totalDocs: '12', totalPhotos: '45', color: colors.primary },
-      { id: 'd2', name: 'Bridge Beta', description: 'Main Span Engineering', start_date: '2026-02-01', end_date: '2026-11-30', totalDocs: '8', totalPhotos: '32', color: '#10b981' },
+    { id: 'd1', name: 'Alpha Construction', description: 'Infrastructure Phase 1', start_date: '2026-01-01', end_date: '2026-12-31', totalDocs: '12', totalPhotos: '45', color: colors.primary },
+    { id: 'd2', name: 'Bridge Beta', description: 'Main Span Engineering', start_date: '2026-02-01', end_date: '2026-11-30', totalDocs: '8', totalPhotos: '32', color: '#10b981' },
   ];
 
   const displayProjects = isTourActive ? DUMMY_PROJECTS : projects;
-  const displayStats = isTourActive 
-    ? { totalDocs: 20, totalPhotos: 77, totalFolders: 8 } 
+  const displayStats = isTourActive
+    ? { totalDocs: 20, totalPhotos: 77, totalFolders: 8 }
     : { totalDocs, totalPhotos, totalFolders };
 
   const filteredProjects = displayProjects.filter((p) =>
@@ -270,7 +270,7 @@ export default function DashboardScreen() {
       setIsUploadingLogo(false);
     }
   };
-  
+
   const handleProfilePicUpload = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -363,7 +363,13 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 4 }}>
-                {`${((user as any).organization?.name || 'APEXISpro™').charAt(0).toUpperCase() + ((user as any).organization?.name || 'APEXISpro™').slice(1)}`}
+                {(user as any).organization?.name ? (
+                  ((user as any).organization.name).charAt(0).toUpperCase() + ((user as any).organization.name).slice(1)
+                ) : (
+                  <Text>
+                    <Text className="font-angelica" style={{ color: colors.primary }}>APEXIS</Text><Text className="font-angelica" style={{ fontSize: 9, color: colors.primary }}>PRO™</Text>
+                  </Text>
+                )}
               </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -580,18 +586,18 @@ export default function DashboardScreen() {
             {(user.role === 'admin' || isTourActive) && (
               <TouchableOpacity
                 onPress={() => {
-                    if (!isTourActive && !checkLimit('projects')) {
-                        Alert.alert(
-                            "Limit Reached", 
-                            "You have reached your project limit. Please upgrade your plan to create more projects.",
-                            [
-                                { text: "Cancel", style: "cancel" },
-                                { text: "Upgrade", onPress: () => router.push('/subscription') }
-                            ]
-                        );
-                        return;
-                    }
-                    setIsCreating(true);
+                  if (!isTourActive && !checkLimit('projects')) {
+                    Alert.alert(
+                      "Limit Reached",
+                      "You have reached your project limit. Please upgrade your plan to create more projects.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Upgrade", onPress: () => router.push('/subscription') }
+                      ]
+                    );
+                    return;
+                  }
+                  setIsCreating(true);
                 }}
                 style={{ width: '22%', alignItems: 'center', gap: 4 }}
               >

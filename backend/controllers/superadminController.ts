@@ -129,16 +129,20 @@ export const inviteSuperAdmin = async (req: Request, res: Response) => {
         );
 
         // Send invitation email
-        const onboardingUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/superadmin-onboarding?token=${token}`;
+        const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/superadmin-onboarding?token=${token}`;
 
         await sendEmail(
             email,
-            "Invitation to join Apexis as SuperAdmin",
-            `<h1>Welcome to Apexis</h1>
-             <p>You have been invited to join the Apexis team as a SuperAdmin.</p>
-             <p>Please click the link below to complete your onboarding:</p>
-             <a href="${onboardingUrl}">${onboardingUrl}</a>
-             <p>This link will expire in 24 hours.</p>`,
+            "Invitation to join APEXISpro™ as SuperAdmin",
+            `<div style="font-family: Arial, Helvetica, sans-serif; color: #14213d;">
+                <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 20px;">
+                    APEXIS<span style="font-size: 16px;">PRO™</span>
+                </div>
+                <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Welcome to APEXIS<span style="font-size: 14px;">PRO™</span></h1>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 12px;">You have been invited to join the APEXIS<span style="font-size: 13px;">PRO™</span> team as a SuperAdmin.</p>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Please click the link below to securely login to the admin portal:</p>
+                <a href="${inviteUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Login to Admin Portal</a>
+             </div>`,
             true
         );
 

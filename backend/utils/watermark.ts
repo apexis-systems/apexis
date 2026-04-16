@@ -46,24 +46,29 @@ export const addWatermark = async (imageBuffer: Buffer, projectName: string = ''
         const logoSize = Math.round(bandHeight * 0.7);
 
         // 1. Get Brand Text Path using opentype.js (ABSOLUTE font control)
-        const brandText = "APEXISpro™";
-        const brandFontSize = Math.round(fontSize * 1.8);
+        const brandTextApex = "APEXIS";
+        const brandTextPro = "PRO™";
+        const brandFontSizeApex = Math.round(fontSize * 1.8);
+        const brandFontSizePro = Math.round(fontSize * 1.0);
         const font = await getFont(fontPath);
 
-        // Measure text width to align right correctly
-        // opentype.js units: font.getAdvanceWidth(text, fontSize, options)
-        const brandTextWidth = font.getAdvanceWidth(brandText, brandFontSize);
-
-        // Get the SVG path data
-        // .getPath(text, x, y, fontSize, options)
-        const textPathObject = font.getPath(brandText, 0, 0, brandFontSize);
-        const brandPathData = textPathObject.toPathData(2); // 2 decimal places
+        // Measure widths
+        const apexWidth = font.getAdvanceWidth(brandTextApex, brandFontSizeApex);
+        
+        // Get paths
+        const apexPathObj = font.getPath(brandTextApex, 0, 0, brandFontSizeApex);
+        const proPathObj = font.getPath(brandTextPro, 0, 0, brandFontSizePro);
+        
+        const apexPathData = apexPathObj.toPathData(2);
+        const proPathData = proPathObj.toPathData(2);
 
         // Branding layout (Left side)
         const gap = 3;
         const logoX = 20;
         const brandTextX = logoX + logoSize + gap;
-        const brandTextY = (svgHeight / 2) + (brandFontSize / 3);
+        const brandTextY = (svgHeight / 2) + (brandFontSizeApex / 3);
+        const proX = brandTextX + apexWidth + 4; // small gap between APEXIS and PRO
+        const proY = brandTextY;
 
         // 2. Create Logo Base64
         let logoBase64 = '';
@@ -86,7 +91,8 @@ export const addWatermark = async (imageBuffer: Buffer, projectName: string = ''
                     height="${logoSize}" 
                     width="${logoSize}" 
                 />` : ''}
-                <path d="${brandPathData}" fill="#f97415" transform="translate(${brandTextX}, ${brandTextY})" />
+                <path d="${apexPathData}" fill="#f97415" transform="translate(${brandTextX}, ${brandTextY})" />
+                <path d="${proPathData}" fill="#f97415" transform="translate(${proX}, ${proY})" />
 
                 <!-- Right Info: Date/Time (Top) + Project Name (Bottom) -->
                 <text x="${infoX}" y="40%" dominant-baseline="middle" text-anchor="end" 

@@ -71,7 +71,7 @@ const SiteHeader = () => {
               <img src="/app-icon.png" alt="APEXIS" className="h-full w-full object-cover" />
             </div>
             <span className="text-base font-bold font-angelica tracking-wider flex items-center">
-              <span className="text-primary italic">APEXIS<span className="text-[10px] lowercase ml-0.5">pro™</span></span>
+              <span className="text-primary italic">APEXIS<span className="text-[10px] uppercase ml-1">PRO™</span></span>
             </span>
 
           </button>
