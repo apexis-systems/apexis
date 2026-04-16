@@ -49,6 +49,14 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            location: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
+            tags: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
         },
         {
             tableName: "files",

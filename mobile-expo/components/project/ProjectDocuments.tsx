@@ -3,7 +3,6 @@ import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, A
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
-import { PrivateAxios } from '@/helpers/PrivateAxios';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
@@ -46,6 +45,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // PDF Viewer state
     const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
     const [pdfViewerName, setPdfViewerName] = useState('');
+    const [currentDoc, setCurrentDoc] = useState<any | null>(null);
     const [pdfLoading, setPdfLoading] = useState(false);
 
     useFocusEffect(
@@ -214,6 +214,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             // Use Google Docs viewer for reliable cross-platform PDF rendering
             const viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.downloadUrl)}`;
             setPdfViewerName(doc.file_name || 'Document');
+            setCurrentDoc(doc);
             setPdfViewerUrl(viewerUrl);
         } else {
             WebBrowser.openBrowserAsync(doc.downloadUrl);
@@ -780,7 +781,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 transparent={false}
                 animationType="slide"
                 statusBarTranslucent
-                onRequestClose={() => setPdfViewerUrl(null)}
+                onRequestClose={() => {
+                    setPdfViewerUrl(null);
+                    setCurrentDoc(null);
+                }}
             >
                 <StatusBar hidden />
                 <View style={{ flex: 1, backgroundColor: '#111' }}>
@@ -797,7 +801,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         borderBottomColor: 'rgba(255,255,255,0.08)',
                     }}>
                         <TouchableOpacity
-                            onPress={() => setPdfViewerUrl(null)}
+                            onPress={() => {
+                                setPdfViewerUrl(null);
+                                setCurrentDoc(null);
+                            }}
                             style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
                         >
                             <Feather name="x" size={20} color="#fff" />
@@ -808,8 +815,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         <View style={{ flexDirection: 'row', gap: 4 }}>
                             <TouchableOpacity
                                 onPress={() => {
-                                    const doc = docs.find(d => d.file_name === pdfViewerName);
-                                    if (doc) handleShare(doc);
+                                    if (currentDoc) handleShare(currentDoc);
                                 }}
                                 style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
                             >
@@ -817,6 +823,32 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             </TouchableOpacity>
                         </View>
                     </View>
+
+                    {/* Metadata Strip */}
+                    {(currentDoc?.location || currentDoc?.tags) && (
+                        <View style={{ backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                                {currentDoc.location && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Feather name="map-pin" size={12} color="#f97316" />
+                                        <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{currentDoc.location}</Text>
+                                    </View>
+                                )}
+                                {currentDoc.tags && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Feather name="tag" size={12} color="#aaa" />
+                                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                                            {currentDoc.tags.split(',').map((tag: string, tidx: number) => (
+                                                <View key={tidx} style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                                    <Text style={{ color: '#fff', fontSize: 9 }}>{tag.trim()}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                    )}
 
                     {/* WebView PDF */}
                     {pdfViewerUrl && (

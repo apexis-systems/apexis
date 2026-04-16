@@ -11,7 +11,7 @@ export const shareReport = async (req: Request, res: Response) => {
 
         // Fetch report and project details for naming
         const report = await reports.findByPk(id, {
-            include: [{ model: projects, attributes: ['name'] }]
+            include: [{ model: projects, as: 'project', attributes: ['name'] }]
         });
 
         if (!report) return res.status(404).json({ error: 'Report not found' });
@@ -30,13 +30,13 @@ export const shareReport = async (req: Request, res: Response) => {
             return `${day}-${month}-${year}`;
         };
 
-        let filename = `${projectName}_${type}_report_${fmt(start)}.pdf`;
+        let filename = `${projectName}_daily_report_${fmt(start)}.pdf`;
         if (type === 'weekly') {
-            filename = `${projectName}_weekly_report_${fmt(start)} to ${fmt(end)}.pdf`;
+            filename = `${projectName}_weekly_report_${fmt(start)}_to_${fmt(end)}.pdf`;
         } else if (type === 'monthly') {
             const monthName = start.toLocaleDateString('en-GB', { month: 'long' }).toLowerCase();
             const year = start.getFullYear();
-            filename = `${projectName}_monthly_${monthName}-${year}.pdf`;
+            filename = `${projectName}_monthly_report_${monthName}-${year}.pdf`;
         }
 
         res.setHeader('Content-Type', 'application/pdf');

@@ -118,7 +118,12 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
             const e = new Date(report.period_end);
             const startStr = `${pad(s.getDate())}-${pad(s.getMonth() + 1)}-${s.getFullYear()}`;
             const endStr = `${pad(e.getDate())}-${pad(e.getMonth() + 1)}-${e.getFullYear()}`;
-            const fileName = `project_${project.id}_weekly_report_${startStr}_to_${endStr}.pdf`;
+            const sanitize = (name?: string | number) => {
+                const raw = String(name ?? project?.name ?? project?.id ?? 'project');
+                return raw.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+            };
+            const base = `${sanitize(project?.name ?? project?.id)}`;
+            const fileName = `${base}_weekly_report_${startStr}_to_${endStr}.pdf`;
             const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
             const { uri } = await FileSystem.downloadAsync(
