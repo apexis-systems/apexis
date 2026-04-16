@@ -185,7 +185,7 @@ export default function Project({ id }: ProjectProps) {
                 <div className="mb-6">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
-                        {user.role === 'admin' && (
+                        {(user.role === 'admin' || user.role === 'superadmin') && (
                             <button
                                 onClick={() => setIsEditModalOpen(true)}
                                 className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-accent"

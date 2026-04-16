@@ -392,7 +392,7 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
 
         const requestedRole = typeof role === "string" ? role : undefined;
         const project =
-            authUser.role === "client"
+            authUser.role === "client" || authUser.role === "contributor"
                 ? await projects.findByPk(id)
                 : authUser.role === "superadmin"
                     ? await projects.findOne({ where: { id } })
@@ -402,16 +402,18 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Project not found or not authorized" });
         }
 
-        if (authUser.role === "client") {
-            if (requestedRole && requestedRole !== "client") {
-                return res.status(403).json({ error: "Only client share links are available" });
+        if (authUser.role === "client" || authUser.role === "contributor") {
+            const requestedRoleForNonAdmin = authUser.role as "client" | "contributor";
+
+            if (requestedRole && requestedRole !== requestedRoleForNonAdmin) {
+                return res.status(403).json({ error: `Only ${requestedRoleForNonAdmin} share links are available` });
             }
 
             const membership = await project_members.findOne({
                 where: {
                     project_id: id,
                     user_id: authUser.user_id,
-                    role: "client",
+                    role: requestedRoleForNonAdmin,
                 },
             });
 
@@ -419,10 +421,21 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
                 return res.status(403).json({ error: "Not authorized to view share links for this project" });
             }
 
-            return res.status(200).json({
-                clientLink: `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`,
-                clientCode: project.client_code,
-            });
+            const shareUrl = requestedRoleForNonAdmin === "client" 
+                ? `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`
+                : `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
+            const shareCode = requestedRoleForNonAdmin === "client" ? project.client_code : project.contributor_code;
+
+            const response: any = {};
+            if (requestedRoleForNonAdmin === "client") {
+                response.clientLink = shareUrl;
+                response.clientCode = shareCode;
+            } else {
+                response.contributorLink = shareUrl;
+                response.contributorCode = shareCode;
+            }
+
+            return res.status(200).json(response);
         }
 
         if (authUser.role !== "admin" && authUser.role !== "superadmin") {
