@@ -80,7 +80,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       const visiblePhotosInit = user?.role === 'client' ? currentFolderPhotosForInit.filter((p: any) => p.client_visible) : currentFolderPhotosForInit;
       const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
         if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
-        if (sortBy === 'date') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (sortBy === 'date') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
         return 0;
       });
@@ -143,7 +143,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         return (nameA || '').localeCompare(nameB || '');
       }
       if (sortBy === 'date') {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
       if (sortBy === 'size') {
         if (type === 'folder') return (a.name || '').localeCompare(b.name || '');

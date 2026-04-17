@@ -93,7 +93,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const visibleDocsInit = user.role === 'client' ? currentFolderDocsForInit.filter((d) => d.client_visible !== false) : currentFolderDocsForInit;
             const sortedInit = [...visibleDocsInit].sort((a: any, b: any) => {
                 if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
-                if (sortBy === 'date') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                if (sortBy === 'date') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
                 if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
                 return 0;
             });
@@ -119,7 +119,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 return (nameA || '').localeCompare(nameB || '');
             }
             if (sortBy === 'date') {
-                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
             }
             if (sortBy === 'size') {
                 if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
