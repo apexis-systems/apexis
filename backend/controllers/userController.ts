@@ -151,46 +151,82 @@ export const getOrgUsers = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
-        // 1. Determine accessible organization(s) based on the current role
+        // Fetch user from DB to get their TRUE base role and primary organization
+        const dbUser = await users.findByPk(authUser.user_id);
+        if (!dbUser) return res.status(404).json({ error: "User not found" });
+
+        const baseRole = dbUser.role;
+        const primaryOrgId = dbUser.organization_id;
+
         let whereCondition: any = {};
 
-        if (authUser.role === 'superadmin') {
-            // Superadmin: can see users from any organization
+        if (baseRole === 'superadmin') {
             whereCondition = {};
-        } else if (authUser.role === 'admin') {
-            // Admin: only see users from their own organization
-            whereCondition = { organization_id: authUser.organization_id };
         } else {
-            // Contributor / Client: See users who share a project with them in their CURRENT role,
-            // PLUS all admins of those organizations.
-            const myProjectIds = await project_members.findAll({
-                where: { user_id: authUser.user_id, role: authUser.role },
+            // 1. Find all projects associated with the user
+            // a) Explicitly joined projects (Contributor/Client)
+            const myExplicitMemberships = await project_members.findAll({
+                where: { user_id: authUser.user_id },
                 attributes: ['project_id']
-            }).then((pms: any[]) => pms.map((pm: any) => pm.project_id));
+            });
+            const explicitProjectIds = myExplicitMemberships.map((pm: any) => pm.project_id);
 
-            if (myProjectIds.length === 0) {
-                // If not in any projects as this role, maybe they can only see themselves?
-                whereCondition.id = authUser.user_id;
-            } else {
-                const peerUserIds = await project_members.findAll({
-                    where: { project_id: { [Op.in]: myProjectIds } },
-                    attributes: ['user_id']
-                }).then((pms: any[]) => pms.map((pm: any) => pm.user_id));
-
-                const sharedProjectOrgs = await projects.findAll({
-                    where: { id: { [Op.in]: myProjectIds } },
-                    attributes: ['organization_id']
-                }).then((projs: any[]) => projs.map((p: any) => p.organization_id));
-
-                const adminUserIds = await users.findAll({
-                    where: {
-                        organization_id: { [Op.in]: [...new Set(sharedProjectOrgs)] },
-                        role: 'admin'
-                    },
+            // b) Implicitly owned projects (if Admin)
+            let adminOwnedProjectIds: number[] = [];
+            if (baseRole === 'admin' && primaryOrgId) {
+                const ownedProjects = await projects.findAll({
+                    where: { organization_id: primaryOrgId },
                     attributes: ['id']
-                }).then((admins: any[]) => admins.map((a: any) => a.id));
+                });
+                adminOwnedProjectIds = ownedProjects.map((p: any) => p.id);
+            }
 
-                whereCondition.id = { [Op.in]: [...new Set([...peerUserIds, ...adminUserIds, authUser.user_id])] };
+            const allProjectIds = [...new Set([...explicitProjectIds, ...adminOwnedProjectIds])];
+
+            // 2. Identify all peers in these projects
+            let peerUserIds: number[] = [];
+            let sharedProjectOrgs: number[] = [];
+
+            if (allProjectIds.length > 0) {
+                const projectPeers = await project_members.findAll({
+                    where: { project_id: { [Op.in]: allProjectIds } },
+                    attributes: ['user_id']
+                });
+                peerUserIds = projectPeers.map((pm: any) => pm.user_id);
+
+                const projectsInScope = await projects.findAll({
+                    where: { id: { [Op.in]: allProjectIds } },
+                    attributes: ['organization_id']
+                });
+                sharedProjectOrgs = projectsInScope.map((p: any) => p.organization_id);
+            }
+
+            // 3. Find all admins of all associated organizations plus primary org
+            const accessibleOrgs = [...new Set([primaryOrgId, ...sharedProjectOrgs].filter(Boolean))];
+            const adminUsers = await users.findAll({
+                where: {
+                    organization_id: { [Op.in]: accessibleOrgs },
+                    role: 'admin'
+                },
+                attributes: ['id']
+            });
+            const adminUserIds = adminUsers.map((a: any) => a.id);
+
+            const allowedUserIds = new Set([...peerUserIds, ...adminUserIds, authUser.user_id]);
+
+            // 4. Set where condition
+            if (baseRole === 'admin' && primaryOrgId) {
+                // Admins see everyone in their primary organization 
+                // PLUS project peers/admins from other orgs where they might be a contributor/client
+                whereCondition = {
+                    [Op.or]: [
+                        { organization_id: primaryOrgId },
+                        { id: { [Op.in]: [...allowedUserIds] } }
+                    ]
+                };
+            } else {
+                // Others (Contributors/Clients) strictly see relevant project peers and org admins
+                whereCondition = { id: { [Op.in]: [...allowedUserIds] } };
             }
         }
 
