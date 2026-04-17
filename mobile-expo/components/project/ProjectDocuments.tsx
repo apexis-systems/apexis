@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
@@ -48,26 +48,35 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [currentDoc, setCurrentDoc] = useState<any | null>(null);
     const [pdfLoading, setPdfLoading] = useState(false);
 
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchFolders = async (isRefetch = false) => {
+        if (!project?.id) return;
+        if (!isRefetch && folders.length === 0 && docs.length === 0) setLoading(true);
+        try {
+            const data = await getProjectFiles(project.id, 'document');
+            if (data.folderData) setFolders(data.folderData);
+            if (data.fileData) {
+                setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+            }
+        } catch (error) {
+            console.error("Error fetching folders:", error);
+        } finally {
+            if (!isRefetch) setLoading(false);
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
-            const fetchFolders = async () => {
-                if (!project?.id) return;
-                if (folders.length === 0 && docs.length === 0) setLoading(true);
-                try {
-                    const data = await getProjectFiles(project.id, 'document');
-                    if (data.folderData) setFolders(data.folderData);
-                    if (data.fileData) {
-                        setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
-                    }
-                } catch (error) {
-                    console.error("Error fetching folders:", error);
-                } finally {
-                    setLoading(false);
-                }
-            };
             fetchFolders();
         }, [project?.id])
     );
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchFolders(true);
+        setRefreshing(false);
+    };
 
     useEffect(() => {
         setSelectedFolder(initialFolderId || null);
@@ -442,7 +451,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // Unified View
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity

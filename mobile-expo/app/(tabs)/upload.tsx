@@ -27,12 +27,11 @@ try {
 import { useAuth } from '@/contexts/AuthContext';
 
 import { useTheme } from '@/contexts/ThemeContext';
-import { uploadFileWithProgress } from '@/services/fileService';
+import { uploadFileWithProgress, uploadScans } from '@/services/fileService';
 import { getProjects } from '@/services/projectService';
 import { getFolders, createFolder } from '@/services/folderService';
 import { createActivity } from '@/services/activityService';
 import { getActiveProjectContext } from '@/utils/projectSelection';
-import { PrivateAxios } from '../../helpers/PrivateAxios';
 
 
 
@@ -525,17 +524,11 @@ export default function UploadScreen() {
                     } as any);
                 });
 
-                const res = await PrivateAxios.post('/files/upload-scans', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' },
-                    onUploadProgress: (progressEvent) => {
-                        const total = progressEvent.total || 1;
-                        const p = Math.min(Math.round((progressEvent.loaded / total) * 100), 100);
-                        setFileQueue(prev => prev.map(it => ({ ...it, progress: p, status: p === 100 ? 'done' : 'uploading' })));
-                    }
-
+                const res = await uploadScans(formData, (p) => {
+                    setFileQueue(prev => prev.map(it => ({ ...it, progress: p, status: p === 100 ? 'done' : 'uploading' })));
                 });
 
-                if (res.data.success) {
+                if (res.success) {
                     setFileQueue(prev => prev.map(it => ({ ...it, status: 'done', progress: 100 })));
                     setMode('done');
 

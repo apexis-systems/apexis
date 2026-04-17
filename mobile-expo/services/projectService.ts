@@ -11,6 +11,16 @@ export const getProjects = async (organization_id?: string) => {
     }
 };
 
+export const createProject = async (data: any) => {
+    try {
+        const response = await PrivateAxios.post('/projects', data);
+        return response.data;
+    } catch (error) {
+        console.error("createProject Error", error);
+        throw error;
+    }
+};
+
 export const getProjectById = async (id: string) => {
     try {
         const response = await PrivateAxios.get(`/projects/${id}`);

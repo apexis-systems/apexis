@@ -7,7 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
-import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { getProjectById } from '@/services/projectService';
 import { PanResponder, Dimensions } from 'react-native';
 import ProjectOverview from '@/components/project/ProjectOverview';
 import ProjectDocuments from '@/components/project/ProjectDocuments';
@@ -86,8 +86,8 @@ export default function ProjectWorkspaceScreen() {
 
     const fetchProject = useCallback(async () => {
         try {
-            const res = await PrivateAxios.get(`/projects/${id}`);
-            setProject(res.data.project);
+            const projectData = await getProjectById(id as string);
+            setProject(projectData);
         } catch (error) {
             console.error("Failed to fetch project:", error);
         } finally {

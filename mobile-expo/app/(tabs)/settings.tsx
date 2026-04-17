@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform, KeyboardAvoidingView, RefreshControl } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -49,14 +49,28 @@ export default function ProfileScreen() {
         }
     }, [user?.name]);
 
-    useEffect(() => {
-        if (user) {
-            getMyMemberships().then(res => {
-                if (res.memberships) setMemberships(res.memberships);
-            }).catch(err => console.error("Load memberships error:", err));
+    const [refreshing, setRefreshing] = useState(false);
+
+    const loadMemberships = async () => {
+        if (!user) return;
+        try {
+            const res = await getMyMemberships();
+            if (res.memberships) setMemberships(res.memberships);
+        } catch (err) {
+            console.error("Load memberships error:", err);
         }
+    };
+
+    useEffect(() => {
+        loadMemberships();
     }, [user?.id, user?.project_id, user?.role]);
 
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadMemberships();
+        // Since other data is either static or updated differently, this is sufficient to test pulling logic
+        setRefreshing(false);
+    };
     // const handleSwitchContext = async ({ projectId, organizationId, role }: { projectId?: number | null; organizationId?: number | null; role: string }) => {
     //     if (isSwitching) return;
     //     setIsSwitching(true);
@@ -228,7 +242,7 @@ export default function ProfileScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
             >
-                <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+                <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                     {/* Avatar + Info */}
                     <View style={{ alignItems: 'center', marginBottom: 32 }}>
                         <TouchableOpacity

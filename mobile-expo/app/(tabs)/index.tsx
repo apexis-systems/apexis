@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView, Alert, StatusBar } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Platform, Image, KeyboardAvoidingView, Alert, StatusBar, RefreshControl } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
-import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { getProjects, createProject } from '@/services/projectService';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { listRooms } from '@/services/chatService';
@@ -218,17 +218,24 @@ export default function DashboardScreen() {
     }
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const fetchProjects = async (orgId?: string | null) => {
     try {
-      const url = orgId ? `/projects?organization_id=${orgId}` : '/projects';
-      const res = await PrivateAxios.get(url);
-      const sortedProjects = (res.data.projects || []).sort((a: any, b: any) =>
+      const data = await getProjects(orgId || undefined);
+      const sortedProjects = (data.projects || []).sort((a: any, b: any) =>
         (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
       );
       setProjects(sortedProjects);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchProjects(selectedOrgId);
+    setRefreshing(false);
   };
 
   const totalDocs = projects.reduce((sum, p) => sum + (parseInt(p.totalDocs, 10) || 0), 0);
@@ -253,7 +260,7 @@ export default function DashboardScreen() {
     if (!newProject.name || !newProject.start_date || !newProject.end_date) return;
     setIsSubmitting(true);
     try {
-      await PrivateAxios.post('/projects', newProject);
+      await createProject(newProject);
       setIsCreating(false);
       setNewProject({ name: '', description: '', start_date: '', end_date: '' });
       fetchProjects();
@@ -359,7 +366,7 @@ export default function DashboardScreen() {
 
 
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           {/* Centered Company Logo + User Name */}
           <View ref={headerRef} style={{ alignItems: 'center', marginBottom: 20 }}>
             <TouchableOpacity
