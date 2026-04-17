@@ -36,10 +36,40 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                 quality: 0.9,
             });
             if (photo) {
-                // Fix orientation for iOS
+                // 1. Calculate the crop to enforce a 4:3 aspect ratio (Portrait 3:4) - iOS ONLY
+                const { width, height } = photo;
+                let crop = undefined;
+
+                if (Platform.OS === 'ios') {
+                    const targetRatio = 3 / 4;
+                    const currentRatio = width / height;
+                    const tolerance = 0.01;
+
+                    if (currentRatio > targetRatio + tolerance) {
+                        const newWidth = Math.min(width, Math.floor(height * targetRatio));
+                        const originX = Math.max(0, Math.floor((width - newWidth) / 2));
+                        const safeWidth = Math.min(newWidth, width - originX);
+                        crop = { originX, originY: 0, width: safeWidth, height };
+                    } else if (currentRatio < targetRatio - tolerance) {
+                        const newHeight = Math.min(height, Math.floor(width / targetRatio));
+                        const originY = Math.max(0, Math.floor((height - newHeight) / 2));
+                        const safeHeight = Math.min(newHeight, height - originY);
+                        crop = { originX: 0, originY, width, height: safeHeight };
+                    }
+                }
+
+                // 2. Fix orientation/resolution for iOS/Android consistency
+                const manipActions: any[] = [];
+                if (crop) manipActions.push({ crop });
+                
+                const finalWidth = crop ? crop.width : width;
+                const finalHeight = crop ? crop.height : height;
+                const resizeOptions = finalWidth > finalHeight ? { width: 1920 } : { height: 1920 };
+                manipActions.push({ resize: resizeOptions });
+
                 const manipulated = await ImageManipulator.manipulateAsync(
                     photo.uri,
-                    [{ resize: { width: 1920 } }],
+                    manipActions,
                     { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                 );
 
@@ -113,11 +143,16 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
 
                 {/* Camera View */}
                 {permission?.granted ? (
-                    <CameraView
-                        ref={cameraRef}
-                        style={{ flex: 1 }}
-                        facing={cameraFacing}
-                    />
+                    <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 95 }}>
+                        <View style={{ width: '100%', aspectRatio: 3 / 4, overflow: 'hidden', backgroundColor: '#111' }}>
+                            <CameraView
+                                ref={cameraRef}
+                                style={{ flex: 1 }}
+                                facing={cameraFacing}
+                                ratio="4:3"
+                            />
+                        </View>
+                    </View>
                 ) : (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
                         <Text style={{ color: '#fff', textAlign: 'center', marginBottom: 20 }}>Camera permission is needed to take photos.</Text>

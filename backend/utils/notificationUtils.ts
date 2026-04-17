@@ -59,7 +59,13 @@ export const sendNotification = async ({
                                 sound: 'default',
                                 badge: 1,
                                 'content-available': 1
-                            }
+                            },
+                            // Duplicate data for iOS - expo-notifications looks at the payload root
+                            ...Object.keys(data).reduce((acc: any, key) => {
+                                acc[key] = String(data[key]);
+                                return acc;
+                            }, {}),
+                            type
                         },
                         headers: {
                             'apns-priority': '10',
