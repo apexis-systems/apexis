@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import {
-    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform, KeyboardAvoidingView,
+    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform, KeyboardAvoidingView, StyleSheet,
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import { useEffect, useCallback, useLayoutEffect } from 'react';
 import { Modal, BackHandler } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { parseApiError } from '@/helpers/apiError';
+import ImageAnnotator from '@/components/common/ImageAnnotator';
 
 type Step = 'camera' | 'details';
 
@@ -34,6 +35,7 @@ export default function SnagCreateScreen() {
     const [step, setStep] = useState<Step>('camera');
     const [isCapturing, setIsCapturing] = useState(false);
     const [capturedPhoto, setCapturedPhoto] = useState<{ uri: string; mime: string; name: string } | null>(null);
+    const [annotatingUri, setAnnotatingUri] = useState<string | null>(null);
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -119,7 +121,7 @@ export default function SnagCreateScreen() {
             );
 
             setCapturedPhoto({ uri: manipulated.uri, mime: 'image/jpeg', name: `snag_${Date.now()}.jpg` });
-            setStep('details');
+            // keep user in camera view so they can preview/edit or press Done
         } catch (e) {
             console.error('capturePhoto error:', e);
         } finally {
@@ -146,7 +148,7 @@ export default function SnagCreateScreen() {
         } catch (e) {}
 
         setCapturedPhoto({ uri, mime: 'image/jpeg', name: a.fileName || `snag_${Date.now()}.jpg` });
-        setStep('details');
+        // keep in camera view to match RFI UX
     };
 
     const handleSubmit = async () => {
@@ -188,61 +190,101 @@ export default function SnagCreateScreen() {
     // ── CAMERA STEP ───────────────────────────────────────────────────────────
     if (step === 'camera') {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} edges={['top']}>
-                {/* Header */}
-                <View style={{
-                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                    paddingHorizontal: 20, paddingVertical: 16,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                }}>
-                    <TouchableOpacity onPress={handleBack}>
-                        <Feather name="x" size={24} color="#fff" />
-                    </TouchableOpacity>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff' }}>Take Snag Photo</Text>
-                    <View style={{ width: 24 }} />
-                </View>
+            <View style={{ flex: 1, backgroundColor: '#000' }}>
+                {/* Header removed — using overlay header inside CameraView for consistent RFI UX */}
 
                 {/* Camera */}
                 {cameraPermission === null ? (
                     <View style={{ flex: 1, backgroundColor: '#000' }} />
                 ) : (cameraPermission.granted && isFocused) ? (
-                    <CameraView style={{ flex: 1 }} facing="back" ref={cameraRef}>
-                        {/* Bottom Controls */}
-                        <View style={{
-                            position: 'absolute', bottom: 0, left: 0, right: 0,
-                            paddingBottom: Math.max(insets.bottom, 16),
-                            backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 15
-                        }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: 16 }}>
-                                {/* Gallery */}
-                                <TouchableOpacity onPress={pickFromGallery} style={{ alignItems: 'center', width: 70 }}>
-                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="image" size={22} color="#fff" />
+                    <View style={{ flex: 1 }}>
+                        <CameraView style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
+
+                        {/* Header Overlay */}
+                        <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                            <TouchableOpacity onPress={handleBack} style={cameraStyles.headerBtn}>
+                                <Feather name="x" size={24} color="#fff" />
+                            </TouchableOpacity>
+                            <Text style={cameraStyles.headerTitle}>Snag Photo</Text>
+                            <View style={{ width: 60 }} />
+                        </View>
+
+                        {/* Bottom Controls Overlay */}
+                        <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                            {/* Preview row */}
+                            {capturedPhoto && (
+                                <View style={cameraStyles.previewContainer}>
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={{ gap: 14, paddingHorizontal: 20, paddingTop: 10, paddingRight: 30 }}
+                                    >
+                                        <View style={cameraStyles.previewWrapper}>
+                                            <Image source={{ uri: capturedPhoto.uri }} style={cameraStyles.previewThumb} />
+                                            <TouchableOpacity
+                                                onPress={() => setCapturedPhoto(null)}
+                                                style={cameraStyles.removeBtn}
+                                            >
+                                                <Feather name="x" size={12} color="#fff" />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => setAnnotatingUri(capturedPhoto.uri)}
+                                                style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 10 }}
+                                            >
+                                                <Feather name="edit-2" size={12} color="#fff" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </ScrollView>
+                                </View>
+                            )}
+
+                            <View style={cameraStyles.shutterRow}>
+                                <TouchableOpacity onPress={pickFromGallery} style={cameraStyles.sideBtn}>
+                                    <View style={cameraStyles.iconCircle}>
+                                        <Feather name="image" size={24} color="#fff" />
                                     </View>
-                                    <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Gallery</Text>
+                                    <Text style={cameraStyles.btnLabel}>Gallery</Text>
                                 </TouchableOpacity>
 
-                                {/* Shutter */}
-                                <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={{ alignItems: 'center' }}>
-                                    <View style={{
-                                        width: 76, height: 76, borderRadius: 38,
-                                        borderWidth: 4, borderColor: '#fff',
-                                        backgroundColor: '#ea8c0a',
-                                        alignItems: 'center', justifyContent: 'center',
-                                    }}>
-                                        <View style={{
-                                            width: 52, height: 52, borderRadius: 26,
-                                            backgroundColor: '#fff',
-                                        }} />
+                                <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                                    <View style={cameraStyles.shutterOuter}>
+                                        <View style={cameraStyles.shutterInner} />
                                     </View>
-                                    <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Photo</Text>
+                                    <Text style={cameraStyles.btnLabel}>Photo</Text>
                                 </TouchableOpacity>
 
-                                {/* Spacer / Right Button */}
                                 <View style={{ width: 70 }} />
                             </View>
                         </View>
-                    </CameraView>
+
+                        {/* Floating Done Button */}
+                        {capturedPhoto && (
+                            <TouchableOpacity
+                                onPress={() => setStep('details')}
+                                style={{
+                                    position: 'absolute',
+                                    bottom: insets.bottom + 180,
+                                    right: 20,
+                                    backgroundColor: colors.primary,
+                                    paddingHorizontal: 24,
+                                    paddingVertical: 14,
+                                    borderRadius: 30,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    elevation: 8,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.3,
+                                    shadowRadius: 5,
+                                    zIndex: 20
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Done</Text>
+                                <Feather name="arrow-right" size={20} color="#fff" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 ) : (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                         <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
@@ -251,7 +293,7 @@ export default function SnagCreateScreen() {
                         </TouchableOpacity>
                     </View>
                 )}
-            </SafeAreaView>
+            </View>
         );
     }
 
@@ -280,11 +322,19 @@ export default function SnagCreateScreen() {
                 {/* Photo preview */}
                 {capturedPhoto && (
                     <View style={{ marginBottom: 28, alignItems: 'center' }}>
-                        <Image
-                            source={{ uri: capturedPhoto.uri }}
-                            style={{ width: 140, height: 180, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
-                            resizeMode="cover"
-                        />
+                        <View style={{ width: 140, height: 180 }}>
+                            <Image
+                                source={{ uri: capturedPhoto.uri }}
+                                style={{ width: 140, height: 180, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+                                resizeMode="cover"
+                            />
+                            <TouchableOpacity
+                                onPress={() => capturedPhoto && setAnnotatingUri(capturedPhoto.uri)}
+                                style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
+                            >
+                                <Feather name="edit-2" size={14} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
                         <TouchableOpacity
                             onPress={() => setStep('camera')}
                             style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}
@@ -347,6 +397,18 @@ export default function SnagCreateScreen() {
             </ScrollView>
             </KeyboardAvoidingView>
 
+            {/* Image annotator for captured photo */}
+            {annotatingUri && (
+                <ImageAnnotator
+                    uri={annotatingUri}
+                    onSave={(newUri) => {
+                        setCapturedPhoto(prev => prev ? { ...prev, uri: newUri } : prev);
+                        setAnnotatingUri(null);
+                    }}
+                    onCancel={() => setAnnotatingUri(null)}
+                />
+            )}
+
             {/* Assignee picker modal */}
             <Modal visible={dropdownOpen} transparent animationType="fade" onRequestClose={() => setDropdownOpen(false)}>
                 <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={() => setDropdownOpen(false)}>
@@ -380,3 +442,106 @@ export default function SnagCreateScreen() {
         </SafeAreaView>
     );
 }
+
+const cameraStyles = StyleSheet.create({
+    headerOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    headerBtn: {
+        padding: 10,
+    },
+    headerTitle: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    controlsOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        zIndex: 10,
+        paddingTop: 10
+    },
+    previewContainer: {
+        paddingBottom: 20,
+        paddingHorizontal: 20,
+    },
+    previewWrapper: {
+        position: 'relative',
+        marginRight: 5,
+    },
+    previewThumb: {
+        width: 56,
+        height: 56,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
+    },
+    removeBtn: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: '#ef4444',
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#000',
+        zIndex: 20,
+    },
+    shutterRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 30,
+    },
+    sideBtn: {
+        alignItems: 'center',
+        width: 70,
+    },
+    iconCircle: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    shutterBtn: {
+        alignItems: 'center',
+    },
+    shutterOuter: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        borderWidth: 4,
+        borderColor: '#fff',
+        backgroundColor: '#ea8c0a',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    shutterInner: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#fff',
+    },
+    btnLabel: {
+        color: '#ccc',
+        fontSize: 10,
+        marginTop: 5,
+    },
+});

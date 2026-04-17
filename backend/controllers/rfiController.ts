@@ -105,7 +105,8 @@ export const createRFI = async (req: Request | any, res: Response) => {
                 let fileBuffer = file.buffer;
                 if (file.mimetype.startsWith('image/')) {
                     try {
-                        fileBuffer = await addWatermark(file.buffer, project.name);
+                        const senderName = authUser.name || 'Someone';
+                        fileBuffer = await addWatermark(file.buffer, project.name, senderName);
                     } catch (err) {
                         console.error('Watermarking failed for RFI photo:', err);
                     }

@@ -506,12 +506,12 @@ export default function ChatDetail() {
                     />
 
                     <div className="flex-1 flex items-end bg-secondary/50 border border-border rounded-2xl px-3 py-2 gap-2 min-h-[44px]">
-                        <button
+                        {/* <button
                             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                             className={`transition-colors pb-0.5 ${showEmojiPicker ? 'text-accent' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                             <Smile className="h-5 w-5" />
-                        </button>
+                        </button> */}
                         <textarea
                             value={message}
                             onChange={e => {

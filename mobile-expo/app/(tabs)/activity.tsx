@@ -32,14 +32,14 @@ const colorMap: Record<string, { bg: string; icon: string }> = {
     share: { bg: 'rgba(34,197,94,0.15)', icon: '#22c55e' },
 };
 
-const actionTypes = [
-    { label: 'All Actions', value: 'all' },
-    { label: 'Upload', value: 'upload' },
-    { label: 'Edit', value: 'edit' },
-    { label: 'Delete', value: 'delete' },
-    { label: 'Share', value: 'share' },
-    { label: 'Photo Upload', value: 'upload_photo' },
-];
+// const actionTypes = [
+//     { label: 'All Actions', value: 'all' },
+//     { label: 'Upload', value: 'upload' },
+//     { label: 'Edit', value: 'edit' },
+//     { label: 'Delete', value: 'delete' },
+//     { label: 'Share', value: 'share' },
+//     { label: 'Photo Upload', value: 'upload_photo' },
+// ];
 
 export default function ActivityScreen() {
     const { user } = useAuth();
@@ -227,12 +227,12 @@ export default function ActivityScreen() {
                             title={userLabel}
                             onPress={() => setActiveModal('user')}
                         />
-                        <FilterButton
+                        {/* <FilterButton
                             label="Action"
                             value={!!selectedType}
                             title={selectedType ? actionTypes.find(a => a.value === selectedType)?.label || '...' : 'All'}
                             onPress={() => setActiveModal('type')}
-                        />
+                        /> */}
                     </ScrollView>
                 </View>
 
@@ -416,7 +416,7 @@ export default function ActivityScreen() {
                             })}
 
                             {/* Type (single-select) */}
-                            {activeModal === 'type' && actionTypes.map((a) => {
+                            {/* {activeModal === 'type' && actionTypes.map((a) => {
                                 const isSelected = (selectedType || 'all') === a.value;
                                 return (
                                     <TouchableOpacity
@@ -435,7 +435,7 @@ export default function ActivityScreen() {
                                         <Text style={{ fontSize: 14, color: themeColors.text }}>{a.label}</Text>
                                     </TouchableOpacity>
                                 );
-                            })}
+                            })} */}
                         </ScrollView>
 
                         {/* Done button for multi-select modals */}

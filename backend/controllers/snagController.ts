@@ -84,7 +84,8 @@ export const createSnag = async (req: Request, res: Response) => {
 
       if ((req as any).file.mimetype.startsWith("image/")) {
         try {
-          fileBuffer = await addWatermark((req as any).file.buffer, project.name);
+          const senderName = authUser.name || "Someone";
+          fileBuffer = await addWatermark((req as any).file.buffer, project.name, senderName);
           ext = ".jpg";
         } catch (e) {
           console.error("Sharp error in snag", e);

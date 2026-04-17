@@ -21,14 +21,14 @@ interface ActivityItem extends GlobalActivityItem {
     organizationName?: string;
 }
 
-const actionTypes = [
-    { label: 'All Actions', value: 'all' },
-    { label: 'Upload', value: 'upload' },
-    { label: 'Edit', value: 'edit' },
-    { label: 'Delete', value: 'delete' },
-    { label: 'Share', value: 'share' },
-    { label: 'Photo Upload', value: 'upload_photo' },
-];
+// const actionTypes = [
+//     { label: 'All Actions', value: 'all' },
+//     { label: 'Upload', value: 'upload' },
+//     { label: 'Edit', value: 'edit' },
+//     { label: 'Delete', value: 'delete' },
+//     { label: 'Share', value: 'share' },
+//     { label: 'Photo Upload', value: 'upload_photo' },
+// ];
 
 const Activity = () => {
     const { user } = useAuth();
@@ -185,7 +185,7 @@ const Activity = () => {
                         placeholder="All Users"
                     />
 
-                    <Select value={selectedType} onValueChange={setSelectedType}>
+                    {/* <Select value={selectedType} onValueChange={setSelectedType}>
                         <SelectTrigger className="w-40 text-xs">
                             <SelectValue placeholder="All Actions" />
                         </SelectTrigger>
@@ -194,7 +194,7 @@ const Activity = () => {
                                 <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                             ))}
                         </SelectContent>
-                    </Select>
+                    </Select> */}
                 </div>
             </div>
 

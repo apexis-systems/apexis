@@ -71,7 +71,7 @@ export default function SetupNameScreen() {
                     <View style={{ alignItems: 'center', marginBottom: 40 }}>
                         <Image source={require('../../assets/images/app-icon.png')} style={{ width: 80, height: 80, marginBottom: 20 }} resizeMode="contain" />
                         <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text, textAlign: 'center', marginBottom: 8 }}>
-                            Welcome to <Text className="font-angelica" style={{ color: colors.primary }}>APEXIS</Text><Text className="font-angelica" style={{ fontSize: 13, color: colors.primary }}>PRO™</Text>
+                            Welcome to <Text className="font-angelica" style={{ color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>APEXIS</Text><Text className="font-angelica" style={{ fontSize: 13, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
                         </Text>
                         <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center' }}>Please enter your full name to continue.</Text>
                     </View>

@@ -257,8 +257,8 @@ export default function SignUpScreen() {
 
                     <View style={{ alignItems: 'center', marginBottom: 30 }}>
                         <Image source={require('../../assets/images/app-icon.png')} style={{ width: 80, height: 80, marginBottom: 12 }} resizeMode="contain" />
-                        <Text className="font-angelica" style={{ fontSize: 30, color: colors.primary }}>
-                            APEXIS<Text className="font-angelica" style={{ fontSize: 16 }}>PRO™</Text>
+                        <Text className="font-angelica" style={{ fontSize: 30, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>
+                            APEXIS<Text className="font-angelica" style={{ fontSize: 16, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
                         </Text>
                         <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>
                             {step.includes('onboarding') ? 'ACCOUNT SETUP' : 'ADMIN REGISTRATION'}

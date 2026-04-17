@@ -397,9 +397,10 @@ export default function DashboardScreen() {
                 {(user as any).organization?.name ? (
                   ((user as any).organization.name).charAt(0).toUpperCase() + ((user as any).organization.name).slice(1)
                 ) : (
-                  <Text>
-                    <Text className="font-angelica" style={{ color: colors.primary }}>APEXIS</Text><Text className="font-angelica" style={{ fontSize: 9, color: colors.primary }}>PRO™</Text>
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text className="font-angelica" style={{ color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>APEXIS</Text>
+                    <Text className="font-angelica" style={{ fontSize: 9, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
+                  </View>
                 )}
               </Text>
 
