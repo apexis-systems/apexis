@@ -123,9 +123,22 @@ export default function UploadScreen() {
         });
     };
 
+    // Data Fetching
+    const fetchProjects = useCallback(async () => {
+        if (!user) return;
+        try {
+            const data = await getProjects();
+            if (data.projects) setProjects(data.projects);
+        } catch (e) {
+            console.error('fetchProjects', e);
+        }
+    }, [user]);
+
     // Ensure state defaults from params if routing with prepopulated picks
     useFocusEffect(
         useCallback(() => {
+            fetchProjects();
+
             // Priority 1: Direct link parameters
             if (params.projectId) {
                 setSelectedProject(params.projectId as string);
@@ -159,7 +172,7 @@ export default function UploadScreen() {
                     }
                 }
             }
-        }, [params.projectId, params.folderId, params.type])
+        }, [params.projectId, params.folderId, params.type, fetchProjects])
     );
 
     // Dynamic Tab Bar Visibility
@@ -168,14 +181,6 @@ export default function UploadScreen() {
             tabBarStyle: mode === 'capture' ? { display: 'none' } : undefined,
         });
     }, [mode, navigation]);
-
-    // Data Fetching
-    useEffect(() => {
-        if (!user) return;
-        getProjects()
-            .then((data) => { if (data.projects) setProjects(data.projects); })
-            .catch((e) => console.error('fetchProjects', e));
-    }, [user]);
 
     const fetchFolders = async () => {
         if (!selectedProject) { setFolders([]); return; }

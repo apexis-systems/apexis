@@ -111,7 +111,14 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         // Apply compression and watermarking only to images
         if (file_type.startsWith('image/')) {
             try {
-                fileBuffer = await addWatermark(req.file.buffer, project.name);
+                // Ensure we have a sender name for the watermark
+                let senderName = authUser.name;
+                if (!senderName) {
+                    const sender = await users.findByPk(authUser.user_id);
+                    senderName = sender?.name || "Someone";
+                }
+
+                fileBuffer = await addWatermark(req.file.buffer, project.name, senderName);
                 // Force extension to jpg since we are converting
                 finalFileName = file_name.replace(/\.[^/.]+$/, "") + ".jpg";
             } catch (sharpErr) {
