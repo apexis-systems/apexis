@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server';
 
-// Apple-App-Site-Association (AASA) file for Universal Links.
-// Tells iOS to open the APEXISpro app directly instead of Safari
-// when these paths are tapped on a device with the app installed.
-//
-// Replace YOUR_TEAM_ID with your Apple Developer Team ID:
-// developer.apple.com → Account → Membership Details → Team ID
 const AASA = {
   applinks: {
+    apps: [],
     details: [
       {
         appIDs: ['949W22S7SP.com.apexis.ios'],
+        paths: ['/auth/login-redirect*', '/auth/invite*', '/auth/onboarding*'],
         components: [
           { '/': '/auth/login-redirect*' },
           { '/': '/auth/invite*' },
@@ -19,6 +15,9 @@ const AASA = {
       },
     ],
   },
+  webcredentials: {
+    apps: ['949W22S7SP.com.apexis.ios']
+  }
 };
 
 export function GET() {

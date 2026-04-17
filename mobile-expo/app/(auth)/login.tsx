@@ -45,9 +45,6 @@ export default function LoginScreen() {
     };
 
     const hasLoggedOutForInvitation = useRef(false);
-    // Initialized BEFORE any effect runs so the credential loader can
-    // check it synchronously on its very first execution.
-    const isInvitationMode = useRef(!!params.code);
 
     useEffect(() => {
         if (!params.code || hasLoggedOutForInvitation.current) return;
@@ -57,28 +54,18 @@ export default function LoginScreen() {
         if (isAuthLoading) return;
 
         const handleInvitation = async () => {
-            isInvitationMode.current = true;
             setIsProcessingLink(true);
 
             const deepRole: UserRole =
                 params.role === 'contributor' || params.role === 'client'
                     ? (params.role as UserRole)
                     : 'contributor';
+            
+            // Set fields BEFORE any potential logout delay to guarantee UI updates
             setSelectedRole(deepRole);
             setProjectCode(params.code as string);
-
-            if (isLoggedIn) {
-                try {
-                    logout();
-                    await new Promise(r => setTimeout(r, 300));
-                } catch (e) {
-                    console.error("Deep link logout error:", e);
-                }
-            }
 
             hasLoggedOutForInvitation.current = true;
-            setSelectedRole(deepRole);
-            setProjectCode(params.code as string);
             setIsProcessingLink(false);
         };
 
@@ -91,9 +78,9 @@ export default function LoginScreen() {
     useEffect(() => {
         // During an invitation deep-link flow, skip loading stored credentials
         // entirely — we never want remembered data to overwrite the deep-link code.
-        if (isInvitationMode.current) return;
+        if (params.code) return;
         loadStoredCredentials();
-    }, [selectedRole]);
+    }, [selectedRole, params.code]);
 
     const loadStoredCredentials = async () => {
         try {
@@ -116,9 +103,7 @@ export default function LoginScreen() {
                     setPassword(data.secret || '');
                 } else {
                     // Only fill stored project code when not in a deep-link invitation flow.
-                    // (isInvitationMode also guards the entire function entry above, but
-                    // this extra check makes the intent explicit.)
-                    if (!isInvitationMode.current) {
+                    if (!params.code) {
                         setProjectCode(data.secret || '');
                     }
                 }
