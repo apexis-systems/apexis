@@ -710,12 +710,12 @@ export default function ChatDetailScreen() {
 
                     <View style={{ paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}>
                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 0, height: 44 }}>
-                            <TouchableOpacity
+                            {/* <TouchableOpacity
                                 onPress={() => setShowEmojis(!showEmojis)}
                                 style={{ padding: 4 }}
                             >
                                 <Feather name="smile" size={24} color={showEmojis ? colors.primary : colors.textMuted} />
-                            </TouchableOpacity>
+                            </TouchableOpacity> */}
                             <TextInput
                                 value={message}
                                 onChangeText={(text) => {
