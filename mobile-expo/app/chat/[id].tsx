@@ -746,7 +746,7 @@ export default function ChatDetailScreen() {
                             <TouchableOpacity onPress={pickImage} style={{ padding: 4, marginLeft: 4 }}>
                                 <Feather name="image" size={22} color={colors.textMuted} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={takePhoto} style={{ padding: 4, marginLeft: 4 }}>
+                            <TouchableOpacity onPress={() => takePhoto()} style={{ padding: 4, marginLeft: 4 }}>
                                 <Feather name="camera" size={22} color={colors.textMuted} />
                             </TouchableOpacity>
                         </View>

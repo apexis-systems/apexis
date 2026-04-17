@@ -132,22 +132,34 @@ export default function UploadScreen() {
                 if (params.folderId) {
                     setSelectedFolder(params.folderId as string);
                 }
+                
+                // Update doc mode based on type param
+                const isDoc = params.type === 'documents' || params.type === 'document';
+                setIsDocMode(isDoc);
+                
+                setMode('capture');
+                
+                // Auto trigger scanner if in doc mode
+                if (isDoc) {
+                    setTimeout(() => captureScan(), 300);
+                }
             } else {
                 // Priority 2: Nav Bar click while inside a project
                 const { projectId, folderId, type } = getActiveProjectContext();
                 if (projectId) {
                     setSelectedProject(projectId);
                     setSelectedFolder(folderId); // This ensures it's set even if null (root)
-                    if (type === 'document') {
-                        setIsDocMode(true);
-                    } else if (type === 'photo') {
-                        setIsDocMode(false);
-                    }
+                    
+                    const isDoc = type === 'document';
+                    setIsDocMode(isDoc);
+                    
                     setMode('capture');
+                    if (isDoc) {
+                        setTimeout(() => captureScan(), 300);
+                    }
                 }
-
             }
-        }, [params.projectId, params.folderId])
+        }, [params.projectId, params.folderId, params.type])
     );
 
     // Dynamic Tab Bar Visibility
