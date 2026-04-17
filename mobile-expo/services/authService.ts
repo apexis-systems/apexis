@@ -166,9 +166,9 @@ export const revokeAllWebSessions = async () => {
 // PASSWORD MANAGEMENT
 // ==========================
 
-export const forgotPasswordRequestOtp = async (email: string, role: 'admin' | 'superadmin') => {
+export const forgotPasswordRequestOtp = async (data: { email?: string, phone?: string, role: string }) => {
     try {
-        const response = await PublicAxios.post('/auth/forgot-password/request-otp', { email, role });
+        const response = await PublicAxios.post('/auth/forgot-password/request-otp', data);
         return response.data;
     } catch (error: any) {
         console.error("forgotPasswordRequestOtp Error:", error?.response?.data || error.message);
@@ -176,9 +176,9 @@ export const forgotPasswordRequestOtp = async (email: string, role: 'admin' | 's
     }
 };
 
-export const forgotPasswordVerifyOtp = async (email: string, otp: string) => {
+export const forgotPasswordVerifyOtp = async (data: { email?: string, phone?: string, otp: string }) => {
     try {
-        const response = await PublicAxios.post('/auth/forgot-password/verify-otp', { email, otp });
+        const response = await PublicAxios.post('/auth/forgot-password/verify-otp', data);
         return response.data; // { resetToken, message }
     } catch (error: any) {
         console.error("forgotPasswordVerifyOtp Error:", error?.response?.data || error.message);
