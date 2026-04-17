@@ -41,7 +41,7 @@ function UploadInner() {
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
     const [done, setDone] = useState(false);
     const [doneType, setDoneType] = useState<'documents' | 'photos'>('documents');
-    
+
     const { usageData, checkLimit, refreshUsage } = useUsage();
 
     // Section collapsed state
@@ -229,7 +229,7 @@ function UploadInner() {
     const handleUpload = async () => {
         if (files.length === 0) { toast.error('Please select at least one file to upload'); return; }
         if (!selectedProject) { toast.error('Please select a project'); return; }
-        
+
         // 1. Check if subscription is locked
         if (usageData?.plan.access?.isLocked) {
             toast.error("Subscription Locked", {
@@ -265,7 +265,7 @@ function UploadInner() {
             await Promise.all(files.map(async (f) => {
                 const formData = new FormData();
                 formData.append('project_id', selectedProject);
-                formData.append('skipActivity', 'false');
+                formData.append('skipActivity', 'true');
                 if (selectedFolder) formData.append('folder_id', selectedFolder);
                 if (effectiveType === 'photos') {
                     if (photoLocation) formData.append('location', photoLocation);
