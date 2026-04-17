@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { View, TouchableOpacity, Alert, Platform, ActivityIndicator, BackHandler } from 'react-native';
+import { View, TouchableOpacity, Alert, Platform, ActivityIndicator, BackHandler, ScrollView, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
@@ -20,7 +20,14 @@ export default function LinkedDevices() {
 
     const [activeSessions, setActiveSessions] = useState<{ sessionId: string, device: string }[]>([]);
     const [sessionsLoading, setSessionsLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const isHandlingScan = useRef(false);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchSessions();
+        setRefreshing(false);
+    };
 
     useFocusEffect(
         useCallback(() => {
@@ -155,7 +162,7 @@ export default function LinkedDevices() {
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
-            <View style={{ paddingTop: insets.top + 20, paddingHorizontal: 24 }}>
+            <ScrollView contentContainerStyle={{ paddingTop: insets.top + 20, paddingHorizontal: 24, paddingBottom: 40 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 30 }}>
                     <TouchableOpacity onPress={() => router.push('/settings')} style={{ marginRight: 16 }}>
                         <Feather name="arrow-left" size={24} color={colors.text} />
@@ -235,7 +242,7 @@ export default function LinkedDevices() {
                         ))}
                     </View>
                 ) : null}
-            </View>
+            </ScrollView>
         </View>
     );
 }

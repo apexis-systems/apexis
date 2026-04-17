@@ -1,5 +1,5 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Image, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Image, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl
 } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -65,25 +65,36 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [replyTo, setReplyTo] = useState<number | null>(null);
     const [commentLoading, setCommentLoading] = useState(false);
     const [addingComment, setAddingComment] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const loadFiles = async (isRefetch = false) => {
+        if (!project?.id) return;
+        if (!isRefetch && folders.length === 0 && photos.length === 0) setLoading(true);
+        try {
+            const data = await getProjectFiles(project.id, 'photo');
+            if (data.folderData) setFolders(data.folderData);
+            if (data.fileData) {
+                setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
+            }
+        } catch (e) {
+            console.error('fetchFiles', e);
+        } finally {
+            if (!isRefetch) setLoading(false);
+        }
+    };
 
     useFocusEffect(
         useCallback(() => {
-            if (!project?.id) return;
-            if (folders.length === 0 && photos.length === 0) setLoading(true);
-            getProjectFiles(project.id, 'photo')
-                .then((data) => {
-                    if (data.folderData) setFolders(data.folderData);
-                    if (data.fileData) {
-                        setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
-                    }
-                })
-                .catch((e) => console.error('fetchFiles', e))
-                .finally(() => setLoading(false));
-
-            // cleanup function placeholder if needed for focus blur
+            loadFiles();
             return () => { };
         }, [project?.id])
     );
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadFiles(true);
+        setRefreshing(false);
+    };
 
     useEffect(() => {
         setSelectedFolder(initialFolderId || null);
@@ -539,7 +550,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity

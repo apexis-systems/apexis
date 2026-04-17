@@ -7,6 +7,7 @@ import {
     ActivityIndicator,
     Alert,
     BackHandler,
+    RefreshControl,
 } from "react-native";
 import { Text } from "@/components/ui/AppText";
 import { Feather } from "@expo/vector-icons";
@@ -51,15 +52,24 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
     // ── Fetch data ─────────────────────────────────────────────────────────────
 
+    const [refreshing, setRefreshing] = useState(false);
+
+    const loadSnags = async (isRefetch = false) => {
+        if (!projectId) return;
+        if (!isRefetch) setLoading(true);
+        try {
+            const data = await getSnags(projectId);
+            setSnags(data);
+        } catch (e) {
+            console.error("fetchSnags error", e);
+        } finally {
+            if (!isRefetch) setLoading(false);
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
-            if (projectId) {
-                setLoading(true);
-                getSnags(projectId)
-                    .then((snags) => setSnags(snags))
-                    .catch((e) => console.error("fetchSnags error", e))
-                    .finally(() => setLoading(false));
-            }
+            loadSnags();
 
             const onBackPress = () => {
                 if (viewPhoto) {
@@ -76,6 +86,12 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             return () => subscription.remove();
         }, [projectId, viewPhoto]),
     );
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadSnags(true);
+        setRefreshing(false);
+    };
 
     // ── Status cycle ───────────────────────────────────────────────────────────
 
@@ -103,7 +119,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     // ── Render ─────────────────────────────────────────────────────────────────
 
     return (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
             {/* Add Snag button */}
             <TouchableOpacity
                 onPress={openAddSnag}

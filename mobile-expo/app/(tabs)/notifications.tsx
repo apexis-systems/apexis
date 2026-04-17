@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
-import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { getNotifications as fetchNotificationsSvc, markAllNotificationsRead, markNotificationRead } from '@/services/notificationService';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { navigateFromNotification } from '@/utils/navigation';
 import { getProjects } from '@/services/projectService';
@@ -115,9 +115,8 @@ export default function NotificationsScreen() {
             else if (selectedProjectIds.length > 1) params.push(`project_ids=${selectedProjectIds.join(',')}`);
             if (selectedType !== 'all') params.push(`type=${selectedType}`);
 
-            const url = params.length > 0 ? `/notifications?${params.join('&')}` : '/notifications';
-            const res = await PrivateAxios.get(url);
-            const data = res.data.notifications || [];
+            const dataRes = await fetchNotificationsSvc(params);
+            const data = dataRes.notifications || [];
 
             let unread = showHistory ? data : data.filter((n: any) => !n.is_read);
             unread = unread.filter((n: any) => matchesTypeFilter(n, selectedType));
@@ -143,7 +142,7 @@ export default function NotificationsScreen() {
 
     const markAllRead = async () => {
         try {
-            await PrivateAxios.patch('/notifications/read-all');
+            await markAllNotificationsRead();
             setUnreadNotificationCount(0);
             setNotifications([]);
         } catch (error) {
@@ -193,7 +192,7 @@ export default function NotificationsScreen() {
 
     const markRead = async (id: number) => {
         try {
-            await PrivateAxios.patch(`/notifications/${id}/read`);
+            await markNotificationRead(id);
             setNotifications(prev => showHistory
                 ? prev.map(n => n.id === id ? { ...n, is_read: true } : n)
                 : prev.filter(n => n.id !== id)

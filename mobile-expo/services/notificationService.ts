@@ -96,3 +96,34 @@ export const registerForPushNotificationsAsync = async () => {
         return null;
     }
 };
+
+export const getNotifications = async (params: string[] = []) => {
+    try {
+        const url = params.length > 0 ? `/notifications?${params.join('&')}` : '/notifications';
+        const response = await PrivateAxios.get(url);
+        return response.data;
+    } catch (error) {
+        console.error("getNotifications Error", error);
+        throw error;
+    }
+};
+
+export const markAllNotificationsRead = async () => {
+    try {
+        const response = await PrivateAxios.patch('/notifications/read-all');
+        return response.data;
+    } catch (error) {
+        console.error("markAllNotificationsRead Error", error);
+        throw error;
+    }
+};
+
+export const markNotificationRead = async (id: string | number) => {
+    try {
+        const response = await PrivateAxios.patch(`/notifications/${id}/read`);
+        return response.data;
+    } catch (error) {
+        console.error("markNotificationRead Error", error);
+        throw error;
+    }
+};

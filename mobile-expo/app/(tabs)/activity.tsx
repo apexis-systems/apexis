@@ -1,4 +1,4 @@
-import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -84,36 +84,45 @@ export default function ActivityScreen() {
         fetchFilters();
     }, [user, selectedOrgId]);
 
-    useEffect(() => {
-        const fetchFeed = async () => {
-            if (!user) return;
-            setLoading(true);
-            try {
-                const filters: any = {
-                    organization_id: selectedOrgId || undefined,
-                    type: selectedType || undefined,
-                };
-                if (selectedProjectIds.length === 1) filters.project_id = selectedProjectIds[0];
-                else if (selectedProjectIds.length > 1) filters.project_ids = selectedProjectIds.join(',');
-                if (selectedUserIds.length === 1) filters.user_id = selectedUserIds[0];
-                else if (selectedUserIds.length > 1) filters.user_ids = selectedUserIds.join(',');
+    const [refreshing, setRefreshing] = useState(false);
 
-                const data = await getActivities(filters);
-                const formatted = data.map((act: any) => ({
-                    ...act,
-                    timestamp: new Date(act.timestamp).toLocaleString('en-IN', {
-                        dateStyle: 'medium', timeStyle: 'short'
-                    })
-                }));
-                setActivities(formatted);
-            } catch (error) {
-                console.error('Failed to load activity', error);
-            } finally {
-                setLoading(false);
-            }
-        };
+    const fetchFeed = async (isRefetch = false) => {
+        if (!user) return;
+        if (!isRefetch) setLoading(true);
+        try {
+            const filters: any = {
+                organization_id: selectedOrgId || undefined,
+                type: selectedType || undefined,
+            };
+            if (selectedProjectIds.length === 1) filters.project_id = selectedProjectIds[0];
+            else if (selectedProjectIds.length > 1) filters.project_ids = selectedProjectIds.join(',');
+            if (selectedUserIds.length === 1) filters.user_id = selectedUserIds[0];
+            else if (selectedUserIds.length > 1) filters.user_ids = selectedUserIds.join(',');
+
+            const data = await getActivities(filters);
+            const formatted = data.map((act: any) => ({
+                ...act,
+                timestamp: new Date(act.timestamp).toLocaleString('en-IN', {
+                    dateStyle: 'medium', timeStyle: 'short'
+                })
+            }));
+            setActivities(formatted);
+        } catch (error) {
+            console.error('Failed to load activity', error);
+        } finally {
+            if (!isRefetch) setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchFeed();
     }, [user, selectedOrgId, selectedProjectIds, selectedUserIds, selectedType]);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchFeed(true);
+        setRefreshing(false);
+    };
 
     // Real-time updates
     useEffect(() => {
@@ -236,7 +245,7 @@ export default function ActivityScreen() {
                     </ScrollView>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false}>
+                <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                     {loading ? (
                         <View style={{ marginTop: 40, alignItems: 'center' }}>
                             <Text style={{ fontSize: 13, color: themeColors.textMuted }}>Loading activities...</Text>
