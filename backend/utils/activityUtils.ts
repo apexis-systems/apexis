@@ -1,6 +1,7 @@
 import { activities, project_members, users, projects } from '../models/index.ts';
 import { getIO } from '../socket.ts';
 import { Op } from 'sequelize';
+import { sendNotification } from '../utils/notificationUtils.ts';
 
 export const logActivity = async ({
     projectId,
@@ -76,14 +77,51 @@ export const logActivity = async ({
         members.forEach((m: any) => recipientIds.add(m.user_id));
         admins.forEach((a: any) => recipientIds.add(a.id));
 
-        // 4. Emit via Socket
+        // 4. Emit via Socket & Push Notifications
         try {
             const io = getIO();
-            recipientIds.forEach(id => {
+            
+            // Map activity type to notification type for deep-linking
+            let notifType = 'activity';
+            if (type === 'upload_photo') notifType = 'photo_upload';
+            if (type === 'upload') notifType = 'file_upload';
+            if (type === 'snag_update') notifType = 'snag_status_update';
+            if (type === 'rfi_update') notifType = 'rfi_status_update';
+
+            // Extract extra data from metadata if available for deep-linking
+            const extraData: any = { projectId: String(projectId) };
+            if (metadata) {
+                if (metadata.folderId) extraData.folderId = String(metadata.folderId);
+                if (metadata.fileId) extraData.fileId = String(metadata.fileId);
+                if (metadata.type) extraData.type = metadata.type;
+                if (metadata.snagId) extraData.snagId = String(metadata.snagId);
+                if (metadata.rfiId) extraData.rfiId = String(metadata.rfiId);
+            }
+
+            for (const id of recipientIds) {
+                // Socket
                 io.to(`user-${id}`).emit('new-activity', formattedActivity);
-            });
-        } catch (socketErr) {
-            console.error('Socket emission error in logActivity:', socketErr);
+                
+                // Push Notification (only for OTHERS)
+                if (id !== userId) {
+                    const senderName = formattedActivity.userName || 'Someone';
+                    // Create a friendly body like "John uploaded 5 photos"
+                    // If description starts with "Uploaded", lowercase it for better flow
+                    const cleanDescription = description.startsWith('Uploaded') 
+                        ? description.charAt(0).toLowerCase() + description.slice(1) 
+                        : description;
+
+                    await sendNotification({
+                        userId: id,
+                        title: project.name || 'New Activity',
+                        body: `${senderName} ${cleanDescription}`,
+                        type: notifType,
+                        data: extraData
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error('Notification error in logActivity:', notifErr);
         }
 
         return newActivity;

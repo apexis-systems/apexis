@@ -70,22 +70,25 @@ export const registerForPushNotificationsAsync = async () => {
         }
 
         // Use Firebase Native SDK to get the FCM token (works for both iOS and Android)
+        console.log('Mobile - Fetching FCM token...');
         const token = await messaging().getToken();
-        console.log('FCM Token (Native):', token);
+        console.log('Mobile - FCM Token (Native):', token);
 
         if (Platform.OS === 'android') {
             await Notifications.setNotificationChannelAsync('default', {
-                name: 'default',
-                importance: Notifications.AndroidImportance.MAX,
+                name: 'Default Channel',
+                importance: 5, // Notifications.AndroidImportance.MAX
                 vibrationPattern: [0, 250, 250, 250],
                 lightColor: '#FF231F7C',
-                lockscreenVisibility: Notifications.AndroidLockscreenVisibility.PUBLIC,
+                lockscreenVisibility: 1, // Notifications.AndroidLockscreenVisibility.PUBLIC
+                showBadge: true,
             });
         }
 
         // Save token to backend
+        console.log('Mobile - Sending token to backend...');
         const res = await PrivateAxios.patch('/users/push-token', { token });
-        console.log('Push token save response:', res.data);
+        console.log('Mobile - Push token registration response:', res.status, res.data);
 
         return token;
     } catch (error: any) {

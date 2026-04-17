@@ -30,6 +30,7 @@ import { registerForPushNotificationsAsync } from '@/services/notificationServic
 import { navigateFromNotification } from '@/utils/navigation';
 import { UsageAlert } from '@/components/shared/UsageAlert';
 import { useUsage } from '@/contexts/UsageContext';
+import Constants from 'expo-constants';
 
 export default function DashboardScreen() {
   const { user, updateUser, login } = useAuth();
@@ -135,8 +136,37 @@ export default function DashboardScreen() {
       navigateFromNotification(notifId, type, data, router);
     });
 
+    // Foreground listener for raw FCM (Option 2)
+    let unsubscribeFCM: () => void = () => { };
+
+    if (Constants.appOwnership !== 'expo') {
+      try {
+        const messaging = require('@react-native-firebase/messaging').default;
+        unsubscribeFCM = messaging().onMessage(async (remoteMessage: any) => {
+          console.log('FCM Message received in foreground:', remoteMessage);
+
+          // Trigger a local notification so it appears in the tray even when in foreground
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: remoteMessage.notification?.title || 'New Notification',
+              body: remoteMessage.notification?.body || '',
+              data: remoteMessage.data,
+              sound: true,
+              priority: Notifications.AndroidNotificationPriority.MAX,
+            },
+            trigger: {
+              channelId: 'default',
+            },
+          });
+        });
+      } catch (e) {
+        console.log('FCM messaging not available:', e);
+      }
+    }
+
     return () => {
       responseListener.remove();
+      unsubscribeFCM();
     };
   }, [user?.id]);
 
