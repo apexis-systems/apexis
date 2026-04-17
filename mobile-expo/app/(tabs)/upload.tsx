@@ -540,7 +540,7 @@ export default function UploadScreen() {
                     formData.append('folder_id', (selectedFolder === 'root' ? '' : selectedFolder) || '');
                     formData.append('file_tag', 'photo');
                     formData.append('client_visible', String(true));
-                    formData.append('skipActivity', 'true');
+                    formData.append('skipActivity', 'false');
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
 

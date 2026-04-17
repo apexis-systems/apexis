@@ -1021,7 +1021,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             <View style={{
                                 position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
                                 flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                                paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
+                                paddingHorizontal: 16, paddingTop: Math.max(insets.top, 20), paddingBottom: 12,
                                 backgroundColor: 'rgba(0,0,0,0.5)',
                             }}>
                                 <TouchableOpacity onPress={closeViewer} style={{ padding: 8 }}>
@@ -1063,17 +1063,22 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
                                 if (idx !== viewerIndex) setViewerIndex(idx);
                             }}
-                            renderItem={({ item }) => (
-                                <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-                                    <ZoomableImage
-                                        uri={item.downloadUrl}
-                                        width={SCREEN_W}
-                                        height={SCREEN_H}
-                                        onZoomStateChange={setIsViewerZoomed}
-                                        onTap={() => setShowViewerUI(prev => !prev)}
-                                    />
-                                </View>
-                            )}
+                            renderItem={({ item }) => {
+                                const viewerHeight = SCREEN_H - insets.top - insets.bottom;
+                                return (
+                                    <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                                        <View style={{ width: SCREEN_W, height: viewerHeight, justifyContent: 'center', alignItems: 'center' }}>
+                                            <ZoomableImage
+                                                uri={item.downloadUrl}
+                                                width={SCREEN_W}
+                                                height={viewerHeight}
+                                                onZoomStateChange={setIsViewerZoomed}
+                                                onTap={() => setShowViewerUI(prev => !prev)}
+                                            />
+                                        </View>
+                                    </View>
+                                );
+                            }}
                         />
 
                         {/* Bottom panel: info + comments */}

@@ -30,6 +30,7 @@ import { registerForPushNotificationsAsync } from '@/services/notificationServic
 import { navigateFromNotification } from '@/utils/navigation';
 import { UsageAlert } from '@/components/shared/UsageAlert';
 import { useUsage } from '@/contexts/UsageContext';
+import Constants from 'expo-constants';
 
 export default function DashboardScreen() {
   const { user, updateUser, login } = useAuth();
@@ -71,7 +72,7 @@ export default function DashboardScreen() {
     // We need a small delay to ensure the layout is settled
     setTimeout(() => {
       const androidStatusBarOffset = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
-      
+
       headerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
         // Adding StatusBar height on Android to compensate for the translucent Modal
         const yPos = y + h / 2 + 43 + (Platform.OS === 'android' ? androidStatusBarOffset : 0);
@@ -79,12 +80,12 @@ export default function DashboardScreen() {
       });
 
       projectListRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('projectCard', { 
-            x: x + (Platform.OS === 'ios' ? 40 : 40), 
-            y: y + (Platform.OS === 'ios' ? 53 : 50) + (Platform.OS === 'android' ? androidStatusBarOffset : 0), 
-            w: 90, 
-            h: 120, 
-            r: 16 
+        registerSpotlight('projectCard', {
+          x: x + (Platform.OS === 'ios' ? 40 : 40),
+          y: y + (Platform.OS === 'ios' ? 53 : 50) + (Platform.OS === 'android' ? androidStatusBarOffset : 0),
+          w: 90,
+          h: 120,
+          r: 16
         });
       });
       createButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
@@ -135,8 +136,37 @@ export default function DashboardScreen() {
       navigateFromNotification(notifId, type, data, router);
     });
 
+    // Foreground listener for raw FCM (Option 2)
+    let unsubscribeFCM: () => void = () => { };
+
+    if (Constants.appOwnership !== 'expo') {
+      try {
+        const messaging = require('@react-native-firebase/messaging').default;
+        unsubscribeFCM = messaging().onMessage(async (remoteMessage: any) => {
+          console.log('FCM Message received in foreground:', remoteMessage);
+
+          // Trigger a local notification so it appears in the tray even when in foreground
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: remoteMessage.notification?.title || 'New Notification',
+              body: remoteMessage.notification?.body || '',
+              data: remoteMessage.data,
+              sound: true,
+              priority: Notifications.AndroidNotificationPriority.MAX,
+            },
+            trigger: {
+              channelId: 'default',
+            },
+          });
+        });
+      } catch (e) {
+        console.log('FCM messaging not available:', e);
+      }
+    }
+
     return () => {
       responseListener.remove();
+      unsubscribeFCM();
     };
   }, [user?.id]);
 

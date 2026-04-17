@@ -566,12 +566,14 @@ export default function ChatDetailScreen() {
             <Stack.Screen options={{ headerShown: false }} />
 
             {/* Header */}
-            <View style={{ 
-                backgroundColor: colors.surface, 
-                borderBottomWidth: 1, 
-                borderBottomColor: colors.border,
-                paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
-            }}>
+            <SafeAreaView 
+                edges={['top']}
+                style={{ 
+                    backgroundColor: colors.surface, 
+                    borderBottomWidth: 1, 
+                    borderBottomColor: colors.border,
+                }}
+            >
                 <View style={{ 
                     flexDirection: 'row', 
                     alignItems: 'center', 
@@ -611,7 +613,7 @@ export default function ChatDetailScreen() {
                     {/* Call icons removed as requested */}
                 </View>
             </View>
-        </View>
+            </SafeAreaView>
 
             {/* Chat Area */}
             <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}>

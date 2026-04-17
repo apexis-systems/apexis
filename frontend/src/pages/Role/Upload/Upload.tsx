@@ -265,7 +265,7 @@ function UploadInner() {
             await Promise.all(files.map(async (f) => {
                 const formData = new FormData();
                 formData.append('project_id', selectedProject);
-                formData.append('skipActivity', 'true');
+                formData.append('skipActivity', 'false');
                 if (selectedFolder) formData.append('folder_id', selectedFolder);
                 if (effectiveType === 'photos') {
                     if (photoLocation) formData.append('location', photoLocation);
