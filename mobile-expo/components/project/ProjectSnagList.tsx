@@ -156,7 +156,13 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                         : {}),
                                 }}>
                                 <TouchableOpacity
-                                    onPress={() => handleCycleStatus(snag)}
+                                    onPress={() => {
+                                        if (String(snag.assigned_to) === String(user?.id)) {
+                                            handleCycleStatus(snag);
+                                        } else {
+                                            Alert.alert("Permission Denied", "Only the assigned person can update the status");
+                                        }
+                                    }}
                                     style={{
                                         width: 26,
                                         height: 26,
@@ -165,6 +171,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                         alignItems: "center",
                                         justifyContent: "center",
                                         marginTop: 1,
+                                        opacity: String(snag.assigned_to) === String(user?.id) ? 1 : 0.6,
                                     }}>
                                     <Feather name={cfg.icon} size={13} color="#fff" />
                                 </TouchableOpacity>
@@ -188,13 +195,20 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             {snag.description}
                                         </Text>
                                     ) : null}
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                                            To: <Text style={{ color: colors.text, fontWeight: '600' }}>{snag.assignee?.name || "Unassigned"}</Text>
+                                        </Text>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                                            By: <Text style={{ color: colors.text, fontWeight: '600' }}>{snag.creator?.name || "—"}</Text>
+                                        </Text>
+                                    </View>
                                     <Text
                                         style={{
                                             fontSize: 10,
                                             color: colors.textMuted,
                                             marginTop: 2,
                                         }}>
-                                        Assigned: {snag.assignee?.name || "Unassigned"} ·{" "}
                                         {cfg.label}
                                     </Text>
                                     {snag.last_comment ? (

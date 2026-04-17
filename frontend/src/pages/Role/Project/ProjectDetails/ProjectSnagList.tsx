@@ -179,9 +179,19 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
             )}>
               {/* Status circle */}
               <button
-                onClick={() => cycleStatus(snag)}
-                className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5 transition-all', cfg.bg)}
-                title={`Status: ${cfg.label} — click to change`}
+                onClick={() => {
+                  if (String(snag.assigned_to) === String(user?.id)) {
+                    cycleStatus(snag);
+                  } else {
+                    toast.error('Only the assigned person can update the status');
+                  }
+                }}
+                className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5 transition-all',
+                  cfg.bg,
+                  String(snag.assigned_to) !== String(user?.id) && "opacity-60 cursor-not-allowed"
+                )}
+                title={String(snag.assigned_to) === String(user?.id) ? `Status: ${cfg.label} — click to change` : `Status: ${cfg.label}`}
               >
                 <Icon className={cn('h-3.5 w-3.5', cfg.text)} />
               </button>
@@ -191,9 +201,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                 {snag.description && (
                   <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{snag.description}</p>
                 )}
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Assigned: {snag.assignee?.name || '—'} · {cfg.label}
-                </p>
+                <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground mt-0.5">
+                  <span>To: <span className="text-foreground font-medium">{snag.assignee?.name || '—'}</span></span>
+                  <span>By: <span className="text-foreground font-medium">{snag.creator?.name || '—'}</span></span>
+                  <span>· {cfg.label}</span>
+                </div>
                 {snag.last_comment && (
                   <div className="flex items-center gap-1 mt-1 text-[9px] text-muted-foreground">
                     <MessageSquare className="h-2.5 w-2.5" />
