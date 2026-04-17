@@ -123,14 +123,38 @@ export default function UploadScreen() {
         });
     };
 
+    // Data Fetching
+    const fetchProjects = useCallback(async () => {
+        if (!user) return;
+        try {
+            const data = await getProjects();
+            if (data.projects) setProjects(data.projects);
+        } catch (e) {
+            console.error('fetchProjects', e);
+        }
+    }, [user]);
+
     // Ensure state defaults from params if routing with prepopulated picks
     useFocusEffect(
         useCallback(() => {
+            fetchProjects();
+
             // Priority 1: Direct link parameters
             if (params.projectId) {
                 setSelectedProject(params.projectId as string);
                 if (params.folderId) {
                     setSelectedFolder(params.folderId as string);
+                }
+                
+                // Update doc mode based on type param
+                const isDoc = params.type === 'documents' || params.type === 'document';
+                setIsDocMode(isDoc);
+                
+                setMode('capture');
+                
+                // Auto trigger scanner if in doc mode
+                if (isDoc) {
+                    setTimeout(() => captureScan(), 300);
                 }
             } else {
                 // Priority 2: Nav Bar click while inside a project
@@ -138,16 +162,17 @@ export default function UploadScreen() {
                 if (projectId) {
                     setSelectedProject(projectId);
                     setSelectedFolder(folderId); // This ensures it's set even if null (root)
-                    if (type === 'document') {
-                        setIsDocMode(true);
-                    } else if (type === 'photo') {
-                        setIsDocMode(false);
-                    }
+                    
+                    const isDoc = type === 'document';
+                    setIsDocMode(isDoc);
+                    
                     setMode('capture');
+                    if (isDoc) {
+                        setTimeout(() => captureScan(), 300);
+                    }
                 }
-
             }
-        }, [params.projectId, params.folderId])
+        }, [params.projectId, params.folderId, params.type, fetchProjects])
     );
 
     // Dynamic Tab Bar Visibility
@@ -156,14 +181,6 @@ export default function UploadScreen() {
             tabBarStyle: mode === 'capture' ? { display: 'none' } : undefined,
         });
     }, [mode, navigation]);
-
-    // Data Fetching
-    useEffect(() => {
-        if (!user) return;
-        getProjects()
-            .then((data) => { if (data.projects) setProjects(data.projects); })
-            .catch((e) => console.error('fetchProjects', e));
-    }, [user]);
 
     const fetchFolders = async () => {
         if (!selectedProject) { setFolders([]); return; }

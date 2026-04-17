@@ -22,7 +22,7 @@ const getFont = async (fontPath: string): Promise<opentype.Font> => {
  * Adds a professional watermark band at the bottom of an image buffer.
  * New Layout: Branding (Left) | DATE & TIME + PROJECT NAME (Right)
  */
-export const addWatermark = async (imageBuffer: Buffer, projectName: string = ''): Promise<Buffer> => {
+export const addWatermark = async (imageBuffer: Buffer, projectName: string = '', userName: string = ''): Promise<Buffer> => {
     try {
         const image = sharp(imageBuffer);
         const metadata = await image.metadata();
@@ -43,13 +43,13 @@ export const addWatermark = async (imageBuffer: Buffer, projectName: string = ''
         // Assets
         const logoPath = path.join(process.cwd(), 'assets', 'app-icon.png');
         const fontPath = path.join(process.cwd(), 'assets', 'fonts', 'Angelica-C.otf');
-        const logoSize = Math.round(bandHeight * 0.7);
+        const logoSize = Math.round(bandHeight * 0.5); // Reduced from 0.7 to 0.5 per user request
 
         // 1. Get Brand Text Path using opentype.js (ABSOLUTE font control)
         const brandTextApex = "APEXIS";
         const brandTextPro = "PRO™";
-        const brandFontSizeApex = Math.round(fontSize * 1.8);
-        const brandFontSizePro = Math.round(fontSize * 1.0);
+        const brandFontSizeApex = fontSize; // Match the date/time fontSize exactly
+        const brandFontSizePro = Math.round(fontSize * 0.65); // Smaller secondary branding
         const font = await getFont(fontPath);
 
         // Measure widths
@@ -76,8 +76,33 @@ export const addWatermark = async (imageBuffer: Buffer, projectName: string = ''
             logoBase64 = fs.readFileSync(logoPath).toString('base64');
         }
 
-        // 3. Right side layout (Project and Time)
-        const infoX = svgWidth - 20;
+        // 3. Info Layout positions
+        const infoXRight = svgWidth - 20;
+        const infoXCenter = svgWidth / 2;
+
+        // Project Name Wrapping (Center)
+        const maxProjectChars = 20; // threshold for splitting into two lines
+        const projectUpperCase = projectName.toUpperCase();
+        let projectLines = [projectUpperCase];
+        
+        if (projectUpperCase.length > maxProjectChars) {
+            const words = projectUpperCase.split(' ');
+            let line1 = '';
+            let lineIdx = 0;
+            
+            while (lineIdx < words.length && (line1 + words[lineIdx]).length <= maxProjectChars) {
+                line1 += (line1 ? ' ' : '') + words[lineIdx];
+                lineIdx++;
+            }
+            
+            if (line1) {
+                projectLines = [line1, words.slice(lineIdx).join(' ')];
+            }
+            // If even a single word is too long, or we couldn't split nicely, just take a chunk
+            if (projectLines.length === 1 || projectLines[1].length === 0) {
+                 projectLines = [projectUpperCase.slice(0, maxProjectChars), projectUpperCase.slice(maxProjectChars)];
+            }
+        }
 
         // 4. Final Combined SVG
         const svgOverlay = `
@@ -94,14 +119,31 @@ export const addWatermark = async (imageBuffer: Buffer, projectName: string = ''
                 <path d="${apexPathData}" fill="#f97415" transform="translate(${brandTextX}, ${brandTextY})" />
                 <path d="${proPathData}" fill="#f97415" transform="translate(${proX}, ${proY})" />
 
-                <!-- Right Info: Date/Time (Top) + Project Name (Bottom) -->
-                <text x="${infoX}" y="40%" dominant-baseline="middle" text-anchor="end" 
+                <!-- Center: Project Name (1 or 2 lines) -->
+                ${projectLines.length > 1 ? `
+                    <text x="${infoXCenter}" y="40%" dominant-baseline="middle" text-anchor="middle" 
+                          fill="#1a1a1a" font-family="sans-serif" font-weight="800" font-size="${Math.round(fontSize * 1.0)}px">
+                        ${projectLines[0]}
+                    </text>
+                    <text x="${infoXCenter}" y="75%" dominant-baseline="middle" text-anchor="middle" 
+                          fill="#1a1a1a" font-family="sans-serif" font-weight="800" font-size="${Math.round(fontSize * 1.0)}px">
+                        ${projectLines[1]}
+                    </text>
+                ` : `
+                    <text x="${infoXCenter}" y="55%" dominant-baseline="middle" text-anchor="middle" 
+                          fill="#1a1a1a" font-family="sans-serif" font-weight="800" font-size="${Math.round(fontSize * 1.1)}px">
+                        ${projectLines[0]}
+                    </text>
+                `}
+
+                <!-- Right Info: Date/Time (Top) + Uploaded By (Bottom) -->
+                <text x="${infoXRight}" y="40%" dominant-baseline="middle" text-anchor="end" 
                       fill="#1a1a1a" font-family="sans-serif" font-weight="800" font-size="${fontSize}px" letter-spacing="0.5px">
-                    ${dateStr}  |  ${timeStr}
+                    ${dateStr} | ${timeStr}
                 </text>
-                <text x="${infoX}" y="70%" dominant-baseline="middle" text-anchor="end" 
-                      fill="#666666" font-family="sans-serif" font-weight="600" font-size="${Math.round(fontSize * 0.9)}px">
-                    ${projectName.toUpperCase()}
+                <text x="${infoXRight}" y="75%" dominant-baseline="middle" text-anchor="end" 
+                      fill="#666666" font-family="sans-serif" font-weight="600" font-size="${Math.round(fontSize * 0.85)}px">
+                    UPLOADED BY : ${userName.toUpperCase()}
                 </text>
             </svg>
         `;
