@@ -148,44 +148,44 @@ export default function ScanScreen() {
                 </Text>
             </View>
 
-            {/* Camera View */}
+            {/* Camera View (self-closing) */}
             <CameraView
                 style={{ flex: 1 }}
                 facing={facing}
                 ref={cameraRef}
                 autofocus="on"
-            >
-                {/* Visual Guideline overlay */}
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <View style={{
-                        width: 250,
-                        height: 250,
-                        borderWidth: 2,
-                        borderColor: 'rgba(255,255,255,0.3)',
-                        borderRadius: 24,
-                        borderStyle: 'dashed',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                    }}>
-                        {/* Corner markers */}
-                        {[
-                            { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
-                            { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },
-                            { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 12 },
-                            { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 12 },
-                        ].map((pos, i) => (
-                            <View key={i} style={[{
-                                position: 'absolute', width: 32, height: 32,
-                                borderColor: colors.primary,
-                            }, pos]} />
-                        ))}
+            />
 
-                        {/* Subtle scan line indicator */}
-                        <View style={{ width: '80%', height: 2, backgroundColor: 'rgba(249,115,22,0.3)', borderRadius: 1 }} />
-                    </View>
-                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 24, fontWeight: '600' }}>Align document within frame</Text>
+            {/* Visual Guideline overlay (sibling, absolute) */}
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+                <View style={{
+                    width: 250,
+                    height: 250,
+                    borderWidth: 2,
+                    borderColor: 'rgba(255,255,255,0.3)',
+                    borderRadius: 24,
+                    borderStyle: 'dashed',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                }}>
+                    {/* Corner markers */}
+                    {[
+                        { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
+                        { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },
+                        { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 12 },
+                        { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 12 },
+                    ].map((pos, i) => (
+                        <View key={i} style={[{
+                            position: 'absolute', width: 32, height: 32,
+                            borderColor: colors.primary,
+                        }, pos]} />
+                    ))}
+
+                    {/* Subtle scan line indicator */}
+                    <View style={{ width: '80%', height: 2, backgroundColor: 'rgba(249,115,22,0.3)', borderRadius: 1 }} />
                 </View>
-            </CameraView>
+                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 24, fontWeight: '600' }}>Align document within frame</Text>
+            </View>
 
             {/* Processing Overlay */}
             {isProcessing && (

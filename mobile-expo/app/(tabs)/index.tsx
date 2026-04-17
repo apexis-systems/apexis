@@ -71,7 +71,7 @@ export default function DashboardScreen() {
     // We need a small delay to ensure the layout is settled
     setTimeout(() => {
       const androidStatusBarOffset = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
-      
+
       headerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
         // Adding StatusBar height on Android to compensate for the translucent Modal
         const yPos = y + h / 2 + 43 + (Platform.OS === 'android' ? androidStatusBarOffset : 0);
@@ -79,12 +79,12 @@ export default function DashboardScreen() {
       });
 
       projectListRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        registerSpotlight('projectCard', { 
-            x: x + (Platform.OS === 'ios' ? 40 : 40), 
-            y: y + (Platform.OS === 'ios' ? 53 : 50) + (Platform.OS === 'android' ? androidStatusBarOffset : 0), 
-            w: 90, 
-            h: 120, 
-            r: 16 
+        registerSpotlight('projectCard', {
+          x: x + (Platform.OS === 'ios' ? 40 : 40),
+          y: y + (Platform.OS === 'ios' ? 53 : 50) + (Platform.OS === 'android' ? androidStatusBarOffset : 0),
+          w: 90,
+          h: 120,
+          r: 16
         });
       });
       createButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
@@ -367,9 +367,10 @@ export default function DashboardScreen() {
                 {(user as any).organization?.name ? (
                   ((user as any).organization.name).charAt(0).toUpperCase() + ((user as any).organization.name).slice(1)
                 ) : (
-                  <Text>
-                    <Text className="font-angelica" style={{ color: colors.primary }}>APEXIS</Text><Text className="font-angelica" style={{ fontSize: 9, color: colors.primary }}>PRO™</Text>
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text className="font-angelica" style={{ color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>APEXIS</Text>
+                    <Text className="font-angelica" style={{ fontSize: 9, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
+                  </View>
                 )}
               </Text>
 
