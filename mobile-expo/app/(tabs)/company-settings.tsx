@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, BackHandler } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, BackHandler, RefreshControl } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +19,16 @@ export default function CompanySettingsScreen() {
     const [logoUri, setLogoUri] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        if (user?.organization?.logo) {
+            loadLogo(user.organization.logo).finally(() => setRefreshing(false));
+        } else {
+            setTimeout(() => setRefreshing(false), 500);
+        }
+    };
 
     useFocusEffect(
         useCallback(() => {
@@ -153,7 +163,7 @@ export default function CompanySettingsScreen() {
                     <View style={{ width: 32 }} />
                 </View>
 
-                <ScrollView contentContainerStyle={{ padding: 20 }}>
+                <ScrollView contentContainerStyle={{ padding: 20 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                         <View>
                             {/* Logo Section */}

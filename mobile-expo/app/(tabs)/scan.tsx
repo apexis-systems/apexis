@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { View, TouchableOpacity, ActivityIndicator, BackHandler } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, BackHandler, Platform } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -88,10 +88,37 @@ export default function ScanScreen() {
 
             if (!photo?.uri) return;
 
-            // Fix orientation for iOS
+            // 1. Calculate the crop to enforce a 4:3 aspect ratio (Portrait 3:4) - iOS ONLY
+            const { width, height } = photo;
+            let crop = undefined;
+
+            if (Platform.OS === 'ios') {
+                const targetRatio = 3 / 4;
+                const currentRatio = width / height;
+                const tolerance = 0.01;
+
+                if (currentRatio > targetRatio + tolerance) {
+                    const newWidth = Math.min(width, Math.floor(height * targetRatio));
+                    const originX = Math.max(0, Math.floor((width - newWidth) / 2));
+                    const safeWidth = Math.min(newWidth, width - originX);
+                    crop = { originX, originY: 0, width: safeWidth, height };
+                } else if (currentRatio < targetRatio - tolerance) {
+                    const newHeight = Math.min(height, Math.floor(width / targetRatio));
+                    const originY = Math.max(0, Math.floor((height - newHeight) / 2));
+                    const safeHeight = Math.min(newHeight, height - originY);
+                    crop = { originX: 0, originY, width, height: safeHeight };
+                }
+            }
+
+            // 2. Fix orientation and cap resolution for iOS/Android consistency
+            // For scans, we generally target the height (1920px) to ensure document readability
+            const manipActions: any[] = [];
+            if (crop) manipActions.push({ crop });
+            manipActions.push({ resize: { height: 1920 } });
+
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [{ resize: { width: 1920 } }],
+                manipActions,
                 { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
             );
 
@@ -148,17 +175,29 @@ export default function ScanScreen() {
                 </Text>
             </View>
 
-            {/* Camera View (self-closing) */}
-            <CameraView
-                style={{ flex: 1 }}
-                facing={facing}
-                ref={cameraRef}
-                autofocus="on"
-            />
+            {/* Camera View (centered 4:3 container, shifted up) */}
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 100 }}>
+                <View style={{ width: '100%', aspectRatio: 3 / 4, overflow: 'hidden', backgroundColor: '#111' }}>
+                    <CameraView
+                        style={{ flex: 1 }}
+                        facing={facing}
+                        ref={cameraRef}
+                        autofocus="on"
+                        ratio="4:3"
+                    />
+                </View>
+            </View>
 
-            {/* Visual Guideline overlay (sibling, absolute) */}
-            <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+            {/* Visual Guideline overlay (sibling, absolute) - aligned with camera */}
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-start', alignItems: 'center', paddingTop: 100 }}>
                 <View style={{
+                    width: '100%', 
+                    aspectRatio: 3 / 4,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    // This ensures the guidelines are centered within the 4:3 camera area
+                }}>
+                    <View style={{
                     width: 250,
                     height: 250,
                     borderWidth: 2,
@@ -183,6 +222,7 @@ export default function ScanScreen() {
 
                     {/* Subtle scan line indicator */}
                     <View style={{ width: '80%', height: 2, backgroundColor: 'rgba(249,115,22,0.3)', borderRadius: 1 }} />
+                </View>
                 </View>
                 <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 24, fontWeight: '600' }}>Align document within frame</Text>
             </View>

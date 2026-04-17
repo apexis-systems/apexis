@@ -27,12 +27,11 @@ try {
 import { useAuth } from '@/contexts/AuthContext';
 
 import { useTheme } from '@/contexts/ThemeContext';
-import { uploadFileWithProgress } from '@/services/fileService';
+import { uploadFileWithProgress, uploadScans } from '@/services/fileService';
 import { getProjects } from '@/services/projectService';
 import { getFolders, createFolder } from '@/services/folderService';
 import { createActivity } from '@/services/activityService';
 import { getActiveProjectContext } from '@/utils/projectSelection';
-import { PrivateAxios } from '../../helpers/PrivateAxios';
 
 
 
@@ -248,9 +247,13 @@ export default function UploadScreen() {
             for (const asset of result.assets) {
                 let uri = asset.uri;
                 try {
+                    // Capping the larger dimension to 1920px (matches Android feel)
+                    const { width, height } = asset;
+                    const resizeOptions = width > height ? { width: 1920 } : { height: 1920 };
+
                     const manipulated = await ImageManipulator.manipulateAsync(
                         uri,
-                        [{ resize: { width: 1920 } }],
+                        [{ resize: resizeOptions }],
                         { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                     );
                     uri = manipulated.uri;
@@ -294,12 +297,12 @@ export default function UploadScreen() {
                 let uri = a.uri;
                 let mimeType = a.mimeType || 'application/octet-stream';
 
-                // If it's an image picked from files, enforce the same 1280px resolution
+                // If it's an image picked from files, enforce the same 1920px resolution
                 if (mimeType.startsWith('image/')) {
                     try {
                         const manipulated = await ImageManipulator.manipulateAsync(
                             uri,
-                            [{ resize: { width: 1920 } }],
+                            [{ resize: { width: 1920 } }], // Note: Document picker doesn't always provide dimensions, width is fallback
                             { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                         );
                         uri = manipulated.uri;
@@ -358,10 +361,42 @@ export default function UploadScreen() {
 
             if (!photo?.uri) return;
 
-            // Fix orientation for iOS items
+            // 1. Calculate the crop to enforce a 4:3 aspect ratio (Portrait 3:4) - iOS ONLY
+            // Android uses the native 'ratio' prop which is much more stable.
+            const { width, height } = photo;
+            let crop = undefined;
+
+            if (Platform.OS === 'ios') {
+                const targetRatio = 3 / 4;
+                const currentRatio = width / height;
+                const tolerance = 0.01;
+
+                if (currentRatio > targetRatio + tolerance) {
+                    const newWidth = Math.min(width, Math.floor(height * targetRatio));
+                    const originX = Math.max(0, Math.floor((width - newWidth) / 2));
+                    const safeWidth = Math.min(newWidth, width - originX);
+                    crop = { originX, originY: 0, width: safeWidth, height };
+                } else if (currentRatio < targetRatio - tolerance) {
+                    const newHeight = Math.min(height, Math.floor(width / targetRatio));
+                    const originY = Math.max(0, Math.floor((height - newHeight) / 2));
+                    const safeHeight = Math.min(newHeight, height - originY);
+                    crop = { originX: 0, originY, width, height: safeHeight };
+                }
+            }
+
+            // 2. Fix orientation and apply resolution constraint (Capping longest side at 1920)
+            const manipActions: any[] = [];
+            if (crop) manipActions.push({ crop });
+            
+            // Recalculate dimensions for resize after crop
+            const finalWidth = crop ? crop.width : width;
+            const finalHeight = crop ? crop.height : height;
+            const resizeOptions = finalWidth > finalHeight ? { width: 1920 } : { height: 1920 };
+            manipActions.push({ resize: resizeOptions });
+
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [{ resize: { width: 1920 } }],
+                manipActions,
                 { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
             );
 
@@ -427,11 +462,13 @@ export default function UploadScreen() {
                         uri = `file://${uri}`;
                     }
 
-                    // Optional: Fix orientation/strip EXIF if ImageManipulator is available
+                    // Fix orientation/resolution and normalize URI for iOS
                     try {
+                        // For scans, we generally want to target the height for vertical documents
+                        // but 1920 width is usually safe for documents too.
                         const manipulated = await ImageManipulator.manipulateAsync(
                             uri,
-                            [{ resize: { width: 1920 } }],
+                            [{ resize: { height: 1920 } }], // Targeting height for documents is often better
                             { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                         );
                         uri = manipulated.uri;
@@ -525,17 +562,11 @@ export default function UploadScreen() {
                     } as any);
                 });
 
-                const res = await PrivateAxios.post('/files/upload-scans', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' },
-                    onUploadProgress: (progressEvent) => {
-                        const total = progressEvent.total || 1;
-                        const p = Math.min(Math.round((progressEvent.loaded / total) * 100), 100);
-                        setFileQueue(prev => prev.map(it => ({ ...it, progress: p, status: p === 100 ? 'done' : 'uploading' })));
-                    }
-
+                const res = await uploadScans(formData, (p) => {
+                    setFileQueue(prev => prev.map(it => ({ ...it, progress: p, status: p === 100 ? 'done' : 'uploading' })));
                 });
 
-                if (res.data.success) {
+                if (res.success) {
                     setFileQueue(prev => prev.map(it => ({ ...it, status: 'done', progress: 100 })));
                     setMode('done');
 
@@ -729,7 +760,16 @@ export default function UploadScreen() {
                     </View>
 
                     {cameraPermission?.granted && isFocused ? (
-                        <CameraView style={{ flex: 1 }} facing="back" ref={cameraRef} />
+                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 60 }}>
+                            <View style={{ width: '100%', aspectRatio: 3 / 4, backgroundColor: '#111', overflow: 'hidden' }}>
+                                <CameraView 
+                                    style={{ flex: 1 }} 
+                                    facing="back" 
+                                    ref={cameraRef} 
+                                    ratio="4:3"
+                                />
+                            </View>
+                        </View>
                     ) : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                             <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>

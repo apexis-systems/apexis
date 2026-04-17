@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, TouchableOpacity, Alert, Platform, ActivityIndicator, TextInput as RNTextInput, KeyboardAvoidingView, ScrollView, TouchableWithoutFeedback, Keyboard, BackHandler } from 'react-native';
+import { View, TouchableOpacity, Alert, Platform, ActivityIndicator, TextInput as RNTextInput, KeyboardAvoidingView, ScrollView, TouchableWithoutFeedback, Keyboard, BackHandler, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -19,6 +19,12 @@ export default function ChangePasswordScreen() {
     const [showCurrent, setShowCurrent] = useState(false);
     const [showNew, setShowNew] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        setTimeout(() => setRefreshing(false), 500);
+    };
 
     useFocusEffect(
         useCallback(() => {
@@ -76,6 +82,7 @@ export default function ChangePasswordScreen() {
                         <ScrollView
                             contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 20 }}
                             showsVerticalScrollIndicator={false}
+                            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                         >
                             <Text style={{ fontSize: 14, color: colors.textMuted, marginBottom: 24, lineHeight: 20 }}>
                                 To protect your account, make sure your new password is at least 8 characters long and includes a mix of letters and numbers.

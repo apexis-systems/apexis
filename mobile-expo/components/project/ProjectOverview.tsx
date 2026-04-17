@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking, Share, Modal, SafeAreaView, Image } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking, Share, Modal, SafeAreaView, Image, RefreshControl } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Text } from '@/components/ui/AppText';
@@ -356,6 +356,13 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         }, [fetchProjectStats])
     );
 
+    const [refreshing, setRefreshing] = useState(false);
+    const onRefresh = async () => {
+        setRefreshing(true);
+        fetchProjectStats();
+        setTimeout(() => setRefreshing(false), 800);
+    };
+
 
     const handleCopy = async (text: string, id: string) => {
         if (!text) return;
@@ -365,7 +372,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     };
 
     return (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 0 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 0 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
             <View style={{ gap: 20 }}>
                 {/* Stats Grid — 2×2 */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>

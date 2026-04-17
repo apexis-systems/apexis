@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
-  Modal, ScrollView, TextInput, Alert, Image, StyleSheet, Platform
+  Modal, ScrollView, TextInput, Alert, Image, StyleSheet, Platform, RefreshControl
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
@@ -171,6 +171,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       console.error('fetchAssignees error', err);
     }
   }, [projectId]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchRFIs(), fetchAssignees()]);
+    setRefreshing(false);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -536,6 +543,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           renderItem={renderRFI}
           keyExtractor={item => String(item.id)}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', marginTop: 40 }}>
               <Feather name="message-square" size={48} color={colors.border} />

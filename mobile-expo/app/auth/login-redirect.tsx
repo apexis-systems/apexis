@@ -17,11 +17,13 @@ export default function LoginRedirect() {
     handled.current = true;
 
     const handle = async () => {
+      // Unconditionally log the user out here in the redirector screen
       if (isLoggedIn) {
         logout();
-        // Give SecureStore time to flush before navigating.
-        await new Promise(r => setTimeout(r, 300));
+        // Give SecureStore time to clear before we shift over to login
+        await new Promise(r => setTimeout(r, 400));
       }
+      
       router.replace({
         pathname: '/(auth)/login',
         params: { code, role },
