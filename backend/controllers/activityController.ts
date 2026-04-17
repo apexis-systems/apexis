@@ -19,41 +19,54 @@ export const getActivities = async (req: Request | any, res: Response) => {
             ? (user_ids as string).split(',').map(Number).filter(Boolean)
             : user_id ? [parseInt(user_id as string, 10)] : [];
 
-        // Determine accessible projects for the user
-        if (authUser.role !== 'superadmin' && authUser.role !== 'admin') {
-            // Contributor or Client: Must be a member of the project to see its activities
+            
+        // Determine accessible projects based on the current role in the token
+        if (authUser.role === 'superadmin') {
+            // Superadmin: can see anything.
+            if (projectIdList.length > 0) {
+                where.project_id = projectIdList.length === 1 ? projectIdList[0] : { [Op.in]: projectIdList };
+            }
+            if (organization_id) {
+                projectWhere.organization_id = organization_id;
+            }
+        } else if (authUser.role === 'admin') {
+            // Admin: only see activities for their own organization
+            projectWhere.organization_id = authUser.organization_id;
+
+            if (projectIdList.length > 0) {
+                // Verify projects belong to their organization
+                const allowedProjects = await projects.findAll({
+                    where: {
+                        id: { [Op.in]: projectIdList },
+                        organization_id: authUser.organization_id
+                    },
+                    attributes: ['id']
+                });
+                const allowedIds = allowedProjects.map((p: any) => p.id);
+                if (allowedIds.length === 0) return res.status(200).json({ activities: [] });
+                where.project_id = { [Op.in]: allowedIds };
+            } else {
+                // Implicitly filtered by projectWhere.organization_id in the Join
+            }
+        } else {
+            // Contributor / Client: MUST be a member of the project
             const userProjects = await project_members.findAll({
                 where: { user_id: authUser.user_id },
                 attributes: ['project_id']
             });
             const accessibleProjectIds = userProjects.map((p: any) => p.project_id);
 
+            if (accessibleProjectIds.length === 0) return res.status(200).json({ activities: [] });
+
             if (projectIdList.length > 0) {
-                // Filter: only include project IDs the user has access to
                 const allowed = projectIdList.filter(id => accessibleProjectIds.includes(id));
                 if (allowed.length === 0) return res.status(200).json({ activities: [] });
                 where.project_id = { [Op.in]: allowed };
             } else {
                 where.project_id = { [Op.in]: accessibleProjectIds };
             }
-        } else if (projectIdList.length > 0) {
-            where.project_id = projectIdList.length === 1 ? projectIdList[0] : { [Op.in]: projectIdList };
-        }
 
-        // 1. Determine all organizations the user belongs to
-        const myProjectOrgs = await project_members.findAll({
-            where: { user_id: authUser.user_id },
-            include: [{ model: projects, attributes: ['organization_id'] }]
-        }).then((pms: any) => pms.map((pm: any) => pm.project?.organization_id).filter(Boolean));
-
-        const myOrgs = [...new Set([authUser.organization_id, ...myProjectOrgs].filter(Boolean))];
-
-        if (authUser.role === 'superadmin') {
-            if (organization_id) {
-                projectWhere.organization_id = organization_id;
-            }
-        } else {
-            projectWhere.organization_id = { [Op.in]: myOrgs };
+            // Still constrain to organization if requested (though membership is already strict)
             if (organization_id) {
                 projectWhere.organization_id = organization_id;
             }
@@ -89,7 +102,7 @@ export const getActivities = async (req: Request | any, res: Response) => {
         const formattedFeed = feed.map((act: any) => {
             let desc = act.description;
             let metadata = act.metadata; // Prioritize new column
-            
+
             // Extract metadata if exists (delimited by \u200B\u200B) - legacy fallback
             if (!metadata && desc && desc.includes('\u200B\u200B')) {
                 const parts = desc.split('\u200B\u200B');

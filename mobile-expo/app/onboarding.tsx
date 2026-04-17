@@ -85,9 +85,9 @@ export default function OnboardingScreen() {
                                 style={[styles.title, { color: colors.text, fontFamily: 'Angelica' }]}
                             >
                                 {item.title === 'APEXIS PRO' ? (
-                                    <Text style={{ fontSize: 42, color: colors.text, fontFamily: 'Angelica' }}>
+                                    <Text className="font-angelica" style={{ fontSize: 42, color: colors.text, fontFamily: 'Angelica', fontWeight: 'normal' }}>
                                         APEXIS
-                                        <Text style={{ fontSize: 22, textTransform: 'uppercase', fontFamily: 'Angelica' }}>PRO™</Text>
+                                        <Text className="font-angelica" style={{ fontSize: 22, textTransform: 'uppercase', fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
                                     </Text>
                                 ) : item.title}
                             </Animated.Text>
@@ -210,7 +210,6 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 42,
-        fontWeight: 'bold',
         marginBottom: 8,
         textAlign: 'center',
     },
