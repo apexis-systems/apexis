@@ -139,17 +139,27 @@ export const projectLogin = async (req: Request, res: Response) => {
             isNewUser = true;
         }
 
-        // Verify if user is already a member of this project with the SAME role
-        const existingMembershipWithSameRole = await project_members.findOne({
+        if (user && user.role === 'admin' && user.organization_id === project.organization_id) {
+            return res.status(400).json({ error: "You are an Admin of this organization and already have access to all projects." });
+        }
+
+        // Verify if user is already a member of this project with ANY role
+        const existingMembership = await project_members.findOne({
             where: {
                 project_id: project.id,
-                user_id: user.id,
-                role: roleForCode
+                user_id: user.id
             }
         });
 
-        if (!existingMembershipWithSameRole) {
-            // Auto-add them to the project since they possess a valid code for a role they don't have yet
+        if (existingMembership) {
+            if (existingMembership.role !== roleForCode) {
+                return res.status(400).json({ 
+                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join with a different role.` 
+                });
+            }
+            // If they are already a member with the SAME role, we proceed to login (token generation)
+        } else {
+            // Auto-add them to the project since they possess a valid code and are not yet a member
             await project_members.create({
                 project_id: project.id,
                 user_id: user.id,
@@ -425,12 +435,23 @@ export const completePublicSignup = async (req: Request, res: Response) => {
             });
         }
 
-        // Verify if already a member with the EXACT same role
-        const existingMembershipWithSameRole = await project_members.findOne({
-            where: { project_id: project.id, user_id: user.id, role: decoded.role }
+        if (user && user.role === 'admin' && user.organization_id === project.organization_id) {
+            return res.status(400).json({ error: "You are an Admin of this organization. You already have full access." });
+        }
+
+        // Verify if already a member of this project (any role)
+        const existingMembership = await project_members.findOne({
+            where: { project_id: project.id, user_id: user.id }
         });
 
-        if (!existingMembershipWithSameRole) {
+        if (existingMembership) {
+            if (existingMembership.role !== decoded.role) {
+                return res.status(400).json({ 
+                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join as a ${decoded.role}.` 
+                });
+            }
+            // Already a member with the same role, proceed to success (no duplicate needed)
+        } else {
             // Add to project with the new role
             await project_members.create({
                 project_id: project.id,
@@ -668,7 +689,6 @@ export const switchContext = async (req: Request, res: Response) => {
                     where: { user_id: authUser.user_id, project_id, role: normalizedRole }
                 });
                 if (!membership) return res.status(403).json({ error: "No such project membership found" });
-            } else {
                 let hasMembership = false;
                 if (normalizedRole === 'contributor' || normalizedRole === 'client') {
                     const membershipDoc = await project_members.findOne({

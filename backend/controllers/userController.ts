@@ -66,6 +66,11 @@ export const inviteUser = async (req: Request, res: Response) => {
 
         // For Project Roles, pre-associate with the project
         if ((role === 'contributor' || role === 'client') && actualProjectId) {
+            // Prevent assigning restricted project roles to organization admins within their own organization
+            if (user && user.role === 'admin' && user.organization_id === authUser.organization_id) {
+                return res.status(400).json({ error: "This user is an Admin of this organization and already has full access to the project." });
+            }
+
             const existingMembership = await project_members.findOne({
                 where: { project_id: actualProjectId, user_id: user.id }
             });
@@ -76,12 +81,12 @@ export const inviteUser = async (req: Request, res: Response) => {
                     user_id: user.id,
                     role: role
                 });
-            } else if (existingMembership.role === role) {
-                return res.status(400).json({ error: `User is already a ${role} in this project` });
+            } else if (existingMembership.role !== role) {
+                return res.status(400).json({ 
+                    error: `User is already a ${existingMembership.role} in this project. You cannot assign multiple roles to the same project.` 
+                });
             } else {
-                // Already a member with different role, update it or leave it?
-                // For now, let's allow updating to the new invited role
-                await existingMembership.update({ role });
+                return res.status(400).json({ error: `User is already a ${role} in this project` });
             }
 
             // Emit socket event to refresh project stats (counts) in real-time
