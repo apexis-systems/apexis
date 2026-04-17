@@ -5,7 +5,7 @@ import { users, organizations, project_members, projects } from "../models/index
 import { Op } from "sequelize";
 import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
-import { normalizePhone, isValidPhone } from "../utils/sms.ts";
+import { normalizePhone, isValidPhone, sendOTP, isIndianPhone } from "../utils/sms.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { getIO } from "../socket.ts";
 import {
@@ -139,17 +139,27 @@ export const projectLogin = async (req: Request, res: Response) => {
             isNewUser = true;
         }
 
-        // Verify if user is already a member of this project with the SAME role
-        const existingMembershipWithSameRole = await project_members.findOne({
+        if (user && user.role === 'admin' && user.organization_id === project.organization_id) {
+            return res.status(400).json({ error: "You are an Admin of this organization and already have access to all projects." });
+        }
+
+        // Verify if user is already a member of this project with ANY role
+        const existingMembership = await project_members.findOne({
             where: {
                 project_id: project.id,
-                user_id: user.id,
-                role: roleForCode
+                user_id: user.id
             }
         });
 
-        if (!existingMembershipWithSameRole) {
-            // Auto-add them to the project since they possess a valid code for a role they don't have yet
+        if (existingMembership) {
+            if (existingMembership.role !== roleForCode) {
+                return res.status(400).json({ 
+                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join with a different role.` 
+                });
+            }
+            // If they are already a member with the SAME role, we proceed to login (token generation)
+        } else {
+            // Auto-add them to the project since they possess a valid code and are not yet a member
             await project_members.create({
                 project_id: project.id,
                 user_id: user.id,
@@ -425,12 +435,23 @@ export const completePublicSignup = async (req: Request, res: Response) => {
             });
         }
 
-        // Verify if already a member with the EXACT same role
-        const existingMembershipWithSameRole = await project_members.findOne({
-            where: { project_id: project.id, user_id: user.id, role: decoded.role }
+        if (user && user.role === 'admin' && user.organization_id === project.organization_id) {
+            return res.status(400).json({ error: "You are an Admin of this organization. You already have full access." });
+        }
+
+        // Verify if already a member of this project (any role)
+        const existingMembership = await project_members.findOne({
+            where: { project_id: project.id, user_id: user.id }
         });
 
-        if (!existingMembershipWithSameRole) {
+        if (existingMembership) {
+            if (existingMembership.role !== decoded.role) {
+                return res.status(400).json({ 
+                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join as a ${decoded.role}.` 
+                });
+            }
+            // Already a member with the same role, proceed to success (no duplicate needed)
+        } else {
             // Add to project with the new role
             await project_members.create({
                 project_id: project.id,
@@ -496,38 +517,76 @@ export const completePublicSignup = async (req: Request, res: Response) => {
 
 export const forgotPasswordRequestOtp = async (req: Request, res: Response) => {
     try {
-        const { email, role } = req.body;
-        const user = await users.findOne({ where: { email: email.toLowerCase(), role } });
+        const { email, phone, role } = req.body;
+        
+        const normalizedEmail = email ? email.toLowerCase() : null;
+        const normalizedPhone = phone ? normalizePhone(phone) : null;
+
+        if (!normalizedEmail && !normalizedPhone) {
+            return res.status(400).json({ error: "Email or Phone number is required" });
+        }
+
+        const user = await users.findOne({
+            where: {
+                [Op.or]: [
+                    normalizedEmail ? { email: normalizedEmail } : null,
+                    normalizedPhone ? { phone_number: normalizedPhone } : null
+                ].filter(Boolean) as any[],
+                role
+            }
+        });
 
         if (!user) return res.status(404).json({ error: "User not found" });
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpHash = await bcrypt.hash(otp, 10);
 
-        await redis.set(`otp:forgot:${email}`, otpHash, "EX", 600);
-        await sendEmail(email, "Password Reset OTP", `Your OTP for password reset is: ${otp}`);
+        const identifier = normalizedEmail || normalizedPhone;
+        
+        if (normalizedPhone && !normalizedEmail && !isIndianPhone(normalizedPhone)) {
+            return res.status(400).json({ error: "Phone OTP is currently only available for Indian numbers (+91)." });
+        }
 
-        res.status(200).json({ message: "OTP sent to email" });
+        await redis.set(`otp:forgot:${identifier}`, otpHash, "EX", 600);
+
+        if (normalizedEmail) {
+            await sendEmail(normalizedEmail, "Password Reset OTP", `Your OTP for password reset is: ${otp}`);
+            res.status(200).json({ message: "OTP sent to email" });
+        } else if (normalizedPhone) {
+            await sendOTP(normalizedPhone, otp);
+            res.status(200).json({ message: "OTP sent to phone number" });
+        }
     } catch (error) {
+        console.error("Forgot Password Request Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
 
 export const forgotPasswordVerifyOtp = async (req: Request, res: Response) => {
     try {
-        const { email, otp } = req.body;
-        const normalizedEmail = email.toLowerCase();
-        const savedOtpHash = await redis.get(`otp:forgot:${normalizedEmail}`);
+        const { email, phone, otp } = req.body;
+        const identifier = email ? email.toLowerCase() : (phone ? normalizePhone(phone) : null);
+
+        if (!identifier) {
+            return res.status(400).json({ error: "Email or Phone is required" });
+        }
+
+        const savedOtpHash = await redis.get(`otp:forgot:${identifier}`);
 
         if (!savedOtpHash || !(await bcrypt.compare(otp, savedOtpHash))) {
             return res.status(400).json({ error: "Invalid or expired OTP" });
         }
 
-        const resetToken = jwt.sign({ email: normalizedEmail }, process.env.JWT_SECRET || "default_secret", { expiresIn: "15m" });
-        await redis.del(`otp:forgot:${normalizedEmail}`);
+        const resetToken = jwt.sign(
+            { email: email ? email.toLowerCase() : null, phone: phone ? normalizePhone(phone) : null },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "15m" }
+        );
+        await redis.del(`otp:forgot:${identifier}`);
 
         res.status(200).json({ resetToken });
     } catch (error) {
+        console.error("Forgot Password Verify Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -538,10 +597,20 @@ export const resetPassword = async (req: Request, res: Response) => {
         const decoded: any = jwt.verify(resetToken, process.env.JWT_SECRET || "default_secret");
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
-        await users.update({ password: passwordHash }, { where: { email: decoded.email } });
+        
+        const updateWhere: any = {};
+        if (decoded.email) updateWhere.email = decoded.email;
+        if (decoded.phone) updateWhere.phone_number = decoded.phone;
+
+        if (Object.keys(updateWhere).length === 0) {
+            return res.status(400).json({ error: "Invalid reset token payload" });
+        }
+
+        await users.update({ password: passwordHash }, { where: updateWhere });
 
         res.status(200).json({ message: "Password reset successful" });
     } catch (error) {
+        console.error("Reset Password Error:", error);
         res.status(400).json({ error: "Invalid or expired reset token" });
     }
 };
@@ -668,7 +737,6 @@ export const switchContext = async (req: Request, res: Response) => {
                     where: { user_id: authUser.user_id, project_id, role: normalizedRole }
                 });
                 if (!membership) return res.status(403).json({ error: "No such project membership found" });
-            } else {
                 let hasMembership = false;
                 if (normalizedRole === 'contributor' || normalizedRole === 'client') {
                     const membershipDoc = await project_members.findOne({

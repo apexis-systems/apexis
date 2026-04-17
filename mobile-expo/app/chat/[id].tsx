@@ -566,12 +566,14 @@ export default function ChatDetailScreen() {
             <Stack.Screen options={{ headerShown: false }} />
 
             {/* Header */}
-            <View style={{ 
-                backgroundColor: colors.surface, 
-                borderBottomWidth: 1, 
-                borderBottomColor: colors.border,
-                paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
-            }}>
+            <SafeAreaView 
+                edges={['top']}
+                style={{ 
+                    backgroundColor: colors.surface, 
+                    borderBottomWidth: 1, 
+                    borderBottomColor: colors.border,
+                }}
+            >
                 <View style={{ 
                     flexDirection: 'row', 
                     alignItems: 'center', 
@@ -611,7 +613,7 @@ export default function ChatDetailScreen() {
                     {/* Call icons removed as requested */}
                 </View>
             </View>
-        </View>
+            </SafeAreaView>
 
             {/* Chat Area */}
             <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}>
@@ -710,12 +712,12 @@ export default function ChatDetailScreen() {
 
                     <View style={{ paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}>
                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 0, height: 44 }}>
-                            <TouchableOpacity
+                            {/* <TouchableOpacity
                                 onPress={() => setShowEmojis(!showEmojis)}
                                 style={{ padding: 4 }}
                             >
                                 <Feather name="smile" size={24} color={showEmojis ? colors.primary : colors.textMuted} />
-                            </TouchableOpacity>
+                            </TouchableOpacity> */}
                             <TextInput
                                 value={message}
                                 onChangeText={(text) => {
@@ -746,7 +748,7 @@ export default function ChatDetailScreen() {
                             <TouchableOpacity onPress={pickImage} style={{ padding: 4, marginLeft: 4 }}>
                                 <Feather name="image" size={22} color={colors.textMuted} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={takePhoto} style={{ padding: 4, marginLeft: 4 }}>
+                            <TouchableOpacity onPress={() => takePhoto()} style={{ padding: 4, marginLeft: 4 }}>
                                 <Feather name="camera" size={22} color={colors.textMuted} />
                             </TouchableOpacity>
                         </View>

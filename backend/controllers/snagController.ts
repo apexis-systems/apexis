@@ -84,7 +84,8 @@ export const createSnag = async (req: Request, res: Response) => {
 
       if ((req as any).file.mimetype.startsWith("image/")) {
         try {
-          fileBuffer = await addWatermark((req as any).file.buffer, project.name);
+          const senderName = authUser.name || "Someone";
+          fileBuffer = await addWatermark((req as any).file.buffer, project.name, senderName);
           ext = ".jpg";
         } catch (e) {
           console.error("Sharp error in snag", e);
@@ -189,6 +190,11 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
 
     const snag = await snags.findByPk(id);
     if (!snag) return res.status(404).json({ error: "Snag not found" });
+
+    // Only the assigned user can change the status
+    if (Number(snag.assigned_to) !== Number(authUser.user_id)) {
+      return res.status(403).json({ error: "Only the assigned person can update the status" });
+    }
 
     (snag as any).status = status;
     await snag.save();

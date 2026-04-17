@@ -93,9 +93,9 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                                 resizeMode="cover"
                             />
                         </View>
-                        <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, letterSpacing: 0.5 }}>
+                        <Text className="font-angelica" style={{ fontSize: 18, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>
                             APEXIS
-                            <Text className="font-angelica" style={{ fontSize: 10 }}>PRO™</Text>
+                            <Text className="font-angelica" style={{ fontSize: 10, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
                         </Text>
                     </TouchableOpacity>
 

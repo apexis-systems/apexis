@@ -36,15 +36,17 @@ export const sendNotification = async ({
         // 3. Push Notification (FCM) - Only if user has a token AND Firebase is initialized
         if (user?.fcm_token && messaging) {
             try {
-                await messaging.send({
+                const response = await messaging.send({
                     notification: { title, body },
                     android: {
                         priority: 'high',
+                        ttl: 2419200 * 1000, // 4 weeks in milliseconds
                         notification: {
                             channelId: 'default',
                             defaultSound: true,
                             defaultVibrateTimings: true,
-                            visibility: 'public'
+                            visibility: 'public',
+                            priority: 'high',
                         }
                     },
                     apns: {
@@ -69,12 +71,19 @@ export const sendNotification = async ({
                             acc[key] = String(data[key]);
                             return acc;
                         }, {}),
+                        title: String(title),
+                        body: String(body),
                         type
                     },
                     token: user.fcm_token
                 });
-            } catch (err) {
-                console.error(`FCM error for user ${userId}:`, err);
+                console.log(`Successfully sent FCM message to user ${userId}:`, response);
+            } catch (err: any) {
+                console.error(`FCM error for user ${userId}:`, err?.code, err?.message);
+                if (err?.code === 'messaging/registration-token-not-registered') {
+                    console.log(`Token for user ${userId} is stale/unregistered. Clearing...`);
+                    await users.update({ fcm_token: null }, { where: { id: userId } });
+                }
             }
         }
 

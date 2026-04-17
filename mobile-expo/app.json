@@ -2,7 +2,7 @@
   "expo": {
     "name": "APEXISpro",
     "slug": "apexis",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "apexis",
@@ -11,8 +11,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apexis.ios",
-      "buildNumber": "23",
+      "buildNumber": "24",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "associatedDomains": ["applinks:web.apexis.in"],
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "APEXISpro needs access to your photo library to attach photos to snags and upload site images.",
         "NSPhotoLibraryAddUsageDescription": "APEXISpro needs permission to save downloaded photos to your library.",
@@ -25,7 +26,31 @@
     },
     "android": {
       "package": "com.apexis.app",
-      "versionCode": 23,
+      "versionCode": 24,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "web.apexis.in",
+              "pathPrefix": "/auth/login-redirect"
+            },
+            {
+              "scheme": "https",
+              "host": "web.apexis.in",
+              "pathPrefix": "/auth/invite"
+            },
+            {
+              "scheme": "https",
+              "host": "web.apexis.in",
+              "pathPrefix": "/auth/onboarding"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "permissions": [
@@ -54,7 +79,7 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      "expo-router",
+      ["expo-router", { "origin": "https://web.apexis.in" }],
       [
         "expo-splash-screen",
         {

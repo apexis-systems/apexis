@@ -33,7 +33,7 @@ export default function LoginScreen() {
     const [error, setError] = useState('');
     const [isProcessingLink, setIsProcessingLink] = useState(false);
 
-    const { login, logout, isLoggedIn } = useAuth();
+    const { login, logout, isLoggedIn, isLoading: isAuthLoading } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
     const params = useGlobalSearchParams<{ role?: string; code?: string }>();
@@ -50,48 +50,43 @@ export default function LoginScreen() {
     const isInvitationMode = useRef(!!params.code);
 
     useEffect(() => {
+        if (!params.code || hasLoggedOutForInvitation.current) return;
+        // Wait for auth state to fully resolve from SecureStore before checking
+        // isLoggedIn — if we act while isAuthLoading=true, isLoggedIn is always
+        // false and the logout is skipped, causing _layout to redirect to tabs.
+        if (isAuthLoading) return;
+
         const handleInvitation = async () => {
-            if (params.code && !hasLoggedOutForInvitation.current) {
-                // Mark invitation mode immediately so the credential loader
-                // (which may fire concurrently) knows to stay out of the way.
-                isInvitationMode.current = true;
-                setIsProcessingLink(true);
+            isInvitationMode.current = true;
+            setIsProcessingLink(true);
 
-                // Set role first so the correct field is shown
-                const deepRole: UserRole =
-                    params.role === 'contributor' || params.role === 'client'
-                        ? (params.role as UserRole)
-                        : 'contributor';
-                setSelectedRole(deepRole);
-                setProjectCode(params.code);
+            const deepRole: UserRole =
+                params.role === 'contributor' || params.role === 'client'
+                    ? (params.role as UserRole)
+                    : 'contributor';
+            setSelectedRole(deepRole);
+            setProjectCode(params.code as string);
 
-                // If user is already logged in, log out to allow switching account
-                if (isLoggedIn) {
-                    try {
-                        await logout();
-                        // Give SecureStore time to flush before we write the new token
-                        await new Promise(r => setTimeout(r, 300));
-                    } catch (e) {
-                        console.error("Deep link logout error:", e);
-                    }
+            if (isLoggedIn) {
+                try {
+                    logout();
+                    await new Promise(r => setTimeout(r, 300));
+                } catch (e) {
+                    console.error("Deep link logout error:", e);
                 }
-
-                hasLoggedOutForInvitation.current = true;
-
-                // Re-assert after the logout await — intermediate re-renders
-                // triggered by isLoggedIn changing can reset these values.
-                setSelectedRole(deepRole);
-                setProjectCode(params.code);
-                setIsProcessingLink(false);
             }
+
+            hasLoggedOutForInvitation.current = true;
+            setSelectedRole(deepRole);
+            setProjectCode(params.code as string);
+            setIsProcessingLink(false);
         };
 
         handleInvitation();
-    // Intentionally exclude isLoggedIn/logout: we snapshot them inside the
-    // effect. Including them would re-fire the effect after logout() resolves
-    // and could create a second conflicting execution.
+    // isAuthLoading added so we re-run once auth resolves.
+    // isLoggedIn/logout intentionally omitted to avoid re-firing after logout().
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [params.code, params.role]);
+    }, [params.code, params.role, isAuthLoading]);
 
     useEffect(() => {
         // During an invitation deep-link flow, skip loading stored credentials
@@ -210,9 +205,9 @@ export default function LoginScreen() {
 
                     <View style={{ alignItems: 'center', marginBottom: 40 }}>
                         <Image source={require('../../assets/images/app-icon.png')} style={{ width: 100, height: 100, marginBottom: 16 }} resizeMode="contain" />
-                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary }}>
+                        <Text className="font-angelica" style={{ fontSize: 34, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>
                             APEXIS
-                            <Text className="font-angelica" style={{ fontSize: 18 }}>PRO™</Text>
+                            <Text className="font-angelica" style={{ fontSize: 18, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
                         </Text>
                         <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, letterSpacing: 4 }}>RECORD · REPORT · RELEASE</Text>
                     </View>

@@ -8,12 +8,14 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { forgotPasswordRequestOtp, forgotPasswordVerifyOtp, resetPassword } from '@/services/authService';
+import CountryCodePicker, { countries, Country, isIndianCountry } from '@/components/CountryCodePicker';
 
 type Step = 'email' | 'otp' | 'reset';
 
 export default function ForgotPasswordScreen() {
     const [step, setStep] = useState<Step>('email');
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
+    const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]); // India
     const [otp, setOtp] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -24,16 +26,43 @@ export default function ForgotPasswordScreen() {
     const router = useRouter();
     const { colors } = useTheme();
 
+    const getNormalizedIdentifier = () => {
+        const isEmail = identifier.includes('@');
+        const isDigitsOnly = /^\d+$/.test(identifier.trim());
+        const cleanIdentifier = identifier.trim().replace(selectedCountry.code, "").trim();
+        
+        if (isEmail) return { email: identifier.trim().toLowerCase() };
+        
+        if (isDigitsOnly || identifier.includes('+') || (identifier.length > 0 && /^\d/.test(identifier))) {
+            if (!isIndianCountry(selectedCountry)) {
+                return { error: "Phone OTP is only available for Indian numbers (+91). Please use your email address or an Indian phone number." };
+            }
+            if (!/^\d{10}$/.test(cleanIdentifier)) {
+                return { error: "Please enter a valid 10-digit phone number." };
+            }
+            return { phone: `${selectedCountry.code}${cleanIdentifier}` };
+        }
+        
+        return { error: "Please enter a valid email or phone number." };
+    };
+
     const handleRequestOtp = async () => {
-        if (!email) {
-            Alert.alert("Error", "Please enter your email");
+        if (!identifier) {
+            Alert.alert("Error", "Please enter your email or phone number");
             return;
         }
+
+        const authData = getNormalizedIdentifier();
+        if (authData.error) {
+            Alert.alert("Error", authData.error);
+            return;
+        }
+
         setIsLoading(true);
         try {
-            await forgotPasswordRequestOtp(email, 'admin');
+            await forgotPasswordRequestOtp({ ...authData, role: 'admin' });
             setStep('otp');
-            Alert.alert("Success", "OTP sent to your email");
+            Alert.alert("Success", `OTP sent to your ${authData.email ? 'email' : 'phone number'}`);
         } catch (error: any) {
             Alert.alert("Error", error.response?.data?.error || "Failed to send OTP");
         } finally {
@@ -46,9 +75,16 @@ export default function ForgotPasswordScreen() {
             Alert.alert("Error", "Please enter verification code");
             return;
         }
+
+        const authData = getNormalizedIdentifier();
+        if (authData.error) {
+            Alert.alert("Error", authData.error);
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const res = await forgotPasswordVerifyOtp(email, otp);
+            const res = await forgotPasswordVerifyOtp({ ...authData, otp });
             setResetToken(res.resetToken);
             setStep('reset');
         } catch (error: any) {
@@ -104,9 +140,9 @@ export default function ForgotPasswordScreen() {
                         </Text>
                         <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 4 }}>
                             {step === 'email'
-                                ? "Enter your registered email to receive a verification code."
+                                ? "Enter your registered email or phone number to receive a verification code."
                                 : step === 'otp'
-                                    ? `Enter the 6-digit code sent to ${email}`
+                                    ? `Enter the 6-digit code sent to ${identifier}`
                                     : "Create a new secure password for your account."}
                         </Text>
                     </View>
@@ -115,26 +151,42 @@ export default function ForgotPasswordScreen() {
                         <View>
                             <View style={{ marginBottom: 20 }}>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
-                                    Work Email
+                                    Email or Phone Number
                                 </Text>
-                                <TextInput
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    placeholder="you@company.com"
-                                    placeholderTextColor={colors.textMuted}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                    style={{
-                                        height: 48,
-                                        borderRadius: 12,
-                                        backgroundColor: colors.surface,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        color: colors.text,
-                                        paddingHorizontal: 14,
-                                        fontSize: 15,
-                                    }}
-                                />
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    {(identifier.length > 0 && /^\d/.test(identifier)) && (
+                                        <CountryCodePicker 
+                                            selectedCountry={selectedCountry} 
+                                            onSelect={setSelectedCountry} 
+                                        />
+                                    )}
+                                    <TextInput
+                                        value={identifier}
+                                        onChangeText={setIdentifier}
+                                        placeholder="Email or Phone Number"
+                                        placeholderTextColor={colors.textMuted}
+                                        keyboardType={identifier.includes('@') ? "email-address" : "default"}
+                                        autoCapitalize="none"
+                                        style={{
+                                            flex: 1,
+                                            height: 48,
+                                            borderRadius: 12,
+                                            backgroundColor: colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            color: colors.text,
+                                            paddingHorizontal: 14,
+                                            fontSize: 15,
+                                        }}
+                                    />
+                                </View>
+                                {identifier.length > 0 && !identifier.includes('@') && !isIndianCountry(selectedCountry) && (
+                                    <View style={{ marginTop: 8, backgroundColor: colors.surface, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <Text style={{ fontSize: 12, color: colors.textMuted, flex: 1 }}>
+                                            📧 Phone OTP is only available for Indian numbers. Please use email or an Indian number.
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                             <TouchableOpacity
                                 onPress={handleRequestOtp}
@@ -196,7 +248,7 @@ export default function ForgotPasswordScreen() {
                                 {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Verify Code</Text>}
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => setStep('email')} style={{ marginTop: 16, alignItems: 'center' }}>
-                                <Text style={{ color: colors.textMuted, fontSize: 14 }}>Use a different email</Text>
+                                <Text style={{ color: colors.textMuted, fontSize: 14 }}>Use a different account</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -205,7 +257,7 @@ export default function ForgotPasswordScreen() {
                         <View>
                             <View style={{ marginBottom: 12, alignItems: 'center', padding: 12, backgroundColor: colors.surface, borderRadius: 12 }}>
                                 <Text style={{ fontSize: 12, color: colors.textMuted }}>Account</Text>
-                                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>{email}</Text>
+                                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>{identifier}</Text>
                             </View>
 
                             <View style={{ marginBottom: 16 }}>
