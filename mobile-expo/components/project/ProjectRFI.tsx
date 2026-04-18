@@ -20,6 +20,7 @@ import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 import { parseApiError } from '@/helpers/apiError';
+import * as ScreenCapture from 'expo-screen-capture';
 
 interface Props {
   project: Project;
@@ -36,6 +37,16 @@ const statusConfig = {
 
 export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
   const { colors } = useTheme();
+
+  useFocusEffect(
+    useCallback(() => {
+      ScreenCapture.preventScreenCaptureAsync('rfi-section');
+      return () => {
+        ScreenCapture.allowScreenCaptureAsync('rfi-section');
+      };
+    }, [])
+  );
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const MAX_RFI_IMAGES = 4;

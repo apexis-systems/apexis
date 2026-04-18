@@ -730,23 +730,39 @@ export const switchContext = async (req: Request, res: Response) => {
             (user.role === 'superadmin' || (user.role === 'admin' && (!targetOrganizationId || Number(targetOrganizationId) === Number(user.organization_id))));
         const isSuperadminRoleSwitch = normalizedRole === 'superadmin' && user.role === 'superadmin';
 
-        let membership = null;
+        // Security Check: If a user is trying to switch to 'admin' role, they MUST be authorized
+        if (normalizedRole === 'admin' && !isAdminSwitch) {
+            return res.status(403).json({ error: `You do not have any projects as an ${normalizedRole}.` });
+        }
+
+        // Project-specific role validation
         if (!isAdminSwitch && !isSuperadminRoleSwitch && !isSuperadminSwitch) {
             if (project_id) {
-                membership = await project_members.findOne({
+                const membership = await project_members.findOne({
                     where: { user_id: authUser.user_id, project_id, role: normalizedRole }
                 });
-                if (!membership) return res.status(403).json({ error: "No such project membership found" });
-                let hasMembership = false;
-                if (normalizedRole === 'contributor' || normalizedRole === 'client') {
-                    const membershipDoc = await project_members.findOne({
-                        where: { user_id: authUser.user_id, role: normalizedRole }
-                    });
-                    hasMembership = !!membershipDoc;
+                if (!membership) {
+                    return res.status(403).json({ error: `You do not have a valid ${normalizedRole} membership for this project` });
                 }
-                
-                const isPrimaryRole = user.role === normalizedRole;
-                if (!hasMembership && !isPrimaryRole) {
+            } else {
+                // If switching context without a specific project, verify they have at least 
+                // ONE project membership globally (or in the target org if provided)
+                const whereClause: any = { user_id: authUser.user_id, role: normalizedRole };
+                const includeClause: any = [];
+
+                if (targetOrganizationId) {
+                    includeClause.push({
+                        model: projects,
+                        where: { organization_id: targetOrganizationId }
+                    });
+                }
+
+                const anyMembership = await project_members.findOne({
+                    include: includeClause,
+                    where: whereClause
+                });
+
+                if (!anyMembership) {
                     return res.status(403).json({ error: `You do not have any projects as a ${normalizedRole}.` });
                 }
             }
