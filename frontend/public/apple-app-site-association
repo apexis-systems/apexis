@@ -1,0 +1,19 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["949W22S7SP.com.apexis.ios"],
+        "paths": ["/auth/login-redirect*", "/auth/invite*", "/auth/onboarding*"],
+        "components": [
+          { "/": "/auth/login-redirect*" },
+          { "/": "/auth/invite*" },
+          { "/": "/auth/onboarding*" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["949W22S7SP.com.apexis.ios"]
+  }
+}
