@@ -12,18 +12,19 @@ export default function LoginRedirect() {
   const handled = useRef(false);
 
   useEffect(() => {
-    // Wait until auth state is fully loaded from SecureStore before acting.
-    if (isLoading || handled.current) return;
+
+    if (handled.current) return;
     handled.current = true;
 
     const handle = async () => {
-      // Unconditionally log the user out here in the redirector screen
-      if (isLoggedIn) {
-        logout();
-        // Give SecureStore time to clear before we shift over to login
-        await new Promise(r => setTimeout(r, 400));
-      }
-      
+      console.log('[NAV] Instant logout triggered by deep-link redirector');
+
+      // Force an immediate logout regardless of current loading state
+      await logout();
+
+      // Small buffer to ensure SecureStore and Context state are fully cleared
+      await new Promise(r => setTimeout(r, 200));
+
       router.replace({
         pathname: '/(auth)/login',
         params: { code, role },
@@ -31,7 +32,7 @@ export default function LoginRedirect() {
     };
 
     handle();
-  }, [isLoading]);
+  }, []);
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
