@@ -3,7 +3,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect, useRef } from 'react';
-import { DeviceEventEmitter, LogBox, TextInput } from 'react-native';
+import { DeviceEventEmitter, LogBox, Platform, TextInput } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -38,22 +38,64 @@ function RootLayoutNav() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [subscriptionLocked, setSubscriptionLocked] = useState(false);
   const response = Notifications.useLastNotificationResponse();
+  const [pendingNotification, setPendingNotification] = useState<any>(null);
 
-  // Handles cold-boot (app killed) notification taps.
-  // Background taps are handled by addNotificationResponseReceivedListener in index.tsx.
-  // Cross-component deduplication is managed by the module-level singleton in navigation.ts.
-  useEffect(() => {
-    if (!response || !isLoggedIn || isAuthLoading || !hasSeenOnboarding || subscriptionLocked) return;
+  useEffect(() => { const subscription = Notifications.addNotificationResponseReceivedListener((response) => { const data = response.notification.request.content.data; const type = data?.type as string; console.log('[NAV] Notification received → queued'); setPendingNotification({ id: response.notification.request.identifier, data, type, }); }); return () => subscription.remove(); }, []);
+  useEffect(() => { const handleColdStart = async () => { const response = await Notifications.getLastNotificationResponseAsync(); if (!response) return; const data = response.notification.request.content.data; const type = data?.type as string; console.log('[NAV] Cold start → queued'); setPendingNotification({ id: response.notification.request.identifier, data, type, }); }; handleColdStart(); }, []);
+  useEffect(() => { if (!pendingNotification) return; if (isAuthLoading) return; if (!isLoggedIn) return; if (!hasSeenOnboarding) return; if (subscriptionLocked) return; console.log('[NAV] Processing notification'); navigateFromNotification(pendingNotification.id, pendingNotification.type, pendingNotification.data, router); setPendingNotification(null); }, [pendingNotification, isAuthLoading, isLoggedIn, hasSeenOnboarding, subscriptionLocked,]);
 
-    const notifId = response.notification.request.identifier;
-    const data = response.notification.request.content.data;
-    const type = data?.type as string;
+  //   // Handles cold-boot (app killed) notification taps.
+  //   useEffect(() => {
+  //   const handleColdStart = async () => {
+  //     const response = await Notifications.getLastNotificationResponseAsync();
 
-    // Delay to ensure the navigator stack is fully mounted before pushing (critical for iOS cold boot)
-    setTimeout(() => {
-      navigateFromNotification(notifId, type, data, router);
-    }, 800);
-  }, [response, isLoggedIn, isAuthLoading, hasSeenOnboarding, subscriptionLocked]);
+  //     if (!response) return;
+
+  //     const notifId = response.notification.request.identifier;
+  //     const data = response.notification.request.content.data;
+  //     const type = data?.type as string;
+
+  //     console.log('[NAV] Cold start notification:', notifId);
+
+  //     navigateFromNotification(notifId, type, data, router);
+  //   };
+
+  //   handleColdStart();
+  // }, []);
+
+
+
+  //   useEffect(() => {
+  //     if (!response || !isLoggedIn || isAuthLoading || !hasSeenOnboarding || subscriptionLocked) return;
+
+  //     const notifId = response.notification.request.identifier;
+  //     const data = response.notification.request.content.data;
+  //     const type = data?.type as string;
+
+  //     // Increased delay for iOS cold-boot to ensure stack is fully ready
+  //     const delay = Platform.OS === 'ios' ? 1500 : 800;
+
+  //     setTimeout(() => {
+  //       console.log(`[NAV] Cold boot navigation triggered for ${notifId}`);
+  //       navigateFromNotification(notifId, type, data, router);
+  //     }, delay);
+  //   }, [response, isLoggedIn, isAuthLoading, hasSeenOnboarding, subscriptionLocked]);
+
+  //   // Handles interaction (tap) when the app is in background or foreground
+  //   useEffect(() => {
+  //     if (!isLoggedIn || isAuthLoading || !hasSeenOnboarding || subscriptionLocked) return;
+
+  //     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+  //       const notifId = response.notification.request.identifier;
+  //       const data = response.notification.request.content.data;
+  //       const type = data?.type as string;
+
+  //       console.log(`[NAV] Notification interaction detected: ${notifId}`);
+  //       navigateFromNotification(notifId, type, data, router);
+  //     });
+
+  //     return () => subscription.remove();
+  //   }, [isLoggedIn, isAuthLoading, hasSeenOnboarding, subscriptionLocked]);
 
   useEffect(() => {
     const checkOnboarding = async () => {

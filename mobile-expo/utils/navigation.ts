@@ -42,6 +42,8 @@ export const navigateFromNotification = (
  */
 export const handleNotificationNavigation = (type: string | undefined | null, data: any, router: Router) => {
     try {
+        console.log(`[NAV] handleNotificationNavigation called. type: "${type}"`, JSON.stringify(data, null, 2));
+
         if (!type || !data) {
             console.warn('[NAV] handleNotificationNavigation called with no type or data — skipping.');
             return;
