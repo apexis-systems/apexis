@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, FlatList, TouchableOpacity, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert, StatusBar, Keyboard } from 'react-native';
+import { View, FlatList, TouchableOpacity, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert, StatusBar, Keyboard, KeyboardAvoidingView } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -44,7 +44,7 @@ export default function ChatDetailScreen() {
     const pulseAnim = useRef(new Animated.Value(0.3)).current;
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
     const flatListRef = useRef<FlatList>(null);
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const keyboardHeight = useRef(new Animated.Value(insets.bottom)).current;
 
     const [attachment, setAttachment] = useState<any>(null);
     const [annotatingImage, setAnnotatingImage] = useState<any>(null);
@@ -54,6 +54,7 @@ export default function ChatDetailScreen() {
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [replyTo, setReplyTo] = useState<any>(null);
     const [isDownloading, setIsDownloading] = useState<string | null>(null);
+    const [isSending, setIsSending] = useState(false);
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
@@ -184,7 +185,7 @@ export default function ChatDetailScreen() {
             return () => clearTimeout(timer);
         }
     }, [loading, messages.length]);
-// Removed room?.id from dependencies as it's for status check below
+    // Removed room?.id from dependencies as it's for status check below
 
     // Active status check when room members are loaded
     useEffect(() => {
@@ -206,19 +207,31 @@ export default function ChatDetailScreen() {
         const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
         const showSub = Keyboard.addListener(showEvent as any, (event) => {
-            setKeyboardHeight(event?.endCoordinates?.height || 0);
+            const h = event?.endCoordinates?.height || 0;
+            // On edge-to-edge Android, sometimes the navigation bar is included in the height.
+            // But usually, the height reported is what we need for the padding.
+            Animated.timing(keyboardHeight, {
+                toValue: h,
+                duration: event?.duration || 250,
+                useNativeDriver: false,
+            }).start();
         });
         const hideSub = Keyboard.addListener(hideEvent as any, () => {
-            setKeyboardHeight(0);
+            Animated.timing(keyboardHeight, {
+                toValue: insets.bottom,
+                duration: 250,
+                useNativeDriver: false,
+            }).start();
         });
 
         return () => {
             showSub.remove();
             hideSub.remove();
         };
-    }, []);
+    }, [insets.bottom]);
 
     const handleSend = async () => {
+        setIsSending(true);
         if (!message.trim() && !attachment) return;
 
         const textToSubmit = message.trim();
@@ -227,6 +240,7 @@ export default function ChatDetailScreen() {
         setMessage('');
         setAttachment(null);
         setShowEmojis(false);
+
 
         try {
             let fileData = null;
@@ -253,7 +267,7 @@ export default function ChatDetailScreen() {
                 parent_id: replyTo?.id || null
             };
             if (textToSubmit) payload.text = textToSubmit;
-            
+
             setReplyTo(null);
 
             const res = await sendChatMessage(payload);
@@ -266,7 +280,9 @@ export default function ChatDetailScreen() {
             }
         } catch (error) {
             console.error("handleSend error:", error);
+        } finally {
             setIsUploading(false);
+            setIsSending(false);
         }
     };
 
@@ -287,7 +303,7 @@ export default function ChatDetailScreen() {
                     { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                 );
                 uri = manipulated.uri;
-            } catch (e) {}
+            } catch (e) { }
 
             setAnnotatingImage({
                 uri,
@@ -395,7 +411,7 @@ export default function ChatDetailScreen() {
                 enableTrackpadTwoFingerGesture
                 leftThreshold={20}
             >
-                <View 
+                <View
                     style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}
                 >
                     <View style={{
@@ -417,7 +433,7 @@ export default function ChatDetailScreen() {
                         )}
 
                         {item.parent && (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 onPress={() => scrollToMessage(item.parent_id)}
                                 style={{
                                     backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
@@ -447,7 +463,7 @@ export default function ChatDetailScreen() {
                                         resizeMode="cover"
                                     />
                                 </TouchableOpacity>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     onPress={() => handleDownload(item)}
                                     disabled={isDownloading === String(item.id)}
                                     style={{ position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 15 }}
@@ -483,7 +499,7 @@ export default function ChatDetailScreen() {
                                         <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
                                     </View>
                                 </TouchableOpacity>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     onPress={() => handleDownload(item)}
                                     disabled={isDownloading === String(item.id)}
                                     style={{ padding: 10, borderRadius: 12, backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
@@ -502,7 +518,7 @@ export default function ChatDetailScreen() {
                                 {item.text}
                             </Text>
                         ) : null}
-                        
+
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
@@ -546,7 +562,7 @@ export default function ChatDetailScreen() {
         const time = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return (
-            <MessageItem 
+            <MessageItem
                 item={item}
                 isMe={isMe}
                 time={time}
@@ -566,53 +582,53 @@ export default function ChatDetailScreen() {
             <Stack.Screen options={{ headerShown: false }} />
 
             {/* Header */}
-            <SafeAreaView 
+            <SafeAreaView
                 edges={['top']}
-                style={{ 
-                    backgroundColor: colors.surface, 
-                    borderBottomWidth: 1, 
+                style={{
+                    backgroundColor: colors.surface,
+                    borderBottomWidth: 1,
                     borderBottomColor: colors.border,
                 }}
             >
-                <View style={{ 
-                    flexDirection: 'row', 
-                    alignItems: 'center', 
-                    paddingHorizontal: 8, 
-                    paddingBottom: 10, 
+                <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 8,
+                    paddingBottom: 10,
                     minHeight: 52
                 }}>
-                <TouchableOpacity onPress={() => router.back()} style={{ padding: 8, flexDirection: 'row', alignItems: 'center' }}>
-                    <Feather name="chevron-left" size={28} color={colors.primary} style={{ marginLeft: -8 }} />
-                    {room?.type === 'group' ? (
-                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 4 }}>
-                            <Feather name="users" size={18} color="#fff" />
-                        </View>
-                    ) : (
-                        <SecureAvatar
-                            fileKey={room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.profile_pic}
-                            name={room?.name || room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name}
-                            size={36}
-                            style={{ marginLeft: 4 }}
-                        />
-                    )}
-                </TouchableOpacity>
+                    <TouchableOpacity onPress={() => router.back()} style={{ padding: 8, flexDirection: 'row', alignItems: 'center' }}>
+                        <Feather name="chevron-left" size={28} color={colors.primary} style={{ marginLeft: -8 }} />
+                        {room?.type === 'group' ? (
+                            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 4 }}>
+                                <Feather name="users" size={18} color="#fff" />
+                            </View>
+                        ) : (
+                            <SecureAvatar
+                                fileKey={room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.profile_pic}
+                                name={room?.name || room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name}
+                                size={36}
+                                style={{ marginLeft: 4 }}
+                            />
+                        )}
+                    </TouchableOpacity>
 
-                <TouchableOpacity style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }} numberOfLines={1}>
-                        {(room?.type === 'direct' ? room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name : room?.name) || 'Loading...'}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                        {room?.type === 'group'
-                            ? `${room.room_members?.length || 0} members`
-                            : (onlineUsers.has(String(room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.id)) ? 'Online' : 'Offline')}
-                    </Text>
-                </TouchableOpacity>
+                    <TouchableOpacity style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }} numberOfLines={1}>
+                            {(room?.type === 'direct' ? room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name : room?.name) || 'Loading...'}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                            {room?.type === 'group'
+                                ? `${room.room_members?.length || 0} members`
+                                : (onlineUsers.has(String(room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.id)) ? 'Online' : 'Offline')}
+                        </Text>
+                    </TouchableOpacity>
 
 
-                <View style={{ flexDirection: 'row', gap: 16, paddingRight: 8 }}>
-                    {/* Call icons removed as requested */}
+                    <View style={{ flexDirection: 'row', gap: 16, paddingRight: 8 }}>
+                        {/* Call icons removed as requested */}
+                    </View>
                 </View>
-            </View>
             </SafeAreaView>
 
             {/* Chat Area */}
@@ -622,14 +638,14 @@ export default function ChatDetailScreen() {
                         <ActivityIndicator size="large" color={colors.primary} />
                     </View>
                 ) : (
-                    <View style={{ flex: 1, paddingBottom: 96 + insets.bottom }}>
+                    <View style={{ flex: 1 }}>
                         <FlatList
                             ref={flatListRef}
                             style={{ flex: 1 }}
                             data={messages}
                             keyExtractor={item => String(item.id)}
                             renderItem={renderMessage}
-                            contentContainerStyle={{ paddingBottom: 20 }}
+                            contentContainerStyle={{ paddingBottom: 20, paddingTop: 10 }}
                             keyboardShouldPersistTaps="handled"
                             keyboardDismissMode="on-drag"
                             onContentSizeChange={() => {
@@ -652,120 +668,128 @@ export default function ChatDetailScreen() {
                     </View>
                 )}
 
-                {typingUser && (
-                    <Animated.View style={{ paddingHorizontal: 20, paddingVertical: 4, opacity: pulseAnim }}>
-                        <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', fontStyle: 'italic' }}>
-                            {typingUser} is typing...
-                        </Text>
-                    </Animated.View>
-                )}
+                <Animated.View style={{ backgroundColor: colors.background, paddingBottom: keyboardHeight }}>
+                    {typingUser && (
+                        <Animated.View style={{ paddingHorizontal: 20, paddingVertical: 8, opacity: pulseAnim, backgroundColor: 'rgba(0,0,0,0.02)' }}>
+                            <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', fontStyle: 'italic' }}>
+                                {typingUser} is typing...
+                            </Text>
+                        </Animated.View>
+                    )}
 
-                <View style={{ position: 'absolute', left: 0, right: 0, bottom: keyboardHeight, backgroundColor: colors.background, paddingBottom: insets.bottom }}>
-                    {showEmojis && (
-                        <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 10, paddingHorizontal: 16 }}>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                {commonEmojis.map(emoji => (
-                                    <TouchableOpacity
-                                        key={emoji}
-                                        onPress={() => setMessage(prev => prev + emoji)}
-                                        style={{ marginRight: 20 }}
-                                    >
-                                        <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                    <View style={{ backgroundColor: colors.background }}>
+                        {showEmojis && (
+                            <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 10, paddingHorizontal: 16 }}>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                    {commonEmojis.map(emoji => (
+                                        <TouchableOpacity
+                                            key={emoji}
+                                            onPress={() => setMessage(prev => prev + emoji)}
+                                            style={{ marginRight: 20 }}
+                                        >
+                                            <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        {attachment && (
+                            <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                                    {attachment.type?.startsWith('image/') ? (
+                                        <Image source={{ uri: attachment.uri }} style={{ width: 44, height: 44 }} />
+                                    ) : (
+                                        <Feather name="file" size={20} color={colors.textMuted} />
+                                    )}
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }} numberOfLines={1}>{attachment.name}</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted }}>{(attachment.size / 1024).toFixed(1)} KB</Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setAttachment(null)} style={{ padding: 4 }}>
+                                    <Ionicons name="close-circle" size={24} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {replyTo && (
+                            <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, borderLeftWidth: 4, borderLeftColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>{replyTo.sender?.name}</Text>
+                                    <Text numberOfLines={1} style={{ fontSize: 13, color: colors.textMuted }}>
+                                        {replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setReplyTo(null)} style={{ padding: 4 }}>
+                                    <Ionicons name="close-circle" size={24} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'flex-end' }}>
+                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 4, minHeight: 44 }}>
+                                <TextInput
+                                    value={message}
+                                    onChangeText={(text) => {
+                                        setMessage(text);
+                                        if (socket && id && user?.name) {
+                                            socket.emit('typing', { roomId: id, userName: user.name });
+                                        }
+                                    }}
+                                    placeholder="Message..."
+                                    placeholderTextColor={colors.textMuted}
+                                    multiline
+                                    textAlignVertical="center"
+                                    style={{
+                                        flex: 1,
+                                        color: colors.text,
+                                        fontSize: 16,
+                                        marginHorizontal: 8,
+                                        maxHeight: 120,
+                                        paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+                                        minHeight: 36,
+                                        lineHeight: 20
+                                    }}
+                                />
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', paddingBottom: 4 }}>
+                                    <TouchableOpacity onPress={pickDocument} style={{ padding: 4 }}>
+                                        <Feather name="paperclip" size={22} color={colors.textMuted} style={{ transform: [{ rotate: '-45deg' }] }} />
                                     </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        </View>
-                    )}
-
-                    {attachment && (
-                        <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                {attachment.type?.startsWith('image/') ? (
-                                    <Image source={{ uri: attachment.uri }} style={{ width: 44, height: 44 }} />
-                                ) : (
-                                    <Feather name="file" size={20} color={colors.textMuted} />
-                                )}
+                                    <TouchableOpacity onPress={pickImage} style={{ padding: 4, marginLeft: 2 }}>
+                                        <Feather name="image" size={22} color={colors.textMuted} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => takePhoto()} style={{ padding: 4, marginLeft: 2 }}>
+                                        <Feather name="camera" size={22} color={colors.textMuted} />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }} numberOfLines={1}>{attachment.name}</Text>
-                                <Text style={{ fontSize: 11, color: colors.textMuted }}>{(attachment.size / 1024).toFixed(1)} KB</Text>
-                            </View>
-                            <TouchableOpacity onPress={() => setAttachment(null)} style={{ padding: 4 }}>
-                                <Ionicons name="close-circle" size={24} color={colors.textMuted} />
-                            </TouchableOpacity>
-                        </View>
-                    )}
 
-                    {replyTo && (
-                        <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, borderLeftWidth: 4, borderLeftColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>{replyTo.sender?.name}</Text>
-                                <Text numberOfLines={1} style={{ fontSize: 13, color: colors.textMuted }}>
-                                    {replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text}
-                                </Text>
-                            </View>
-                            <TouchableOpacity onPress={() => setReplyTo(null)} style={{ padding: 4 }}>
-                                <Ionicons name="close-circle" size={24} color={colors.textMuted} />
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    <View style={{ paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}>
-                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 0, height: 44 }}>
-                            {/* <TouchableOpacity
-                                onPress={() => setShowEmojis(!showEmojis)}
-                                style={{ padding: 4 }}
+                            <TouchableOpacity
+                                onPress={handleSend}
+                                disabled={isSending || isUploading}
+                                style={{
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: 22,
+                                    backgroundColor: colors.primary,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginLeft: 8,
+                                    opacity: (isSending || isUploading) ? 0.6 : 1,
+                                    alignSelf: 'flex-end'
+                                }}
                             >
-                                <Feather name="smile" size={24} color={showEmojis ? colors.primary : colors.textMuted} />
-                            </TouchableOpacity> */}
-                            <TextInput
-                                value={message}
-                                onChangeText={(text) => {
-                                    setMessage(text);
-                                    if (socket && id && user?.name) {
-                                        socket.emit('typing', { roomId: id, userName: user.name });
-                                    }
-                                }}
-                                placeholder="Message..."
-                                placeholderTextColor={colors.textMuted}
-                                multiline
-                                textAlignVertical="center"
-                                style={{ 
-                                    flex: 1, 
-                                    color: colors.text, 
-                                    fontSize: 16, 
-                                    marginHorizontal: 8, 
-                                    maxHeight: 100, 
-                                    paddingVertical: Platform.OS === 'ios' ? 10 : 0, 
-                                    height: 44, 
-                                    lineHeight: 20 
-                                }}
-                            />
-
-                            <TouchableOpacity onPress={pickDocument} style={{ padding: 4 }}>
-                                <Feather name="paperclip" size={22} color={colors.textMuted} style={{ transform: [{ rotate: '-45deg' }] }} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={pickImage} style={{ padding: 4, marginLeft: 4 }}>
-                                <Feather name="image" size={22} color={colors.textMuted} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => takePhoto()} style={{ padding: 4, marginLeft: 4 }}>
-                                <Feather name="camera" size={22} color={colors.textMuted} />
+                                {isSending || isUploading ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Feather name="send" size={20} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
+                                )}
                             </TouchableOpacity>
                         </View>
-
-                        <TouchableOpacity
-                            onPress={handleSend}
-                            disabled={isUploading}
-                            style={{ width: 44, height: 44, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 8, opacity: isUploading ? 0.6 : 1 }}
-                        >
-                            {isUploading ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                                <Feather name="send" size={20} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
-                            )}
-                        </TouchableOpacity>
                     </View>
-                </View>
+                </Animated.View>
 
                 <ChatCameraModal
                     visible={isCameraVisible}

@@ -47,15 +47,18 @@ export default function ImageAnnotator({ uri, onSave, onCancel }: Props) {
     if (!uri) return;
     Image.getSize(uri, (w, h) => {
       if (!w || !h) return;
-      const availableHeight = SCREEN_HEIGHT - 180;
+      const headerHeight = 60 + insets.top;
+      const footerHeight = 120;
+      const margin = 40;
+      const availableHeight = SCREEN_HEIGHT - (headerHeight + footerHeight + margin);
       const ratio = Math.min(SCREEN_WIDTH / w, availableHeight / h) || 1;
       setImageSize({ width: w * ratio, height: h * ratio });
     }, (err) => {
       console.warn('Failed to get image size in annotator:', err);
-      // Fallback to screen size
-      setImageSize({ width: SCREEN_WIDTH, height: SCREEN_HEIGHT - 180 });
+      const headerHeight = 60 + insets.top;
+      setImageSize({ width: SCREEN_WIDTH, height: SCREEN_HEIGHT - (headerHeight + 160) });
     });
-  }, [uri]);
+  }, [uri, insets.top]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -121,12 +124,15 @@ export default function ImageAnnotator({ uri, onSave, onCancel }: Props) {
       visible 
       transparent={false} 
       animationType="slide" 
-      presentationStyle="fullScreen"
+      presentationStyle="overFullScreen"
       statusBarTranslucent 
       onRequestClose={onCancel}
     >
       <View style={[styles.container, { backgroundColor: '#000' }]}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
+        <View style={[styles.header, { 
+          paddingTop: insets.top,
+          height: 60 + insets.top,
+        }]}>
           <TouchableOpacity 
             onPress={() => {
               if (paths.length > 0) {
@@ -143,7 +149,7 @@ export default function ImageAnnotator({ uri, onSave, onCancel }: Props) {
             <Feather name="x" size={26} color="#fff" />
           </TouchableOpacity>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Edit Photo</Text>
-          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <TouchableOpacity onPress={() => setShowColorPicker(!showColorPicker)} style={[styles.btn, showColorPicker && { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 }]}>
               <Feather name="edit-3" size={22} color={selectedColor} />
             </TouchableOpacity>
@@ -222,13 +228,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 100,
-    paddingTop: 50,
     paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
   },
   btn: {
     padding: 10,

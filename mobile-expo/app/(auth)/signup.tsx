@@ -38,6 +38,8 @@ export default function SignUpScreen() {
     const [showPassword, setShowPassword] = useState(false);
     const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]); // India
     const [error, setError] = useState('');
+    const [timer, setTimer] = useState(60);
+    const [canResend, setCanResend] = useState(false);
 
     // Derived: is the selected country India (the only one supporting phone OTP)
     const isIndian = isIndianCountry(selectedCountry);
@@ -62,6 +64,18 @@ export default function SignUpScreen() {
             handleVerifyPublicToken(publicToken);
         }
     }, [token, publicToken]);
+    
+    useEffect(() => {
+        let interval: any;
+        if (step === 'otp' && timer > 0) {
+            interval = setInterval(() => {
+                setTimer((prev) => prev - 1);
+            }, 1000);
+        } else if (timer === 0) {
+            setCanResend(true);
+        }
+        return () => clearInterval(interval);
+    }, [step, timer]);
 
     const handleVerifyToken = async (t: string) => {
         setIsLoading(true);
@@ -134,6 +148,9 @@ export default function SignUpScreen() {
                 verification_method: effectiveMethod
             });
             setStep('otp');
+            setTimer(60);
+            setCanResend(false);
+            setOtp('');
         } catch (err: any) {
             setError(err.response?.data?.error || "Failed to send OTP. Please try again.");
         } finally {
@@ -453,7 +470,39 @@ export default function SignUpScreen() {
                             <TouchableOpacity onPress={handleVerifyOtp} disabled={otp.length !== 6 || isLoading} style={{ height: 52, borderRadius: 14, backgroundColor: otp.length === 6 ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center', opacity: isLoading ? 0.7 : 1 }}>
                                 {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: otp.length === 6 ? '#fff' : colors.textMuted }}>Verify & Sign Up</Text>}
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setStep('details')}><Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center' }}>← Change Details</Text></TouchableOpacity>
+
+                            <View style={{ alignItems: 'center', gap: 12, marginTop: 10 }}>
+                                <TouchableOpacity 
+                                    onPress={handleSendOtp} 
+                                    disabled={!canResend || isLoading}
+                                >
+                                    <Text style={{ 
+                                        fontSize: 14, 
+                                        color: (canResend && !isLoading) ? colors.primary : colors.textMuted,
+                                        fontWeight: '600'
+                                    }}>
+                                        {isLoading ? "Resending..." : (canResend ? "Resend Code" : `Resend Code in ${timer}s`)}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {verificationMethod === 'phone' && email && (
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setVerificationMethod('email');
+                                            handleSendOtp();
+                                        }}
+                                        disabled={isLoading}
+                                    >
+                                        <Text style={{ fontSize: 13, color: colors.textMuted }}>
+                                            Didn't receive? <Text style={{ color: colors.primary, fontWeight: '600' }}>Send to Email</Text>
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <TouchableOpacity onPress={() => setStep('details')}>
+                                    <Text style={{ fontSize: 14, color: colors.textMuted }}>← Change Details</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
 
