@@ -122,21 +122,12 @@ export default function DashboardScreen() {
     }
   }, [user?.id]);
 
-  // Foreground / background notification tap listener.
-  // Cross-component deduplication is handled by the module-level singleton in navigation.ts,
-  // so a background tap handled here won't double-fire via _layout.tsx's useLastNotificationResponse.
+  // Foreground notification handler (Native Firebase)
+  // This listener specifically handles foreground banner behavior.
+  // Tap interactions are now centrally handled in _layout.tsx.
   useEffect(() => {
     if (!user) return;
 
-    const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
-      const notifId = response.notification.request.identifier;
-      const data = response.notification.request.content.data;
-      const type = data?.type as string;
-      // navigateFromNotification checks the shared singleton — safe against double-firing
-      navigateFromNotification(notifId, type, data, router);
-    });
-
-    // Foreground listener for raw FCM (Option 2)
     let unsubscribeFCM: () => void = () => { };
 
     if (Constants.appOwnership !== 'expo') {
@@ -165,7 +156,6 @@ export default function DashboardScreen() {
     }
 
     return () => {
-      responseListener.remove();
       unsubscribeFCM();
     };
   }, [user?.id]);

@@ -75,6 +75,7 @@ export default function ChatListScreen() {
 
     useFocusEffect(
         useCallback(() => {
+            // Re-fetch rooms when the screen comes into focus
             fetchRooms();
         }, [])
     );
@@ -223,8 +224,10 @@ export default function ChatListScreen() {
             return name.toLowerCase().includes(searchQuery.toLowerCase());
         })
         .sort((a, b) => {
-            const timeA = new Date(a.updatedAt || a.createdAt).getTime();
-            const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+            const lastMsgA = a.chat_messages?.[0]?.createdAt;
+            const lastMsgB = b.chat_messages?.[0]?.createdAt;
+            const timeA = new Date(lastMsgA || a.updatedAt || a.createdAt).getTime();
+            const timeB = new Date(lastMsgB || b.updatedAt || b.createdAt).getTime();
             return timeB - timeA;
         });
 
