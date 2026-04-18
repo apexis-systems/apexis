@@ -3,7 +3,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect, useRef } from 'react';
-import { DeviceEventEmitter, LogBox, TextInput } from 'react-native';
+import { DeviceEventEmitter, LogBox, Platform, TextInput, Modal, ActivityIndicator, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import { Text } from '@/components/ui/AppText';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -31,29 +32,171 @@ import * as Notifications from 'expo-notifications';
 import { navigateFromNotification } from '@/utils/navigation';
 
 function RootLayoutNav() {
-  const { isLoggedIn, isLoading: isAuthLoading, user, isPendingName } = useAuth();
+  const { isLoggedIn, isLoading: isAuthLoading, user, logout, isPendingName } = useAuth();
   const { usageData } = useUsage();
   const segments = useSegments();
+  const { colors } = useTheme();
   const router = useRouter();
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [subscriptionLocked, setSubscriptionLocked] = useState(false);
-  const response = Notifications.useLastNotificationResponse();
+  const [isProcessingInvitation, setIsProcessingInvitation] = useState(false);
+  const nativeUrl = Linking.useURL();
+  const [pendingNotification, setPendingNotification] = useState<any>(null);
+  const lastProcessedUrl = useRef<string | null>(null);
+  const lastProcessedNotifId = useRef<string | null>(null);
 
-  // Handles cold-boot (app killed) notification taps.
-  // Background taps are handled by addNotificationResponseReceivedListener in index.tsx.
-  // Cross-component deduplication is managed by the module-level singleton in navigation.ts.
+  // Hardened Deep Link Watcher (Reacts to useURL changes on background resume)
   useEffect(() => {
-    if (!response || !isLoggedIn || isAuthLoading || !hasSeenOnboarding || subscriptionLocked) return;
+    if (!nativeUrl) return;
+    
+    // LOOP GUARD: Stop if we've already handled this exact URL string
+    if (nativeUrl === lastProcessedUrl.current) return;
+    lastProcessedUrl.current = nativeUrl;
 
-    const notifId = response.notification.request.identifier;
-    const data = response.notification.request.content.data;
-    const type = data?.type as string;
+    const handleDeepLink = async (url: string) => {
+      console.log('[DEBUG] Incoming URL detected:', url);
+      
+      const parsed = Linking.parse(url);
+      const { code, role } = parsed.queryParams || {};
 
-    // Delay to ensure the navigator stack is fully mounted before pushing (critical for iOS cold boot)
-    setTimeout(() => {
-      navigateFromNotification(notifId, type, data, router);
-    }, 800);
-  }, [response, isLoggedIn, isAuthLoading, hasSeenOnboarding, subscriptionLocked]);
+      const isInvitation = code && role && (url.includes('login-redirect') || url.includes('/login'));
+
+      if (isInvitation) {
+        console.log('[NAV] Invitation deep-link matched! Redirection starting...', { code, role });
+        
+        if (isLoggedIn) {
+          setIsProcessingInvitation(true);
+          try {
+            await logout();
+            // Critical: Give state time to settle
+            await new Promise(r => setTimeout(r, 200));
+          } catch (e) {
+            console.error('[AUTH] Invitation logout failed:', e);
+          } finally {
+            setIsProcessingInvitation(false);
+          }
+        }
+
+        router.replace({
+          pathname: '/(auth)/login',
+          params: { code, role }
+        });
+      }
+    };
+
+    handleDeepLink(nativeUrl);
+  }, [nativeUrl, isLoggedIn, logout]);
+
+  // 1. Listen for notification taps while the app is running (foreground/background)
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      const type = data?.type as string;
+      const id = response.notification.request.identifier;
+
+      // GUARD: Prevent double-fires
+      if (id && id === lastProcessedNotifId.current) return;
+      if (id) lastProcessedNotifId.current = id;
+
+      console.log('[NAV] Notification received → queued', id);
+      setPendingNotification({ id, data, type });
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  // 2. Check if the app was opened by a notification (cold start)
+  useEffect(() => {
+    const handleColdStart = async () => {
+      const response = await Notifications.getLastNotificationResponseAsync();
+      if (!response) return;
+
+      const data = response.notification.request.content.data;
+      const type = data?.type as string;
+      const id = response.notification.request.identifier;
+
+      // GUARD: Prevent double-fires from cold start catch-up
+      if (id && id === lastProcessedNotifId.current) return;
+      if (id) lastProcessedNotifId.current = id;
+
+      console.log('[NAV] Cold start → queued', id);
+      setPendingNotification({ id, data, type });
+    };
+    handleColdStart();
+  }, []);
+
+  // 3. Process the queued notification once auth state is ready
+  useEffect(() => {
+    if (!pendingNotification) return;
+    if (isAuthLoading) return;
+    if (!isLoggedIn) return;
+    if (!hasSeenOnboarding) return;
+    if (subscriptionLocked) return;
+
+    console.log('[NAV] Processing notification', pendingNotification.id);
+    navigateFromNotification(
+      pendingNotification.id,
+      pendingNotification.type,
+      pendingNotification.data,
+      router
+    );
+    
+    // Clear the queue after processing
+    setPendingNotification(null);
+  }, [pendingNotification, isAuthLoading, isLoggedIn, hasSeenOnboarding, subscriptionLocked]);
+
+  //   // Handles cold-boot (app killed) notification taps.
+  //   useEffect(() => {
+  //   const handleColdStart = async () => {
+  //     const response = await Notifications.getLastNotificationResponseAsync();
+
+  //     if (!response) return;
+
+  //     const notifId = response.notification.request.identifier;
+  //     const data = response.notification.request.content.data;
+  //     const type = data?.type as string;
+
+  //     console.log('[NAV] Cold start notification:', notifId);
+
+  //     navigateFromNotification(notifId, type, data, router);
+  //   };
+
+  //   handleColdStart();
+  // }, []);
+
+
+
+  //   useEffect(() => {
+  //     if (!response || !isLoggedIn || isAuthLoading || !hasSeenOnboarding || subscriptionLocked) return;
+
+  //     const notifId = response.notification.request.identifier;
+  //     const data = response.notification.request.content.data;
+  //     const type = data?.type as string;
+
+  //     // Increased delay for iOS cold-boot to ensure stack is fully ready
+  //     const delay = Platform.OS === 'ios' ? 1500 : 800;
+
+  //     setTimeout(() => {
+  //       console.log(`[NAV] Cold boot navigation triggered for ${notifId}`);
+  //       navigateFromNotification(notifId, type, data, router);
+  //     }, delay);
+  //   }, [response, isLoggedIn, isAuthLoading, hasSeenOnboarding, subscriptionLocked]);
+
+  //   // Handles interaction (tap) when the app is in background or foreground
+  //   useEffect(() => {
+  //     if (!isLoggedIn || isAuthLoading || !hasSeenOnboarding || subscriptionLocked) return;
+
+  //     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+  //       const notifId = response.notification.request.identifier;
+  //       const data = response.notification.request.content.data;
+  //       const type = data?.type as string;
+
+  //       console.log(`[NAV] Notification interaction detected: ${notifId}`);
+  //       navigateFromNotification(notifId, type, data, router);
+  //     });
+
+  //     return () => subscription.remove();
+  //   }, [isLoggedIn, isAuthLoading, hasSeenOnboarding, subscriptionLocked]);
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -173,12 +316,23 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack>
-      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="subscription" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <Stack>
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="subscription" options={{ headerShown: false }} />
+      </Stack>
+      <Modal visible={isProcessingInvitation} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={{ marginTop: 20, fontSize: 16, fontWeight: '600', color: colors.text }}>Processing your invitation...</Text>
+            <Text style={{ marginTop: 8, fontSize: 13, color: colors.textMuted }}>Please wait a moment</Text>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
