@@ -23,6 +23,7 @@ import {
     deleteSnagApi,
 } from "@/services/snagService";
 import FullScreenImageModal from "@/components/shared/FullScreenImageModal";
+import * as ScreenCapture from 'expo-screen-capture';
 
 interface Props {
     project: Project;
@@ -41,6 +42,16 @@ const STATUS_CYCLE: SnagStatus[] = ["amber", "green", "red"];
 
 export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const { colors } = useTheme();
+
+    useFocusEffect(
+        useCallback(() => {
+            ScreenCapture.preventScreenCaptureAsync('snags-section');
+            return () => {
+                ScreenCapture.allowScreenCaptureAsync('snags-section');
+            };
+        }, [])
+    );
+
     const { user } = useAuth();
     const router = useRouter();
     const projectId = project.id;
