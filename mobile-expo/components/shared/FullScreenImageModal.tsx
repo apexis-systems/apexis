@@ -19,11 +19,14 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
     const insets = useSafeAreaInsets();
     
     React.useEffect(() => {
+        // Temporarily disabling for testing iOS blackout issue
+        /*
         if (visible) {
             ScreenCapture.preventScreenCaptureAsync('image-preview');
         } else {
             ScreenCapture.allowScreenCaptureAsync('image-preview');
         }
+        */
         return () => {
             ScreenCapture.allowScreenCaptureAsync('image-preview');
         };
@@ -34,14 +37,16 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
     return (
         <Modal
             visible={visible}
-            transparent={false}
+            transparent={true}
             animationType="fade"
             statusBarTranslucent={true}
-            presentationStyle="fullScreen"
+            presentationStyle="overFullScreen"
             onRequestClose={onClose}
         >
-            <GestureHandlerRootView style={{ flex: 1 }}>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                 <View style={styles.container}>
+                    <ZoomableImage uri={uri} />
+
                     <TouchableOpacity
                         onPress={onClose}
                         style={[styles.closeButton, { top: Math.max(insets.top, 20) }]}
@@ -58,8 +63,6 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
                             <Feather name="edit-2" size={20} color="#fff" />
                         </TouchableOpacity>
                     )}
-
-                    <ZoomableImage uri={uri} />
                 </View>
             </GestureHandlerRootView>
         </Modal>
@@ -80,7 +83,7 @@ const styles = StyleSheet.create({
     closeButton: {
         position: 'absolute',
         right: 20,
-        zIndex: 10,
+        zIndex: 100,
         backgroundColor: 'rgba(0,0,0,0.5)',
         width: 44,
         height: 44,
@@ -91,7 +94,7 @@ const styles = StyleSheet.create({
  ,
     editButton: {
         position: 'absolute',
-        zIndex: 10,
+        zIndex: 100,
         backgroundColor: 'rgba(0,0,0,0.5)',
         width: 44,
         height: 44,

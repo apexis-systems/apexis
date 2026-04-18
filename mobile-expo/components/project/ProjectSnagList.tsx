@@ -3,12 +3,12 @@ import {
     View,
     TouchableOpacity,
     ScrollView,
-    Image,
     ActivityIndicator,
     Alert,
     BackHandler,
     RefreshControl,
 } from "react-native";
+import { Image } from "expo-image";
 import { Text } from "@/components/ui/AppText";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -296,9 +296,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             borderColor: colors.border,
                                         }}>
                                         <Image
-                                            source={{ uri: snag.photoDownloadUrl || snag.photo_url }}
+                                            source={snag.photoDownloadUrl || snag.photo_url}
                                             style={{ width: "100%", height: "100%" }}
-                                            resizeMode="cover"
+                                            contentFit="cover"
+                                            transition={200}
                                         />
                                     </TouchableOpacity>
                                 ) : null}

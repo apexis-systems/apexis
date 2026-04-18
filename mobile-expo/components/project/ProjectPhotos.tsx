@@ -1,6 +1,7 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Image, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl
 } from 'react-native';
+import { Image } from 'expo-image';
 import { FlatList } from 'react-native-gesture-handler';
 import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
@@ -752,7 +753,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             zIndex: 5,
                                         }}
                                     />
-                                    <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                    <Image 
+                                        source={photo.downloadUrl} 
+                                        style={{ width: '100%', height: '100%' }} 
+                                        contentFit="cover"
+                                        transition={200}
+                                    />
+
                                     {isSelected && (
                                         <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                             <Feather name="check" size={10} color="#fff" />
