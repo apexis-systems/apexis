@@ -11,9 +11,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apexis.ios",
-      "buildNumber": "26",
+      "buildNumber": "27",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "associatedDomains": ["applinks:web.apexis.in"],
+      "associatedDomains": [
+        "applinks:web.apexis.in"
+      ],
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "APEXISpro needs access to your photo library to attach photos to snags and upload site images.",
         "NSPhotoLibraryAddUsageDescription": "APEXISpro needs permission to save downloaded photos to your library.",
@@ -26,7 +28,7 @@
     },
     "android": {
       "package": "com.apexis.app",
-      "versionCode": 26,
+      "versionCode": 27,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -48,7 +50,10 @@
               "pathPrefix": "/auth/onboarding"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "softwareKeyboardLayoutMode": "resize",
@@ -79,7 +84,12 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      ["expo-router", { "origin": "https://web.apexis.in" }],
+      [
+        "expo-router",
+        {
+          "origin": "https://web.apexis.in"
+        }
+      ],
       [
         "expo-splash-screen",
         {

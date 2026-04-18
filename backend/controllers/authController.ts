@@ -5,6 +5,7 @@ import { users, organizations, project_members, projects } from "../models/index
 import { Op } from "sequelize";
 import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
+import { buildForgotPasswordOtpEmail } from "../utils/emailTemplates.ts";
 import { normalizePhone, isValidPhone, sendOTP, isIndianPhone } from "../utils/sms.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { getIO } from "../socket.ts";
@@ -550,7 +551,17 @@ export const forgotPasswordRequestOtp = async (req: Request, res: Response) => {
         await redis.set(`otp:forgot:${identifier}`, otpHash, "EX", 600);
 
         if (normalizedEmail) {
-            await sendEmail(normalizedEmail, "Password Reset OTP", `Your OTP for password reset is: ${otp}`);
+            const emailData = buildForgotPasswordOtpEmail(user.name, otp);
+            await sendEmail(
+                normalizedEmail,
+                emailData.subject,
+                emailData.html,
+                {
+                    isHtml: true,
+                    text: emailData.text,
+                    attachments: emailData.attachments,
+                }
+            );
             res.status(200).json({ message: "OTP sent to email" });
         } else if (normalizedPhone) {
             await sendOTP(normalizedPhone, otp);
