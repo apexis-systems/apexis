@@ -2,7 +2,7 @@
   "expo": {
     "name": "APEXISpro",
     "slug": "apexis",
-    "version": "1.5.2",
+    "version": "1.5.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "apexis",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apexis.ios",
-      "buildNumber": "25",
+      "buildNumber": "26",
       "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": ["applinks:web.apexis.in"],
       "infoPlist": {
@@ -26,7 +26,7 @@
     },
     "android": {
       "package": "com.apexis.app",
-      "versionCode": 25,
+      "versionCode": 26,
       "intentFilters": [
         {
           "action": "VIEW",

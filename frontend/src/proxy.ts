@@ -9,7 +9,13 @@ export function proxy(request: NextRequest) {
     const isAuthRoute = pathname === '/login' || pathname === '/signup' || pathname.startsWith('/auth/');
 
     // Allow public assets
-    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname === '/favicon.ico' || pathname.startsWith('/app-icon.png')) {
+    if (
+        pathname.startsWith('/_next') || 
+        pathname.startsWith('/api') || 
+        pathname === '/favicon.ico' || 
+        pathname.startsWith('/app-icon.png') ||
+        pathname.startsWith('/.well-known/')
+    ) {
         return NextResponse.next();
     }
 
