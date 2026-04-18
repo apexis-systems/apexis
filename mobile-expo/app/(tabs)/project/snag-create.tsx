@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import {
-    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform, KeyboardAvoidingView, StyleSheet,
+    View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Platform, KeyboardAvoidingView, StyleSheet, Dimensions
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +21,9 @@ import ImageAnnotator from '@/components/common/ImageAnnotator';
 import * as ScreenCapture from 'expo-screen-capture';
 
 type Step = 'camera' | 'details';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
 
 export default function SnagCreateScreen() {
     useFocusEffect(
@@ -123,10 +126,23 @@ export default function SnagCreateScreen() {
             const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
             if (!photo?.uri) return;
 
-            // Fix orientation for iOS
+            // Enforce 4:3 crop for iOS to match preview
+            const { width, height } = photo;
+            const manipActions: any[] = [];
+            if (Platform.OS === 'ios') {
+                const targetRatio = 3 / 4;
+                const currentRatio = width / height;
+                if (Math.abs(currentRatio - targetRatio) > 0.01) {
+                    const newHeight = Math.min(height, Math.floor(width / targetRatio));
+                    const originY = Math.max(0, Math.floor((height - newHeight) / 2));
+                    manipActions.push({ crop: { originX: 0, originY, width, height: newHeight } });
+                }
+            }
+            manipActions.push({ resize: { width: 1920 } });
+
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
-                [{ resize: { width: 1920 } }],
+                manipActions,
                 { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
             );
 
@@ -207,8 +223,20 @@ export default function SnagCreateScreen() {
                 {cameraPermission === null ? (
                     <View style={{ flex: 1, backgroundColor: '#000' }} />
                 ) : (cameraPermission.granted && isFocused) ? (
-                    <View style={{ flex: 1 }}>
-                        <CameraView style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
+                    <View style={{ flex: 1, backgroundColor: '#000' }}>
+                        <View style={{
+                            width: SCREEN_W,
+                            height: CAMERA_HEIGHT,
+                            overflow: 'hidden',
+                            marginTop: Math.max(insets.top, 20) + 60, // Match RFI layout
+                        }}>
+                            <CameraView 
+                                style={StyleSheet.absoluteFill} 
+                                facing="back" 
+                                ref={cameraRef} 
+                                ratio="4:3"
+                            />
+                        </View>
 
                         {/* Header Overlay */}
                         <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>

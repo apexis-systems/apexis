@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
-  Modal, ScrollView, TextInput, Alert, Image, StyleSheet, Platform, RefreshControl
+  Modal, ScrollView, TextInput, Alert, Image, StyleSheet, Platform, RefreshControl, Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
@@ -35,12 +35,18 @@ const statusConfig = {
   overdue: { icon: 'alert-triangle', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', label: 'Overdue' },
 };
 
+const { width: SCREEN_W } = Dimensions.get('window');
+const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
+
 export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
   const { colors } = useTheme();
 
   useFocusEffect(
     useCallback(() => {
+      // Temporarily disabling for testing iOS modal issues
+      /*
       ScreenCapture.preventScreenCaptureAsync('rfi-section');
+      */
       return () => {
         ScreenCapture.allowScreenCaptureAsync('rfi-section');
       };
@@ -311,10 +317,23 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
       if (!photo?.uri) return;
 
-      // Fix orientation and format for iOS compatibility
+      // Enforce 4:3 crop for iOS to match preview
+      const { width, height } = photo;
+      const manipActions: any[] = [];
+      if (Platform.OS === 'ios') {
+        const targetRatio = 3 / 4;
+        const currentRatio = width / height;
+        if (Math.abs(currentRatio - targetRatio) > 0.01) {
+          const newHeight = Math.min(height, Math.floor(width / targetRatio));
+          const originY = Math.max(0, Math.floor((height - newHeight) / 2));
+          manipActions.push({ crop: { originX: 0, originY, width, height: newHeight } });
+        }
+      }
+      manipActions.push({ resize: { width: 1920 } });
+
       const manipulated = await ImageManipulator.manipulateAsync(
         photo.uri,
-        [{ resize: { width: 1920 } }],
+        manipActions,
         { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
       );
 
@@ -622,7 +641,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </View>
                   </View>
 
-                  {(selectedRFI?.photoDownloadUrls?.length ?? 0) > 0 && (
+                  {(selectedRFI?.photoDownloadUrls?.length || 0) > 0 && (
                     <View style={{ marginBottom: 20 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>Attachments</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
@@ -730,6 +749,32 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
               </ScrollView>
             )}
           </View>
+          
+          {/* Nested Photo Viewer for iOS support inside detail modal */}
+          <FullScreenImageModal
+            visible={!!previewImage}
+            onClose={() => setPreviewImage(null)}
+            uri={previewImage}
+            onEdit={(u) => { if (u) setAnnotatingRemoteUri(u); }}
+          />
+
+          {/* Nested Annotator for remote/existing RFI images */}
+          {annotatingRemoteUri && (
+            <ImageAnnotator
+              uri={annotatingRemoteUri}
+              onSave={(newUri) => {
+                if (selectedRFI) {
+                  const newUrls = (selectedRFI.photoDownloadUrls || []).map(u => (u === annotatingRemoteUri ? newUri : u));
+                  setSelectedRFI({ ...selectedRFI, photoDownloadUrls: newUrls });
+                  setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, photoDownloadUrls: newUrls } : r));
+                  if (previewImage === annotatingRemoteUri) setPreviewImage(newUri);
+                }
+                setAnnotatingRemoteUri(null);
+              }}
+              onCancel={() => setAnnotatingRemoteUri(null)}
+            />
+          )}
+
         </View>
       </Modal>
 
@@ -998,7 +1043,20 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 <View style={{ flex: 1 }}>
                   {cameraPermission?.granted && cameraReady ? (
                     <>
-                      <CameraView key={cameraSessionKey} style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
+                      <View style={{
+                        width: SCREEN_W,
+                        height: CAMERA_HEIGHT,
+                        overflow: 'hidden',
+                        marginTop: Math.max(insets.top, 20) + 60, // Place after header
+                      }}>
+                        <CameraView
+                          key={cameraSessionKey}
+                          style={StyleSheet.absoluteFill}
+                          facing="back"
+                          ref={cameraRef}
+                          ratio="4:3"
+                        />
+                      </View>
 
                       {/* Header Overlay */}
                       <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -1098,6 +1156,20 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 </View>
               </View>
             </Modal>
+            {/* Nested Image annotator for captured photo */}
+            {annotatingImageIndex !== null && (
+              <ImageAnnotator
+                uri={selectedImages[annotatingImageIndex]}
+                onSave={(newUri) => {
+                  const newImages = [...selectedImages];
+                  newImages[annotatingImageIndex] = newUri;
+                  setSelectedImages(newImages);
+                  setAnnotatingImageIndex(null);
+                }}
+                onCancel={() => setAnnotatingImageIndex(null)}
+              />
+            )}
+
           </View>
         </View>
       </Modal>
@@ -1178,13 +1250,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           </View>
         </TouchableOpacity>
       </Modal>
-      {/* Photo Preview Modal */}
-      <FullScreenImageModal
-        visible={!!previewImage}
-        onClose={() => setPreviewImage(null)}
-        uri={previewImage}
-        onEdit={(u) => { if (u) setAnnotatingRemoteUri(u); }}
-      />
+      {/* Removed root-level modal for RFI as it needs to be nested for iOS compatibility */}
 
       {/* Image Annotator */}
       {annotatingImageIndex !== null && (

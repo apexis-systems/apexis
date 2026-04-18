@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dimensions, Image } from 'react-native';
+import { Dimensions, Image, ActivityIndicator, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
@@ -22,6 +22,7 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
     const savedTranslateY = useSharedValue(0);
 
     const [isZoomed, setIsZoomed] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     const notifyZoom = (active: boolean) => {
         setIsZoomed(active);
@@ -106,7 +107,18 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
     return (
         <GestureDetector gesture={all}>
             <Animated.View style={[{ width, height, justifyContent: 'center', alignItems: 'center' }, animatedStyle]} collapsable={false}>
-                <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                <Image 
+                    source={{ uri }} 
+                    style={{ width: '100%', height: '100%' }} 
+                    resizeMode="contain" 
+                    onLoadStart={() => setLoading(true)}
+                    onLoadEnd={() => setLoading(false)}
+                />
+                {loading && (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)' }}>
+                        <ActivityIndicator color="#fff" size="large" />
+                    </View>
+                )}
             </Animated.View>
         </GestureDetector>
     );
