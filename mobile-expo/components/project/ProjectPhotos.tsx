@@ -20,6 +20,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ScreenCapture from 'expo-screen-capture';
 
 // Removed local ZoomableImage
 
@@ -27,6 +28,14 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectPhotos({ project, user, initialFolderId, initialFileId }: { project: any; user: any; initialFolderId?: string; initialFileId?: string }) {
     const { colors } = useTheme();
+    useFocusEffect(
+        useCallback(() => {
+            ScreenCapture.preventScreenCaptureAsync('photos-section');
+            return () => {
+                ScreenCapture.allowScreenCaptureAsync('photos-section');
+            };
+        }, [])
+    );
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);

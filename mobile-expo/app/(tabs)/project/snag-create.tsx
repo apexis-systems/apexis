@@ -18,10 +18,20 @@ import { Modal, BackHandler } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { parseApiError } from '@/helpers/apiError';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
+import * as ScreenCapture from 'expo-screen-capture';
 
 type Step = 'camera' | 'details';
 
 export default function SnagCreateScreen() {
+    useFocusEffect(
+        useCallback(() => {
+            ScreenCapture.preventScreenCaptureAsync('snag-create-screen');
+            return () => {
+                ScreenCapture.allowScreenCaptureAsync('snag-create-screen');
+            };
+        }, [])
+    );
+
     const { projectId } = useLocalSearchParams<{ projectId: string }>();
     const router = useRouter();
     const navigation = useNavigation();

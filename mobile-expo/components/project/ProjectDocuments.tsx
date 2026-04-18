@@ -14,11 +14,22 @@ import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import { WebView } from 'react-native-webview';
 import { formatFileSize } from '@/helpers/format';
+import * as ScreenCapture from 'expo-screen-capture';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectDocuments({ project, user, initialFolderId, initialFileId }: { project: any, user: any, initialFolderId?: string, initialFileId?: string }) {
     const { colors } = useTheme();
+
+    useFocusEffect(
+        useCallback(() => {
+            ScreenCapture.preventScreenCaptureAsync('docs-section');
+            return () => {
+                ScreenCapture.allowScreenCaptureAsync('docs-section');
+            };
+        }, [])
+    );
+
     const router = useRouter();
     const [docs, setDocs] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);

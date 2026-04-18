@@ -3,6 +3,7 @@ import { View, Modal, TouchableOpacity, Image, StyleSheet, Dimensions } from 're
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as ScreenCapture from 'expo-screen-capture';
 import ZoomableImage from './ZoomableImage';
 
 interface Props {
@@ -16,6 +17,17 @@ const { width, height } = Dimensions.get('window');
 
 export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: Props) {
     const insets = useSafeAreaInsets();
+    
+    React.useEffect(() => {
+        if (visible) {
+            ScreenCapture.preventScreenCaptureAsync('image-preview');
+        } else {
+            ScreenCapture.allowScreenCaptureAsync('image-preview');
+        }
+        return () => {
+            ScreenCapture.allowScreenCaptureAsync('image-preview');
+        };
+    }, [visible]);
 
     if (!uri) return null;
 
