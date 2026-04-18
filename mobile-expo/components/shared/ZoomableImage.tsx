@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Dimensions, Image, ActivityIndicator, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Dimensions, ActivityIndicator, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Image } from 'expo-image';
+import { Feather } from '@expo/vector-icons';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -22,7 +24,20 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
     const savedTranslateY = useSharedValue(0);
 
     const [isZoomed, setIsZoomed] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [hasError, setHasError] = useState(false);
+
+    // Reset state when URI changes
+    useEffect(() => {
+        setHasError(false);
+        // Only show loader if we think it might take a moment.
+        // We'll let onLoadStart trigger it for real network loads.
+        const timer = setTimeout(() => {
+            setLoading(false); // Safety timeout
+        }, 8000);
+        
+        return () => clearTimeout(timer);
+    }, [uri]);
 
     const notifyZoom = (active: boolean) => {
         setIsZoomed(active);
@@ -108,15 +123,38 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
         <GestureDetector gesture={all}>
             <Animated.View style={[{ width, height, justifyContent: 'center', alignItems: 'center' }, animatedStyle]} collapsable={false}>
                 <Image 
-                    source={{ uri }} 
+                    key={uri}
+                    source={uri} 
                     style={{ width: '100%', height: '100%' }} 
-                    resizeMode="contain" 
-                    onLoadStart={() => setLoading(true)}
-                    onLoadEnd={() => setLoading(false)}
+                    contentFit="contain"
+                    onLoadStart={() => {
+                        // Use a flag to avoid flashing loader for cached images
+                        setLoading(true);
+                    }}
+                    onLoad={() => {
+                        setLoading(false);
+                        setHasError(false);
+                    }}
+                    onError={() => {
+                        setLoading(false);
+                        setHasError(true);
+                    }}
+                    // standard fallback
+                    transition={200}
                 />
+                
                 {loading && (
-                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)' }}>
+                    <View style={{ position: 'absolute', zIndex: 10, justifyContent: 'center', alignItems: 'center' }}>
                         <ActivityIndicator color="#fff" size="large" />
+                    </View>
+                )}
+
+                {hasError && !loading && (
+                    <View style={{ position: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
+                        <Feather name="image" size={48} color="rgba(255,255,255,0.3)" />
+                        <View style={{ marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
+                            <ActivityIndicator size="small" color="#fff" />
+                        </View>
                     </View>
                 )}
             </Animated.View>

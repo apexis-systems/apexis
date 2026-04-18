@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
-  Modal, ScrollView, TextInput, Alert, Image, StyleSheet, Platform, RefreshControl, Dimensions
+  Modal, ScrollView, TextInput, Alert, StyleSheet, Platform, RefreshControl, Dimensions
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
@@ -43,10 +44,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
   useFocusEffect(
     useCallback(() => {
-      // Temporarily disabling for testing iOS modal issues
-      /*
       ScreenCapture.preventScreenCaptureAsync('rfi-section');
-      */
       return () => {
         ScreenCapture.allowScreenCaptureAsync('rfi-section');
       };
@@ -648,7 +646,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         {(selectedRFI?.photoDownloadUrls || []).map((url, idx) => (
                           <View key={idx} style={{ position: 'relative' }}>
                             <TouchableOpacity onPress={() => setPreviewImage(url)}>
-                              <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 12 }} />
+                              <Image 
+                                source={url} 
+                                style={{ width: 120, height: 120, borderRadius: 12 }} 
+                                contentFit="cover"
+                                transition={200}
+                              />
                             </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => setAnnotatingRemoteUri(url)}
