@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-    View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+    View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Pressable, TextInput as RNTextInput,
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { forgotPasswordRequestOtp, forgotPasswordVerifyOtp, resetPassword } from '@/services/authService';
 import CountryCodePicker, { countries, Country, isIndianCountry } from '@/components/CountryCodePicker';
+import { useRef, useEffect } from 'react';
 
 type Step = 'email' | 'otp' | 'reset';
 
@@ -22,9 +23,24 @@ export default function ForgotPasswordScreen() {
     const [resetToken, setResetToken] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [timer, setTimer] = useState(60);
+    const [canResend, setCanResend] = useState(false);
+    const otpRef = useRef<RNTextInput>(null);
 
     const router = useRouter();
     const { colors } = useTheme();
+
+    useEffect(() => {
+        let interval: any;
+        if (step === 'otp' && timer > 0) {
+            interval = setInterval(() => {
+                setTimer((prev) => prev - 1);
+            }, 1000);
+        } else if (timer === 0) {
+            setCanResend(true);
+        }
+        return () => clearInterval(interval);
+    }, [step, timer]);
 
     const getNormalizedIdentifier = () => {
         const isEmail = identifier.includes('@');
@@ -62,6 +78,9 @@ export default function ForgotPasswordScreen() {
         try {
             await forgotPasswordRequestOtp({ ...authData, role: 'admin' });
             setStep('otp');
+            setTimer(60);
+            setCanResend(false);
+            setOtp('');
             Alert.alert("Success", `OTP sent to your ${authData.email ? 'email' : 'phone number'}`);
         } catch (error: any) {
             Alert.alert("Error", error.response?.data?.error || "Failed to send OTP");
@@ -208,48 +227,92 @@ export default function ForgotPasswordScreen() {
                     {step === 'otp' && (
                         <View>
                             <View style={{ marginBottom: 20 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, textAlign: 'center', marginBottom: 12 }}>
                                     Verification Code
                                 </Text>
-                                <TextInput
-                                    value={otp}
-                                    onChangeText={setOtp}
-                                    placeholder="123456"
-                                    placeholderTextColor={colors.textMuted}
-                                    keyboardType="number-pad"
-                                    maxLength={6}
-                                    style={{
-                                        height: 56,
-                                        borderRadius: 12,
-                                        backgroundColor: colors.surface,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        color: colors.text,
-                                        paddingHorizontal: 14,
-                                        fontSize: 24,
-                                        textAlign: 'center',
-                                        letterSpacing: 8,
-                                        fontWeight: 'bold',
-                                    }}
-                                />
+                                
+                                <Pressable 
+                                    onPress={() => otpRef.current?.focus()}
+                                    style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 20 }}
+                                >
+                                    {Array.from({ length: 6 }).map((_, i) => (
+                                        <View 
+                                            key={i} 
+                                            pointerEvents="none" 
+                                            style={{ 
+                                                width: 44, 
+                                                height: 52, 
+                                                borderRadius: 10, 
+                                                backgroundColor: colors.surface, 
+                                                borderWidth: 2, 
+                                                borderColor: otp[i] ? colors.primary : colors.border, 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center' 
+                                            }}
+                                        >
+                                            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>{otp[i] || ''}</Text>
+                                        </View>
+                                    ))}
+                                    <RNTextInput 
+                                        ref={otpRef}
+                                        value={otp} 
+                                        onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, '').slice(0, 6))} 
+                                        keyboardType="number-pad" 
+                                        maxLength={6} 
+                                        style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0 }} 
+                                        autoFocus 
+                                    />
+                                </Pressable>
                             </View>
+
                             <TouchableOpacity
                                 onPress={handleVerifyOtp}
-                                disabled={isLoading}
+                                disabled={otp.length !== 6 || isLoading}
                                 style={{
                                     height: 48,
                                     borderRadius: 12,
-                                    backgroundColor: colors.primary,
+                                    backgroundColor: otp.length === 6 ? colors.primary : colors.border,
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     opacity: isLoading ? 0.7 : 1,
                                 }}
                             >
-                                {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 15, fontWeight: '600', color: '#fff' }}>Verify Code</Text>}
+                                {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 15, fontWeight: '600', color: otp.length === 6 ? '#fff' : colors.textMuted }}>Verify Code</Text>}
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setStep('email')} style={{ marginTop: 16, alignItems: 'center' }}>
-                                <Text style={{ color: colors.textMuted, fontSize: 14 }}>Use a different account</Text>
-                            </TouchableOpacity>
+
+                            <View style={{ alignItems: 'center', gap: 14, marginTop: 20 }}>
+                                <TouchableOpacity 
+                                    onPress={handleRequestOtp} 
+                                    disabled={!canResend || isLoading}
+                                >
+                                    <Text style={{ 
+                                        fontSize: 14, 
+                                        color: (canResend && !isLoading) ? colors.primary : colors.textMuted,
+                                        fontWeight: '600'
+                                    }}>
+                                        {isLoading ? "Resending..." : (canResend ? "Resend Code" : `Resend Code in ${timer}s`)}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {!identifier.includes('@') && (
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setStep('email');
+                                            setIdentifier('');
+                                            Alert.alert("Switch to Email", "Please enter your registered email address.");
+                                        }}
+                                        disabled={isLoading}
+                                    >
+                                        <Text style={{ fontSize: 13, color: colors.textMuted }}>
+                                            Didn't receive? <Text style={{ color: colors.primary, fontWeight: '600' }}>Receive via Mail</Text>
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <TouchableOpacity onPress={() => setStep('email')} style={{ alignItems: 'center' }}>
+                                    <Text style={{ color: colors.textMuted, fontSize: 14 }}>Use a different account</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
 
