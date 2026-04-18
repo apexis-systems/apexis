@@ -653,12 +653,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 transition={200}
                               />
                             </TouchableOpacity>
-                            <TouchableOpacity
+                            {/* <TouchableOpacity
                               onPress={() => setAnnotatingRemoteUri(url)}
                               style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 10 }}
                             >
                               <Feather name="edit-2" size={14} color="#fff" />
-                            </TouchableOpacity>
+                            </TouchableOpacity> */}
                           </View>
                         ))}
                       </ScrollView>

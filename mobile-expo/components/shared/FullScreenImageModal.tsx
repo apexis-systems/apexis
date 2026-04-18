@@ -55,14 +55,14 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
                     </TouchableOpacity>
 
                     {/* Edit button (optional) */}
-                    {onEdit && (
+                    {/* {onEdit && (
                         <TouchableOpacity
                             onPress={() => onEdit(uri!)}
                             style={[styles.editButton, { top: Math.max(insets.top, 20), right: 80 }]}
                         >
                             <Feather name="edit-2" size={20} color="#fff" />
                         </TouchableOpacity>
-                    )}
+                    )} */}
                 </View>
             </GestureHandlerRootView>
         </Modal>
