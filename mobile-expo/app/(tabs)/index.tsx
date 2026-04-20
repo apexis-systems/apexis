@@ -62,6 +62,7 @@ export default function DashboardScreen() {
   const [profileUri, setProfileUri] = useState<string | null>(null);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isSwitching, setIsSwitching] = useState<string | null>(null);
+  const [sortType, setSortType] = useState<'name' | 'newest' | 'oldest'>('name');
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -113,7 +114,7 @@ export default function DashboardScreen() {
         setLocalLogoKey(orgs.logo);
       }
     }
-  }, [user, selectedOrgId]);
+  }, [user, selectedOrgId, sortType]);
 
   // Register push token once when the user is available (isolated from selectedOrgId)
   useEffect(() => {
@@ -214,10 +215,19 @@ export default function DashboardScreen() {
   const fetchProjects = async (orgId?: string | null) => {
     try {
       const data = await getProjects(orgId || undefined);
-      const sortedProjects = (data.projects || []).sort((a: any, b: any) =>
-        (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
-      );
-      setProjects(sortedProjects);
+      let sortedProjects = data.projects || [];
+      
+      if (sortType === 'newest') {
+        sortedProjects.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      } else if (sortType === 'oldest') {
+        sortedProjects.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      } else {
+        sortedProjects.sort((a: any, b: any) => 
+          (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+        );
+      }
+      
+      setProjects([...sortedProjects]);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     }
@@ -557,6 +567,28 @@ export default function DashboardScreen() {
                 <Feather name="chevron-down" size={12} color={colors.textMuted} />
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              onPress={() => {
+                const next: any = sortType === 'name' ? 'newest' : sortType === 'newest' ? 'oldest' : 'name';
+                setSortType(next);
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border
+              }}
+            >
+              <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
+              <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>
+                {sortType === 'name' ? 'Name' : sortType === 'newest' ? 'Newest' : 'Oldest'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Project Grid */}

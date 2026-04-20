@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useUsage } from '@/contexts/UsageContext';
-import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X, Copy, Check } from 'lucide-react';
+import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X, Copy, Check, ChevronDown, ListFilter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import { getProjects, createProject } from '@/services/projectService';
 import { getOrgOverview, uploadOrgLogo, getSecureFileUrl, getOrganizations } from '@/services/superadminService';
@@ -33,6 +35,7 @@ export default function Dashboard() {
     const [organizations, setOrganizations] = useState<any[]>([]);
     const [selectedOrgId, setSelectedOrgId] = useState<string>('');
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [sortType, setSortType] = useState<'name' | 'newest' | 'oldest'>('name');
     const logoInputRef = useRef<HTMLInputElement>(null);
 
     // Cropping states
@@ -54,7 +57,7 @@ export default function Dashboard() {
                 setLocalLogo(typedUser.organization.logo);
             }
         }
-    }, [user, selectedOrgId]);
+    }, [user, selectedOrgId, sortType]);
 
     useEffect(() => {
         let currentUrl: string | null = null;
@@ -95,10 +98,17 @@ export default function Dashboard() {
     const fetchProjects = async (orgId?: string) => {
         try {
             const data = await getProjects(orgId);
-            const sortedProjects = (data.projects || []).sort((a: any, b: any) => 
-                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
-            );
-            setProjects(sortedProjects);
+            let sortedProjects = data.projects || [];
+            if (sortType === 'newest') {
+                sortedProjects.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            } else if (sortType === 'oldest') {
+                sortedProjects.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            } else {
+                sortedProjects.sort((a: any, b: any) => 
+                    (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+                );
+            }
+            setProjects([...sortedProjects]);
         } catch (e) {
             console.error("Failed to fetch projects", e);
         }
@@ -295,9 +305,32 @@ export default function Dashboard() {
             </div>
 
             <div id="projects-list-header" className="flex items-center justify-between gap-4 mb-4">
-                <h2 className="text-lg font-bold text-foreground">
-                    {user.role === 'superadmin' ? t('organization_projects') : t('your_projects')}
-                </h2>
+                <div className="flex items-center gap-6">
+                    <h2 className="text-lg font-bold text-foreground">
+                        {user.role === 'superadmin' ? t('organization_projects') : t('your_projects')}
+                    </h2>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 text-[10px] font-semibold gap-1.5 text-muted-foreground bg-secondary/50">
+                                Sort by: <span className="text-foreground capitalize">{sortType === 'name' ? 'Name' : sortType}</span>
+                                <ChevronDown className="h-3 w-3" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuLabel className="text-[10px]">Sort Projects By</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setSortType('name')} className="text-xs flex items-center justify-between">
+                                Name {sortType === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setSortType('newest')} className="text-xs flex items-center justify-between">
+                                Newest {sortType === 'newest' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setSortType('oldest')} className="text-xs flex items-center justify-between">
+                                Oldest {sortType === 'oldest' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
                 <div className="flex items-center gap-3">
                     {user.role === 'superadmin' && (
                         <select
