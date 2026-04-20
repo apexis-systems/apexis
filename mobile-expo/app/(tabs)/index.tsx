@@ -31,6 +31,7 @@ import { navigateFromNotification } from '@/utils/navigation';
 import { UsageAlert } from '@/components/shared/UsageAlert';
 import { useUsage } from '@/contexts/UsageContext';
 import Constants from 'expo-constants';
+import DiagnosticPermissionModal from '@/components/shared/DiagnosticPermissionModal';
 
 export default function DashboardScreen() {
   const { user, updateUser, login } = useAuth();
@@ -64,6 +65,7 @@ export default function DashboardScreen() {
   const [isSwitching, setIsSwitching] = useState<string | null>(null);
   const [sortType, setSortType] = useState<'name' | 'newest' | 'oldest'>('name');
   const [loading, setLoading] = useState(true);
+  const [isDiagnosticModalOpen, setIsDiagnosticModalOpen] = useState(false);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -169,6 +171,16 @@ export default function DashboardScreen() {
       return () => clearTimeout(timer);
     }
   }, [hasSeenTour, user]);
+
+  useEffect(() => {
+    // Show diagnostic permission modal after tour is done, but only if it's null
+    if (hasSeenTour && user && user.diagnostic_data_permission === null && !isTourActive) {
+      const timer = setTimeout(() => {
+        setIsDiagnosticModalOpen(true);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [hasSeenTour, user?.diagnostic_data_permission, isTourActive]);
 
   useEffect(() => {
     const fetchLogo = async () => {
@@ -874,6 +886,10 @@ export default function DashboardScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      <DiagnosticPermissionModal 
+        visible={isDiagnosticModalOpen} 
+        onClose={() => setIsDiagnosticModalOpen(false)} 
+      />
     </>
   );
 }

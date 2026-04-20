@@ -60,6 +60,10 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING,
                 allowNull: true,
             },
+            diagnostic_data_permission: {
+                type: DataTypes.BOOLEAN,
+                allowNull: true,
+            },
         },
         {
             tableName: "users",

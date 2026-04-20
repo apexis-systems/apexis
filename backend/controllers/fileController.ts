@@ -155,6 +155,8 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         // Check skipActivity explicitly
         const shouldSkip = skipActivity === 'true' || skipActivity === true;
 
+        console.log("fileId", newFile.id)
+
         if (!shouldSkip) {
             // Log Activity
             await logActivity({

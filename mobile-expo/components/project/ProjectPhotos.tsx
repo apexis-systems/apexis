@@ -10,6 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import { getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
@@ -71,6 +72,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [commentLoading, setCommentLoading] = useState(false);
     const [addingComment, setAddingComment] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [projectMembers, setProjectMembers] = useState<any[]>([]);
+    const [mentionQuery, setMentionQuery] = useState('');
+    const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+    const [showMentions, setShowMentions] = useState(false);
 
     // Action Menu state
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
@@ -219,6 +224,81 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     };
 
+    const loadMembers = async () => {
+        if (!project?.id) return;
+        try {
+            const data = await getProjectMembers(project.id);
+            if (data.members) setProjectMembers(data.members.map((m: any) => m.user));
+        } catch (e) {
+            console.error('loadMembers error:', e);
+        }
+    };
+
+    const handleInputChange = (text: string) => {
+        setCommentText(text);
+
+        // Find the last "@" at the start of a word
+        const lastAtIndex = text.lastIndexOf('@');
+        if (lastAtIndex !== -1 && (lastAtIndex === 0 || text[lastAtIndex - 1] === ' ')) {
+            const query = text.substring(lastAtIndex + 1);
+            // Only trigger if no space after @
+            if (!query.includes(' ')) {
+                setMentionQuery(query);
+                setShowMentions(true);
+                setMentionStartIndex(lastAtIndex);
+                return;
+            }
+        }
+        setShowMentions(false);
+        setMentionStartIndex(-1);
+    };
+
+    const handleSelectMention = (member: any) => {
+        if (mentionStartIndex === -1) return;
+        const before = commentText.substring(0, mentionStartIndex);
+        const newText = `${before}@[${member.id}:${member.name}] `;
+        setCommentText(newText);
+        setShowMentions(false);
+        setMentionStartIndex(-1);
+    };
+
+    const renderCommentText = (text: string) => {
+        if (!text) return null;
+        const mentionRegex = /(@\[(\d+):([^\]]+)\])/g;
+        const parts = text.split(mentionRegex);
+        const result: any[] = [];
+
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+
+            // The split with capturing group returns the matches in specific indices
+            // [non-match, whole-match, id, name, non-match, ...]
+            // Indexing:
+            // 0: text before
+            // 1: whole match @[id:name]
+            // 2: id
+            // 3: name
+            // 4: text after ...
+
+            if (i % 4 === 1) continue; // Skip whole match
+            if (i % 4 === 2) continue; // Skip ID
+            if (i % 4 === 3) {
+                result.push(
+                    <Text key={i} style={{ fontWeight: '800' }}>
+                        @{part}
+                    </Text>
+                );
+                continue;
+            }
+
+            if (part) {
+                result.push(part);
+            }
+        }
+
+        return result;
+    };
+
     const handleAddComment = async () => {
         const photo = sortedPhotos[viewerIndex];
         if (!photo?.id || !commentText.trim()) return;
@@ -243,6 +323,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setIsViewerZoomed(false);
         setShowViewerUI(false);
         setViewerOpen(true);
+        loadMembers();
     };
 
     const closeViewer = () => {
@@ -838,9 +919,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 zIndex: 5,
                                             }}
                                         />
-                                        <Image 
-                                            source={photo.downloadUrl} 
-                                            style={{ width: '100%', height: '100%' }} 
+                                        <Image
+                                            source={photo.downloadUrl}
+                                            style={{ width: '100%', height: '100%' }}
                                             contentFit="cover"
                                             transition={200}
                                         />
@@ -954,9 +1035,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             const groups = groupItemsByMonth(sortedPhotos);
                             return groups.map((group) => (
                                 <View key={group.title} style={{ marginBottom: 20 }}>
-                                    <View style={{ 
-                                        paddingVertical: 12, 
-                                        backgroundColor: 'transparent', 
+                                    <View style={{
+                                        paddingVertical: 12,
+                                        backgroundColor: 'transparent',
                                         flexDirection: 'row',
                                         alignItems: 'center',
                                         justifyContent: 'space-between'
@@ -964,10 +1045,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
                                         <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
                                     </View>
-                                    <View style={{ 
-                                        flexDirection: viewMode === 'grid' ? 'row' : 'column', 
-                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', 
-                                        gap: viewMode === 'grid' ? 4 : 8 
+                                    <View style={{
+                                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                        gap: viewMode === 'grid' ? 4 : 8
                                     }}>
                                         {group.data.map((p, i) => renderPhotoItem(p, i))}
                                     </View>
@@ -976,10 +1057,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         }
 
                         return (
-                            <View style={{ 
-                                flexDirection: viewMode === 'grid' ? 'row' : 'column', 
-                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', 
-                                gap: viewMode === 'grid' ? 4 : 4 
+                            <View style={{
+                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                gap: viewMode === 'grid' ? 4 : 4
                             }}>
                                 {sortedPhotos.map((photo, index) => renderPhotoItem(photo, index))}
                             </View>
@@ -1292,7 +1373,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
                                             {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
                                         </Text>
-                                        
+
                                         {(sortedPhotos[viewerIndex]?.location || sortedPhotos[viewerIndex]?.tags) && (
                                             <View style={{ marginTop: 8, gap: 8 }}>
                                                 {sortedPhotos[viewerIndex]?.location && (
@@ -1303,7 +1384,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{sortedPhotos[viewerIndex].location}</Text>
                                                     </View>
                                                 )}
-                                                
+
                                                 {sortedPhotos[viewerIndex]?.tags && (
                                                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                                                         <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
@@ -1340,12 +1421,16 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                     <Text style={{ color: '#888', fontSize: 9 }}>↩ Reply</Text>
                                                                 </TouchableOpacity>
                                                             </View>
-                                                            <Text style={{ color: '#ddd', fontSize: 11 }}>{c.text}</Text>
+                                                            <Text style={{ color: '#ddd', fontSize: 11 }}>
+                                                                {renderCommentText(c.text)}
+                                                            </Text>
                                                         </View>
                                                         {c.replies?.map((r: any) => (
                                                             <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
                                                                 <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || 'User'}</Text>
-                                                                <Text style={{ color: '#ccc', fontSize: 10 }}>{r.text}</Text>
+                                                                <Text style={{ color: '#ccc', fontSize: 10 }}>
+                                                                    {renderCommentText(r.text)}
+                                                                </Text>
                                                             </View>
                                                         ))}
                                                     </View>
@@ -1360,10 +1445,28 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 </TouchableOpacity>
                                             </View>
                                         )}
+                                        {showMentions && (
+                                            <View style={{ position: 'absolute', bottom: 50, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000 }}>
+                                                <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
+                                                    {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
+                                                        <TouchableOpacity
+                                                            key={m.id}
+                                                            onPress={() => handleSelectMention(m)}
+                                                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                                                        >
+                                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                            </View>
+                                                            <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </ScrollView>
+                                            </View>
+                                        )}
                                         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
                                             <TextInput
                                                 value={commentText}
-                                                onChangeText={setCommentText}
+                                                onChangeText={handleInputChange}
                                                 placeholder="Add a comment…"
                                                 placeholderTextColor="#555"
                                                 style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
@@ -1444,3 +1547,4 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         </View>
     );
 }
+                        

@@ -51,41 +51,82 @@ export const addComment = async (req: Request, res: Response) => {
         });
 
         res.status(201).json({ comment: withUser });
-        
+
         // --- ASYNC: Notifications and Activities ---
         // (Don't await these to keep response time fast)
         (async () => {
             try {
-                const isImage = file.file_type?.startsWith('image/');
+                const f = file as any;
+                const isImage = f.file_type?.startsWith('image/');
                 const activityCategory = isImage ? 'photos' : 'documents';
 
                 // 1. Log Activity
                 await logActivity({
-                    projectId: file.project_id,
+                    projectId: f.project_id,
                     userId: authUser.user_id,
                     type: isImage ? 'photo_comment' : 'comment',
-                    description: `${authUser.name} commented on ${isImage ? 'photo' : 'file'}: ${file.file_name}`,
-                    metadata: { folderId: file.folder_id, type: activityCategory }
+                    description: `${authUser.name} commented on ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
+                    metadata: { folderId: f.folder_id, type: activityCategory }
                 });
 
-                // 2. Send Notification to File Uploader
-                // Only if uploader is NOT the commenter
-                if (file.created_by !== authUser.user_id) {
+                // 2. Parsed Mentions (Tagging)
+                const mentionRegex = /@\[(\d+):([^\]]+)\]/g;
+                let match;
+                const mentionedUserIds = new Set<number>();
+                while ((match = mentionRegex.exec(text)) !== null) {
+                    const userId = Number(match[1]);
+                    if (userId !== authUser.user_id) {
+                        mentionedUserIds.add(userId);
+                    }
+                }
+
+                const cleanText = (text as string).replace(/@\[(\d+):([^\]]+)\]/g, (m: string, id: string, name: string) => `@${name}`);
+
+                console.log("taggedUser", mentionedUserIds);
+
+                // 3. Send Notification + log activity for each mentioned user
+                for (const taggedUserId of mentionedUserIds) {
+                    await sendNotification({
+                        userId: taggedUserId,
+                        title: isImage ? 'Tagged in Photo' : 'Tagged in Comment',
+                        body: `${authUser.name} tagged you in a ${isImage ? 'photo' : 'file'}: "${cleanText.substring(0, 50)}..."`,
+                        type: isImage ? 'photo_comment' : 'comment',
+                        data: {
+                            fileId: String(f.id),
+                            projectId: String(f.project_id),
+                            folderId: String(f.folder_id),
+                            type: activityCategory,
+                            commentId: String((comment as any).id),
+                            isTag: 'true'
+                        }
+                    });
+
+                    await logActivity({
+                        projectId: f.project_id,
+                        userId: authUser.user_id,
+                        type: isImage ? 'photo_comment' : 'comment',
+                        description: `${authUser.name} mentioned a user in ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
+                        metadata: { folderId: f.folder_id, type: activityCategory, mentionedUserId: taggedUserId }
+                    });
+                }
+
+                // 4. Send Notification to File Uploader (if not already mentioned and not the commenter)
+                if (f.created_by !== authUser.user_id && !mentionedUserIds.has(f.created_by)) {
                     const uploaderMembership = await project_members.findOne({
-                        where: { project_id: file.project_id, user_id: file.created_by }
+                        where: { project_id: f.project_id, user_id: f.created_by }
                     });
                     if (uploaderMembership) {
                         await sendNotification({
-                            userId: file.created_by,
+                            userId: f.created_by,
                             title: isImage ? 'New Photo Comment' : 'New File Comment',
-                            body: `${authUser.name} commented on your ${isImage ? 'photo' : 'file'}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
+                            body: `${authUser.name} commented on your ${isImage ? 'photo' : 'file'}: "${cleanText.substring(0, 50)}..."`,
                             type: isImage ? 'photo_comment' : 'comment',
                             data: {
-                                fileId: String(file.id),
-                                projectId: String(file.project_id),
-                                folderId: String(file.folder_id),
+                                fileId: String(f.id),
+                                projectId: String(f.project_id),
+                                folderId: String(f.folder_id),
                                 type: activityCategory,
-                                commentId: String(comment.id)
+                                commentId: String((comment as any).id)
                             }
                         });
                     }

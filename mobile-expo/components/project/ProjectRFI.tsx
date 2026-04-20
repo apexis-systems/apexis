@@ -637,9 +637,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         {(selectedRFI?.photoDownloadUrls || []).map((url, idx) => (
                           <View key={idx} style={{ position: 'relative' }}>
                             <TouchableOpacity onPress={() => setPreviewImage(url)}>
-                              <Image 
-                                source={url} 
-                                style={{ width: 120, height: 120, borderRadius: 12 }} 
+                              <Image
+                                source={url}
+                                style={{ width: 120, height: 120, borderRadius: 12 }}
                                 contentFit="cover"
                                 transition={200}
                               />
@@ -743,7 +743,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
               </ScrollView>
             )}
           </View>
-          
+
           {/* Nested Photo Viewer for iOS support inside detail modal */}
           <FullScreenImageModal
             visible={!!previewImage}

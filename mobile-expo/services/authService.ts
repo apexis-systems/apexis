@@ -225,3 +225,13 @@ export const switchContext = async (params: { role: string; project_id?: number 
         throw error;
     }
 };
+
+export const updateDiagnosticPermission = async (permission: boolean) => {
+    try {
+        const response = await PrivateAxios.patch('/auth/diagnostic-permission', { permission });
+        return response.data;
+    } catch (error: any) {
+        console.error("updateDiagnosticPermission Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
