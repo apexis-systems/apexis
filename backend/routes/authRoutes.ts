@@ -13,7 +13,8 @@ import {
     verifyOnboardingToken,
     completePublicSignup,
     getMyMemberships,
-    switchContext
+    switchContext,
+    updateDiagnosticPermission
 } from "../controllers/authController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
@@ -44,5 +45,6 @@ router.post("/change-password", verifyToken, changePassword);
 // Context Switching
 router.get("/memberships", verifyToken, getMyMemberships);
 router.post("/switch-context", verifyToken, switchContext);
+router.patch("/diagnostic-permission", verifyToken, updateDiagnosticPermission);
 
 export default router;

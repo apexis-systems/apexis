@@ -117,6 +117,7 @@ export default function NotificationsScreen() {
 
             const dataRes = await fetchNotificationsSvc(params);
             const data = dataRes.notifications || [];
+            console.log(data[0]);
 
             let unread = showHistory ? data : data.filter((n: any) => !n.is_read);
             unread = unread.filter((n: any) => matchesTypeFilter(n, selectedType));
