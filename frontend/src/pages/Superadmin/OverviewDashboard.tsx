@@ -1,10 +1,11 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   Activity,
   AlertCircle,
   AlertTriangle,
+  Brain,
   Building2,
   Camera,
   CheckCircle,
@@ -13,7 +14,12 @@ import {
   FileText,
   FolderKanban,
   HardDrive,
+  HeartPulse,
+  Lightbulb,
   MessageSquare,
+  Monitor,
+  TrendingDown,
+  TrendingUp,
   Upload,
   Users,
 } from "lucide-react";
@@ -28,6 +34,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { SUPERADMIN_SECTION_HIGHLIGHT_EVENT } from "@/components/superadmin/SuperadminSidebar";
 import { cn } from "@/lib/utils";
 
 const metrics = [
@@ -187,6 +194,67 @@ const alerts = [
   { icon: CreditCard, text: "XYZ Constructions trial expiring in 3 days", severity: "info", time: "1 day ago" },
 ];
 
+const projectHealthProjects = [
+  { name: "Skyline Tower A", company: "Skyline Realty", completion: 78, delayed: 3, rfisPending: 2, drawingsAwaiting: 1, siteIssues: 0, status: "healthy" as const },
+  { name: "Metro Bridge Phase 2", company: "Metro Infra Ltd", completion: 45, delayed: 8, rfisPending: 5, drawingsAwaiting: 3, siteIssues: 2, status: "attention" as const },
+  { name: "Green Valley Mall", company: "Green Valley Developers", completion: 92, delayed: 0, rfisPending: 1, drawingsAwaiting: 0, siteIssues: 0, status: "healthy" as const },
+  { name: "Highway NH-48 Ext", company: "National Highways Authority", completion: 34, delayed: 14, rfisPending: 12, drawingsAwaiting: 6, siteIssues: 5, status: "critical" as const },
+  { name: "City Hospital Block C", company: "City Health Trust", completion: 61, delayed: 5, rfisPending: 4, drawingsAwaiting: 2, siteIssues: 1, status: "attention" as const },
+  { name: "Prestige Lakeside", company: "Prestige Group", completion: 88, delayed: 1, rfisPending: 0, drawingsAwaiting: 0, siteIssues: 0, status: "healthy" as const },
+];
+
+const companyUsage = [
+  { name: "Shapoorji Pallonji", projects: 24, users: 186, messages: 42800, tasks: 3200 },
+  { name: "L&T Infrastructure", projects: 18, users: 142, messages: 38200, tasks: 2800 },
+  { name: "Godrej Properties", projects: 15, users: 98, messages: 28400, tasks: 2100 },
+  { name: "Prestige Group", projects: 12, users: 85, messages: 22100, tasks: 1800 },
+  { name: "Sobha Limited", projects: 10, users: 72, messages: 18500, tasks: 1400 },
+  { name: "Brigade Group", projects: 8, users: 56, messages: 14200, tasks: 1100 },
+];
+
+const systemHealthMetrics = [
+  { label: "Server Uptime", value: "99.97%", status: "good" as const },
+  { label: "API Response Time", value: "142ms", status: "good" as const },
+  { label: "File Storage Used", value: "2.4 TB", status: "warning" as const },
+  { label: "Failed Uploads", value: "0.02%", status: "good" as const },
+];
+
+const userBehaviorMetrics = [
+  { label: "Avg Session Time", value: "18 min" },
+  { label: "Sessions Per Day", value: "3.2" },
+];
+
+const screenUsage = [
+  { screen: "Chat", sessions: 42 },
+  { screen: "Tasks", sessions: 28 },
+  { screen: "Drawings", sessions: 18 },
+  { screen: "RFIs", sessions: 8 },
+  { screen: "Dashboard", sessions: 4 },
+];
+
+const intelligenceInsights = [
+  {
+    icon: TrendingDown,
+    text: "Project delays increased 18% in the last 2 weeks. Top cause: drawing approval bottlenecks.",
+  },
+  {
+    icon: TrendingUp,
+    text: "Companies with more than 10 users are 4x more likely to convert to paid plans.",
+  },
+  {
+    icon: Lightbulb,
+    text: "RFI response time is 2.3x slower in projects with more than 50 team members. Auto-routing would help.",
+  },
+  {
+    icon: TrendingUp,
+    text: "Chat adoption grew 34% after push notifications launched. The same pattern could lift task adoption.",
+  },
+  {
+    icon: Lightbulb,
+    text: "48% of drawings are uploaded between 8 PM and 10 PM. Evening autoscaling is worth planning.",
+  },
+];
+
 const chartGridStroke = "hsl(214,20%,90%)";
 const chartTickColor = "hsl(215,10%,45%)";
 
@@ -221,6 +289,24 @@ const activityBadge: Record<string, string> = {
   Low: "bg-[hsl(37_18%_91%)] text-[hsl(30_8%_45%)] dark:bg-[hsl(30_6%_18%)] dark:text-[hsl(38_10%_55%)]",
 };
 
+const projectHealthStatus = {
+  healthy: {
+    label: "Healthy",
+    dot: "bg-emerald-500",
+    progress: "bg-emerald-500",
+  },
+  attention: {
+    label: "Attention",
+    dot: "bg-amber-500",
+    progress: "bg-amber-500",
+  },
+  critical: {
+    label: "Critical",
+    dot: "bg-red-500",
+    progress: "bg-red-500",
+  },
+};
+
 const scrollSectionClass = "scroll-mt-24";
 
 const metricChangeClass: Record<"up" | "down" | "neutral", string> = {
@@ -230,20 +316,65 @@ const metricChangeClass: Record<"up" | "down" | "neutral", string> = {
 };
 
 function useHashScroll() {
+  const [highlightedSection, setHighlightedSection] = useState("");
+
   useEffect(() => {
+    let timeoutId: number | undefined;
+
+    const highlightSection = (sectionId: string) => {
+      if (!sectionId) return;
+
+      setHighlightedSection("");
+      window.requestAnimationFrame(() => {
+        setHighlightedSection(sectionId);
+      });
+
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+
+      timeoutId = window.setTimeout(() => {
+        setHighlightedSection((current) =>
+          current === sectionId ? "" : current,
+        );
+      }, 1400);
+    };
+
     const scrollToHash = () => {
       const hash = window.location.hash.replace("#", "");
       if (!hash) return;
 
       window.requestAnimationFrame(() => {
         document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        highlightSection(hash);
       });
+    };
+
+    const handleHighlight = (event: Event) => {
+      const sectionId = (event as CustomEvent<string>).detail;
+      highlightSection(sectionId);
     };
 
     scrollToHash();
     window.addEventListener("hashchange", scrollToHash);
-    return () => window.removeEventListener("hashchange", scrollToHash);
+    window.addEventListener(
+      SUPERADMIN_SECTION_HIGHLIGHT_EVENT,
+      handleHighlight as EventListener,
+    );
+
+    return () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      window.removeEventListener("hashchange", scrollToHash);
+      window.removeEventListener(
+        SUPERADMIN_SECTION_HIGHLIGHT_EVENT,
+        handleHighlight as EventListener,
+      );
+    };
   }, []);
+
+  return highlightedSection;
 }
 
 function MetricCard({
@@ -309,7 +440,14 @@ const SummaryPill = ({
 );
 
 export default function OverviewDashboard() {
-  useHashScroll();
+  const highlightedSection = useHashScroll();
+  const getHighlightedCardClass = (sectionId: string) =>
+    cn(
+      cardClass,
+      "transition-all duration-500",
+      highlightedSection === sectionId &&
+        "animate-pulse ring-2 ring-[hsl(24_95%_53%/0.45)] ring-offset-2 ring-offset-[hsl(38_33%_95%)] shadow-[0_0_0_4px_hsl(24_95%_53%/0.10)] dark:ring-offset-[hsl(30_10%_10%)]",
+    );
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -329,7 +467,7 @@ export default function OverviewDashboard() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <div className="space-y-4 xl:col-span-8">
           <section id="platform-growth" className={scrollSectionClass}>
-            <div className={cardClass}>
+            <div className={getHighlightedCardClass("platform-growth")}>
               <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h3 className={cn("text-sm font-semibold", strongTextClass)}>
@@ -379,7 +517,7 @@ export default function OverviewDashboard() {
           </section>
 
           <section id="project-activity" className={scrollSectionClass}>
-            <div className={cardClass}>
+            <div className={getHighlightedCardClass("project-activity")}>
               <h3 className={cn("mb-1 text-sm font-semibold", strongTextClass)}>
                 Project Activity
               </h3>
@@ -458,7 +596,7 @@ export default function OverviewDashboard() {
           </div>
 
           <section id="communication" className={scrollSectionClass}>
-            <div className={cardClass}>
+            <div className={getHighlightedCardClass("communication")}>
               <h3 className={cn("mb-1 text-sm font-semibold", strongTextClass)}>
                 Communication Analytics
               </h3>
@@ -509,6 +647,122 @@ export default function OverviewDashboard() {
               </div>
             </div>
           </section>
+
+          <section id="project-health" className={scrollSectionClass}>
+            <div className={getHighlightedCardClass("project-health")}>
+              <div className="mb-4 flex items-center gap-2">
+                <HeartPulse className="h-4 w-4 text-[hsl(24_95%_53%)]" />
+                <div>
+                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                    Project Health
+                  </h3>
+                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+                    Completion progress, delays, RFIs, drawing waits, and site issues
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)]">
+                      <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>Project</th>
+                      <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>Status</th>
+                      <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>Completion</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Delayed</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>RFIs</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Drawings</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Issues</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectHealthProjects.map((project) => (
+                      <tr
+                        key={project.name}
+                        className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
+                        <td className="py-2.5">
+                          <div className={cn("font-medium", strongTextClass)}>{project.name}</div>
+                          <div className={cn("mt-0.5 text-[11px]", mutedTextClass)}>{project.company}</div>
+                        </td>
+                        <td className="py-2.5">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={cn("h-2 w-2 rounded-full", projectHealthStatus[project.status].dot)} />
+                            <span className={mutedTextClass}>{projectHealthStatus[project.status].label}</span>
+                          </span>
+                        </td>
+                        <td className="py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-[hsl(37_18%_91%)] dark:bg-[hsl(30_6%_18%)]">
+                              <div
+                                className={cn("h-full rounded-full", projectHealthStatus[project.status].progress)}
+                                style={{ width: `${project.completion}%` }}
+                              />
+                            </div>
+                            <span className={mutedTextClass}>{project.completion}%</span>
+                          </div>
+                        </td>
+                        <td className={cn("py-2.5 text-center", project.delayed > 5 ? "font-semibold text-red-600 dark:text-red-400" : mutedTextClass)}>
+                          {project.delayed}
+                        </td>
+                        <td className={cn("py-2.5 text-center", project.rfisPending > 5 ? "font-semibold text-amber-600 dark:text-amber-400" : mutedTextClass)}>
+                          {project.rfisPending}
+                        </td>
+                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{project.drawingsAwaiting}</td>
+                        <td className={cn("py-2.5 text-center", project.siteIssues > 2 ? "font-semibold text-red-600 dark:text-red-400" : mutedTextClass)}>
+                          {project.siteIssues}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="company-usage" className={scrollSectionClass}>
+            <div className={getHighlightedCardClass("company-usage")}>
+              <div className="mb-4 flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-[hsl(24_95%_53%)]" />
+                <div>
+                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                    Company Usage
+                  </h3>
+                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+                    The most active companies by projects, users, messages, and tasks
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)]">
+                      <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>#</th>
+                      <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>Company</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Projects</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Users</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Messages</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Tasks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {companyUsage.map((company, index) => (
+                      <tr
+                        key={company.name}
+                        className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
+                        <td className={cn("py-2.5 font-medium", mutedTextClass)}>{index + 1}</td>
+                        <td className={cn("py-2.5 font-medium", strongTextClass)}>{company.name}</td>
+                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.projects}</td>
+                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.users}</td>
+                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.messages.toLocaleString()}</td>
+                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.tasks.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div className="space-y-4 xl:col-span-4">
@@ -551,7 +805,7 @@ export default function OverviewDashboard() {
           </div>
 
           <section id="live-activity" className={scrollSectionClass}>
-            <div className={cardClass}>
+            <div className={getHighlightedCardClass("live-activity")}>
               <div className="mb-4 flex items-center gap-2">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
                 <h3 className={cn("text-sm font-semibold", strongTextClass)}>
@@ -575,7 +829,7 @@ export default function OverviewDashboard() {
           </section>
 
           <section id="alerts" className={scrollSectionClass}>
-            <div className={cardClass}>
+            <div className={getHighlightedCardClass("alerts")}>
               <div className="mb-4 flex items-center justify-between">
                 <h3 className={cn("text-sm font-semibold", strongTextClass)}>Alerts</h3>
                 <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
@@ -601,8 +855,33 @@ export default function OverviewDashboard() {
             </div>
           </section>
 
+          <section id="intelligence" className={scrollSectionClass}>
+            <div className={getHighlightedCardClass("intelligence")}>
+              <div className="mb-4 flex items-center gap-2">
+                <Brain className="h-4 w-4 text-[hsl(24_95%_53%)]" />
+                <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                  Construction Intelligence
+                </h3>
+              </div>
+              <div className="space-y-2">
+                {intelligenceInsights.map((insight, index) => (
+                  <div
+                    key={`${insight.text}-${index}`}
+                    className="rounded border border-[hsl(24_95%_53%/0.15)] bg-[hsl(24_95%_53%/0.06)] p-3">
+                    <div className="flex items-start gap-2">
+                      <insight.icon className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(24_95%_53%)]" />
+                      <p className={cn("text-xs leading-relaxed", strongTextClass)}>
+                        {insight.text}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <section id="feature-usage" className={scrollSectionClass}>
-            <div className={cardClass}>
+            <div className={getHighlightedCardClass("feature-usage")}>
               <h3 className={cn("mb-1 text-sm font-semibold", strongTextClass)}>
                 Feature Usage
               </h3>
@@ -628,8 +907,91 @@ export default function OverviewDashboard() {
             </div>
           </section>
 
+          <section id="system-health" className={scrollSectionClass}>
+            <div className={getHighlightedCardClass("system-health")}>
+              <div className="mb-4 flex items-center gap-2">
+                <Monitor className="h-4 w-4 text-[hsl(24_95%_53%)]" />
+                <div>
+                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                    System Health
+                  </h3>
+                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+                    Core uptime, performance, and storage indicators
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {systemHealthMetrics.map((metric) => (
+                  <div
+                    key={metric.label}
+                    className="flex items-start gap-3 rounded bg-[hsl(37_18%_91%/0.55)] p-3 dark:bg-[hsl(30_6%_18%)]">
+                    {metric.status === "good" ? (
+                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    )}
+                    <div>
+                      <p className={cn("text-lg font-bold", strongTextClass)}>{metric.value}</p>
+                      <p className={cn("text-[10px] font-medium uppercase tracking-[0.14em]", mutedTextClass)}>
+                        {metric.label}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section id="user-behavior" className={scrollSectionClass}>
+            <div className={getHighlightedCardClass("user-behavior")}>
+              <div className="mb-4 flex items-center gap-2">
+                <Users className="h-4 w-4 text-[hsl(24_95%_53%)]" />
+                <div>
+                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                    User Behavior
+                  </h3>
+                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+                    Session patterns and the most-used surfaces across the platform
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                {userBehaviorMetrics.map((metric) => (
+                  <div
+                    key={metric.label}
+                    className="rounded bg-[hsl(37_18%_91%/0.55)] p-3 dark:bg-[hsl(30_6%_18%)]">
+                    <p className={cn("text-2xl font-bold", strongTextClass)}>{metric.value}</p>
+                    <p className={cn("text-[10px] font-medium uppercase tracking-[0.14em]", mutedTextClass)}>
+                      {metric.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <p className={cn("text-xs font-medium uppercase tracking-[0.14em]", mutedTextClass)}>
+                  Most Used Screens
+                </p>
+                {screenUsage.map((screen) => (
+                  <div key={screen.screen} className="flex items-center gap-2">
+                    <span className={cn("w-20 text-xs font-medium", strongTextClass)}>{screen.screen}</span>
+                    <div className="h-4 flex-1 overflow-hidden rounded bg-[hsl(37_18%_91%)] dark:bg-[hsl(30_6%_18%)]">
+                      <div
+                        className="h-full rounded bg-[hsl(24_95%_53%)]"
+                        style={{ width: `${screen.sessions}%` }}
+                      />
+                    </div>
+                    <span className={cn("w-10 text-right text-xs", mutedTextClass)}>{screen.sessions}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <section id="revenue" className={scrollSectionClass}>
-            <div className={cardClass}>
+            <div className={getHighlightedCardClass("revenue")}>
               <h3 className={cn("mb-1 text-sm font-semibold", strongTextClass)}>
                 Revenue Analytics
               </h3>

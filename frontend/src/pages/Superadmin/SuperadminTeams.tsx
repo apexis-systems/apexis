@@ -149,10 +149,10 @@ export default function SuperadminTeams() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className={cn("text-xl font-bold", strongTextClass)}>
-            Superadmin Team
+            Admin Team
           </h1>
           <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-            Manage superadmin access, invitations, and primary ownership.
+            Manage admin access and invitations.
           </p>
         </div>
 
@@ -171,19 +171,19 @@ export default function SuperadminTeams() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
-            title: "Total Superadmins",
+            title: "Total Admins",
             value: stats.total,
             icon: Users,
             accent: "bg-[hsl(24_95%_53%/0.1)] text-[hsl(24_95%_53%)]",
           },
           {
-            title: "Primary Access",
+            title: "Super Admin",
             value: stats.primary,
             icon: ShieldCheck,
             accent: "bg-sky-500/10 text-sky-500",
           },
           {
-            title: "Secondary Access",
+            title: "Admins",
             value: stats.secondary,
             icon: ShieldCheck,
             accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
@@ -213,11 +213,11 @@ export default function SuperadminTeams() {
         <div className={cn(cardClass, "p-5")}>
           <div className="mb-4">
             <h2 className={cn("text-sm font-semibold", strongTextClass)}>
-              Invite another superadmin
+              Invite another admin
             </h2>
             <p className={cn("mt-1 text-xs", mutedTextClass)}>
-              Invited users stay under the same `superadmin` role. Only the
-              primary flag changes ownership labeling.
+              The primary owner is shown as Super Admin. Everyone else is shown
+              as Admin.
             </p>
           </div>
 
@@ -254,10 +254,11 @@ export default function SuperadminTeams() {
         <div className="flex items-center justify-between border-b border-[hsl(35_15%_85%)] px-5 py-4 dark:border-[hsl(30_8%_22%)]">
           <div>
             <h2 className={cn("text-sm font-semibold", strongTextClass)}>
-              Active superadmin roster
+              Active admin roster
             </h2>
             <p className={cn("mt-1 text-xs", mutedTextClass)}>
-              Primary and invited members all remain superadmins.
+              The primary owner is shown as Super Admin. Everyone else is shown
+              as Admin.
             </p>
           </div>
           {loading && <Loader2 className="h-4 w-4 animate-spin text-[hsl(24_95%_53%)]" />}
@@ -273,7 +274,7 @@ export default function SuperadminTeams() {
               <thead className="bg-[hsl(37_18%_91%/0.45)] dark:bg-[hsl(30_6%_18%/0.9)]">
                 <tr>
                   <th className={tableHeadClass}>Member</th>
-                  <th className={tableHeadClass}>Access</th>
+                  <th className={tableHeadClass}>Role</th>
                   <th className={tableHeadClass}>Status</th>
                   <th className={tableHeadClass}>Joined</th>
                   <th className={tableHeadClass}>Actions</th>
@@ -288,7 +289,7 @@ export default function SuperadminTeams() {
                       <td className={tableCellClass}>
                         <div>
                           <div className={cn("text-sm font-medium", strongTextClass)}>
-                            {member.name || "Invited superadmin"}
+                            {member.name || "Invited admin"}
                           </div>
                           <div className={cn("mt-1 flex items-center gap-1 text-xs", mutedTextClass)}>
                             <Mail className="h-3 w-3" />
@@ -297,22 +298,17 @@ export default function SuperadminTeams() {
                         </div>
                       </td>
                       <td className={tableCellClass}>
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <ShieldCheck
-                              className={cn(
-                                "h-4 w-4",
-                                isPrimary
-                                  ? "text-[hsl(24_95%_53%)]"
-                                  : "text-emerald-600 dark:text-emerald-400",
-                              )}
-                            />
-                            <span className={cn("text-xs font-semibold uppercase tracking-[0.18em]", strongTextClass)}>
-                              Superadmin
-                            </span>
-                          </div>
-                          <span className={cn("text-[11px]", mutedTextClass)}>
-                            {isPrimary ? "Primary access" : "Secondary access"}
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck
+                            className={cn(
+                              "h-4 w-4",
+                              isPrimary
+                                ? "text-[hsl(24_95%_53%)]"
+                                : "text-emerald-600 dark:text-emerald-400",
+                            )}
+                          />
+                          <span className={cn("text-xs font-semibold uppercase tracking-[0.18em]", strongTextClass)}>
+                            {isPrimary ? "Super Admin" : "Admin"}
                           </span>
                         </div>
                       </td>

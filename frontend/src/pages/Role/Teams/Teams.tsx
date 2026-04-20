@@ -97,8 +97,8 @@ const Teams = () => {
         <div className="p-8 max-w-5xl mx-auto">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground">SuperAdmin Team</h1>
-                    <p className="text-sm text-muted-foreground mt-1">Manage superadmin access, invitations, and primary ownership.</p>
+                    <h1 className="text-2xl font-bold text-foreground">Admin Team</h1>
+                    <p className="text-sm text-muted-foreground mt-1">Manage admin access and invitations.</p>
                 </div>
                 <Button
                     onClick={() => setShowInvite(!showInvite)}
@@ -159,24 +159,19 @@ const Teams = () => {
                                 return (
                                     <tr key={m.id} className="hover:bg-secondary/20 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-foreground">{m.name || 'Invited superadmin'}</span>
-                                                <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                    <Mail className="h-3 w-3" /> {m.email}
-                                                </span>
-                                            </div>
-                                        </td>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-foreground">{m.name || 'Invited admin'}</span>
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                        <Mail className="h-3 w-3" /> {m.email}
+                                                    </span>
+                                                </div>
+                                            </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 <ShieldCheck className={cn("h-4 w-4", isPrimary ? "text-accent" : "text-muted-foreground")} />
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-medium uppercase text-muted-foreground">
-                                                        Superadmin
-                                                    </span>
-                                                    <span className="text-[11px] text-muted-foreground">
-                                                        {isPrimary ? 'Primary access' : 'Secondary access'}
-                                                    </span>
-                                                </div>
+                                                <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                    {isPrimary ? 'Super Admin' : 'Admin'}
+                                                </span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">

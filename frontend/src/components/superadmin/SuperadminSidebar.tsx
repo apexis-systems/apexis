@@ -7,17 +7,21 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Brain,
+  Building2,
   ClipboardList,
   DollarSign,
+  HeartPulse,
   IndianRupee,
   LayoutDashboard,
   LogOut,
   MessageSquare,
+  Monitor,
   Rocket,
-  Settings2,
   ShieldCheck,
   TrendingUp,
   UserCheck,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -30,7 +34,17 @@ export interface SuperadminNavItem {
   badge?: number;
 }
 
+type SuperadminAccessUser =
+  | {
+      is_primary?: boolean | null;
+      isPrimaryAdmin?: boolean | null;
+    }
+  | null
+  | undefined;
+
 export const SUPERADMIN_DASHBOARD_PATH = "/superadmin/dashboard";
+export const SUPERADMIN_SECTION_HIGHLIGHT_EVENT =
+  "superadmin:highlight-section";
 
 export const superadminNavItems: SuperadminNavItem[] = [
   { href: SUPERADMIN_DASHBOARD_PATH, label: "Overview", icon: LayoutDashboard },
@@ -40,21 +54,32 @@ export const superadminNavItems: SuperadminNavItem[] = [
   { href: `${SUPERADMIN_DASHBOARD_PATH}#platform-growth`, label: "Platform Growth", icon: TrendingUp, scrollTo: "platform-growth" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#project-activity`, label: "Project Activity", icon: ClipboardList, scrollTo: "project-activity" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#communication`, label: "Communication", icon: MessageSquare, scrollTo: "communication" },
+  { href: `${SUPERADMIN_DASHBOARD_PATH}#project-health`, label: "Project Health", icon: HeartPulse, scrollTo: "project-health" },
+  { href: `${SUPERADMIN_DASHBOARD_PATH}#company-usage`, label: "Company Usage", icon: Building2, scrollTo: "company-usage" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#feature-usage`, label: "Feature Usage", icon: BarChart3, scrollTo: "feature-usage" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#revenue`, label: "Revenue", icon: DollarSign, scrollTo: "revenue" },
+  { href: `${SUPERADMIN_DASHBOARD_PATH}#system-health`, label: "System Health", icon: Monitor, scrollTo: "system-health" },
+  { href: `${SUPERADMIN_DASHBOARD_PATH}#user-behavior`, label: "User Behavior", icon: Users, scrollTo: "user-behavior" },
+  { href: `${SUPERADMIN_DASHBOARD_PATH}#intelligence`, label: "Intelligence", icon: Brain, scrollTo: "intelligence" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#alerts`, label: "Alerts", icon: AlertTriangle, scrollTo: "alerts", badge: 4 },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#live-activity`, label: "Live Activity", icon: Activity, scrollTo: "live-activity" },
   { href: "/superadmin/teams", label: "Teams", icon: ShieldCheck },
 ];
 
-const isPrimarySuperadmin = (value?: boolean | null) =>
-  value === true;
+export const canAccessSuperadminAccounts = (user: SuperadminAccessUser) =>
+  Boolean(user?.is_primary ?? user?.isPrimaryAdmin);
+
+export const getVisibleSuperadminNavItems = (user: SuperadminAccessUser) =>
+  superadminNavItems.filter(
+    (item) => item.href !== "/superadmin/accounts" || canAccessSuperadminAccounts(user),
+  );
 
 export default function SuperadminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
   const [activeHash, setActiveHash] = useState("");
+  const visibleNavItems = getVisibleSuperadminNavItems(user);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -70,7 +95,7 @@ export default function SuperadminSidebar() {
 
   const handleLogout = () => {
     logout();
-    router.replace("/login");
+    router.replace("/auth/login");
   };
 
   const handleNavigation = (item: SuperadminNavItem) => {
@@ -83,6 +108,11 @@ export default function SuperadminSidebar() {
       document.getElementById(item.scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
       window.history.replaceState(null, "", item.href);
       setActiveHash(item.scrollTo);
+      window.dispatchEvent(
+        new CustomEvent(SUPERADMIN_SECTION_HIGHLIGHT_EVENT, {
+          detail: item.scrollTo,
+        }),
+      );
       return;
     }
 
@@ -113,7 +143,7 @@ export default function SuperadminSidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {superadminNavItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = item.scrollTo
             ? pathname === SUPERADMIN_DASHBOARD_PATH && activeHash === item.scrollTo
             : item.href === SUPERADMIN_DASHBOARD_PATH
@@ -144,27 +174,7 @@ export default function SuperadminSidebar() {
         })}
       </nav>
 
-      <div className="space-y-3 border-t border-[hsl(30_8%_20%)] px-4 py-4 dark:border-[hsl(30_8%_16%)]">
-        {user && (
-          <div className="rounded-lg border border-[hsl(30_8%_20%)] bg-[hsl(30_8%_18%)]/50 px-3 py-3 dark:border-[hsl(30_8%_16%)]">
-            <p className="text-sm font-semibold text-[hsl(38_20%_90%)]">{user.name}</p>
-            <p className="mt-1 truncate text-xs text-[hsl(38_20%_85%/0.6)]">{user.email}</p>
-            <div className="mt-3 inline-flex rounded-full border border-[hsl(24_95%_53%/0.25)] bg-[hsl(24_95%_53%/0.12)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[hsl(24_95%_53%)]">
-              {isPrimarySuperadmin(user.is_primary ?? user.isPrimaryAdmin)
-                ? "Primary"
-                : "Secondary"}
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded px-3 py-2.5 text-sm text-[hsl(38_20%_85%/0.6)] transition-colors duration-150 hover:bg-[hsl(30_8%_18%)] hover:text-[hsl(38_20%_85%)]"
-        >
-          <Settings2 className="h-[18px] w-[18px]" />
-          <span>Settings</span>
-        </button>
-
+      <div className="border-t border-[hsl(30_8%_20%)] px-4 py-4 dark:border-[hsl(30_8%_16%)]">
         <button
           type="button"
           onClick={handleLogout}

@@ -6,9 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { Loader2, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import SuperadminSidebar, {
+  canAccessSuperadminAccounts,
+  getVisibleSuperadminNavItems,
   SUPERADMIN_DASHBOARD_PATH,
+  SUPERADMIN_SECTION_HIGHLIGHT_EVENT,
   type SuperadminNavItem,
-  superadminNavItems,
 } from "@/components/superadmin/SuperadminSidebar";
 import SuperadminThemeToggle from "@/components/superadmin/SuperadminThemeToggle";
 import { cn } from "@/lib/utils";
@@ -24,19 +26,33 @@ export default function SuperadminLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [activeHash, setActiveHash] = useState("");
+  const visibleNavItems = getVisibleSuperadminNavItems(user);
+  const blockedAccountsRoute = Boolean(
+    user &&
+      pathname.startsWith("/superadmin/accounts") &&
+      !canAccessSuperadminAccounts(user),
+  );
 
   useEffect(() => {
     if (isLoading) return;
 
     if (!user) {
-      router.replace("/login");
+      router.replace("/auth/login");
       return;
     }
 
     if (user.role !== "superadmin") {
       router.replace(`/${user.role}/dashboard`);
+      return;
     }
-  }, [isLoading, router, user]);
+
+    if (
+      pathname.startsWith("/superadmin/accounts") &&
+      !canAccessSuperadminAccounts(user)
+    ) {
+      router.replace("/superadmin/dashboard");
+    }
+  }, [isLoading, pathname, router, user]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -52,7 +68,7 @@ export default function SuperadminLayout({
 
   const handleLogout = () => {
     logout();
-    router.replace("/login");
+    router.replace("/auth/login");
   };
 
   const handleMobileNavigation = (item: SuperadminNavItem) => {
@@ -67,13 +83,18 @@ export default function SuperadminLayout({
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
       window.history.replaceState(null, "", item.href);
       setActiveHash(item.scrollTo);
+      window.dispatchEvent(
+        new CustomEvent(SUPERADMIN_SECTION_HIGHLIGHT_EVENT, {
+          detail: item.scrollTo,
+        }),
+      );
       return;
     }
 
     router.push(item.href);
   };
 
-  if (isLoading || !user || user.role !== "superadmin") {
+  if (isLoading || !user || user.role !== "superadmin" || blockedAccountsRoute) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3 text-center">
@@ -126,7 +147,7 @@ export default function SuperadminLayout({
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {superadminNavItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = item.scrollTo
                 ? pathname === SUPERADMIN_DASHBOARD_PATH &&
                   activeHash === item.scrollTo
