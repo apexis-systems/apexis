@@ -12,6 +12,7 @@ export interface User {
     profile_pic?: string;
     fcm_token?: string;
     createdAt?: string;
+    diagnostic_data_permission?: boolean | null;
     organization?: {
         id: string;
         name: string;

@@ -70,19 +70,27 @@ export const createOrder = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid plan price configuration" });
     }
 
-    const cycleMultiplier = plan_cycle === "annual" ? 12 : 1;
-    const preTaxAmount = basePlanPrice * cycleMultiplier;
-    const normalizedAmount = Number((preTaxAmount * (1 + GST_RATE)).toFixed(2));
+    // New logic: Price in DB is inclusive of GST
+    // Annual plans get a 35% discount on the basePrice
+    const ANNUAL_DISCOUNT = 0.35;
+    let normalizedAmount = basePlanPrice;
+
+    if (plan_cycle === "annual") {
+      const discountedMonthlyPrice = basePlanPrice * (1 - ANNUAL_DISCOUNT);
+      normalizedAmount = Number((discountedMonthlyPrice * 12).toFixed(2));
+    } else {
+      normalizedAmount = Number(basePlanPrice.toFixed(2));
+    }
 
     if (
       Number.isFinite(requestedAmount) &&
-      Math.abs(requestedAmount - normalizedAmount) > 1 &&
-      Math.abs(requestedAmount - preTaxAmount) > 1
+      Math.abs(requestedAmount - normalizedAmount) > 1
     ) {
       console.warn(
         `createOrder amount mismatch for plan "${plan_name}" (${plan_cycle}): requested=${requestedAmount}, expected=${normalizedAmount}`,
       );
     }
+
     if (normalizedAmount > RAZORPAY_MAX_ORDER_AMOUNT_INR) {
       return res.status(400).json({
         message: `Amount exceeds Razorpay maximum allowed per order (INR ${RAZORPAY_MAX_ORDER_AMOUNT_INR.toLocaleString("en-IN")}).`,
@@ -142,6 +150,7 @@ export const createOrder = async (req: Request, res: Response) => {
       });
   }
 };
+
 
 export const verifyPayment = async (req: Request, res: Response) => {
   try {

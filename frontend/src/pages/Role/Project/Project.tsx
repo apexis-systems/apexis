@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSocket } from '@/contexts/SocketContext';
-import { getProjectById } from '@/services/projectService';
+import { getProjectById, deleteProject } from '@/services/projectService';
+import { toast } from 'sonner';
 import ProjectOverview from '@/pages/Role/Project/ProjectDetails/ProjectOverview';
 import ProjectDocuments from '@/pages/Role/Project/ProjectDetails/ProjectDocuments';
 import ProjectPhotos from '@/pages/Role/Project/ProjectDetails/ProjectPhotos';
@@ -18,7 +19,7 @@ import ProjectRFI from '@/pages/Role/Project/ProjectDetails/ProjectRFI';
 import { getRFIs } from '@/services/rfiService';
 import EditProjectModal from "@/components/Project/EditProjectModal";
 import { cn } from '@/lib/utils';
-import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle, Calendar, Pencil, MapPin } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3, AlertTriangle, BookOpen, HelpCircle, Calendar, Pencil, MapPin, Trash2, Loader2 } from 'lucide-react';
 
 
 
@@ -37,6 +38,7 @@ export default function Project({ id }: ProjectProps) {
 
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [hasPendingRFI, setHasPendingRFI] = useState(false);
 
     const isClient = user?.role === 'client';
@@ -126,7 +128,33 @@ export default function Project({ id }: ProjectProps) {
         }
     }, [socket, isConnected, id, checkRFIs]);
 
-    if (!user || loading) return null;
+    const handleDeleteProject = async () => {
+        if (!user) return;
+        if (!window.confirm("Are you sure you want to permanently delete this project? This action cannot be undone.")) {
+            return;
+        }
+
+        try {
+            setIsDeleting(true);
+            await deleteProject(id);
+            toast.success("Project deleted successfully");
+            router.push(`/${user.role}/dashboard`);
+        } catch (error) {
+            console.error("Failed to delete project:", error);
+            toast.error("Failed to delete project. Please try again.");
+            setIsDeleting(false);
+        }
+    };
+
+    if (!user) return null;
+
+    if (loading && !project) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center bg-background">
+                <Loader2 className="h-10 w-10 animate-spin text-accent" />
+            </div>
+        );
+    }
 
     if (!project) {
         return (
@@ -181,19 +209,41 @@ export default function Project({ id }: ProjectProps) {
                     })}
                 </nav>
             </div>
-            <div className="flex-1 p-8 overflow-y-auto max-w-5xl">
+            <div className="flex-1 p-8 overflow-y-auto max-w-5xl relative">
+                {isDeleting && (
+                    <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-[100] flex items-center justify-center">
+                        <div className="flex flex-col items-center gap-4 bg-card p-8 rounded-xl border border-border shadow-2xl">
+                            <Loader2 className="h-10 w-10 animate-spin text-accent" />
+                            <div className="text-center">
+                                <p className="text-lg font-bold text-foreground">Deleting Project</p>
+                                <p className="text-sm text-muted-foreground">Please wait while we clean up all assets...</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <div className="mb-6">
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
-                        {(user.role === 'admin' || user.role === 'superadmin') && (
-                            <button
-                                onClick={() => setIsEditModalOpen(true)}
-                                className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-accent"
-                                title="Edit Project"
-                            >
-                                <Pencil className="h-4 w-4" />
-                            </button>
-                        )}
+                    <div className="flex items-center justify-between gap-3">
+                        <h1 className="text-2xl font-bold text-foreground truncate">{project.name}</h1>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {(user.role === 'admin' || user.role === 'superadmin') && (
+                                <button
+                                    onClick={() => setIsEditModalOpen(true)}
+                                    className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-accent"
+                                    title="Edit Project"
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </button>
+                            )}
+                            {(user.role === 'admin' || user.role === 'superadmin') && (
+                                <button
+                                    onClick={handleDeleteProject}
+                                    className="p-1 hover:bg-destructive/10 rounded-md transition-colors text-muted-foreground hover:text-destructive"
+                                    title="Delete Project"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
                     </div>
                     {project.description && (
                         <p className="text-sm text-muted-foreground mt-1 max-w-3xl">

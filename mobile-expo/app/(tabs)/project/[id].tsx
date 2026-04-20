@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler, FlatList, Platform, Alert } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,7 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
-import { getProjectById } from '@/services/projectService';
+import { getProjectById, deleteProject } from '@/services/projectService';
 import { PanResponder, Dimensions } from 'react-native';
 import ProjectOverview from '@/components/project/ProjectOverview';
 import ProjectDocuments from '@/components/project/ProjectDocuments';
@@ -22,6 +22,7 @@ import ProjectManuals from '@/components/project/ProjectManuals';
 import { getRFIs } from '@/services/rfiService';
 import MainHeader from '@/components/shared/MainHeader';
 import EditProjectModal from '@/components/project/EditProjectModal';
+import * as ScreenCapture from 'expo-screen-capture';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -37,6 +38,7 @@ export default function ProjectWorkspaceScreen() {
 
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -79,8 +81,21 @@ export default function ProjectWorkspaceScreen() {
     );
 
     useEffect(() => {
+        console.log("tab => ", id, tab, qFolderId, qInitialFolderId, rfiId, snagId, fileId, photoId);
         if (tab && ['overview', 'documents', 'photos', 'rfi', 'reports', 'snags', 'sops'].includes(tab)) {
             setActiveTab(tab as Tab);
+            // For main tabs, also drive the FlatList scroll.
+            // Without this, setActiveTab alone won't move the pager — the FlatList
+            // stays at whatever page it was already on.
+            const targetIndex = visibleTabs.findIndex(t => t.key === tab);
+            if (targetIndex !== -1) {
+                ignoreScrollSync.current = true;
+                setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
+                    // Release the scroll lock after the snap animation finishes
+                    setTimeout(() => { ignoreScrollSync.current = false; }, 600);
+                }, 200); // run after the initial-scroll effect (100ms) so we always win
+            }
         }
     }, [tab]);
 
@@ -147,18 +162,6 @@ export default function ProjectWorkspaceScreen() {
         }
     }, [socket, isConnected, id, checkRFIs]);
 
-    if (!user || loading) return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={colors.primary} />
-        </SafeAreaView>
-    );
-
-    if (!project) return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: colors.text }}>Project not found</Text>
-        </SafeAreaView>
-    );
-
     type TabDef = { key: Tab; label: string; hideForClient?: boolean };
     const tabs: TabDef[] = [
         { key: 'overview', label: 'Overview' },
@@ -167,111 +170,35 @@ export default function ProjectWorkspaceScreen() {
         { key: 'rfi', label: 'RFI' },
     ];
 
-    const visibleTabs = tabs.filter((t) => !(t.hideForClient && user.role === 'client'));
+    const visibleTabs = tabs.filter((t) => !(t.hideForClient && user?.role === 'client'));
 
-    return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
-            <MainHeader
-                showBack
-                onSearchChange={setSearchQuery}
-                searchPlaceholder="Search in project..."
-            />
+    const flatListRef = useRef<FlatList<TabDef>>(null);
+    const ignoreScrollSync = useRef(false);
 
-            {/* Project Title Header */}
-            <View style={{
-                paddingHorizontal: 16,
-                paddingVertical: 16,
-                backgroundColor: colors.background,
-            }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>
-                        {project.name.charAt(0).toUpperCase() + project.name.slice(1)}
-                    </Text>
-                    {user.role === 'admin' && (
-                        <TouchableOpacity
-                            onPress={() => { setIsEditModalOpen(true); setEditModalFocus(null); }}
-                            style={{ padding: 4 }}
-                        >
-                            <Feather name="edit-3" size={18} color={colors.primary} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-                {project.description && (
-                    <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18 }}>
-                        {project.description}
-                    </Text>
-                )}
-            </View>
+    // Sync button press with FlatList
+    const handleTabPress = (tabKey: Tab) => {
+        if (activeTab === tabKey) return;
+        ignoreScrollSync.current = true;
+        setActiveTab(tabKey);
+        router.setParams({ folderId: '' });
+        const index = visibleTabs.findIndex(t => t.key === tabKey);
+        if (index !== -1) {
+            flatListRef.current?.scrollToIndex({ index, animated: true });
+        }
 
+        // Safety timeout to ensure flag is cleared even if momentum doesn't fire
+        setTimeout(() => {
+            ignoreScrollSync.current = false;
+        }, 1000);
+    };
 
+    // Helper to render the content for a specific tab
+    const renderTabScene = (tabKey: Tab) => {
+        if (!user) return null;
 
-            {/* Tab Bar */}
-            <View style={{ backgroundColor: colors.background }}>
-                <View style={{
-                    paddingHorizontal: 12,
-                    paddingBottom: 0,
-                    paddingTop: 8,
-                }}>
-                    <View style={{
-                        flexDirection: 'row',
-                        backgroundColor: isDark ? colors.border : '#e2e8f0',
-                        borderRadius: 12,
-                        padding: 4,
-                        gap: 2
-                    }}>
-                        {visibleTabs.map((tab) => (
-                            <TouchableOpacity
-                                key={tab.key}
-                                onPress={() => {
-                                    setActiveTab(tab.key);
-                                    router.setParams({ folderId: '' });
-                                }}
-                                style={{
-                                    flex: 1,
-                                    borderRadius: 10,
-                                    paddingVertical: 10,
-                                    alignItems: 'center',
-                                    backgroundColor: activeTab === tab.key ? colors.surface : 'transparent',
-                                    // Subtle shadow for active tab
-                                    ...(activeTab === tab.key && !isDark ? {
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 1 },
-                                        shadowOpacity: 0.1,
-                                        shadowRadius: 2,
-                                        elevation: 2,
-                                    } : {})
-                                }}
-                            >
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text
-                                        style={{
-                                            fontSize: 12,
-                                            fontWeight: activeTab === tab.key ? '700' : '500',
-                                            color: activeTab === tab.key ? colors.text : colors.textMuted,
-                                        }}
-                                    >
-                                        {tab.label}
-                                    </Text>
-                                    {tab.key === 'rfi' && hasPendingRFI && (
-                                        <View style={{
-                                            width: 6,
-                                            height: 6,
-                                            borderRadius: 3,
-                                            backgroundColor: colors.primary,
-                                            marginLeft: 4,
-                                            marginTop: -6
-                                        }} />
-                                    )}
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-            </View>
-
-            {/* Tab Content */}
-            <View style={{ flex: 1 }}>
-                {activeTab === 'overview' && (
+        switch (tabKey) {
+            case 'overview':
+                return (
                     <ProjectOverview
                         project={project}
                         userRole={user.role}
@@ -284,82 +211,331 @@ export default function ProjectWorkspaceScreen() {
                                 setEditModalFocus('end_date');
                                 setIsEditModalOpen(true);
                             } else {
-                                setActiveTab(actionId as Tab);
+                                handleTabPress(actionId as Tab);
                             }
                         }}
                     />
-                )}
-                {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} initialFileId={fileId} />}
-                {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} initialFileId={fileId || photoId} />}
-                {activeTab === 'snags' && (
-                    <View style={{ flex: 1 }}>
-                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
-                                <Feather name="arrow-left" size={20} color={colors.text} />
-                            </TouchableOpacity>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
-                        </View>
-                        <ProjectSnagList project={project} initialSnagId={snagId} />
-                    </View>
-                )}
-                {activeTab === 'sops' && (
-                    <View style={{ flex: 1 }}>
-                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
-                                <Feather name="arrow-left" size={20} color={colors.text} />
-                            </TouchableOpacity>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>SOPs & Manuals</Text>
-                        </View>
-                        <ProjectManuals project={project} />
-                    </View>
-                )}
-                {activeTab === 'rfi' && <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />}
+                );
+            case 'documents':
+                return <ProjectDocuments project={project} user={user} initialFolderId={folderId} initialFileId={fileId} />;
+            case 'photos':
+                return <ProjectPhotos project={project} user={user} initialFolderId={folderId} initialFileId={fileId || photoId} />;
+            case 'rfi':
+                return <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />;
+            default:
+                return null;
+        }
+    };
 
-                {/* Internal / Hidden Tabs */}
-                {activeTab === 'reports' && (
-                    <View style={{ flex: 1 }} {...panHandlers}>
-                        <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+    // Instant sync scroll with header highlight
+    const onScroll = useCallback((e: any) => {
+        if (ignoreScrollSync.current) return;
+        const xOffset = e.nativeEvent.contentOffset.x;
+        const decimalIndex = xOffset / SCREEN_WIDTH;
+        const index = Math.round(decimalIndex);
+
+        // Sticky syncing: Only update header when we are 80% into the target page
+        // This prevents the header from 'flickering' through intermediate tabs
+        const distanceToPage = Math.abs(decimalIndex - index);
+        if (distanceToPage > 0.2) return;
+
+        if (visibleTabs[index] && visibleTabs[index].key !== activeTab) {
+            setActiveTab(visibleTabs[index].key);
+        }
+    }, [activeTab, visibleTabs]);
+
+    const stopIgnoring = useCallback(() => {
+        ignoreScrollSync.current = false;
+    }, []);
+
+    // Initial scroll sync — runs once per project (when id changes).
+    // IMPORTANT: do NOT use `activeTab` here — its closure value is always
+    // 'overview' (the default) because state updates from sibling effects
+    // aren't reflected yet. Read `tab` directly from the URL params instead.
+    useEffect(() => {
+        const targetKey = (tab && ['overview', 'documents', 'photos', 'rfi'].includes(tab))
+            ? tab as Tab
+            : 'overview';
+        const index = visibleTabs.findIndex(t => t.key === targetKey);
+        if (index !== -1) {
+            setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index, animated: false });
+            }, 100);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id]); // Reset when project changes — intentionally excludes `tab` from deps
+
+    // Centralized Screen Capture Protection for the entire Project Workspace
+    // Note: On iOS, expo-screen-capture can cause a total black screen for the user 
+    // even during normal viewing on certain devices/simulators.
+    // We only enable it for Android for now to ensure iOS visibility is restored.
+    useEffect(() => {
+        const enableProtection = async () => {
+            try {
+                if (Platform.OS === 'android') {
+                    await ScreenCapture.preventScreenCaptureAsync('project-workspace');
+                }
+            } catch (error) {
+                console.warn('Failed to enable ScreenCapture', error);
+            }
+        };
+        enableProtection();
+        return () => {
+            if (Platform.OS === 'android') {
+                ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
+            }
+        };
+    }, [id]); // Reset only when changing projects or leaving
+
+    const isMainTab = visibleTabs.some(t => t.key === activeTab);
+    const handleDeleteProject = () => {
+        Alert.alert(
+            "Delete Project",
+            "Are you sure you want to permanently delete this project? This action cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            setIsDeleting(true);
+                            await deleteProject(id as string);
+                            router.replace('/');
+                        } catch (error) {
+                            console.error("Failed to delete project:", error);
+                            Alert.alert("Error", "Failed to delete project. Please try again.");
+                        } finally {
+                            setIsDeleting(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    if (!user || loading) return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+        </SafeAreaView>
+    );
+
+    if (!project) return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ color: colors.text }}>Project not found</Text>
+        </SafeAreaView>
+    );
+
+    return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+            <MainHeader
+                showBack
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Search in project..."
+            />
+
+            {isDeleting ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={{ marginTop: 16, color: colors.textMuted, fontSize: 16, fontWeight: '600' }}>Deleting project...</Text>
+                </View>
+            ) : (
+                <>
+                    {/* Project Title Header */}
+                    <View style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 16,
+                        backgroundColor: colors.background,
+                    }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text, flex: 1 }} numberOfLines={1}>
+                                {project.name.charAt(0).toUpperCase() + project.name.slice(1)}
+                            </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <TouchableOpacity onPress={() => setActiveTab('overview')}>
-                                    <Feather name="arrow-left" size={20} color={colors.text} />
-                                </TouchableOpacity>
-                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
+                                {user.role === 'admin' && (
+                                    <TouchableOpacity
+                                        onPress={() => { setIsEditModalOpen(true); setEditModalFocus(null); }}
+                                        style={{ padding: 4 }}
+                                    >
+                                        <Feather name="edit-3" size={18} color={colors.primary} />
+                                    </TouchableOpacity>
+                                )}
+                                {user.role === 'admin' && (
+                                    <TouchableOpacity
+                                        onPress={handleDeleteProject}
+                                        style={{ padding: 4 }}
+                                    >
+                                        <Feather name="trash-2" size={18} color="#ef4444" />
+                                    </TouchableOpacity>
+                                )}
                             </View>
-
-                            <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#e2e8f0', borderRadius: 8, padding: 2 }}>
-                                <TouchableOpacity
-                                    onPress={() => setReportType('daily')}
-                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'daily' ? colors.surface : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>Daily</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setReportType('weekly')}
-                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'weekly' ? colors.surface : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setReportType('monthly')}
-                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'monthly' ? colors.surface : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'monthly' ? colors.text : colors.textMuted }}>Monthly</Text>
-                                </TouchableOpacity>
-                            </View>
-
                         </View>
-                        {reportType === 'daily' ? (
-                            <ProjectDailyReports project={project} userRole={user.role} />
-                        ) : reportType === 'weekly' ? (
-                            <ProjectWeeklyReports project={project} userRole={user.role} />
-                        ) : (
-                            <ProjectMonthlyReports project={project} userRole={user.role} />
+                        {project.description && (
+                            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18 }}>
+                                {project.description}
+                            </Text>
                         )}
-
                     </View>
-                )}
 
-            </View>
+                    {/* Tab Bar (Sticky only for main tabs) */}
+                    <View style={{ backgroundColor: colors.background }}>
+                        <View style={{
+                            paddingHorizontal: 12,
+                            paddingBottom: 0,
+                            paddingTop: 8,
+                        }}>
+                            <View style={{
+                                flexDirection: 'row',
+                                backgroundColor: isDark ? colors.border : '#e2e8f0',
+                                borderRadius: 12,
+                                padding: 4,
+                                gap: 2
+                            }}>
+                                {visibleTabs.map((tab) => (
+                                    <TouchableOpacity
+                                        key={tab.key}
+                                        onPress={() => handleTabPress(tab.key)}
+                                        style={{
+                                            flex: 1,
+                                            borderRadius: 10,
+                                            paddingVertical: 10,
+                                            alignItems: 'center',
+                                            backgroundColor: activeTab === tab.key ? colors.surface : 'transparent',
+                                            ...(activeTab === tab.key && !isDark ? {
+                                                shadowColor: '#000',
+                                                shadowOffset: { width: 0, height: 1 },
+                                                shadowOpacity: 0.1,
+                                                shadowRadius: 2,
+                                                elevation: 2,
+                                            } : {})
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Text
+                                                style={{
+                                                    fontSize: 12,
+                                                    fontWeight: activeTab === tab.key ? '700' : '500',
+                                                    color: activeTab === tab.key ? colors.text : colors.textMuted,
+                                                }}
+                                            >
+                                                {tab.label}
+                                            </Text>
+                                            {tab.key === 'rfi' && hasPendingRFI && (
+                                                <View style={{
+                                                    width: 6,
+                                                    height: 6,
+                                                    borderRadius: 3,
+                                                    backgroundColor: colors.primary,
+                                                    marginLeft: 4,
+                                                    marginTop: -6
+                                                }} />
+                                            )}
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Tab Content */}
+                    <View style={{ flex: 1 }}>
+                        {isMainTab ? (
+                            <FlatList
+                                ref={flatListRef}
+                                data={visibleTabs}
+                                horizontal
+                                pagingEnabled
+                                showsHorizontalScrollIndicator={false}
+                                keyExtractor={(item) => item.key}
+                                renderItem={({ item }) => (
+                                    <View style={{ width: SCREEN_WIDTH, flex: 1 }}>
+                                        {renderTabScene(item.key)}
+                                    </View>
+                                )}
+                                onScroll={onScroll}
+                                onMomentumScrollEnd={stopIgnoring}
+                                onScrollEndDrag={stopIgnoring}
+                                scrollEventThrottle={16}
+                                getItemLayout={(_, index) => ({
+                                    length: SCREEN_WIDTH,
+                                    offset: SCREEN_WIDTH * index,
+                                    index,
+                                })}
+                                windowSize={Platform.OS === 'ios' ? 5 : 2}
+                                initialNumToRender={Platform.OS === 'ios' ? 2 : 1}
+                                maxToRenderPerBatch={Platform.OS === 'ios' ? 2 : 1}
+                                removeClippedSubviews={Platform.OS === 'android'}
+                                style={{ backgroundColor: colors.background }}
+                            />
+                        ) : (
+                            <View style={{ flex: 1 }}>
+                                {activeTab === 'snags' && (
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                                <Feather name="arrow-left" size={20} color={colors.text} />
+                                            </TouchableOpacity>
+                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
+                                        </View>
+                                        <ProjectSnagList project={project} initialSnagId={snagId} />
+                                    </View>
+                                )}
+                                {activeTab === 'sops' && (
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                                <Feather name="arrow-left" size={20} color={colors.text} />
+                                            </TouchableOpacity>
+                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>SOPs & Manuals</Text>
+                                        </View>
+                                        <ProjectManuals project={project} />
+                                    </View>
+                                )}
+                                {activeTab === 'reports' && (
+                                    <View style={{ flex: 1 }} {...panHandlers}>
+                                        <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                                    <Feather name="arrow-left" size={20} color={colors.text} />
+                                                </TouchableOpacity>
+                                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
+                                            </View>
+
+                                            <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#e2e8f0', borderRadius: 8, padding: 2 }}>
+                                                <TouchableOpacity
+                                                    onPress={() => setReportType('daily')}
+                                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'daily' ? colors.surface : 'transparent' }}
+                                                >
+                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>Daily</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    onPress={() => setReportType('weekly')}
+                                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'weekly' ? colors.surface : 'transparent' }}
+                                                >
+                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    onPress={() => setReportType('monthly')}
+                                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'monthly' ? colors.surface : 'transparent' }}
+                                                >
+                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'monthly' ? colors.text : colors.textMuted }}>Monthly</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                        {reportType === 'daily' ? (
+                                            <ProjectDailyReports project={project} userRole={user.role} />
+                                        ) : reportType === 'weekly' ? (
+                                            <ProjectWeeklyReports project={project} userRole={user.role} />
+                                        ) : (
+                                            <ProjectMonthlyReports project={project} userRole={user.role} />
+                                        )}
+                                    </View>
+                                )}
+                            </View>
+                        )}
+                    </View>
+                </>
+            )}
 
             <EditProjectModal
                 isOpen={isEditModalOpen}

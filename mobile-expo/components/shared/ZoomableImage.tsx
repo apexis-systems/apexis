@@ -13,15 +13,19 @@ interface Props {
     height?: number;
     onZoomStateChange?: (isZoomed: boolean) => void;
     onTap?: () => void;
+    onDismiss?: () => void;
 }
 
-export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H, onZoomStateChange, onTap }: Props) {
+export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H, onZoomStateChange, onTap, onDismiss }: Props) {
     const scale = useSharedValue(1);
     const savedScale = useSharedValue(1);
     const translateX = useSharedValue(0);
     const translateY = useSharedValue(0);
     const savedTranslateX = useSharedValue(0);
     const savedTranslateY = useSharedValue(0);
+
+    const dismissY = useSharedValue(0);
+    const dismissScale = useSharedValue(1);
 
     const [isZoomed, setIsZoomed] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -30,12 +34,14 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
     // Reset state when URI changes
     useEffect(() => {
         setHasError(false);
+        dismissY.value = 0;
+        dismissScale.value = 1;
         // Only show loader if we think it might take a moment.
         // We'll let onLoadStart trigger it for real network loads.
         const timer = setTimeout(() => {
             setLoading(false); // Safety timeout
         }, 8000);
-        
+
         return () => clearTimeout(timer);
     }, [uri]);
 
@@ -81,6 +87,25 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
             savedTranslateY.value = translateY.value;
         });
 
+    const dismissPan = Gesture.Pan()
+        .enabled(!isZoomed && !!onDismiss)
+        .maxPointers(1)
+        .activeOffsetY(25) // Increase threshold to give horizontal paging a "head start"
+        .onUpdate((e) => {
+            if (e.translationY > 0) {
+                dismissY.value = e.translationY;
+                dismissScale.value = Math.max(0.8, 1 - (e.translationY / 800));
+            }
+        })
+        .onEnd((e) => {
+            if (e.translationY > 150 || e.velocityY > 800) {
+                if (onDismiss) runOnJS(onDismiss)();
+            } else {
+                dismissY.value = withTiming(0);
+                dismissScale.value = withTiming(1);
+            }
+        });
+
     const doubleTap = Gesture.Tap()
         .numberOfTaps(2)
         .onEnd(() => {
@@ -109,23 +134,31 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [
             { translateX: translateX.value },
-            { translateY: translateY.value },
-            { scale: scale.value },
+            { translateY: translateY.value + dismissY.value },
+            { scale: scale.value * dismissScale.value },
         ],
     }));
 
-    // Combine gestures using deeply nested Simultaneous approach
+    // Combine gestures using a more robust composition
     const innerGestures = Gesture.Simultaneous(pinch, pan);
     const taps = Gesture.Exclusive(doubleTap, singleTap);
-    const all = Gesture.Simultaneous(taps, innerGestures);
+
+    // We Race the dismissal against the inner gestures (scale/pan).
+    // This prevents them from fighting for control.
+    const gestures = Gesture.Race(innerGestures, dismissPan);
+
+    const all = Gesture.Simultaneous(taps, gestures);
 
     return (
         <GestureDetector gesture={all}>
-            <Animated.View style={[{ width, height, justifyContent: 'center', alignItems: 'center' }, animatedStyle]} collapsable={false}>
-                <Image 
-                    key={uri}
-                    source={uri} 
-                    style={{ width: '100%', height: '100%' }} 
+            <Animated.View
+                renderToHardwareTextureAndroid={true}
+                style={[{ width, height, justifyContent: 'center', alignItems: 'center' }, animatedStyle]}
+                collapsable={false}
+            >
+                <Image
+                    source={uri}
+                    style={{ width: '100%', height: '100%' }}
                     contentFit="contain"
                     onLoadStart={() => {
                         // Use a flag to avoid flashing loader for cached images
@@ -142,7 +175,7 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
                     // standard fallback
                     transition={200}
                 />
-                
+
                 {loading && (
                     <View style={{ position: 'absolute', zIndex: 10, justifyContent: 'center', alignItems: 'center' }}>
                         <ActivityIndicator color="#fff" size="large" />
@@ -161,3 +194,4 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
         </GestureDetector>
     );
 }
+

@@ -288,7 +288,7 @@ export const me = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
         const dbUser = await users.findByPk(authUser.user_id, {
-            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'organization_id', 'profile_pic']
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'organization_id', 'profile_pic', 'diagnostic_data_permission']
         });
 
         if (!dbUser) return res.status(404).json({ error: "User not found" });
@@ -805,6 +805,27 @@ export const switchContext = async (req: Request, res: Response) => {
         });
     } catch (error) {
         console.error("Switch Context Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const updateDiagnosticPermission = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { permission } = req.body;
+
+        if (typeof permission !== "boolean" && permission !== null) {
+            return res.status(400).json({ error: "Permission must be a boolean or null value" });
+        }
+
+        await users.update(
+            { diagnostic_data_permission: permission },
+            { where: { id: authUser.user_id } }
+        );
+
+        res.status(200).json({ message: "Diagnostic permission updated successfully" });
+    } catch (error) {
+        console.error("Update Diagnostic Permission Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

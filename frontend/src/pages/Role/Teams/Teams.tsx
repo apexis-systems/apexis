@@ -1,26 +1,38 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, Trash2, Loader2, Mail, ShieldCheck, Clock } from 'lucide-react';
+import { UserPlus, Trash2, Loader2, Mail, ShieldCheck, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { getApiErrorMessage } from '@/helpers/apiError';
 import { getSuperAdmins, inviteSuperAdmin, deleteSuperAdmin } from '@/services/superadminService';
 import { cn } from '@/lib/utils';
 
+interface SuperadminMember {
+    id: number | string;
+    name?: string;
+    email: string;
+    email_verified?: boolean;
+    createdAt?: string;
+    is_primary?: boolean;
+    isPrimaryAdmin?: boolean;
+}
+
+const isPrimarySuperadmin = (member: SuperadminMember) =>
+    Boolean(member?.is_primary ?? member?.isPrimaryAdmin);
+
 const Teams = () => {
     const { user } = useAuth();
-    const { t } = useLanguage();
-    const [members, setMembers] = useState<any[]>([]);
+    const [members, setMembers] = useState<SuperadminMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [showInvite, setShowInvite] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviting, setInviting] = useState(false);
 
-    const [deleteUser, setDeleteUser] = useState<any>(null);
+    const [deleteUser, setDeleteUser] = useState<SuperadminMember | null>(null);
     const [deleting, setDeleting] = useState(false);
 
     const fetchTeams = async () => {
@@ -28,7 +40,7 @@ const Teams = () => {
         try {
             const data = await getSuperAdmins();
             setMembers(data || []);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load team members");
         } finally {
             setLoading(false);
@@ -59,8 +71,8 @@ const Teams = () => {
             setInviteEmail('');
             setShowInvite(false);
             fetchTeams();
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || "Failed to send invitation");
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, "Failed to send invitation"));
         } finally {
             setInviting(false);
         }
@@ -74,8 +86,8 @@ const Teams = () => {
             toast.success("Member removed successfully");
             setDeleteUser(null);
             fetchTeams();
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || "Failed to remove member");
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, "Failed to remove member"));
         } finally {
             setDeleting(false);
         }
@@ -85,8 +97,8 @@ const Teams = () => {
         <div className="p-8 max-w-5xl mx-auto">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground">SuperAdmin Team</h1>
-                    <p className="text-sm text-muted-foreground mt-1">Manage secondary superadmins and pending invitations.</p>
+                    <h1 className="text-2xl font-bold text-foreground">Admin Team</h1>
+                    <p className="text-sm text-muted-foreground mt-1">Manage admin access and invitations.</p>
                 </div>
                 <Button
                     onClick={() => setShowInvite(!showInvite)}
@@ -141,50 +153,54 @@ const Teams = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {members.map(m => (
-                                <tr key={m.id} className="hover:bg-secondary/20 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-bold text-foreground">{m.name}</span>
-                                            <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                <Mail className="h-3 w-3" /> {m.email}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-1.5">
-                                            <ShieldCheck className={cn("h-4 w-4", m.is_primary ? "text-accent" : "text-muted-foreground")} />
-                                            <span className="text-xs font-medium uppercase text-muted-foreground">
-                                                {m.is_primary ? 'Superadmin' : 'admin'}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        {m.email_verified ? (
-                                            <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-green-600 bg-green-500/5 border-green-500/20 text-[10px] py-0 h-5">
-                                                Active
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-amber-600 bg-amber-500/5 border-amber-500/20 text-[10px] py-0 h-5 flex items-center gap-1">
-                                                <Clock className="h-3 w-3" /> Pending
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 text-xs text-muted-foreground">
-                                        {new Date(m.createdAt).toLocaleDateString()}
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        {!m.is_primary && m.id !== user.id && (
-                                            <button
-                                                onClick={() => setDeleteUser(m)}
-                                                className="rounded-lg p-2 hover:bg-destructive/10 transition-colors"
-                                            >
-                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
+                            {members.map((m) => {
+                                const isPrimary = isPrimarySuperadmin(m);
+
+                                return (
+                                    <tr key={m.id} className="hover:bg-secondary/20 transition-colors">
+                                        <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-foreground">{m.name || 'Invited admin'}</span>
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                        <Mail className="h-3 w-3" /> {m.email}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <ShieldCheck className={cn("h-4 w-4", isPrimary ? "text-accent" : "text-muted-foreground")} />
+                                                <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                    {isPrimary ? 'Super Admin' : 'Admin'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {m.email_verified ? (
+                                                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-green-600 bg-green-500/5 border-green-500/20 text-[10px] py-0 h-5">
+                                                    Active
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-amber-600 bg-amber-500/5 border-amber-500/20 text-[10px] py-0 h-5 flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" /> Pending
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-xs text-muted-foreground">
+                                            {m.createdAt ? new Date(m.createdAt).toLocaleDateString() : '—'}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            {!isPrimary && m.id !== user.id && (
+                                                <button
+                                                    onClick={() => setDeleteUser(m)}
+                                                    className="rounded-lg p-2 hover:bg-destructive/10 transition-colors"
+                                                >
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                     {members.length === 0 && (

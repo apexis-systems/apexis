@@ -10,33 +10,29 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import { getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import { formatFileSize } from '@/helpers/format';
+import { groupItemsByMonth } from '@/helpers/grouping';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenCapture from 'expo-screen-capture';
+import FileActionMenu from './FileActionMenu';
+import FolderActionMenu from './FolderActionMenu';
 
 // Removed local ZoomableImage
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectPhotos({ project, user, initialFolderId, initialFileId }: { project: any; user: any; initialFolderId?: string; initialFileId?: string }) {
-    const { colors } = useTheme();
-    useFocusEffect(
-        useCallback(() => {
-            ScreenCapture.preventScreenCaptureAsync('photos-section');
-            return () => {
-                ScreenCapture.allowScreenCaptureAsync('photos-section');
-            };
-        }, [])
-    );
+    const { colors, isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
@@ -51,7 +47,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [editFolderName, setEditFolderName] = useState('');
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
+    const [sortBy, setSortBy] = useState<'name' | 'newest' | 'oldest' | 'size'>('name');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -76,6 +72,17 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [commentLoading, setCommentLoading] = useState(false);
     const [addingComment, setAddingComment] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [projectMembers, setProjectMembers] = useState<any[]>([]);
+    const [mentionQuery, setMentionQuery] = useState('');
+    const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+    const [showMentions, setShowMentions] = useState(false);
+
+    // Action Menu state
+    const [actionMenuVisible, setActionMenuVisible] = useState(false);
+    const [activeActionFile, setActiveActionFile] = useState<any>(null);
+    const [folderMenuVisible, setFolderMenuVisible] = useState(false);
+    const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
+    const [processing, setProcessing] = useState<string | null>(null);
 
     const loadFiles = async (isRefetch = false) => {
         if (!project?.id) return;
@@ -118,7 +125,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     useEffect(() => {
         if (selectedFolder) {
-            setSortBy('date');
+            setSortBy('newest');
         } else {
             setSortBy('name');
         }
@@ -130,7 +137,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const visiblePhotosInit = user.role === 'client' ? currentFolderPhotosForInit.filter((p) => p.client_visible !== false) : currentFolderPhotosForInit;
             const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
                 if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
-                if (sortBy === 'date') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                if (sortBy === 'newest') return new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime();
+                if (sortBy === 'oldest') return new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime();
                 if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
                 return 0;
             });
@@ -157,8 +165,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 const nameB = type === 'folder' ? b.name : b.file_name;
                 return (nameA || '').localeCompare(nameB || '');
             }
-            if (sortBy === 'date') {
-                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            if (sortBy === 'newest') {
+                return new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime();
+            }
+            if (sortBy === 'oldest') {
+                return new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime();
             }
             if (sortBy === 'size') {
                 if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
@@ -213,6 +224,81 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     };
 
+    const loadMembers = async () => {
+        if (!project?.id) return;
+        try {
+            const data = await getProjectMembers(project.id);
+            if (data.members) setProjectMembers(data.members.map((m: any) => m.user));
+        } catch (e) {
+            console.error('loadMembers error:', e);
+        }
+    };
+
+    const handleInputChange = (text: string) => {
+        setCommentText(text);
+
+        // Find the last "@" at the start of a word
+        const lastAtIndex = text.lastIndexOf('@');
+        if (lastAtIndex !== -1 && (lastAtIndex === 0 || text[lastAtIndex - 1] === ' ')) {
+            const query = text.substring(lastAtIndex + 1);
+            // Only trigger if no space after @
+            if (!query.includes(' ')) {
+                setMentionQuery(query);
+                setShowMentions(true);
+                setMentionStartIndex(lastAtIndex);
+                return;
+            }
+        }
+        setShowMentions(false);
+        setMentionStartIndex(-1);
+    };
+
+    const handleSelectMention = (member: any) => {
+        if (mentionStartIndex === -1) return;
+        const before = commentText.substring(0, mentionStartIndex);
+        const newText = `${before}@[${member.id}:${member.name}] `;
+        setCommentText(newText);
+        setShowMentions(false);
+        setMentionStartIndex(-1);
+    };
+
+    const renderCommentText = (text: string) => {
+        if (!text) return null;
+        const mentionRegex = /(@\[(\d+):([^\]]+)\])/g;
+        const parts = text.split(mentionRegex);
+        const result: any[] = [];
+
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+
+            // The split with capturing group returns the matches in specific indices
+            // [non-match, whole-match, id, name, non-match, ...]
+            // Indexing:
+            // 0: text before
+            // 1: whole match @[id:name]
+            // 2: id
+            // 3: name
+            // 4: text after ...
+
+            if (i % 4 === 1) continue; // Skip whole match
+            if (i % 4 === 2) continue; // Skip ID
+            if (i % 4 === 3) {
+                result.push(
+                    <Text key={i} style={{ fontWeight: '800' }}>
+                        @{part}
+                    </Text>
+                );
+                continue;
+            }
+
+            if (part) {
+                result.push(part);
+            }
+        }
+
+        return result;
+    };
+
     const handleAddComment = async () => {
         const photo = sortedPhotos[viewerIndex];
         if (!photo?.id || !commentText.trim()) return;
@@ -237,6 +323,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setIsViewerZoomed(false);
         setShowViewerUI(false);
         setViewerOpen(true);
+        loadMembers();
     };
 
     const closeViewer = () => {
@@ -267,35 +354,35 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }, [viewerOpen, isSelectionMode, selectedFolder, goBack])
     );
 
-    const handleSharePhoto = async () => {
-        const photo = sortedPhotos[viewerIndex];
-        if (!photo?.downloadUrl) return;
-        try {
-            const ext = photo.file_name?.split('.').pop() || 'jpg';
-            const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
+    // const handleSharePhoto = async () => {
+    //     const photo = sortedPhotos[viewerIndex];
+    //     if (!photo?.downloadUrl) return;
+    //     try {
+    //         const ext = photo.file_name?.split('.').pop() || 'jpg';
+    //         const localUri = `${(FileSystem as any).cacheDirectory}${photo.file_name || `photo_${Date.now()}.${ext}`}`;
 
-            setDownloading(true);
-            const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
+    //         setDownloading(true);
+    //         const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
 
-            if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(uri, {
-                    mimeType: photo.file_type || 'image/jpeg',
-                    dialogTitle: photo.file_name || 'Site Photo'
-                });
-            } else {
-                await RNShare.share({
-                    title: photo.file_name || 'Site Photo',
-                    message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
-                    url: photo.downloadUrl,
-                });
-            }
-        } catch (e) {
-            console.error('Share error:', e);
-            Alert.alert("Error", "Failed to share photo");
-        } finally {
-            setDownloading(false);
-        }
-    };
+    //         if (await Sharing.isAvailableAsync()) {
+    //             await Sharing.shareAsync(uri, {
+    //                 mimeType: photo.file_type || 'image/jpeg',
+    //                 dialogTitle: photo.file_name || 'Site Photo'
+    //             });
+    //         } else {
+    //             await RNShare.share({
+    //                 title: photo.file_name || 'Site Photo',
+    //                 message: `${photo.file_name || 'Site Photo'}\n${photo.downloadUrl}`,
+    //                 url: photo.downloadUrl,
+    //             });
+    //         }
+    //     } catch (e) {
+    //         console.error('Share error:', e);
+    //         Alert.alert("Error", "Failed to share photo");
+    //     } finally {
+    //         setDownloading(false);
+    //     }
+    // };
 
     const downloadToGallery = async () => {
         const photo = sortedPhotos[viewerIndex];
@@ -343,37 +430,82 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     // ── Toggle helpers ────────────────────────────────────────────────────────
 
-    const togglePhotoVisibility = async (photo: any) => {
+    const handleToggleVisibility = async (file: any) => {
         try {
-            await toggleFileVisibility(photo.id, !photo.client_visible);
-            setPhotos((prev) => prev.map((p) => p.id === photo.id ? { ...p, client_visible: !photo.client_visible } : p));
-        } catch {
-            Alert.alert('Error', 'Failed to toggle visibility');
+            setProcessing('visibility');
+            await toggleFileVisibility(file.id, !file.client_visible);
+            await loadFiles(true);
+            setActionMenuVisible(false);
+        } catch (e) {
+            Alert.alert("Error", "Failed to update visibility");
+        } finally {
+            setProcessing(null);
         }
     };
 
-    const toggleFolderVis = async (folder: any) => {
+    const handleToggleFolderVis = async (folder: any) => {
         try {
+            setProcessing('visibility');
             await toggleFolderVisibility(folder.id, !folder.client_visible);
-            setFolders((prev) => prev.map((f) => f.id === folder.id ? { ...f, client_visible: !folder.client_visible } : f));
-        } catch {
-            Alert.alert('Error', 'Failed to toggle visibility');
+            await loadFiles(true);
+            setFolderMenuVisible(false);
+        } catch (e) {
+            Alert.alert("Error", "Failed to update visibility");
+        } finally {
+            setProcessing(null);
         }
+    };
+
+    const handleRenameFolder = async (folder: any) => {
+        setEditingFolderId(folder.id);
+        setEditFolderName(folder.name);
+        setShowEditFolder(true);
+    };
+
+    const handleDeleteFolderAction = async (folder: any) => {
+        confirmDeleteFolder(folder);
+    };
+
+    const handleDeleteFile = async (file: any) => {
+        Alert.alert(
+            "Delete Photo",
+            "Are you sure you want to delete this photo?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            setProcessing('delete');
+                            await deleteFile(file.id);
+                            await loadFiles(true);
+                            setActionMenuVisible(false);
+                        } catch (e) {
+                            Alert.alert("Error", "Failed to delete photo");
+                        } finally {
+                            setProcessing(null);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const handleCreateFolder = async () => {
-        if (!newFolderName.trim() || !project?.id) return;
+        if (!newFolderName.trim()) return;
         setSubmitting(true);
         try {
-            const data = await createFolder({ project_id: project.id, name: newFolderName.trim(), parent_id: selectedFolder, folder_type: 'photo' });
-            if (data.folder) {
-                setFolders([...folders, data.folder]);
-                setSelectedFolder(String(data.folder.id));
-                setShowCreateFolder(false);
-                setNewFolderName('');
-            }
-        } catch {
-            Alert.alert('Error', 'Failed to create folder');
+            await createFolder({
+                name: newFolderName.trim(),
+                project_id: project.id,
+                parent_id: selectedFolder,
+            });
+            await loadFiles(true);
+            setNewFolderName('');
+            setShowCreateFolder(false);
+        } catch (e) {
+            Alert.alert("Error", "Failed to create folder");
         } finally {
             setSubmitting(false);
         }
@@ -383,15 +515,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!editFolderName.trim() || !editingFolderId) return;
         setSubmitting(true);
         try {
-            const data = await updateFolder(editingFolderId, editFolderName.trim());
-            if (data.folder) {
-                setFolders(prev => prev.map(f => f.id === editingFolderId ? data.folder : f));
-                setShowEditFolder(false);
-                setEditFolderName('');
-                setEditingFolderId(null);
-            }
-        } catch {
-            Alert.alert('Error', 'Failed to rename folder');
+            await updateFolder(editingFolderId, editFolderName.trim());
+            await loadFiles(true);
+            setShowEditFolder(false);
+            setEditingFolderId(null);
+            setEditFolderName('');
+        } catch (e) {
+            Alert.alert("Error", "Failed to update folder");
         } finally {
             setSubmitting(false);
         }
@@ -399,39 +529,20 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const handleDelete = async (folder: any, force = false) => {
         try {
-            await deleteFolder(folder.id, force);
-            setFolders(prev => prev.filter(f => f.id !== folder.id));
-            if (selectedFolder === String(folder.id)) {
-                setSelectedFolder(folder.parent_id ? String(folder.parent_id) : null);
-            }
-        } catch (e: any) {
-            const data = e.response?.data;
-            if (data?.hasContent) {
+            setProcessing('delete_folder');
+            const data = await deleteFolder(folder.id);
+            if (data.success) {
+                setFolders(folders.filter((f) => f.id !== folder.id));
+                setFolderMenuVisible(false);
                 Alert.alert(
-                    'Folder Not Empty',
-                    `"${folder.name}" contains files or subfolders. How would you like to proceed?`,
+                    'Success',
+                    data.message || 'Folder deleted successfully.',
                     [
-                        { text: 'Cancel', style: 'cancel' },
                         {
-                            text: 'Move Contents',
+                            text: 'OK',
                             onPress: () => {
-                                const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
-                                const childFiles = photos.filter(p => String(p.folder_id) === String(folder.id));
-
-                                if (childFolders.length === 0 && childFiles.length === 0) {
-                                    Alert.alert("Info", "Folder is already empty");
-                                    return;
-                                }
-
-                                setMovingContentsOf(folder);
-                                setMovingItem(null);
-                                setShowMoveDialog(true);
+                                if (selectedFolder === folder.id) setSelectedFolder(null);
                             }
-                        },
-                        {
-                            text: 'Delete Everything',
-                            style: 'destructive',
-                            onPress: () => handleDelete(folder, true)
                         }
                     ]
                 );
@@ -439,6 +550,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 const msg = data?.error || 'Failed to delete folder';
                 Alert.alert('Error', msg);
             }
+        } finally {
+            setProcessing(null);
         }
     };
 
@@ -472,7 +585,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     };
 
     const handleLongPress = (type: 'folder' | 'file', id: string | number) => {
-        if (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') {
+        if (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor' || user.role === 'client') {
             setIsSelectionMode(true);
             toggleSelection(type, id);
         }
@@ -486,6 +599,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const handleBulkVisibility = async (visible: boolean) => {
         try {
+            setProcessing('bulk_visibility');
             const promises = [];
             if (selectedFolders.size > 0) {
                 promises.push(bulkUpdateFolders({ ids: Array.from(selectedFolders), client_visible: visible }));
@@ -496,16 +610,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             await Promise.all(promises);
             Alert.alert("Success", "Visibility updated");
             // Refresh
-            getProjectFiles(project.id, 'photo')
-                .then((data) => {
-                    if (data.folderData) setFolders(data.folderData);
-                    if (data.fileData) {
-                        setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
-                    }
-                });
+            await loadFiles(true);
             clearSelection();
         } catch (e) {
             Alert.alert("Error", "Failed to update visibility");
+        } finally {
+            setProcessing(null);
         }
     };
 
@@ -545,6 +655,54 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     };
 
+    const handleShareProject = async () => {
+        try {
+            const { getProjectShareLinks } = require('@/services/projectService');
+            const links = await getProjectShareLinks(project.id, user.role);
+            const link = user.role === 'client' ? links.clientLink : links.contributorLink;
+            if (link) {
+                await RNShare.share({
+                    message: `Join ${project.name} on Apexis: ${link}`,
+                });
+            } else {
+                Alert.alert("Info", "Share link not available");
+            }
+        } catch (error) {
+            Alert.alert("Error", "Failed to get share link");
+        }
+    };
+
+
+    const handleSharePhoto = async (photo?: any) => {
+        const photoToShare = photo || (selectedFiles.size > 0 ? photos.find(p => p.id === Array.from(selectedFiles)[0]) : null);
+        if (!photoToShare) return;
+        
+        try {
+            setDownloading(true);
+            const ext = photoToShare.file_name?.split('.').pop() || 'jpg';
+            const localUri = `${(FileSystem as any).cacheDirectory}${photoToShare.file_name || `photo_${Date.now()}.${ext}`}`;
+            
+            const { uri } = await FileSystem.downloadAsync(photoToShare.downloadUrl, localUri);
+            
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    mimeType: photoToShare.file_type || 'image/jpeg',
+                    dialogTitle: photoToShare.file_name || 'Site Photo'
+                });
+            } else {
+                await RNShare.share({
+                    title: photoToShare.file_name,
+                    url: photoToShare.downloadUrl,
+                });
+            }
+        } catch (e) {
+            Alert.alert("Error", "Failed to share photo");
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+
     const getBreadcrumbs = () => {
         if (!currentFolder) return [];
         const path: any[] = [];
@@ -561,7 +719,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     return (
         <View style={{ flex: 1 }}>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-                {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') && (
+                {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') ? (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity
                             onPress={() => router.push(`/(tabs)/upload?projectId=${project.id}&type=photos&folderId=${selectedFolder || ''}`)}
@@ -578,7 +736,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
                         </TouchableOpacity>
                     </View>
-                )}
+                ) : null}
 
                 {loading ? (
                     <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
@@ -627,7 +785,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                             <TouchableOpacity
                                 onPress={() => {
-                                    const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
+                                    let next: any = 'name';
+                                    if (sortBy === 'name') next = 'newest';
+                                    else if (sortBy === 'newest') next = 'oldest';
+                                    else if (sortBy === 'oldest') next = 'size';
+                                    else if (sortBy === 'size') next = 'name';
                                     setSortBy(next);
                                 }}
                                 style={{
@@ -696,16 +858,19 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                             {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
                                         </Text>
-                                        {/* Folder Visibility Icon - Indicator/Toggle */}
-                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
+                                        {/* Folder Action Menu - Hidden for Clients */}
+                                        {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                                             <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
                                                 <TouchableOpacity
-                                                    onPress={() => toggleFolderVis(folder)}
+                                                    onPress={() => {
+                                                        setActiveActionFolder(folder);
+                                                        setFolderMenuVisible(true);
+                                                    }}
                                                 >
                                                     <Feather
-                                                        name={folder.client_visible !== false ? 'eye' : 'eye-off'}
+                                                        name="more-vertical"
                                                         size={14}
-                                                        color={folder.client_visible !== false ? colors.primary : colors.textMuted}
+                                                        color={colors.textMuted}
                                                     />
                                                 </TouchableOpacity>
                                             </View>
@@ -724,124 +889,183 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     </View>
                 )}
 
-                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 4 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
-                    {sortedPhotos.map((photo, index) => {
-                        const isSelected = selectedFiles.has(photo.id);
-                        if (viewMode === 'grid') {
-                            return (
-                                <View
-                                    key={photo.id}
-                                    style={{
-                                        width: '24%',
-                                        aspectRatio: 1,
-                                        backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                        borderRadius: 10,
-                                        overflow: 'hidden',
-                                        borderWidth: 1,
-                                        borderColor: isSelected ? colors.primary : colors.border,
-                                        position: 'relative'
-                                    }}
-                                >
-                                    <TouchableOpacity
-                                        onPress={() => {
-                                            if (isSelectionMode) toggleSelection('file', photo.id);
-                                            else openViewer(index);
-                                        }}
-                                        onLongPress={() => handleLongPress('file', photo.id)}
+                <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                    {(() => {
+                        const renderPhotoItem = (photo: any, index: number) => {
+                            const isSelected = selectedFiles.has(photo.id);
+                            if (viewMode === 'grid') {
+                                return (
+                                    <View
+                                        key={photo.id}
                                         style={{
-                                            ...StyleSheet.absoluteFillObject,
-                                            zIndex: 5,
+                                            width: '23.8%',
+                                            aspectRatio: 1,
+                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
+                                            borderRadius: 10,
+                                            overflow: 'hidden',
+                                            borderWidth: 1,
+                                            borderColor: isSelected ? colors.primary : colors.border,
+                                            position: 'relative'
                                         }}
-                                    />
-                                    <Image 
-                                        source={photo.downloadUrl} 
-                                        style={{ width: '100%', height: '100%' }} 
-                                        contentFit="cover"
-                                        transition={200}
-                                    />
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (isSelectionMode) toggleSelection('file', photo.id);
+                                                else openViewer(sortedPhotos.findIndex(p => p.id === photo.id));
+                                            }}
+                                            onLongPress={() => handleLongPress('file', photo.id)}
+                                            style={{
+                                                ...StyleSheet.absoluteFillObject,
+                                                zIndex: 5,
+                                            }}
+                                        />
+                                        <Image
+                                            source={photo.downloadUrl}
+                                            style={{ width: '100%', height: '100%' }}
+                                            contentFit="cover"
+                                            transition={200}
+                                        />
 
-                                    {isSelected && (
-                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                            <Feather name="check" size={10} color="#fff" />
+                                        {isSelected && (
+                                            <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                <Feather name="check" size={10} color="#fff" />
+                                            </View>
+                                        )}
+                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                            <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 10 }}>
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setActiveActionFile(photo);
+                                                        setActionMenuVisible(true);
+                                                    }}
+                                                    style={{ 
+                                                        width: 24, 
+                                                        height: 24, 
+                                                        borderRadius: 12, 
+                                                        backgroundColor: colors.surface,
+                                                        borderWidth: 1,
+                                                        borderColor: colors.border,
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        shadowColor: '#000',
+                                                        shadowOffset: { width: 0, height: 1 },
+                                                        shadowOpacity: isDark ? 0.3 : 0.1,
+                                                        shadowRadius: 1,
+                                                        elevation: 2
+                                                    }}
+                                                >
+                                                    <Feather
+                                                        name="more-vertical"
+                                                        size={14}
+                                                        color={colors.text}
+                                                    />
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+                                        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 6 }}>
+                                            <Text numberOfLines={1} style={{ fontSize: 9, color: '#fff', textAlign: 'center' }}>{photo.file_name}</Text>
                                         </View>
-                                    )}
-                                    {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
-                                        <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                            <TouchableOpacity
-                                                onPress={() => togglePhotoVisibility(photo)}
-                                            >
-                                                <Feather
-                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'}
-                                                    size={14}
-                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted}
-                                                />
-                                            </TouchableOpacity>
-                                        </View>
-                                    )}
-                                    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 6 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 9, color: '#fff', textAlign: 'center' }}>{photo.file_name}</Text>
                                     </View>
-                                </View>
-                            );
-                        } else {
-                            // List View Mode
-                            return (
-                                <View
-                                    key={photo.id}
-                                    style={{
+                                );
+                            } else {
+                                // List View Mode
+                                return (
+                                    <View
+                                        key={photo.id}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            borderRadius: 12,
+                                            backgroundColor: isSelected ? (isDark ? 'rgba(249,115,22,0.2)' : 'rgba(249,115,22,0.1)') : colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: isSelected ? colors.primary : colors.border,
+                                            padding: 10,
+                                            marginVertical: 4,
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (isSelectionMode) toggleSelection('file', photo.id);
+                                                else openViewer(sortedPhotos.findIndex(p => p.id === photo.id));
+                                            }}
+                                            onLongPress={() => handleLongPress('file', photo.id)}
+                                            style={{
+                                                ...StyleSheet.absoluteFillObject,
+                                                zIndex: 5,
+                                            }}
+                                        />
+                                        <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface }}>
+                                            <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                                        </View>
+                                        {isSelected && (
+                                            <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                <Feather name="check" size={10} color="#fff" />
+                                            </View>
+                                        )}
+                                        <View style={{ flex: 1 }}>
+                                            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{photo.file_name}</Text>
+                                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(photo.file_size_mb)}</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
+                                            {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setActiveActionFile(photo);
+                                                        setActionMenuVisible(true);
+                                                    }}
+                                                    style={{ padding: 4 }}
+                                                >
+                                                    <Feather
+                                                        name="more-vertical"
+                                                        size={16}
+                                                        color={colors.textMuted}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                );
+                            }
+                        };
+
+                        if (sortBy === 'newest' || sortBy === 'oldest') {
+                            const groups = groupItemsByMonth(sortedPhotos);
+                            return groups.map((group) => (
+                                <View key={group.title} style={{ marginBottom: 20 }}>
+                                    <View style={{
+                                        paddingVertical: 12,
+                                        backgroundColor: 'transparent',
                                         flexDirection: 'row',
                                         alignItems: 'center',
-                                        gap: 12,
-                                        borderRadius: 12,
-                                        backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
-                                        borderWidth: 1,
-                                        borderColor: isSelected ? colors.primary : colors.border,
-                                        padding: 10,
-                                        position: 'relative',
-                                        overflow: 'hidden'
-                                    }}
-                                >
-                                    <TouchableOpacity
-                                        onPress={() => {
-                                            if (isSelectionMode) toggleSelection('file', photo.id);
-                                            else openViewer(index);
-                                        }}
-                                        onLongPress={() => handleLongPress('file', photo.id)}
-                                        style={{
-                                            ...StyleSheet.absoluteFillObject,
-                                            zIndex: 5,
-                                        }}
-                                    />
-                                    <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface }}>
-                                        <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                        justifyContent: 'space-between'
+                                    }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
+                                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
                                     </View>
-                                    {isSelected && (
-                                        <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                            <Feather name="check" size={10} color="#fff" />
-                                        </View>
-                                    )}
-                                    <View style={{ flex: 1 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{photo.file_name}</Text>
-                                        <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(photo.file_size_mb)}</Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', gap: 6, zIndex: 10 }}>
-                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
-                                            <TouchableOpacity
-                                                onPress={() => togglePhotoVisibility(photo)}
-                                                style={{ padding: 6 }}
-                                            >
-                                                <Feather
-                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'}
-                                                    size={16}
-                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted}
-                                                />
-                                            </TouchableOpacity>
-                                        )}
+                                    <View style={{
+                                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                        gap: viewMode === 'grid' ? 4 : 8
+                                    }}>
+                                        {group.data.map((p, i) => renderPhotoItem(p, i))}
                                     </View>
                                 </View>
-                            );
+                            ));
                         }
-                    })}
+
+                        return (
+                            <View style={{
+                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                gap: viewMode === 'grid' ? 4 : 4
+                            }}>
+                                {sortedPhotos.map((photo, index) => renderPhotoItem(photo, index))}
+                            </View>
+                        );
+                    })()}
                 </View>
 
                 {sortedPhotos.length === 0 && sortedFolders.length > 0 && (
@@ -876,126 +1100,151 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 </View>
             </Modal>
 
-            {/* Bulk Action Bar */}
+            {/* Bulk Action Bar - Now enabled for Clients too */}
             {isSelectionMode && (selectedFolders.size > 0 || selectedFiles.size > 0) && (
                 <View style={{
-                    position: 'absolute',
-                    bottom: 15,
-                    left: 20,
-                    right: 20,
-                    backgroundColor: colors.surface,
-                    borderRadius: 35,
-                    height: 64,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingHorizontal: 20,
-                    elevation: 12,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 6 },
-                    shadowOpacity: 0.35,
-                    shadowRadius: 8,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    zIndex: 1000,
+                    position: 'absolute', bottom: 15, left: 20, right: 20,
+                    backgroundColor: colors.surface, borderRadius: 35, height: 64,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    paddingHorizontal: 20, elevation: 12, shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 8,
+                    borderWidth: 1, borderColor: colors.border, zIndex: 1000,
                 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                         <TouchableOpacity onPress={clearSelection} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
                             <Feather name="x" size={18} color={colors.text} />
                         </TouchableOpacity>
-                        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{selectedFolders.size + selectedFiles.size} selected</Text>
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 15, alignItems: 'center', paddingRight: 15 }}>
-                            {/* Share - Only if files selected */}
-                            {selectedFiles.size > 0 && (
-                                <TouchableOpacity onPress={handleBulkShare} style={{ padding: 4 }}>
-                                    <Feather name="share-2" size={20} color={colors.primary} />
-                                </TouchableOpacity>
-                            )}
+                        <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>{selectedFolders.size + selectedFiles.size}</Text>
+                        <View style={{ flex: 1, marginLeft: 0 }}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 15, alignItems: 'center', paddingRight: 10, paddingLeft: 10, flex: 1, justifyContent: 'flex-end' }}>
+                                {/* Share - Only if files selected */}
+                                {selectedFiles.size > 0 && (
+                                    <TouchableOpacity 
+                                        onPress={() => handleSharePhoto()} 
+                                        style={{ padding: 4 }}
+                                        disabled={processing !== null}
+                                    >
+                                        <Feather name="share-2" size={18} color={colors.primary} />
+                                    </TouchableOpacity>
+                                )}
 
-                            {/* Edit - Only if single folder selected */}
-                            {selectedFolders.size === 1 && selectedFiles.size === 0 && (
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        const folderId = Array.from(selectedFolders)[0];
-                                        const folder = folders.find(f => f.id === folderId);
-                                        if (folder) {
-                                            setEditingFolderId(folder.id);
-                                            setEditFolderName(folder.name);
-                                            setShowEditFolder(true);
+                                {/* Edit - Only if single folder selected */}
+                                {selectedFolders.size === 1 && selectedFiles.size === 0 && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            const folderId = Array.from(selectedFolders)[0];
+                                            const folder = folders.find(f => f.id === folderId);
+                                            if (folder) {
+                                                setEditingFolderId(folder.id);
+                                                setEditFolderName(folder.name);
+                                                setShowEditFolder(true);
+                                            }
+                                        }}
+                                        style={{ padding: 4 }}
+                                        disabled={processing !== null}
+                                    >
+                                        <Feather name="edit-2" size={18} color={colors.primary} />
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Delete - ONLY for single folder or files you uploaded */}
+                                {(() => {
+                                    if (selectedFolders.size === 1 && selectedFiles.size === 0) {
+                                        // Folder delete for admins only
+                                        if (user.role === 'admin' || user.role === 'superadmin') {
+                                            return (
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        const folderId = Array.from(selectedFolders)[0];
+                                                        const folder = folders.find(f => f.id === folderId);
+                                                        if (folder) confirmDeleteFolder(folder);
+                                                    }}
+                                                    style={{ padding: 4 }}
+                                                    disabled={processing !== null}
+                                                >
+                                                    {processing === 'delete_folder' ? (
+                                                        <ActivityIndicator size="small" color="#ef4444" />
+                                                    ) : (
+                                                        <Feather name="trash-2" size={18} color="#ef4444" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            );
                                         }
-                                    }}
-                                    style={{ padding: 4 }}
-                                >
-                                    <Feather name="edit-2" size={20} color={colors.primary} />
-                                </TouchableOpacity>
-                            )}
-
-                            {/* Delete - Context aware */}
-                            {(() => {
-                                let canDelete = false;
-                                if (selectedFolders.size > 0) canDelete = true; // Admin/Contrib can delete folders
-                                if (selectedFiles.size === 1 && selectedFolders.size === 0) {
-                                    const fileId = Array.from(selectedFiles)[0];
-                                    const file = photos.find(p => p.id === fileId);
-                                    if (file && (String(file.created_by) === String(user.id) || String(file.creator?.id) === String(user.id) || user.role === 'admin' || user.role === 'superadmin')) {
-                                        canDelete = true;
+                                    } else if (selectedFiles.size === 1 && selectedFolders.size === 0) {
+                                        // File delete ONLY for uploader
+                                        const fileId = Array.from(selectedFiles)[0];
+                                        const file = photos.find(p => p.id === fileId);
+                                        if (file && (String(file.created_by) === String(user.id))) {
+                                            return (
+                                                <TouchableOpacity
+                                                    onPress={() => handleDeleteFile(file)}
+                                                    style={{ padding: 4 }}
+                                                    disabled={processing !== null}
+                                                >
+                                                    {processing === 'delete' ? (
+                                                        <ActivityIndicator size="small" color="#ef4444" />
+                                                    ) : (
+                                                        <Feather name="trash-2" size={18} color="#ef4444" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            );
+                                        }
                                     }
-                                } else if (selectedFiles.size > 1) {
-                                    canDelete = user.role === 'admin' || user.role === 'superadmin';
-                                }
+                                    return null;
+                                })()}
 
-                                if (canDelete) {
-                                    return (
+                                {/* Visibility Toggle - Admin, Contributor, and Client */}
+                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor' || user.role === 'client') && (
+                                    <>
                                         <TouchableOpacity
-                                            onPress={() => {
-                                                if (selectedFolders.size === 1 && selectedFiles.size === 0) {
-                                                    const folderId = Array.from(selectedFolders)[0];
-                                                    const folder = folders.find(f => f.id === folderId);
-                                                    if (folder) confirmDeleteFolder(folder);
-                                                } else if (selectedFiles.size === 1 && selectedFolders.size === 0) {
-                                                    const fileId = Array.from(selectedFiles)[0];
-                                                    const file = photos.find(p => p.id === fileId);
-                                                    if (file) confirmDeletePhoto(file);
-                                                } else {
-                                                    // Bulk delete not implemented as a single service call, but could be added
-                                                    Alert.alert("Bulk Delete", "Delete selected items?", [
-                                                        { text: "Cancel", style: "cancel" },
-                                                        {
-                                                            text: "Delete", style: "destructive", onPress: () => {
-                                                                // Fallback to existing single delete logic for now or tell user to delete one by one
-                                                                Alert.alert("Note", "Please delete items individually for now or use the web interface for bulk deletion.");
-                                                            }
-                                                        }
-                                                    ]);
-                                                }
-                                            }}
+                                            onPress={() => handleBulkVisibility(true)}
                                             style={{ padding: 4 }}
+                                            disabled={processing !== null}
                                         >
-                                            <Feather name="trash-2" size={20} color="#ef4444" />
+                                            {processing === 'bulk_visibility' ? (
+                                                <ActivityIndicator size="small" color={colors.primary} />
+                                            ) : (
+                                                <Feather name="eye" size={18} color={colors.primary} />
+                                            )}
                                         </TouchableOpacity>
-                                    );
-                                }
-                                return null;
-                            })()}
+                                        <TouchableOpacity
+                                            onPress={() => handleBulkVisibility(false)}
+                                            style={{ padding: 4 }}
+                                            disabled={processing !== null}
+                                        >
+                                            {processing === 'bulk_visibility' ? (
+                                                <ActivityIndicator size="small" color={colors.textMuted} />
+                                            ) : (
+                                                <Feather name="eye-off" size={18} color={colors.textMuted} />
+                                            )}
+                                        </TouchableOpacity>
+                                    </>
+                                )}
 
-                            <TouchableOpacity onPress={() => { setMovingItem(null); setShowMoveDialog(true); }} style={{ padding: 4 }}>
-                                <Feather name="move" size={20} color={colors.primary} />
-                            </TouchableOpacity>
-
-                            {user.role === 'admin' || user.role === 'superadmin' ? (
-                                <>
-                                    <View style={{ height: 20, width: 1, backgroundColor: colors.border, marginHorizontal: 2 }} />
-                                    <TouchableOpacity onPress={() => handleBulkVisibility(true)} style={{ padding: 4 }}>
-                                        <Feather name="eye" size={20} color={colors.primary} />
+                                {/* Move Option - Admin only for folders, Admin/Contributor for files */}
+                                {((selectedFolders.size > 0 && (user.role === 'admin' || user.role === 'superadmin')) || (selectedFiles.size > 0)) && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (selectedFolders.size === 1 && selectedFiles.size === 0) {
+                                                const folderId = Array.from(selectedFolders)[0];
+                                                setMovingItem({ type: 'folder', id: folderId });
+                                                setShowMoveDialog(true);
+                                            } else if (selectedFiles.size === 1 && selectedFolders.size === 0) {
+                                                const fileId = Array.from(selectedFiles)[0];
+                                                setMovingItem({ type: 'file', id: fileId });
+                                                setShowMoveDialog(true);
+                                            } else {
+                                                Alert.alert("Info", "Select a single item to move");
+                                            }
+                                        }}
+                                        style={{ padding: 4 }}
+                                        disabled={processing !== null}
+                                    >
+                                        <Feather name="folder-minus" size={18} color={colors.primary} />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => handleBulkVisibility(false)} style={{ padding: 4 }}>
-                                        <Feather name="eye-off" size={20} color={colors.textMuted} />
-                                    </TouchableOpacity>
-                                </>
-                            ) : null}
-                        </ScrollView>
+                                )}
+                            </ScrollView>
+                        </View>
                     </View>
                 </View>
             )}
@@ -1084,6 +1333,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             pagingEnabled
                             scrollEnabled={!isViewerZoomed}
                             showsHorizontalScrollIndicator={false}
+                            removeClippedSubviews={Platform.OS === 'android'}
+                            windowSize={3}
+                            initialNumToRender={1}
+                            maxToRenderPerBatch={1}
                             keyExtractor={(item) => item.id.toString()}
                             getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
                             onMomentumScrollEnd={(e) => {
@@ -1101,6 +1354,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 height={viewerHeight}
                                                 onZoomStateChange={setIsViewerZoomed}
                                                 onTap={() => setShowViewerUI(prev => !prev)}
+                                                onDismiss={closeViewer}
                                             />
                                         </View>
                                     </View>
@@ -1119,7 +1373,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
                                             {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
                                         </Text>
-                                        
+
                                         {(sortedPhotos[viewerIndex]?.location || sortedPhotos[viewerIndex]?.tags) && (
                                             <View style={{ marginTop: 8, gap: 8 }}>
                                                 {sortedPhotos[viewerIndex]?.location && (
@@ -1130,7 +1384,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{sortedPhotos[viewerIndex].location}</Text>
                                                     </View>
                                                 )}
-                                                
+
                                                 {sortedPhotos[viewerIndex]?.tags && (
                                                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                                                         <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
@@ -1167,12 +1421,16 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                     <Text style={{ color: '#888', fontSize: 9 }}>↩ Reply</Text>
                                                                 </TouchableOpacity>
                                                             </View>
-                                                            <Text style={{ color: '#ddd', fontSize: 11 }}>{c.text}</Text>
+                                                            <Text style={{ color: '#ddd', fontSize: 11 }}>
+                                                                {renderCommentText(c.text)}
+                                                            </Text>
                                                         </View>
                                                         {c.replies?.map((r: any) => (
                                                             <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
                                                                 <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || 'User'}</Text>
-                                                                <Text style={{ color: '#ccc', fontSize: 10 }}>{r.text}</Text>
+                                                                <Text style={{ color: '#ccc', fontSize: 10 }}>
+                                                                    {renderCommentText(r.text)}
+                                                                </Text>
                                                             </View>
                                                         ))}
                                                     </View>
@@ -1187,10 +1445,28 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 </TouchableOpacity>
                                             </View>
                                         )}
+                                        {showMentions && (
+                                            <View style={{ position: 'absolute', bottom: 50, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000 }}>
+                                                <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
+                                                    {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
+                                                        <TouchableOpacity
+                                                            key={m.id}
+                                                            onPress={() => handleSelectMention(m)}
+                                                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                                                        >
+                                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                            </View>
+                                                            <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </ScrollView>
+                                            </View>
+                                        )}
                                         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
                                             <TextInput
                                                 value={commentText}
-                                                onChangeText={setCommentText}
+                                                onChangeText={handleInputChange}
                                                 placeholder="Add a comment…"
                                                 placeholderTextColor="#555"
                                                 style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
@@ -1239,6 +1515,36 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     </View>
                 </View>
             </Modal>
+
+            {/* File Action Menu */}
+            <FileActionMenu
+                isVisible={actionMenuVisible}
+                onClose={() => setActionMenuVisible(false)}
+                onHideUnhide={() => handleToggleVisibility(activeActionFile)}
+                onDoNotFollow={() => {}} 
+                onDelete={() => handleDeleteFile(activeActionFile)}
+                onShare={() => handleSharePhoto(activeActionFile)}
+                showDoNotFollow={false}
+                isAdmin={user.role === 'admin' || user.role === 'superadmin'}
+                clientVisible={activeActionFile?.client_visible !== false}
+                doNotFollow={false}
+                canDelete={activeActionFile && (String(activeActionFile.created_by) === String(user.id))}
+                fileName={activeActionFile?.file_name || ''}
+                isProcessing={processing !== null}
+            />
+
+            <FolderActionMenu
+                isVisible={folderMenuVisible}
+                onClose={() => setFolderMenuVisible(false)}
+                onHideUnhide={() => handleToggleFolderVis(activeActionFolder)}
+                onRename={() => handleRenameFolder(activeActionFolder)}
+                onDelete={() => handleDeleteFolderAction(activeActionFolder)}
+                isAdmin={user.role === 'admin' || user.role === 'superadmin'}
+                clientVisible={activeActionFolder?.client_visible !== false}
+                folderName={activeActionFolder?.name || ''}
+                isProcessing={processing !== null}
+            />
         </View>
     );
 }
+                        

@@ -60,6 +60,7 @@ const plans = [
     monthlyPrice: "₹40,000",
     monthlyValue: 40000,
     baseValue: 40000,
+    isSubscription: true,
     period: "/month",
     recommended: false,
     buttonText: "Get Started",
@@ -84,6 +85,7 @@ const plans = [
     monthlyPrice: "₹60,000",
     monthlyValue: 60000,
     baseValue: 60000,
+    isSubscription: true,
     period: "/month",
     recommended: true,
     buttonText: "Upgrade to Pro",
@@ -102,6 +104,7 @@ const plans = [
       "Secure Data Storage",
     ],
   },
+
   {
     name: "Enterprise",
     key: "enterprise",
@@ -136,8 +139,7 @@ const Billing = () => {
   const [loading, setLoading] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const gstAmount = (base: number) => Number((base * 0.18).toFixed(2));
-  const payableAmount = (base: number) => Number((base + gstAmount(base)).toFixed(2));
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
 
   useEffect(() => {
     if (user && (user.role === "admin" || user.role === "superadmin")) {
@@ -167,6 +169,14 @@ const Billing = () => {
     });
   };
 
+  const getEffectivePrice = (plan: any) => {
+
+
+    if (!plan.isSubscription && plan.key !== "onetime") return plan.monthlyValue;
+    if (plan.key === "onetime") return plan.monthlyValue;
+    return billingCycle === "annual" ? plan.monthlyValue * 0.65 : plan.monthlyValue;
+  };
+
   const handlePayment = async (plan: any) => {
     if (plan.key === "enterprise") {
       window.location.href =
@@ -185,11 +195,16 @@ const Billing = () => {
         return;
       }
 
+      const effectivePrice = getEffectivePrice(plan);
+      const finalAmount = billingCycle === "annual" && plan.key !== "onetime" 
+        ? effectivePrice * 12 
+        : effectivePrice;
+
       const orderData = await subscriptionService.createOrder({
-        amount: plan.monthlyValue,
+        amount: finalAmount,
         currency: "INR",
         plan_name: plan.name,
-        plan_cycle: "monthly",
+        plan_cycle: plan.key === "onetime" ? "monthly" : billingCycle,
       });
 
       const { order } = orderData;
@@ -214,7 +229,7 @@ const Billing = () => {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
               plan_name: plan.name,
-              plan_cycle: "monthly",
+              plan_cycle: plan.key === "onetime" ? "monthly" : billingCycle,
             });
             toast.success("Payment successful! Your plan has been upgraded.");
             loadTransactions();
@@ -264,7 +279,7 @@ const Billing = () => {
       setLoading(null);
     }
   };
-  
+
   const handleDownloadInvoice = async (tx: any) => {
     setDownloadingId(tx.id);
     try {
@@ -294,6 +309,23 @@ const Billing = () => {
           Choose the plan that fits your team
         </p>
       </div>
+
+      <div className="flex items-center justify-center gap-4 mb-10">
+        <span className={cn("text-sm font-medium transition-colors", billingCycle === "monthly" ? "text-foreground" : "text-muted-foreground")}>Monthly</span>
+        <button
+          onClick={() => setBillingCycle(billingCycle === "monthly" ? "annual" : "monthly")}
+          className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 bg-[#FF8A3D]"
+        >
+          <span className={cn(
+            "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform",
+            billingCycle === "annual" ? "translate-x-5" : "translate-x-1"
+          )} />
+        </button>
+        <span className={cn("text-sm font-medium transition-colors", billingCycle === "annual" ? "text-foreground" : "text-muted-foreground")}>
+          Annual <span className="text-orange-500 font-bold ml-1 text-xs">(Save 35%)</span>
+        </span>
+      </div>
+
       <Tabs defaultValue="plans" className="w-full">
         <TabsList className="grid w-full grid-cols-3 max-w-[450px] mx-auto mb-10 text-foreground">
           <TabsTrigger value="plans" className="flex items-center gap-2">
@@ -312,61 +344,69 @@ const Billing = () => {
 
         <TabsContent value="plans">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {plans.map((plan) => (
-              <div
-                key={plan.key}
-                className={cn(
-                  "relative rounded-3xl border p-6 flex flex-col transition-all duration-300 hover:shadow-xl",
-                  plan.recommended
-                    ? "border-orange-500 bg-orange-50/10 shadow-lg scale-105 z-10"
-                    : "border-border bg-card",
-                )}>
-                {plan.recommended && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="rounded-full bg-black px-4 py-1 text-[10px] font-bold text-white uppercase tracking-wider">
-                      Most Popular
-                    </span>
-                  </div>
-                )}
+            {plans.map((plan) => {
+              const effectivePrice = getEffectivePrice(plan);
+              const isAnnual = billingCycle === "annual" && plan.key !== "onetime" && plan.key !== "enterprise";
+              const totalAnnual = effectivePrice * 12;
 
-                <div className="text-center mb-6">
-                  <h3 className="text-xl font-bold text-foreground mb-1">
-                    {plan.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    {plan.subtitle}
-                  </p>
-
-                  {plan.validity && (
-                    <p className="text-[11px] text-orange-500 font-semibold mb-1">
-                      {plan.validity}
-                    </p>
-                  )}
-                  <p className="text-[11px] text-orange-500 font-semibold mb-4">
-                    {plan.trial}
-                  </p>
-
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-3xl font-black text-foreground">
-                      {plan.monthlyPrice}
-                    </span>
-                    {plan.period && (
-                      <span className="text-xs text-muted-foreground">
-                        {plan.period}
+              return (
+                <div
+                  key={plan.key}
+                  className={cn(
+                    "relative rounded-3xl border p-6 flex flex-col transition-all duration-300 hover:shadow-xl",
+                    plan.recommended
+                      ? "border-orange-500 bg-orange-50/10 shadow-lg scale-105 z-10"
+                      : "border-border bg-card",
+                  )}>
+                  {plan.recommended && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="rounded-full bg-black px-4 py-1 text-[10px] font-bold text-white uppercase tracking-wider">
+                        Most Popular
                       </span>
+                    </div>
+                  )}
+
+                  <div className="text-center mb-6">
+                    <h3 className="text-xl font-bold text-foreground mb-1">
+                      {plan.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      {plan.subtitle}
+                    </p>
+
+                    {plan.validity && (
+                      <p className="text-[11px] text-orange-500 font-semibold mb-1">
+                        {plan.validity}
+                      </p>
+                    )}
+                    <p className="text-[11px] text-orange-500 font-semibold mb-4">
+                      {plan.trial}
+                    </p>
+
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-foreground">
+                          {plan.key === "enterprise" ? "Custom" : `₹${effectivePrice.toLocaleString("en-IN")}`}
+                        </span>
+                        {plan.key !== "onetime" && plan.key !== "enterprise" && (
+                          <span className="text-xs text-muted-foreground">
+                            /month
+                          </span>
+                        )}
+                      </div>
+                      {isAnnual && (
+                        <p className="text-[10px] text-orange-500 font-bold">
+                          Billed annually: ₹{totalAnnual.toLocaleString("en-IN")}
+                        </p>
+                      )}
+                    </div>
+                    {plan.monthlyValue > 0 && (
+                      <p className="text-[10px] text-muted-foreground mt-2 font-medium">
+                        (Incl. 18% GST)
+                      </p>
                     )}
                   </div>
-                  {plan.baseValue > 0 && (
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      ₹{plan.baseValue.toLocaleString("en-IN")} + 18% GST
-                    </p>
-                  )}
-                  {plan.baseValue > 0 && (
-                    <p className="text-[10px] text-foreground mt-1 font-semibold">
-                      Payable: ₹{payableAmount(plan.baseValue).toLocaleString("en-IN")}
-                    </p>
-                  )}
-                </div>
+
 
                 <ul className="space-y-4 flex-1 mb-8">
                   {plan.features.map((feature, i) => (
@@ -412,8 +452,9 @@ const Billing = () => {
                   );
                 })()}
               </div>
-            ))}
+            )})}
           </div>
+
         </TabsContent>
 
         <TabsContent value="usage">
