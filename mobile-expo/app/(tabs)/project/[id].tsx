@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler, FlatList, Platform } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler, FlatList, Platform, Alert } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,7 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
-import { getProjectById } from '@/services/projectService';
+import { getProjectById, deleteProject } from '@/services/projectService';
 import { PanResponder, Dimensions } from 'react-native';
 import ProjectOverview from '@/components/project/ProjectOverview';
 import ProjectDocuments from '@/components/project/ProjectDocuments';
@@ -38,6 +38,7 @@ export default function ProjectWorkspaceScreen() {
 
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -270,6 +271,31 @@ export default function ProjectWorkspaceScreen() {
     }, [id]); // Reset only when changing projects or leaving
 
     const isMainTab = visibleTabs.some(t => t.key === activeTab);
+    const handleDeleteProject = () => {
+        Alert.alert(
+            "Delete Project",
+            "Are you sure you want to permanently delete this project? This action cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            setIsDeleting(true);
+                            await deleteProject(id as string);
+                            router.replace('/');
+                        } catch (error) {
+                            console.error("Failed to delete project:", error);
+                            Alert.alert("Error", "Failed to delete project. Please try again.");
+                        } finally {
+                            setIsDeleting(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
     if (!user || loading) return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
@@ -291,24 +317,41 @@ export default function ProjectWorkspaceScreen() {
                 searchPlaceholder="Search in project..."
             />
 
+            {isDeleting ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={{ marginTop: 16, color: colors.textMuted, fontSize: 16, fontWeight: '600' }}>Deleting project...</Text>
+                </View>
+            ) : (
+                <>
             {/* Project Title Header */}
             <View style={{
                 paddingHorizontal: 16,
                 paddingVertical: 16,
                 backgroundColor: colors.background,
             }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text, flex: 1 }} numberOfLines={1}>
                         {project.name.charAt(0).toUpperCase() + project.name.slice(1)}
                     </Text>
-                    {user.role === 'admin' && (
-                        <TouchableOpacity
-                            onPress={() => { setIsEditModalOpen(true); setEditModalFocus(null); }}
-                            style={{ padding: 4 }}
-                        >
-                            <Feather name="edit-3" size={18} color={colors.primary} />
-                        </TouchableOpacity>
-                    )}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        {user.role === 'admin' && (
+                            <TouchableOpacity
+                                onPress={() => { setIsEditModalOpen(true); setEditModalFocus(null); }}
+                                style={{ padding: 4 }}
+                            >
+                                <Feather name="edit-3" size={18} color={colors.primary} />
+                            </TouchableOpacity>
+                        )}
+                        {user.role === 'admin' && (
+                            <TouchableOpacity
+                                onPress={handleDeleteProject}
+                                style={{ padding: 4 }}
+                            >
+                                <Feather name="trash-2" size={18} color="#ef4444" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
                 {project.description && (
                     <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18 }}>
@@ -474,6 +517,8 @@ export default function ProjectWorkspaceScreen() {
                     </View>
                 )}
             </View>
+            </>
+            )}
 
             <EditProjectModal
                 isOpen={isEditModalOpen}

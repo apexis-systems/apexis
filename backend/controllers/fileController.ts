@@ -320,12 +320,14 @@ export const listFiles = async (req: Request, res: Response) => {
 };
 
 export const deleteFile = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
     try {
         const authUser = (req as any).user;
         const { fileId } = req.params;
 
-        const file = await files.findByPk(fileId);
+        const file = await files.findByPk(fileId, { transaction: t });
         if (!file) {
+            await t.rollback();
             return res.status(404).json({ error: "File not found" });
         }
 
@@ -335,6 +337,7 @@ export const deleteFile = async (req: Request, res: Response) => {
             authUser.role !== "superadmin" &&
             String(file.created_by) !== String(authUser.user_id)
         ) {
+            await t.rollback();
             return res.status(403).json({ error: "Unauthorized: only admins or the uploader can delete this file" });
         }
 
@@ -349,16 +352,25 @@ export const deleteFile = async (req: Request, res: Response) => {
             projectId: file.project_id,
             userId: authUser.user_id,
             type: 'delete',
-            description: `Deleted ${file.file_name}`
+            description: `Deleted ${file.file_name}`,
+            metadata: { fileId: file.id }
         });
 
-        await file.destroy();
+        await file.destroy({ transaction: t });
 
         // Update organization storage usage (decrement)
-        await updateOrganizationStorage(authUser.organization_id, -file.file_size_mb);
+        if (file.file_size_mb > 0) {
+            await organizations.decrement('storage_used_mb', {
+                by: file.file_size_mb,
+                where: { id: authUser.organization_id },
+                transaction: t
+            });
+        }
 
+        await t.commit();
         res.status(200).json({ message: "File deleted successfully" });
     } catch (error) {
+        await t.rollback();
         console.error("Delete File Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }

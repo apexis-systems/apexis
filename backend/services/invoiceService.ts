@@ -239,10 +239,11 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
             headX += colWidths[i];
         });
 
-        const subtotal = Number(organization.plan_price);
-        const cgst = subtotal * 0.09;
-        const sgst = subtotal * 0.09;
-        const grandTotal = subtotal + cgst + sgst;
+        const grandTotal = Number(transaction.payment_amount);
+        const subtotal = grandTotal / 1.18;
+        const totalTax = grandTotal - subtotal;
+        const cgst = totalTax / 2;
+        const sgst = totalTax / 2;
 
         const rowY = tableStartY + headerH;
         const rowRadius = 6;
@@ -257,7 +258,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
             organization?.plan_name || '-',
             formatPeriod(organization?.plan_start_date, organization?.plan_end_date),
             subtotal.toFixed(2),
-            (cgst + sgst).toFixed(2),
+            totalTax.toFixed(2),
             grandTotal.toFixed(2)
         ];
 
@@ -266,6 +267,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
             doc.font('Helvetica').fontSize(8.5).fillColor(BRAND.ink).text(String(val), cellX + 5, rowY + 8, { width: colWidths[i] - 10, align: i > 1 ? 'right' : 'left' });
             cellX += colWidths[i];
         });
+
 
         // --- 6. Totals Summary ---
         doc.y = rowY + 40;

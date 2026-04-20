@@ -12,12 +12,20 @@ const { width, height } = Dimensions.get('window');
 
 const SLIDES = [
     {
+        id: '0',
+        title: 'COMPANY_BRANDING', // Internal flag for custom rendering
+        subtitle: 'RECORD · REPORT · RELEASE',
+        description: '',
+        icon: 'app-icon',
+        color: '#f97316',
+    },
+    {
         id: '1',
-        title: 'APEXIS PRO',
-        subtitle: 'Construction Communication Infrastructure',
-        description: 'APEXIS transforms informal site communication into structured, professional project documentation.',
+        title: 'Structured Reporting',
+        subtitle: 'Communication Infrastructure',
+        description: 'Transform informal site communication into structured, professional project documentation.',
         icon: 'layers',
-        color: '#f97316', // Primary Orange
+        color: '#0ea5e9', // Sky Blue
     },
     {
         id: '2',
@@ -70,40 +78,71 @@ export default function OnboardingScreen() {
             <View style={[styles.slide, { width }]}>
                 {isActive && (
                     <>
-                        <Animated.View
-                            entering={FadeInUp.duration(600).delay(100)}
-                            style={[styles.iconContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.surface, borderColor: `${item.color}30`, borderWidth: 1 }]}
-                        >
-                            <View style={[styles.iconBg, { backgroundColor: `${item.color}15` }]}>
-                                <Feather name={item.icon as any} size={70} color={item.color} />
-                            </View>
-                        </Animated.View>
+                        {item.id === '0' ? (
+                            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                                <Animated.View entering={FadeInUp.duration(600).delay(100)} style={{ marginBottom: 20 }}>
+                                    <View style={[styles.iconContainer, { backgroundColor: 'transparent', shadowOpacity: 0, elevation: 0, borderWidth: 0, width: 150, height: 150, marginBottom: 24 }]}>
+                                        <Animated.Image 
+                                            source={require('../assets/images/app-icon.png')} 
+                                            style={{ width: 150, height: 150 }} 
+                                            resizeMode="contain" 
+                                        />
+                                    </View>
+                                </Animated.View>
 
-                        <View style={styles.textContainer}>
-                            <Animated.Text
-                                entering={FadeInDown.duration(600).delay(300)}
-                                style={[styles.title, { color: colors.text, fontFamily: 'Angelica' }]}
-                            >
-                                {item.title === 'APEXIS PRO' ? (
-                                    <Text className="font-angelica" style={{ fontSize: 42, color: colors.text, fontFamily: 'Angelica', fontWeight: 'normal' }}>
-                                        APEXIS
-                                        <Text className="font-angelica" style={{ fontSize: 22, textTransform: 'uppercase', fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
-                                    </Text>
-                                ) : item.title}
-                            </Animated.Text>
-                            <Animated.Text
-                                entering={FadeInDown.duration(600).delay(400)}
-                                style={[styles.subtitle, { color: item.color }]}
-                            >
-                                {item.subtitle}
-                            </Animated.Text>
-                            <Animated.Text
-                                entering={FadeInDown.duration(600).delay(500)}
-                                style={[styles.description, { color: colors.textMuted }]}
-                            >
-                                {item.description}
-                            </Animated.Text>
-                        </View>
+                                <View style={styles.textContainer}>
+                                    <Animated.Text
+                                        entering={FadeInDown.duration(600).delay(300)}
+                                        style={[styles.title, { color: colors.text, fontFamily: 'Angelica' }]}
+                                    >
+                                        <Text className="font-angelica" style={{ fontSize: 48, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>
+                                            APEXIS
+                                            <Text className="font-angelica" style={{ fontSize: 24, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
+                                        </Text>
+                                    </Animated.Text>
+                                    <Animated.Text
+                                        entering={FadeInDown.duration(600).delay(400)}
+                                        numberOfLines={1}
+                                        adjustsFontSizeToFit
+                                        style={{ fontSize: 12, color: colors.textMuted, marginTop: 8, letterSpacing: 3, fontWeight: '600', textAlign: 'center' }}
+                                    >
+                                        {item.subtitle}
+                                    </Animated.Text>
+                                </View>
+                            </View>
+                        ) : (
+                            <>
+                                <Animated.View
+                                    entering={FadeInUp.duration(600).delay(100)}
+                                    style={[styles.iconContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.surface, borderColor: `${item.color}30`, borderWidth: 1 }]}
+                                >
+                                    <View style={[styles.iconBg, { backgroundColor: `${item.color}15` }]}>
+                                        <Feather name={item.icon as any} size={70} color={item.color} />
+                                    </View>
+                                </Animated.View>
+
+                                <View style={styles.textContainer}>
+                                    <Animated.Text
+                                        entering={FadeInDown.duration(600).delay(300)}
+                                        style={[styles.title, { color: colors.text, fontFamily: 'Angelica' }]}
+                                    >
+                                        {item.title}
+                                    </Animated.Text>
+                                    <Animated.Text
+                                        entering={FadeInDown.duration(600).delay(400)}
+                                        style={[styles.subtitle, { color: item.color }]}
+                                    >
+                                        {item.subtitle}
+                                    </Animated.Text>
+                                    <Animated.Text
+                                        entering={FadeInDown.duration(600).delay(500)}
+                                        style={[styles.description, { color: colors.textMuted }]}
+                                    >
+                                        {item.description}
+                                    </Animated.Text>
+                                </View>
+                            </>
+                        )}
                     </>
                 )}
             </View>
