@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
+import { getApiErrorMessage } from '@/helpers/apiError';
 import { verifyInvitation, completeSuperAdminOnboarding, loginSuperAdmin } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, ShieldCheck, Mail, Lock, UserCircle } from 'lucide-react';
@@ -35,7 +36,7 @@ const OnboardingContent = () => {
             try {
                 const data = await verifyInvitation(token);
                 setEmail(data.email);
-            } catch (err) {
+            } catch {
                 toast.error("Invalid or expired invitation link");
                 router.push('/');
             } finally {
@@ -84,9 +85,9 @@ const OnboardingContent = () => {
             }
 
             toast.success("Account set up successfully");
-            router.push('/login');
-        } catch (err: any) {
-            setError(err.response?.data?.error || "Failed to complete onboarding");
+            router.push('/auth/login');
+        } catch (error: unknown) {
+            setError(getApiErrorMessage(error, "Failed to complete onboarding"));
         } finally {
             setSubmitting(false);
         }
