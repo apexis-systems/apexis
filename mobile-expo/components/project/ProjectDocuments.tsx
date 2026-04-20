@@ -283,7 +283,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleShare = async (doc: any) => {
         try {
             if (!doc.downloadUrl) return;
-            
+
             setSharing(true);
 
             // For files, we download to cache then share the local URI
@@ -838,9 +838,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             const groups = groupItemsByMonth(sortedDocs);
                             return groups.map((group) => (
                                 <View key={group.title} style={{ marginBottom: 20 }}>
-                                    <View style={{ 
-                                        paddingVertical: 12, 
-                                        backgroundColor: colors.background, 
+                                    <View style={{
+                                        paddingVertical: 12,
+                                        backgroundColor: colors.background,
                                         flexDirection: 'row',
                                         alignItems: 'center',
                                         justifyContent: 'space-between'
@@ -848,10 +848,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{group.title}</Text>
                                         <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.5 }} />
                                     </View>
-                                    <View style={{ 
-                                        flexDirection: viewMode === 'grid' ? 'row' : 'column', 
-                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', 
-                                        gap: viewMode === 'grid' ? 4 : 4 
+                                    <View style={{
+                                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                        gap: viewMode === 'grid' ? 4 : 4
                                     }}>
                                         {group.data.map(renderDocItem)}
                                     </View>
@@ -860,10 +860,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         }
 
                         return (
-                            <View style={{ 
-                                flexDirection: viewMode === 'grid' ? 'row' : 'column', 
-                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', 
-                                gap: viewMode === 'grid' ? 4 : 4 
+                            <View style={{
+                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                gap: viewMode === 'grid' ? 4 : 4
                             }}>
                                 {sortedDocs.map(renderDocItem)}
                             </View>
@@ -998,7 +998,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     </View>
                 )}
             </Modal>
-            
+
             {/* Sharing Overlay (For cases where viewer isn't open) */}
             {sharing && !pdfViewerUrl && (
                 <View style={{
@@ -1229,3 +1229,4 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         </View>
     );
 }
+
