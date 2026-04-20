@@ -14,6 +14,7 @@ import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import { WebView } from 'react-native-webview';
 import { formatFileSize } from '@/helpers/format';
+import { groupItemsByMonth } from '@/helpers/grouping';
 import * as ScreenCapture from 'expo-screen-capture';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -43,7 +44,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [editFolderName, setEditFolderName] = useState('');
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-    const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
+    const [sortBy, setSortBy] = useState<'name' | 'newest' | 'oldest' | 'size'>('name');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -58,6 +59,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [pdfViewerName, setPdfViewerName] = useState('');
     const [currentDoc, setCurrentDoc] = useState<any | null>(null);
     const [pdfLoading, setPdfLoading] = useState(false);
+    const [sharing, setSharing] = useState(false);
 
     const [refreshing, setRefreshing] = useState(false);
 
@@ -101,7 +103,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     useEffect(() => {
         if (selectedFolder) {
-            setSortBy('date');
+            setSortBy('newest');
         } else {
             setSortBy('name');
         }
@@ -113,7 +115,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const visibleDocsInit = user.role === 'client' ? currentFolderDocsForInit.filter((d) => d.client_visible !== false) : currentFolderDocsForInit;
             const sortedInit = [...visibleDocsInit].sort((a: any, b: any) => {
                 if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
-                if (sortBy === 'date') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                if (sortBy === 'newest') return new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime();
+                if (sortBy === 'oldest') return new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime();
                 if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
                 return 0;
             });
@@ -138,8 +141,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 const nameB = type === 'folder' ? b.name : b.file_name;
                 return (nameA || '').localeCompare(nameB || '');
             }
-            if (sortBy === 'date') {
-                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            if (sortBy === 'newest') {
+                return new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime();
+            }
+            if (sortBy === 'oldest') {
+                return new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime();
             }
             if (sortBy === 'size') {
                 if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
@@ -227,15 +233,48 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         ]);
     };
 
-    // Open doc: PDF → in-app viewer, everything else → external browser
-    const openDoc = (doc: any) => {
+    // Optimized Open Doc: Stay in-app, but use native power for speed
+    const openDoc = async (doc: any) => {
+        if (!doc.downloadUrl) return;
+
         const isPdf = doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf');
-        if (isPdf && doc.downloadUrl) {
-            // Use Google Docs viewer for reliable cross-platform PDF rendering
-            const viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.downloadUrl)}`;
-            setPdfViewerName(doc.file_name || 'Document');
-            setCurrentDoc(doc);
-            setPdfViewerUrl(viewerUrl);
+
+        if (isPdf) {
+            try {
+                setPdfLoading(true);
+                setPdfViewerName(doc.file_name || 'Document');
+                setCurrentDoc(doc);
+
+                // 1. Prepare clean local path in cache
+                const ext = doc.file_name?.split('.').pop() || 'pdf';
+                const cleanName = (doc.file_name || `document_${doc.id}.${ext}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+                const localUri = `${FileSystem.cacheDirectory}${cleanName}`;
+
+                // 2. Local Cache Logic
+                const fileInfo = await FileSystem.getInfoAsync(localUri);
+                let uriToOpen = localUri;
+
+                if (!fileInfo.exists) {
+                    const downloadResult = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+                    uriToOpen = downloadResult.uri;
+                }
+
+                // 3. Selection of Viewer
+                if (Platform.OS === 'ios') {
+                    // EXTREMELY FAST: iOS Webview renders local PDFs natively
+                    setPdfViewerUrl(uriToOpen);
+                } else {
+                    // Android requires Google View for internal rendering
+                    const viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.downloadUrl)}`;
+                    setPdfViewerUrl(viewerUrl);
+                }
+            } catch (error) {
+                console.error("[PDF] Optimization failed:", error);
+                // Fallback to basic browser if everything fails
+                await WebBrowser.openBrowserAsync(doc.downloadUrl);
+            } finally {
+                setPdfLoading(false);
+            }
         } else {
             WebBrowser.openBrowserAsync(doc.downloadUrl);
         }
@@ -244,12 +283,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleShare = async (doc: any) => {
         try {
             if (!doc.downloadUrl) return;
+            
+            setSharing(true);
 
             // For files, we download to cache then share the local URI
             const ext = doc.file_name?.split('.').pop() || 'tmp';
             const localUri = `${(FileSystem as any).cacheDirectory}${doc.file_name || `file_${Date.now()}.${ext}`}`;
 
-            Alert.alert("Preparing...", "Downloading file to share...");
             const { uri } = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
 
             if (await Sharing.isAvailableAsync()) {
@@ -269,6 +309,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         } catch (e) {
             console.error('Share error:', e);
             Alert.alert("Error", "Failed to share file");
+        } finally {
+            setSharing(false);
         }
     };
 
@@ -544,7 +586,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
                     <TouchableOpacity
                         onPress={() => {
-                            const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
+                            let next: any = 'name';
+                            if (sortBy === 'name') next = 'newest';
+                            else if (sortBy === 'newest') next = 'oldest';
+                            else if (sortBy === 'oldest') next = 'size';
+                            else if (sortBy === 'size') next = 'name';
                             setSortBy(next);
                         }}
                         style={{
@@ -638,153 +684,191 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     </View>
                 )}
 
-                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 4 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
-                    {sortedDocs.map((doc) => {
-                        const isSelected = selectedFiles.has(doc.id);
-                        if (viewMode === 'grid') {
-                            return (
-                                <View
-                                    key={doc.id}
-                                    style={{
-                                        width: '24%',
-                                        aspectRatio: 1,
-                                        backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                        borderRadius: 10,
-                                        overflow: 'hidden',
-                                        borderWidth: 1,
-                                        borderColor: isSelected ? colors.primary : colors.border,
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: 8,
-                                        position: 'relative'
-                                    }}
-                                >
-                                    <TouchableOpacity
-                                        onPress={() => {
-                                            if (isSelectionMode) toggleSelection('file', doc.id);
-                                            else openDoc(doc);
-                                        }}
-                                        onLongPress={() => handleLongPress('file', doc.id)}
-                                        style={{
-                                            ...StyleSheet.absoluteFillObject,
-                                            zIndex: 5,
-                                        }}
-                                    />
-                                    <Feather name="file-text" size={32} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
-                                    {isSelected && (
-                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
-                                            <Feather name="check" size={10} color="#fff" />
-                                        </View>
-                                    )}
-                                    <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: colors.text, textAlign: 'center' }}>{doc.file_name}</Text>
-                                    {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
-                                        <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 30 }}>
-                                            <TouchableOpacity
-                                                onPress={() => toggleDocVisibility(doc)}
-                                            >
-                                                <Feather
-                                                    name={doc.client_visible !== false ? 'eye' : 'eye-off'}
-                                                    size={14}
-                                                    color={doc.client_visible !== false ? colors.primary : colors.textMuted}
-                                                />
-                                            </TouchableOpacity>
-                                        </View>
-                                    )}
-                                    {doc.do_not_follow && (
-                                        <View style={{
-                                            position: 'absolute',
-                                            top: '30%',
-                                            left: '20%',
-                                            right: '20%',
-                                            backgroundColor: 'rgba(239, 68, 68, 0.9)',
-                                            borderRadius: 4,
-                                            paddingHorizontal: 4,
-                                            paddingVertical: 2,
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            zIndex: 20,
-                                            transform: [{ rotate: '-10deg' }]
-                                        }}>
-                                            <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            );
-                        } else {
-                            return (
-                                <View
-                                    key={doc.id}
-                                    style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        gap: 8,
-                                        borderRadius: 10,
-                                        backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
-                                        borderWidth: 1,
-                                        borderColor: isSelected ? colors.primary : colors.border,
-                                        padding: 10,
-                                        position: 'relative',
-                                        overflow: 'hidden'
-                                    }}
-                                >
-                                    <TouchableOpacity
-                                        onPress={() => {
-                                            if (isSelectionMode) toggleSelection('file', doc.id);
-                                            else openDoc(doc);
-                                        }}
-                                        onLongPress={() => handleLongPress('file', doc.id)}
-                                        style={{
-                                            ...StyleSheet.absoluteFillObject,
-                                            zIndex: 5,
-                                        }}
-                                    />
+                <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                    {(() => {
+                        const renderDocItem = (doc: any) => {
+                            const isSelected = selectedFiles.has(doc.id);
+                            if (viewMode === 'grid') {
+                                return (
                                     <View
+                                        key={doc.id}
                                         style={{
-                                            width: 34,
-                                            height: 34,
-                                            borderRadius: 8,
-                                            backgroundColor: doc.file_type.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                                            width: '23.8%',
+                                            aspectRatio: 1,
+                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
+                                            borderRadius: 10,
+                                            overflow: 'hidden',
+                                            borderWidth: 1,
+                                            borderColor: isSelected ? colors.primary : colors.border,
                                             alignItems: 'center',
                                             justifyContent: 'center',
+                                            padding: 8,
+                                            position: 'relative'
                                         }}
                                     >
-                                        <Feather name="file-text" size={16} color={doc.file_type.includes('pdf') ? '#ef4444' : '#3b82f6'} />
-                                    </View>
-                                    {isSelected && (
-                                        <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                            <Feather name="check" size={10} color="#fff" />
-                                        </View>
-                                    )}
-                                    <View style={{ flex: 1, marginRight: 4 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text, flexShrink: 1 }}>{doc.file_name}</Text>
-                                            {doc.do_not_follow && (
-                                                <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                                    <Feather name="shield" size={8} color="#ef4444" />
-                                                    <Text style={{ fontSize: 7, fontWeight: '800', color: '#ef4444' }}>DNF</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                        <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (isSelectionMode) toggleSelection('file', doc.id);
+                                                else openDoc(doc);
+                                            }}
+                                            onLongPress={() => handleLongPress('file', doc.id)}
+                                            style={{
+                                                ...StyleSheet.absoluteFillObject,
+                                                zIndex: 5,
+                                            }}
+                                        />
+                                        <Feather name="file-text" size={32} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
+                                        {isSelected && (
+                                            <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
+                                                <Feather name="check" size={10} color="#fff" />
+                                            </View>
+                                        )}
+                                        <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center', paddingHorizontal: 2 }}>{doc.file_name}</Text>
                                         {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
-                                            <TouchableOpacity
-                                                onPress={() => toggleDocVisibility(doc)}
-                                                style={{ padding: 4 }}
-                                            >
-                                                <Feather
-                                                    name={doc.client_visible !== false ? 'eye' : 'eye-off'}
-                                                    size={14}
-                                                    color={doc.client_visible !== false ? colors.primary : colors.textMuted}
-                                                />
-                                            </TouchableOpacity>
+                                            <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 30 }}>
+                                                <TouchableOpacity
+                                                    onPress={() => toggleDocVisibility(doc)}
+                                                >
+                                                    <Feather
+                                                        name={doc.client_visible !== false ? 'eye' : 'eye-off'}
+                                                        size={14}
+                                                        color={doc.client_visible !== false ? colors.primary : colors.textMuted}
+                                                    />
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+                                        {doc.do_not_follow && (
+                                            <View style={{
+                                                position: 'absolute',
+                                                top: '30%',
+                                                left: '20%',
+                                                right: '20%',
+                                                backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                                                borderRadius: 4,
+                                                paddingHorizontal: 4,
+                                                paddingVertical: 2,
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                zIndex: 20,
+                                                transform: [{ rotate: '-10deg' }]
+                                            }}>
+                                                <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
+                                            </View>
                                         )}
                                     </View>
+                                );
+                            } else {
+                                return (
+                                    <View
+                                        key={doc.id}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 8,
+                                            borderRadius: 10,
+                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
+                                            borderWidth: 1,
+                                            borderColor: isSelected ? colors.primary : colors.border,
+                                            padding: 10,
+                                            position: 'relative',
+                                            marginVertical: 4,
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (isSelectionMode) toggleSelection('file', doc.id);
+                                                else openDoc(doc);
+                                            }}
+                                            onLongPress={() => handleLongPress('file', doc.id)}
+                                            style={{
+                                                ...StyleSheet.absoluteFillObject,
+                                                zIndex: 5,
+                                            }}
+                                        />
+                                        <View
+                                            style={{
+                                                width: 34,
+                                                height: 34,
+                                                borderRadius: 8,
+                                                backgroundColor: doc.file_type?.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <Feather name="file-text" size={16} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} />
+                                        </View>
+                                        {isSelected && (
+                                            <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                <Feather name="check" size={10} color="#fff" />
+                                            </View>
+                                        )}
+                                        <View style={{ flex: 1, marginRight: 4 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text, flexShrink: 1 }}>{doc.file_name}</Text>
+                                                {doc.do_not_follow && (
+                                                    <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                                        <Feather name="shield" size={8} color="#ef4444" />
+                                                        <Text style={{ fontSize: 7, fontWeight: '800', color: '#ef4444' }}>DNF</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
+                                            {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
+                                                <TouchableOpacity
+                                                    onPress={() => toggleDocVisibility(doc)}
+                                                    style={{ padding: 4 }}
+                                                >
+                                                    <Feather
+                                                        name={doc.client_visible !== false ? 'eye' : 'eye-off'}
+                                                        size={14}
+                                                        color={doc.client_visible !== false ? colors.primary : colors.textMuted}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                );
+                            }
+                        };
+
+                        if (sortBy === 'newest' || sortBy === 'oldest') {
+                            const groups = groupItemsByMonth(sortedDocs);
+                            return groups.map((group) => (
+                                <View key={group.title} style={{ marginBottom: 20 }}>
+                                    <View style={{ 
+                                        paddingVertical: 12, 
+                                        backgroundColor: colors.background, 
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between'
+                                    }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{group.title}</Text>
+                                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.5 }} />
+                                    </View>
+                                    <View style={{ 
+                                        flexDirection: viewMode === 'grid' ? 'row' : 'column', 
+                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', 
+                                        gap: viewMode === 'grid' ? 4 : 4 
+                                    }}>
+                                        {group.data.map(renderDocItem)}
+                                    </View>
                                 </View>
-                            );
+                            ));
                         }
-                    })}
+
+                        return (
+                            <View style={{ 
+                                flexDirection: viewMode === 'grid' ? 'row' : 'column', 
+                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', 
+                                gap: viewMode === 'grid' ? 4 : 4 
+                            }}>
+                                {sortedDocs.map(renderDocItem)}
+                            </View>
+                        );
+                    })()}
                 </View>
 
                 {sortedDocs.length === 0 && sortedFolders.length > 0 && (
@@ -870,7 +954,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         </View>
                     )}
 
-                    {/* WebView PDF */}
+                    {/* WebView PDF Rendering Layer */}
                     {pdfViewerUrl && (
                         <WebView
                             key={pdfViewerUrl}
@@ -881,6 +965,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             allowsInlineMediaPlayback
                             javaScriptEnabled
                             domStorageEnabled
+                            originWhitelist={['*']}
                             onLoadStart={() => setPdfLoading(true)}
                             onLoadEnd={() => setPdfLoading(false)}
                             renderLoading={() => (
@@ -889,13 +974,47 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
                                 }}>
                                     <ActivityIndicator size="large" color={colors.primary} />
-                                    <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>Loading PDF…</Text>
+                                    <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>Optimizing View…</Text>
                                 </View>
                             )}
                         />
                     )}
                 </View>
+
+                {/* Sharing Overlay (Inside the PDF Viewer) */}
+                {sharing && (
+                    <View style={{
+                        ...StyleSheet.absoluteFillObject,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        zIndex: 9999
+                    }}>
+                        <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Preparing...</Text>
+                            <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file to share...</Text>
+                        </View>
+                    </View>
+                )}
             </Modal>
+            
+            {/* Sharing Overlay (For cases where viewer isn't open) */}
+            {sharing && !pdfViewerUrl && (
+                <View style={{
+                    ...StyleSheet.absoluteFillObject,
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 9999
+                }}>
+                    <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Preparing...</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file to share...</Text>
+                    </View>
+                </View>
+            )}
 
             {/* New Folder Modal */}
             <Modal visible={showCreateFolder} transparent animationType="fade">

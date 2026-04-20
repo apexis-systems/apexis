@@ -45,7 +45,7 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
         >
             <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                 <View style={styles.container}>
-                    <ZoomableImage uri={uri} />
+                    <ZoomableImage uri={uri} onDismiss={onClose} />
 
                     <TouchableOpacity
                         onPress={onClose}
