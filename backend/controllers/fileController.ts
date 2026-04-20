@@ -331,14 +331,10 @@ export const deleteFile = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "File not found" });
         }
 
-        // Only admins, superadmins, or the creator can delete
-        if (
-            authUser.role !== "admin" &&
-            authUser.role !== "superadmin" &&
-            String(file.created_by) !== String(authUser.user_id)
-        ) {
+        // ONLY the original uploader can delete individual files
+        if (String(file.created_by) !== String(authUser.user_id)) {
             await t.rollback();
-            return res.status(403).json({ error: "Unauthorized: only admins or the uploader can delete this file" });
+            return res.status(403).json({ error: "Unauthorized: only the original uploader can delete this file" });
         }
 
         const command = new DeleteObjectCommand({

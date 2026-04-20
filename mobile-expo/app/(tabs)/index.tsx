@@ -63,6 +63,7 @@ export default function DashboardScreen() {
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isSwitching, setIsSwitching] = useState<string | null>(null);
   const [sortType, setSortType] = useState<'name' | 'newest' | 'oldest'>('name');
+  const [loading, setLoading] = useState(true);
 
   const headerRef = useRef<View>(null);
   const statsRef = useRef<View>(null);
@@ -214,6 +215,7 @@ export default function DashboardScreen() {
 
   const fetchProjects = async (orgId?: string | null) => {
     try {
+      if (projects.length === 0 && !refreshing) setLoading(true);
       const data = await getProjects(orgId || undefined);
       let sortedProjects = data.projects || [];
       
@@ -230,6 +232,8 @@ export default function DashboardScreen() {
       setProjects([...sortedProjects]);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -694,7 +698,12 @@ export default function DashboardScreen() {
             )}
           </View>
 
-          {filteredProjects.length === 0 && (
+          {loading ? (
+            <View style={{ marginTop: 60, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={{ marginTop: 12, color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>Fetching Projects...</Text>
+            </View>
+          ) : filteredProjects.length === 0 && (
             <View style={{ marginTop: 40, alignItems: 'center' }}>
               <Text style={{ fontSize: 12, color: colors.textMuted }}>
                 {searchQuery ? t('dashboard.noProjectsSearch') : t('dashboard.noProjects')}

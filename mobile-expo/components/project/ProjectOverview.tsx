@@ -49,6 +49,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [snagsCount, setSnagsCount] = useState<number>(0);
     const [reportsLoading, setReportsLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [overallLoading, setOverallLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
     const [memberModalType, setMemberModalType] = useState<'contributor' | 'client' | null>(null);
     const [members, setMembers] = useState<any[]>([]);
@@ -311,58 +313,68 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         } catch { return String(d); }
     };
 
-    const fetchProjectStats = useCallback(() => {
-        if (!projectId) return;
-
-        // Load file counts
+    const fetchData = async (isRefetch = false) => {
+        if (!projectId || projectId === 'undefined') {
+            console.log("[ProjectOverview] Skipping fetch: Invalid projectId", projectId);
+            return;
+        }
+        
+        if (!isRefetch) setOverallLoading(true);
         setCounting(true);
-        getProjectFiles(projectId)
-            .then((data) => {
-                let photos = 0, docs = 0;
-                if (data.fileData) {
-                    data.fileData.forEach((file: any) => {
-                        if (file.file_type?.startsWith('image/')) photos++;
-                        else docs++;
-                    });
-                }
-                setPhotosCount(photos);
-                setDocsCount(docs);
-            })
-            .catch(() => { })
-            .finally(() => setCounting(false));
-
-        // Load reports
         setReportsLoading(true);
-        getReports(projectId)
-            .then((all) => {
-                setDailyReports(all.filter((r) => r.type === 'daily'));
-                setWeeklyReports(all.filter((r) => r.type === 'weekly'));
-            })
-            .catch(() => { })
-            .finally(() => setReportsLoading(false));
+        
+        try {
+            console.log("[ProjectOverview] Fetching data for project:", projectId);
+            
+            // 1. Fetch Files for Counts
+            try {
+                const data = await getProjectFiles(projectId);
+                const fileList = data.fileData || [];
+                const photos = fileList.filter((f: any) => f.file_type?.startsWith('image/'));
+                const docs = fileList.filter((f: any) => !f.file_type?.startsWith('image/'));
+                setPhotosCount(photos.length);
+                setDocsCount(docs.length);
+            } catch (err) {
+                console.error("[ProjectOverview] getProjectFiles failed:", err);
+            }
 
-        // Load snags count
-        getSnags(projectId)
-            .then((snags) => {
+            // 2. Fetch Reports
+            try {
+                const reports = await getReports(projectId);
+                setDailyReports(reports.filter((r: any) => r.type === 'daily'));
+                setWeeklyReports(reports.filter((r: any) => r.type === 'weekly'));
+            } catch (err) {
+                console.error("[ProjectOverview] getReports failed:", err);
+            }
+
+            // 3. Fetch Snags
+            try {
+                const snags = await getSnags(projectId);
                 setSnagsCount(snags?.length || 0);
-            })
-            .catch(() => { });
-    }, [projectId]);
+            } catch (err) {
+                console.error("[ProjectOverview] getSnags failed:", err);
+            }
 
-    // Re-fetch stats every time the screen focuses (catches same-app uploads)
-    useFocusEffect(
-        useCallback(() => {
-            fetchProjectStats();
-        }, [fetchProjectStats])
-    );
-
-    const [refreshing, setRefreshing] = useState(false);
-    const onRefresh = async () => {
-        setRefreshing(true);
-        fetchProjectStats();
-        setTimeout(() => setRefreshing(false), 800);
+        } catch (err) {
+            console.error("[ProjectOverview] Global fetch error:", err);
+        } finally {
+            setCounting(false);
+            setReportsLoading(false);
+            setOverallLoading(false);
+        }
     };
 
+    useFocusEffect(
+        useCallback(() => {
+            fetchData();
+        }, [projectId])
+    );
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchData(true);
+        setRefreshing(false);
+    };
 
     const handleCopy = async (text: string, id: string) => {
         if (!text) return;
@@ -373,6 +385,13 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 0 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+            {overallLoading ? (
+                <View style={{ flex: 1, minHeight: 400, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={{ marginTop: 12, color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>Loading Overview...</Text>
+                </View>
+            ) : (
+                <>
             <View style={{ gap: 20 }}>
                 {/* Stats Grid — 2×2 */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
@@ -721,6 +740,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
                 {/* EditProjectModal moved to [id].tsx */}
             </View>
+                </>
+            )}
 
             {/* Member List Modal */}
             <Modal visible={!!memberModalType} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setMemberModalType(null)}>
