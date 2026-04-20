@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { folders, files, project_members, activities, users as UsersModel, projects } from "../models/index.ts";
+import { folders, files, project_members, activities, users as UsersModel, projects, organizations, sequelize } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { Op } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
@@ -247,45 +247,56 @@ export const updateFolder = async (req: Request, res: Response) => {
 };
 
 export const deleteFolder = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const authUser = (req as any).user;
-        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (!authUser) {
+            await t.rollback();
+            return res.status(401).json({ error: "Unauthorized" });
+        }
 
         const { folderId } = req.params;
         const { forceDelete } = req.body;
 
-        const folder = await folders.findByPk(folderId);
+        const folder = await folders.findByPk(folderId, { transaction: t });
         if (!folder) {
+            await t.rollback();
             return res.status(404).json({ error: "Folder not found" });
         }
 
         // Authorization: Admins or Project Contributors
         if (authUser.role !== "admin" && authUser.role !== "contributor") {
+            await t.rollback();
             return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can delete folders" });
         }
 
         if (authUser.role === "contributor") {
             const access = await project_members.findOne({
-                where: { user_id: authUser.user_id, project_id: folder.project_id }
+                where: { user_id: authUser.user_id, project_id: folder.project_id },
+                transaction: t
             });
             if (!access || access.role !== "contributor") {
+                await t.rollback();
                 return res.status(403).json({ error: "Forbidden: You do not have contributor access to this project" });
             }
         }
 
         // Check if folder has content
-        const fileCount = await files.count({ where: { folder_id: folderId } });
-        const subfolderCount = await folders.count({ where: { parent_id: folderId } });
+        const fileCount = await files.count({ where: { folder_id: folderId }, transaction: t });
+        const subfolderCount = await folders.count({ where: { parent_id: folderId }, transaction: t });
+
+        let totalSizeDeletedMb = 0;
 
         if (fileCount > 0 || subfolderCount > 0) {
             if (!forceDelete) {
+                await t.rollback();
                 return res.status(400).json({ error: "Cannot delete a folder that is not empty", hasContent: true });
             }
 
             // Recursive deletion logic
             const deleteRecursively = async (fId: any) => {
                 // Get all files in this folder
-                const folderFiles = await files.findAll({ where: { folder_id: fId } });
+                const folderFiles = await files.findAll({ where: { folder_id: fId }, transaction: t });
                 for (const file of folderFiles) {
                     try {
                         // Delete from S3
@@ -297,27 +308,40 @@ export const deleteFolder = async (req: Request, res: Response) => {
                     } catch (s3Err) {
                         console.error(`Failed to delete S3 object for file ${file.id}:`, s3Err);
                     }
-                    await file.destroy();
+                    totalSizeDeletedMb += (file.file_size_mb || 0);
+                    await file.destroy({ transaction: t });
                 }
 
                 // Get all subfolders
-                const subfolders = await folders.findAll({ where: { parent_id: fId } });
-                for (const sub of subfolders) {
+                const subfoldersList = await folders.findAll({ where: { parent_id: fId }, transaction: t });
+                for (const sub of subfoldersList) {
                     await deleteRecursively(sub.id);
                 }
                 
                 // Finally delete the folder itself (except the root target which is handled at the end)
                 if (fId !== folderId) {
-                    await folders.destroy({ where: { id: fId } });
+                    await folders.destroy({ where: { id: fId }, transaction: t });
                 }
             };
 
             await deleteRecursively(folderId);
         }
 
+        // Update organization storage usage
+        if (totalSizeDeletedMb > 0) {
+            const project = await projects.findByPk(folder.project_id, { transaction: t });
+            if (project) {
+                await organizations.decrement('storage_used_mb', {
+                    by: totalSizeDeletedMb,
+                    where: { id: project.organization_id },
+                    transaction: t
+                });
+            }
+        }
+
         const folderName = folder.name;
         const project_id = folder.project_id;
-        await folder.destroy();
+        await folder.destroy({ transaction: t });
 
         await logActivity({
             projectId: project_id,
@@ -327,8 +351,10 @@ export const deleteFolder = async (req: Request, res: Response) => {
             metadata: { folderId: folder.id, type: folder.folder_type === 'photo' ? 'photos' : 'documents' }
         });
 
+        await t.commit();
         res.status(200).json({ message: "Folder deleted successfully" });
     } catch (error) {
+        await t.rollback();
         console.error("Delete Folder Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }

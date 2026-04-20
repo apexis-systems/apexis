@@ -184,7 +184,8 @@ export default function DashboardScreen() {
     useCallback(() => {
       // Clear out the active project scope if they return to Dashboard
       setActiveProjectContext(null, null);
-    }, [])
+      fetchProjects(selectedOrgId);
+    }, [selectedOrgId])
   );
 
   useEffect(() => {
