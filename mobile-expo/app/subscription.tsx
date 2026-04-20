@@ -153,6 +153,8 @@ export default function SubscriptionScreen() {
     fetchPlans();
   }, []);
 
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+
   const fetchPlans = async () => {
     setPlansLoading(true);
     try {
@@ -168,6 +170,12 @@ export default function SubscriptionScreen() {
     } finally {
       setPlansLoading(false);
     }
+  };
+
+  const getEffectivePrice = (plan: any) => {
+    const basePrice = Number(plan.price) || 0;
+    if (plan.name === "One-Time Buy" || plan.name === "Enterprise") return basePrice;
+    return billingCycle === "annual" ? basePrice * 0.65 : basePrice;
   };
 
   const handleUpgrade = async (plan: any) => {
@@ -199,15 +207,17 @@ export default function SubscriptionScreen() {
 
     setProcessingPayment(true);
     try {
-      const basePrice = Number(plan.price) || 0;
-      const amount = basePrice;
+      const effectivePrice = getEffectivePrice(plan);
+      const isAnnual = billingCycle === "annual" && plan.name !== "One-Time Buy";
+      const amount = isAnnual ? effectivePrice * 12 : effectivePrice;
 
       const orderData = await createOrder({
         amount,
         currency: "INR",
         plan_name: plan.name,
-        plan_cycle: "monthly",
+        plan_cycle: plan.name === "One-Time Buy" ? "monthly" : billingCycle,
       });
+
 
       if (!orderData?.order?.id || !orderData.order.amount) {
         throw new Error("Invalid payment order received from server.");
@@ -409,13 +419,28 @@ export default function SubscriptionScreen() {
         {/* Available Plans */}
         <Text style={styles.sectionTitle}>UPGRADE YOUR EXPERIENCE</Text>
 
+        <View style={styles.toggleContainer}>
+          <Text style={[styles.toggleLabel, billingCycle === "monthly" && { color: colors.primary, fontWeight: "700" }]}>Monthly</Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setBillingCycle(billingCycle === "monthly" ? "annual" : "monthly")}
+            style={[styles.toggleSwitch, { backgroundColor: colors.primary }]}>
+            <View style={[styles.toggleCircle, billingCycle === "annual" ? styles.toggleCircleAnnual : styles.toggleCircleMonthly]} />
+          </TouchableOpacity>
+          <Text style={[styles.toggleLabel, billingCycle === "annual" && { color: colors.primary, fontWeight: "700" }]}>
+            Annual <Text style={{ color: colors.primary, fontSize: 10 }}>(Save 35%)</Text>
+          </Text>
+        </View>
+
         <View style={styles.plansList}>
           {availablePlans.map((p) => {
             const isCurrent = p.name === plan.name;
-            const basePrice = Number(p.price) || 0;
-            const price = basePrice;
+            const effectivePrice = getEffectivePrice(p);
+            const isAnnual = billingCycle === "annual" && p.name !== "One-Time Buy";
+            const totalAnnual = effectivePrice * 12;
+
             const isEnterprise = isEnterprisePlan(p);
-            const period = PLAN_PERIOD_MAP[p.name] || "";
+            const period = p.name === "One-Time Buy" || isEnterprise ? "" : "/mo";
             const buttonLabel = isCurrent
               ? "Current"
               : isEnterprise
@@ -447,24 +472,31 @@ export default function SubscriptionScreen() {
                     {PLAN_DETAILS[p.name]?.subtitle || "Tap to view benefits"}
                   </Text>
                   <View
-                    style={{ flexDirection: "row", alignItems: "baseline" }}>
-                    <Text
-                      style={[
-                        styles.availablePlanPrice,
-                        { color: colors.primary },
-                      ]}>
-                      {isEnterprise
-                        ? "Custom"
-                        : `₹${price.toLocaleString("en-IN")}`}
-                    </Text>
-                    {!!period && (
+                    style={{ flexDirection: "column", alignItems: "flex-start" }}>
+                    <View style={{ flexDirection: "row", alignItems: "baseline" }}>
                       <Text
-                        style={{
-                          fontSize: 12,
-                          color: colors.textMuted,
-                          marginLeft: 4,
-                        }}>
-                        {period}
+                        style={[
+                          styles.availablePlanPrice,
+                          { color: colors.primary },
+                        ]}>
+                        {isEnterprise
+                          ? "Custom"
+                          : `₹${effectivePrice.toLocaleString("en-IN")}`}
+                      </Text>
+                      {!!period && (
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.textMuted,
+                            marginLeft: 4,
+                          }}>
+                          {period}
+                        </Text>
+                      )}
+                    </View>
+                    {isAnnual && !isEnterprise && (
+                      <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "600" }}>
+                        Billed annually: ₹{totalAnnual.toLocaleString("en-IN")}
                       </Text>
                     )}
                   </View>
@@ -473,21 +505,10 @@ export default function SubscriptionScreen() {
                       style={{
                         fontSize: 11,
                         color: colors.textMuted,
-                        marginTop: 2,
+                        marginTop: 4,
+                        fontWeight: "600",
                       }}>
-                      ₹{basePrice.toLocaleString("en-IN")} + 18% GST
-                    </Text>
-                  )}
-                  {!isEnterprise && (
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        color: colors.text,
-                        marginTop: 2,
-                        fontWeight: "700",
-                      }}>
-                      Payable: ₹
-                      {payableAmount(basePrice).toLocaleString("en-IN")}
+                      (Incl. 18% GST)
                     </Text>
                   )}
                 </View>
@@ -503,6 +524,7 @@ export default function SubscriptionScreen() {
                       borderWidth: 1,
                     },
                   ]}>
+
                   <Text
                     style={[
                       styles.selectBtnText,
@@ -590,16 +612,16 @@ export default function SubscriptionScreen() {
                         ]}>
                         {isEnterprisePlan(selectedPlan)
                           ? "Custom Pricing"
-                          : `₹${Number(selectedPlan.price || 0).toLocaleString("en-IN")}`}
+                          : `₹${getEffectivePrice(selectedPlan).toLocaleString("en-IN")}`}
                       </Text>
-                      {!!PLAN_PERIOD_MAP[selectedPlan.name] &&
+                      {selectedPlan.name !== "One-Time Buy" &&
                         !isEnterprisePlan(selectedPlan) && (
                           <Text
                             style={[
                               styles.modalPeriod,
                               { color: colors.textMuted },
                             ]}>
-                            {PLAN_PERIOD_MAP[selectedPlan.name]}
+                            /mo
                           </Text>
                         )}
                     </View>
@@ -621,29 +643,24 @@ export default function SubscriptionScreen() {
                         {selectedPlanDetails.trial}
                       </Text>
                     )}
+                    {billingCycle === "annual" && selectedPlan.name !== "One-Time Buy" && !isEnterprisePlan(selectedPlan) && (
+                      <Text style={{ color: colors.primary, fontWeight: "700", marginTop: 4 }}>
+                        Total Annual: ₹{(getEffectivePrice(selectedPlan) * 12).toLocaleString("en-IN")}
+                      </Text>
+                    )}
                     {!isEnterprisePlan(selectedPlan) && (
-                      <>
-                        <Text
-                          style={[
-                            styles.modalMetaText,
-                            { color: colors.textMuted },
-                          ]}>
-                          Base: ₹
-                          {Number(selectedPlan.price || 0).toLocaleString(
-                            "en-IN",
-                          )}{" "}
-                          + 18% GST
-                        </Text>
-                        <Text
-                          style={[styles.modalPayable, { color: colors.text }]}>
-                          Payable: ₹
-                          {payableAmount(
-                            Number(selectedPlan.price || 0),
-                          ).toLocaleString("en-IN")}
-                        </Text>
-                      </>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: colors.textMuted,
+                          marginTop: 4,
+                          fontWeight: "600",
+                        }}>
+                        (Incl. 18% GST)
+                      </Text>
                     )}
                   </View>
+
 
                   <View
                     style={[
@@ -849,27 +866,45 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 3,
   },
-  cycleContainer: {
+  toggleContainer: {
     flexDirection: "row",
-    backgroundColor: "rgba(0,0,0,0.05)",
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 16,
-  },
-  cycleBtn: {
-    flex: 1,
-    paddingVertical: 10,
     alignItems: "center",
-    borderRadius: 10,
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 24,
+    backgroundColor: "rgba(0,0,0,0.03)",
+    paddingVertical: 12,
+    borderRadius: 16,
   },
-  cycleText: {
-    fontSize: 12,
-    fontWeight: "700",
+  toggleSwitch: {
+    width: 48,
+    height: 24,
+    borderRadius: 12,
+    padding: 2,
+    justifyContent: "center",
+  },
+  toggleCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "white",
+  },
+  toggleCircleMonthly: {
+    alignSelf: "flex-start",
+  },
+  toggleCircleAnnual: {
+    alignSelf: "flex-end",
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
   },
   plansList: {
     gap: 12,
     marginBottom: 32,
   },
+
   availablePlanCard: {
     flexDirection: "row",
     alignItems: "center",
