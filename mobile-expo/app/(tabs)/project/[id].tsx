@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler, FlatList, Platform } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +22,7 @@ import ProjectManuals from '@/components/project/ProjectManuals';
 import { getRFIs } from '@/services/rfiService';
 import MainHeader from '@/components/shared/MainHeader';
 import EditProjectModal from '@/components/project/EditProjectModal';
+import * as ScreenCapture from 'expo-screen-capture';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -147,6 +148,129 @@ export default function ProjectWorkspaceScreen() {
         }
     }, [socket, isConnected, id, checkRFIs]);
 
+    type TabDef = { key: Tab; label: string; hideForClient?: boolean };
+    const tabs: TabDef[] = [
+        { key: 'overview', label: 'Overview' },
+        { key: 'documents', label: 'Docs' },
+        { key: 'photos', label: 'Photos' },
+        { key: 'rfi', label: 'RFI' },
+    ];
+
+    const visibleTabs = tabs.filter((t) => !(t.hideForClient && user?.role === 'client'));
+
+    const flatListRef = useRef<FlatList<TabDef>>(null);
+    const ignoreScrollSync = useRef(false);
+
+    // Sync button press with FlatList
+    const handleTabPress = (tabKey: Tab) => {
+        if (activeTab === tabKey) return;
+        ignoreScrollSync.current = true;
+        setActiveTab(tabKey);
+        router.setParams({ folderId: '' });
+        const index = visibleTabs.findIndex(t => t.key === tabKey);
+        if (index !== -1) {
+            flatListRef.current?.scrollToIndex({ index, animated: true });
+        }
+
+        // Safety timeout to ensure flag is cleared even if momentum doesn't fire
+        setTimeout(() => {
+            ignoreScrollSync.current = false;
+        }, 1000);
+    };
+
+    // Helper to render the content for a specific tab
+    const renderTabScene = (tabKey: Tab) => {
+        if (!user) return null;
+
+        switch (tabKey) {
+            case 'overview':
+                return (
+                    <ProjectOverview
+                        project={project}
+                        userRole={user.role}
+                        onUpdate={(updated) => setProject(updated)}
+                        onActionPress={(actionId: string) => {
+                            if (actionId === 'edit-start') {
+                                setEditModalFocus('start_date');
+                                setIsEditModalOpen(true);
+                            } else if (actionId === 'edit-end') {
+                                setEditModalFocus('end_date');
+                                setIsEditModalOpen(true);
+                            } else {
+                                handleTabPress(actionId as Tab);
+                            }
+                        }}
+                    />
+                );
+            case 'documents':
+                return <ProjectDocuments project={project} user={user} initialFolderId={folderId} initialFileId={fileId} />;
+            case 'photos':
+                return <ProjectPhotos project={project} user={user} initialFolderId={folderId} initialFileId={fileId || photoId} />;
+            case 'rfi':
+                return <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />;
+            default:
+                return null;
+        }
+    };
+
+    // Instant sync scroll with header highlight
+    const onScroll = useCallback((e: any) => {
+        if (ignoreScrollSync.current) return;
+        const xOffset = e.nativeEvent.contentOffset.x;
+        const decimalIndex = xOffset / SCREEN_WIDTH;
+        const index = Math.round(decimalIndex);
+
+        // Sticky syncing: Only update header when we are 80% into the target page
+        // This prevents the header from 'flickering' through intermediate tabs
+        const distanceToPage = Math.abs(decimalIndex - index);
+        if (distanceToPage > 0.2) return;
+
+        if (visibleTabs[index] && visibleTabs[index].key !== activeTab) {
+            setActiveTab(visibleTabs[index].key);
+        }
+    }, [activeTab, visibleTabs]);
+
+    const stopIgnoring = useCallback(() => {
+        ignoreScrollSync.current = false;
+    }, []);
+
+    // Initial scroll sync
+    useEffect(() => {
+        if (activeTab && visibleTabs.some(t => t.key === activeTab)) {
+            const index = visibleTabs.findIndex(t => t.key === activeTab);
+            if (index !== -1) {
+                // Short timeout to ensure FlatList is mounted
+                setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({ index, animated: false });
+                }, 100);
+            }
+        }
+    }, [id]); // Reset when project changes
+
+    // Centralized Screen Capture Protection for the entire Project Workspace
+    // Note: On iOS, expo-screen-capture can cause a total black screen for the user 
+    // even during normal viewing on certain devices/simulators.
+    // We only enable it for Android for now to ensure iOS visibility is restored.
+    useEffect(() => {
+        const enableProtection = async () => {
+            try {
+                if (Platform.OS === 'android') {
+                    await ScreenCapture.preventScreenCaptureAsync('project-workspace');
+                }
+            } catch (error) {
+                console.warn('Failed to enable ScreenCapture', error);
+            }
+        };
+        enableProtection();
+        return () => {
+            if (Platform.OS === 'android') {
+                ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
+            }
+        };
+    }, [id]); // Reset only when changing projects or leaving
+
+    const isMainTab = visibleTabs.some(t => t.key === activeTab);
+
     if (!user || loading) return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -158,16 +282,6 @@ export default function ProjectWorkspaceScreen() {
             <Text style={{ color: colors.text }}>Project not found</Text>
         </SafeAreaView>
     );
-
-    type TabDef = { key: Tab; label: string; hideForClient?: boolean };
-    const tabs: TabDef[] = [
-        { key: 'overview', label: 'Overview' },
-        { key: 'documents', label: 'Docs' },
-        { key: 'photos', label: 'Photos' },
-        { key: 'rfi', label: 'RFI' },
-    ];
-
-    const visibleTabs = tabs.filter((t) => !(t.hideForClient && user.role === 'client'));
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
@@ -203,9 +317,7 @@ export default function ProjectWorkspaceScreen() {
                 )}
             </View>
 
-
-
-            {/* Tab Bar */}
+            {/* Tab Bar (Sticky only for main tabs) */}
             <View style={{ backgroundColor: colors.background }}>
                 <View style={{
                     paddingHorizontal: 12,
@@ -222,17 +334,13 @@ export default function ProjectWorkspaceScreen() {
                         {visibleTabs.map((tab) => (
                             <TouchableOpacity
                                 key={tab.key}
-                                onPress={() => {
-                                    setActiveTab(tab.key);
-                                    router.setParams({ folderId: '' });
-                                }}
+                                onPress={() => handleTabPress(tab.key)}
                                 style={{
                                     flex: 1,
                                     borderRadius: 10,
                                     paddingVertical: 10,
                                     alignItems: 'center',
                                     backgroundColor: activeTab === tab.key ? colors.surface : 'transparent',
-                                    // Subtle shadow for active tab
                                     ...(activeTab === tab.key && !isDark ? {
                                         shadowColor: '#000',
                                         shadowOffset: { width: 0, height: 1 },
@@ -271,94 +379,100 @@ export default function ProjectWorkspaceScreen() {
 
             {/* Tab Content */}
             <View style={{ flex: 1 }}>
-                {activeTab === 'overview' && (
-                    <ProjectOverview
-                        project={project}
-                        userRole={user.role}
-                        onUpdate={(updated) => setProject(updated)}
-                        onActionPress={(actionId: string) => {
-                            if (actionId === 'edit-start') {
-                                setEditModalFocus('start_date');
-                                setIsEditModalOpen(true);
-                            } else if (actionId === 'edit-end') {
-                                setEditModalFocus('end_date');
-                                setIsEditModalOpen(true);
-                            } else {
-                                setActiveTab(actionId as Tab);
-                            }
-                        }}
-                    />
-                )}
-                {activeTab === 'documents' && <ProjectDocuments project={project} user={user} initialFolderId={folderId} initialFileId={fileId} />}
-                {activeTab === 'photos' && <ProjectPhotos project={project} user={user} initialFolderId={folderId} initialFileId={fileId || photoId} />}
-                {activeTab === 'snags' && (
-                    <View style={{ flex: 1 }}>
-                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
-                                <Feather name="arrow-left" size={20} color={colors.text} />
-                            </TouchableOpacity>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
-                        </View>
-                        <ProjectSnagList project={project} initialSnagId={snagId} />
-                    </View>
-                )}
-                {activeTab === 'sops' && (
-                    <View style={{ flex: 1 }}>
-                        <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <TouchableOpacity onPress={() => setActiveTab('overview')}>
-                                <Feather name="arrow-left" size={20} color={colors.text} />
-                            </TouchableOpacity>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>SOPs & Manuals</Text>
-                        </View>
-                        <ProjectManuals project={project} />
-                    </View>
-                )}
-                {activeTab === 'rfi' && <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />}
-
-                {/* Internal / Hidden Tabs */}
-                {activeTab === 'reports' && (
-                    <View style={{ flex: 1 }} {...panHandlers}>
-                        <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <TouchableOpacity onPress={() => setActiveTab('overview')}>
-                                    <Feather name="arrow-left" size={20} color={colors.text} />
-                                </TouchableOpacity>
-                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
+                {isMainTab ? (
+                    <FlatList
+                        ref={flatListRef}
+                        data={visibleTabs}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        keyExtractor={(item) => item.key}
+                        renderItem={({ item }) => (
+                            <View style={{ width: SCREEN_WIDTH, flex: 1 }}>
+                                {renderTabScene(item.key)}
                             </View>
-
-                            <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#e2e8f0', borderRadius: 8, padding: 2 }}>
-                                <TouchableOpacity
-                                    onPress={() => setReportType('daily')}
-                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'daily' ? colors.surface : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>Daily</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setReportType('weekly')}
-                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'weekly' ? colors.surface : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setReportType('monthly')}
-                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'monthly' ? colors.surface : 'transparent' }}
-                                >
-                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'monthly' ? colors.text : colors.textMuted }}>Monthly</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                        </View>
-                        {reportType === 'daily' ? (
-                            <ProjectDailyReports project={project} userRole={user.role} />
-                        ) : reportType === 'weekly' ? (
-                            <ProjectWeeklyReports project={project} userRole={user.role} />
-                        ) : (
-                            <ProjectMonthlyReports project={project} userRole={user.role} />
                         )}
+                        onScroll={onScroll}
+                        onMomentumScrollEnd={stopIgnoring}
+                        onScrollEndDrag={stopIgnoring}
+                        scrollEventThrottle={16}
+                        getItemLayout={(_, index) => ({
+                            length: SCREEN_WIDTH,
+                            offset: SCREEN_WIDTH * index,
+                            index,
+                        })}
+                        windowSize={Platform.OS === 'ios' ? 5 : 2}
+                        initialNumToRender={Platform.OS === 'ios' ? 2 : 1}
+                        maxToRenderPerBatch={Platform.OS === 'ios' ? 2 : 1}
+                        removeClippedSubviews={Platform.OS === 'android'}
+                        style={{ backgroundColor: colors.background }}
+                    />
+                ) : (
+                    <View style={{ flex: 1 }}>
+                        {activeTab === 'snags' && (
+                            <View style={{ flex: 1 }}>
+                                <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                        <Feather name="arrow-left" size={20} color={colors.text} />
+                                    </TouchableOpacity>
+                                    <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
+                                </View>
+                                <ProjectSnagList project={project} initialSnagId={snagId} />
+                            </View>
+                        )}
+                        {activeTab === 'sops' && (
+                            <View style={{ flex: 1 }}>
+                                <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                        <Feather name="arrow-left" size={20} color={colors.text} />
+                                    </TouchableOpacity>
+                                    <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>SOPs & Manuals</Text>
+                                </View>
+                                <ProjectManuals project={project} />
+                            </View>
+                        )}
+                        {activeTab === 'reports' && (
+                            <View style={{ flex: 1 }} {...panHandlers}>
+                                <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <TouchableOpacity onPress={() => setActiveTab('overview')}>
+                                            <Feather name="arrow-left" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+                                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
+                                    </View>
 
+                                    <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#e2e8f0', borderRadius: 8, padding: 2 }}>
+                                        <TouchableOpacity
+                                            onPress={() => setReportType('daily')}
+                                            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'daily' ? colors.surface : 'transparent' }}
+                                        >
+                                            <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>Daily</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => setReportType('weekly')}
+                                            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'weekly' ? colors.surface : 'transparent' }}
+                                        >
+                                            <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => setReportType('monthly')}
+                                            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'monthly' ? colors.surface : 'transparent' }}
+                                        >
+                                            <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'monthly' ? colors.text : colors.textMuted }}>Monthly</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                                {reportType === 'daily' ? (
+                                    <ProjectDailyReports project={project} userRole={user.role} />
+                                ) : reportType === 'weekly' ? (
+                                    <ProjectWeeklyReports project={project} userRole={user.role} />
+                                ) : (
+                                    <ProjectMonthlyReports project={project} userRole={user.role} />
+                                )}
+                            </View>
+                        )}
                     </View>
                 )}
-
             </View>
 
             <EditProjectModal

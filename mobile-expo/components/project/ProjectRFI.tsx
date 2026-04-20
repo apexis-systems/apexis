@@ -42,15 +42,6 @@ const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
 export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
   const { colors } = useTheme();
 
-  useFocusEffect(
-    useCallback(() => {
-      ScreenCapture.preventScreenCaptureAsync('rfi-section');
-      return () => {
-        ScreenCapture.allowScreenCaptureAsync('rfi-section');
-      };
-    }, [])
-  );
-
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const MAX_RFI_IMAGES = 4;

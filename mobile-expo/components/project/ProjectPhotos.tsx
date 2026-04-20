@@ -16,6 +16,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import { formatFileSize } from '@/helpers/format';
+import { groupItemsByMonth } from '@/helpers/grouping';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -29,14 +30,6 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectPhotos({ project, user, initialFolderId, initialFileId }: { project: any; user: any; initialFolderId?: string; initialFileId?: string }) {
     const { colors } = useTheme();
-    useFocusEffect(
-        useCallback(() => {
-            ScreenCapture.preventScreenCaptureAsync('photos-section');
-            return () => {
-                ScreenCapture.allowScreenCaptureAsync('photos-section');
-            };
-        }, [])
-    );
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
@@ -51,7 +44,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [editFolderName, setEditFolderName] = useState('');
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
+    const [sortBy, setSortBy] = useState<'name' | 'newest' | 'oldest' | 'size'>('name');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -118,7 +111,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     useEffect(() => {
         if (selectedFolder) {
-            setSortBy('date');
+            setSortBy('newest');
         } else {
             setSortBy('name');
         }
@@ -130,7 +123,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const visiblePhotosInit = user.role === 'client' ? currentFolderPhotosForInit.filter((p) => p.client_visible !== false) : currentFolderPhotosForInit;
             const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
                 if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
-                if (sortBy === 'date') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                if (sortBy === 'newest') return new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime();
+                if (sortBy === 'oldest') return new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime();
                 if (sortBy === 'size') return (b.file_size_mb || 0) - (a.file_size_mb || 0);
                 return 0;
             });
@@ -157,8 +151,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 const nameB = type === 'folder' ? b.name : b.file_name;
                 return (nameA || '').localeCompare(nameB || '');
             }
-            if (sortBy === 'date') {
-                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            if (sortBy === 'newest') {
+                return new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime();
+            }
+            if (sortBy === 'oldest') {
+                return new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime();
             }
             if (sortBy === 'size') {
                 if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
@@ -627,7 +624,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                             <TouchableOpacity
                                 onPress={() => {
-                                    const next: any = sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : 'name';
+                                    let next: any = 'name';
+                                    if (sortBy === 'name') next = 'newest';
+                                    else if (sortBy === 'newest') next = 'oldest';
+                                    else if (sortBy === 'oldest') next = 'size';
+                                    else if (sortBy === 'size') next = 'name';
                                     setSortBy(next);
                                 }}
                                 style={{
@@ -724,124 +725,162 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     </View>
                 )}
 
-                <View style={{ flexDirection: viewMode === 'grid' ? 'row' : 'column', flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', gap: viewMode === 'grid' ? 4 : 8, marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
-                    {sortedPhotos.map((photo, index) => {
-                        const isSelected = selectedFiles.has(photo.id);
-                        if (viewMode === 'grid') {
-                            return (
-                                <View
-                                    key={photo.id}
-                                    style={{
-                                        width: '24%',
-                                        aspectRatio: 1,
-                                        backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                        borderRadius: 10,
-                                        overflow: 'hidden',
-                                        borderWidth: 1,
-                                        borderColor: isSelected ? colors.primary : colors.border,
-                                        position: 'relative'
-                                    }}
-                                >
-                                    <TouchableOpacity
-                                        onPress={() => {
-                                            if (isSelectionMode) toggleSelection('file', photo.id);
-                                            else openViewer(index);
-                                        }}
-                                        onLongPress={() => handleLongPress('file', photo.id)}
+                <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                    {(() => {
+                        const renderPhotoItem = (photo: any, index: number) => {
+                            const isSelected = selectedFiles.has(photo.id);
+                            if (viewMode === 'grid') {
+                                return (
+                                    <View
+                                        key={photo.id}
                                         style={{
-                                            ...StyleSheet.absoluteFillObject,
-                                            zIndex: 5,
+                                            width: '23.8%',
+                                            aspectRatio: 1,
+                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
+                                            borderRadius: 10,
+                                            overflow: 'hidden',
+                                            borderWidth: 1,
+                                            borderColor: isSelected ? colors.primary : colors.border,
+                                            position: 'relative'
                                         }}
-                                    />
-                                    <Image 
-                                        source={photo.downloadUrl} 
-                                        style={{ width: '100%', height: '100%' }} 
-                                        contentFit="cover"
-                                        transition={200}
-                                    />
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (isSelectionMode) toggleSelection('file', photo.id);
+                                                else openViewer(sortedPhotos.findIndex(p => p.id === photo.id));
+                                            }}
+                                            onLongPress={() => handleLongPress('file', photo.id)}
+                                            style={{
+                                                ...StyleSheet.absoluteFillObject,
+                                                zIndex: 5,
+                                            }}
+                                        />
+                                        <Image 
+                                            source={photo.downloadUrl} 
+                                            style={{ width: '100%', height: '100%' }} 
+                                            contentFit="cover"
+                                            transition={200}
+                                        />
 
-                                    {isSelected && (
-                                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                            <Feather name="check" size={10} color="#fff" />
+                                        {isSelected && (
+                                            <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                <Feather name="check" size={10} color="#fff" />
+                                            </View>
+                                        )}
+                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
+                                            <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
+                                                <TouchableOpacity
+                                                    onPress={() => togglePhotoVisibility(photo)}
+                                                >
+                                                    <Feather
+                                                        name={photo.client_visible !== false ? 'eye' : 'eye-off'}
+                                                        size={14}
+                                                        color={photo.client_visible !== false ? colors.primary : colors.textMuted}
+                                                    />
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+                                        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 6 }}>
+                                            <Text numberOfLines={1} style={{ fontSize: 9, color: '#fff', textAlign: 'center' }}>{photo.file_name}</Text>
                                         </View>
-                                    )}
-                                    {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
-                                        <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                            <TouchableOpacity
-                                                onPress={() => togglePhotoVisibility(photo)}
-                                            >
-                                                <Feather
-                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'}
-                                                    size={14}
-                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted}
-                                                />
-                                            </TouchableOpacity>
-                                        </View>
-                                    )}
-                                    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 6 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 9, color: '#fff', textAlign: 'center' }}>{photo.file_name}</Text>
                                     </View>
-                                </View>
-                            );
-                        } else {
-                            // List View Mode
-                            return (
-                                <View
-                                    key={photo.id}
-                                    style={{
+                                );
+                            } else {
+                                // List View Mode
+                                return (
+                                    <View
+                                        key={photo.id}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            borderRadius: 12,
+                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
+                                            borderWidth: 1,
+                                            borderColor: isSelected ? colors.primary : colors.border,
+                                            padding: 10,
+                                            marginVertical: 4,
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (isSelectionMode) toggleSelection('file', photo.id);
+                                                else openViewer(sortedPhotos.findIndex(p => p.id === photo.id));
+                                            }}
+                                            onLongPress={() => handleLongPress('file', photo.id)}
+                                            style={{
+                                                ...StyleSheet.absoluteFillObject,
+                                                zIndex: 5,
+                                            }}
+                                        />
+                                        <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface }}>
+                                            <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                                        </View>
+                                        {isSelected && (
+                                            <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                <Feather name="check" size={10} color="#fff" />
+                                            </View>
+                                        )}
+                                        <View style={{ flex: 1 }}>
+                                            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{photo.file_name}</Text>
+                                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(photo.file_size_mb)}</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', gap: 6, zIndex: 10 }}>
+                                            {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
+                                                <TouchableOpacity
+                                                    onPress={() => togglePhotoVisibility(photo)}
+                                                    style={{ padding: 6 }}
+                                                >
+                                                    <Feather
+                                                        name={photo.client_visible !== false ? 'eye' : 'eye-off'}
+                                                        size={16}
+                                                        color={photo.client_visible !== false ? colors.primary : colors.textMuted}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                );
+                            }
+                        };
+
+                        if (sortBy === 'newest' || sortBy === 'oldest') {
+                            const groups = groupItemsByMonth(sortedPhotos);
+                            return groups.map((group) => (
+                                <View key={group.title} style={{ marginBottom: 20 }}>
+                                    <View style={{ 
+                                        paddingVertical: 12, 
+                                        backgroundColor: 'transparent', 
                                         flexDirection: 'row',
                                         alignItems: 'center',
-                                        gap: 12,
-                                        borderRadius: 12,
-                                        backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
-                                        borderWidth: 1,
-                                        borderColor: isSelected ? colors.primary : colors.border,
-                                        padding: 10,
-                                        position: 'relative',
-                                        overflow: 'hidden'
-                                    }}
-                                >
-                                    <TouchableOpacity
-                                        onPress={() => {
-                                            if (isSelectionMode) toggleSelection('file', photo.id);
-                                            else openViewer(index);
-                                        }}
-                                        onLongPress={() => handleLongPress('file', photo.id)}
-                                        style={{
-                                            ...StyleSheet.absoluteFillObject,
-                                            zIndex: 5,
-                                        }}
-                                    />
-                                    <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface }}>
-                                        <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                        justifyContent: 'space-between'
+                                    }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
+                                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
                                     </View>
-                                    {isSelected && (
-                                        <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                            <Feather name="check" size={10} color="#fff" />
-                                        </View>
-                                    )}
-                                    <View style={{ flex: 1 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{photo.file_name}</Text>
-                                        <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(photo.file_size_mb)}</Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', gap: 6, zIndex: 10 }}>
-                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin') && (
-                                            <TouchableOpacity
-                                                onPress={() => togglePhotoVisibility(photo)}
-                                                style={{ padding: 6 }}
-                                            >
-                                                <Feather
-                                                    name={photo.client_visible !== false ? 'eye' : 'eye-off'}
-                                                    size={16}
-                                                    color={photo.client_visible !== false ? colors.primary : colors.textMuted}
-                                                />
-                                            </TouchableOpacity>
-                                        )}
+                                    <View style={{ 
+                                        flexDirection: viewMode === 'grid' ? 'row' : 'column', 
+                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', 
+                                        gap: viewMode === 'grid' ? 4 : 8 
+                                    }}>
+                                        {group.data.map((p, i) => renderPhotoItem(p, i))}
                                     </View>
                                 </View>
-                            );
+                            ));
                         }
-                    })}
+
+                        return (
+                            <View style={{ 
+                                flexDirection: viewMode === 'grid' ? 'row' : 'column', 
+                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap', 
+                                gap: viewMode === 'grid' ? 4 : 4 
+                            }}>
+                                {sortedPhotos.map((photo, index) => renderPhotoItem(photo, index))}
+                            </View>
+                        );
+                    })()}
                 </View>
 
                 {sortedPhotos.length === 0 && sortedFolders.length > 0 && (
@@ -1084,6 +1123,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             pagingEnabled
                             scrollEnabled={!isViewerZoomed}
                             showsHorizontalScrollIndicator={false}
+                            removeClippedSubviews={Platform.OS === 'android'}
+                            windowSize={3}
+                            initialNumToRender={1}
+                            maxToRenderPerBatch={1}
                             keyExtractor={(item) => item.id.toString()}
                             getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
                             onMomentumScrollEnd={(e) => {
@@ -1101,6 +1144,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 height={viewerHeight}
                                                 onZoomStateChange={setIsViewerZoomed}
                                                 onTap={() => setShowViewerUI(prev => !prev)}
+                                                onDismiss={closeViewer}
                                             />
                                         </View>
                                     </View>
