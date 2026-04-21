@@ -73,12 +73,8 @@ export const getOrganizations = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
         }
 
-        const allOrgs = await organizations.findAll({
-            attributes: ['id', 'name', 'logo'],
-            order: [['name', 'ASC']]
-        });
-
-        res.status(200).json({ organizations: allOrgs });
+        const accounts = await analyticsService.getDetailedAccountsList();
+        res.status(200).json({ organizations: accounts });
     } catch (error) {
         console.error("Get Organizations Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -180,6 +176,69 @@ export const deleteSuperAdmin = async (req: Request, res: Response) => {
         res.status(200).json({ message: "SuperAdmin deleted successfully" });
     } catch (error) {
         console.error("Delete SuperAdmin Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// --- NEW METRICS CONTROLLERS ---
+import * as analyticsService from "../services/analyticsService.ts";
+
+export const getDashboardOverview = async (req: Request, res: Response) => {
+    try {
+        const stats = await analyticsService.getDashboardOverviewStats();
+        const growth = await analyticsService.getPlatformGrowthData();
+        const activity = await analyticsService.getProjectActivityData();
+        const comms = await analyticsService.getCommunicationStats();
+        const topProjects = await analyticsService.getTopActiveProjects();
+        const feed = await analyticsService.getGlobalActivityFeed();
+        const insightsData = await analyticsService.getPlatformInsights();
+        const revenue = await analyticsService.getRevenueAnalytics();
+        const revenueTrend = await analyticsService.getRevenueGrowthData();
+        const alerts = await analyticsService.getPlatformAlerts();
+        
+        res.status(200).json({ stats, growth, activity, comms, topProjects, feed, revenue, revenueTrend, alerts, ...insightsData });
+    } catch (error) {
+        console.error("getDashboardOverview Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getRevenueMetrics = async (req: Request, res: Response) => {
+    try {
+        const data = await analyticsService.getRevenueAnalytics();
+        const churnData = await analyticsService.getChurnAndRetentionMetrics();
+        const revenueTrend = await analyticsService.getRevenueGrowthData();
+        const feedbackData = await analyticsService.getFeedbackData();
+        
+        res.status(200).json({ 
+            ...data, 
+            ...churnData, 
+            revenueTrend,
+            feedbackData 
+        });
+    } catch (error) {
+        console.error("getRevenueMetrics Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getFreemiumLeadList = async (req: Request, res: Response) => {
+    try {
+        const leads = await analyticsService.getFreemiumLeads();
+        res.status(200).json({ leads });
+    } catch (error) {
+        console.error("getFreemiumLeadList Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getGrowthAnalytics = async (req: Request, res: Response) => {
+    try {
+        const data = await analyticsService.getSaasGrowthAnalytics();
+        const revenueGrowth = await analyticsService.getRevenueGrowthData();
+        res.status(200).json({ ...data, revenueGrowth });
+    } catch (error) {
+        console.error("getGrowthAnalytics Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

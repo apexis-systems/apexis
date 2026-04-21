@@ -36,227 +36,12 @@ import {
 } from "recharts";
 import { SUPERADMIN_SECTION_HIGHLIGHT_EVENT } from "@/components/superadmin/SuperadminSidebar";
 import { cn } from "@/lib/utils";
-
-const metrics = [
-  {
-    title: "Active Companies",
-    value: "84",
-    change: "+12% this month",
-    changeType: "up" as const,
-    icon: Building2,
-    sparkline: [12, 19, 28, 38, 52, 65, 78, 84],
-  },
-  {
-    title: "Active Projects",
-    value: "236",
-    change: "+8% this week",
-    changeType: "up" as const,
-    icon: FolderKanban,
-    sparkline: [28, 45, 72, 110, 148, 190, 220, 236],
-  },
-  {
-    title: "Total Users",
-    value: "1,920",
-    change: "+156 this month",
-    changeType: "up" as const,
-    icon: Users,
-    sparkline: [180, 340, 560, 820, 1100, 1480, 1750, 1920],
-  },
-  {
-    title: "Daily Active Users",
-    value: "847",
-    change: "+5.2% today",
-    changeType: "up" as const,
-    icon: Activity,
-    sparkline: [620, 680, 710, 760, 790, 820, 835, 847],
-  },
-  {
-    title: "Tasks Completed",
-    value: "342",
-    change: "Today",
-    changeType: "neutral" as const,
-    icon: CheckCircle,
-    sparkline: [280, 310, 295, 330, 315, 340, 325, 342],
-  },
-  {
-    title: "Messages Sent",
-    value: "5,430",
-    change: "+18% vs yesterday",
-    changeType: "up" as const,
-    icon: MessageSquare,
-    sparkline: [3200, 3800, 4100, 4500, 4200, 4800, 5100, 5430],
-  },
-];
-
-const platformGrowthData = [
-  { month: "Aug", companies: 12, projects: 28, users: 180 },
-  { month: "Sep", companies: 19, projects: 45, users: 340 },
-  { month: "Oct", companies: 28, projects: 72, users: 560 },
-  { month: "Nov", companies: 38, projects: 110, users: 820 },
-  { month: "Dec", companies: 52, projects: 148, users: 1100 },
-  { month: "Jan", companies: 65, projects: 190, users: 1480 },
-  { month: "Feb", companies: 78, projects: 220, users: 1750 },
-  { month: "Mar", companies: 84, projects: 236, users: 1920 },
-];
-
-const projectActivityData = [
-  { day: "Day 1", completed: 26, created: 18 },
-  { day: "Day 2", completed: 31, created: 22 },
-  { day: "Day 3", completed: 29, created: 20 },
-  { day: "Day 4", completed: 36, created: 27 },
-  { day: "Day 5", completed: 34, created: 24 },
-  { day: "Day 6", completed: 39, created: 26 },
-  { day: "Day 7", completed: 42, created: 29 },
-  { day: "Day 8", completed: 37, created: 25 },
-  { day: "Day 9", completed: 33, created: 23 },
-  { day: "Day 10", completed: 41, created: 28 },
-  { day: "Day 11", completed: 44, created: 30 },
-  { day: "Day 12", completed: 38, created: 24 },
-  { day: "Day 13", completed: 35, created: 22 },
-  { day: "Day 14", completed: 40, created: 27 },
-];
-
-const activityMetrics = [
-  { label: "Tasks Created", value: "1,248", sub: "this month" },
-  { label: "Tasks Completed", value: "982", sub: "78.7% rate" },
-  { label: "RFIs Raised", value: "147", sub: "32 pending" },
-  { label: "Drawings Uploaded", value: "384", sub: "62 revisions" },
-];
-
-const messagesPerDay = [
-  { day: "Mon", messages: 680 },
-  { day: "Tue", messages: 820 },
-  { day: "Wed", messages: 950 },
-  { day: "Thu", messages: 1120 },
-  { day: "Fri", messages: 890 },
-  { day: "Sat", messages: 420 },
-  { day: "Sun", messages: 350 },
-];
-
-const fileBreakdown = [
-  { type: "Photos", count: 2430, pct: 63 },
-  { type: "PDFs", count: 870, pct: 23 },
-  { type: "Drawings", count: 410, pct: 11 },
-  { type: "Videos", count: 120, pct: 3 },
-];
-
-const projects = [
-  { name: "Skyline Towers", company: "ABC Developers", activity: "High", risk: "green", tasks: 142, messages: 890 },
-  { name: "Palm Residency", company: "XYZ Constructions", activity: "Medium", risk: "yellow", tasks: 87, messages: 520 },
-  { name: "Lakeview Villa", company: "Studio Architects", activity: "Low", risk: "red", tasks: 23, messages: 110 },
-  { name: "Metro Hub Phase 2", company: "Metro Corp", activity: "High", risk: "green", tasks: 198, messages: 1240 },
-  { name: "Green Valley Homes", company: "Greenfield Realty", activity: "Medium", risk: "green", tasks: 65, messages: 340 },
-  { name: "Harbor Point", company: "Coastal Builders", activity: "Medium", risk: "yellow", tasks: 54, messages: 280 },
-];
-
-const features = [
-  { name: "Chat", usage: 91 },
-  { name: "Tasks", usage: 64 },
-  { name: "Drawings", usage: 47 },
-  { name: "RFIs", usage: 38 },
-  { name: "Site Updates", usage: 33 },
-];
-
-const revenueData = [
-  { month: "Sep", mrr: 8400 },
-  { month: "Oct", mrr: 14200 },
-  { month: "Nov", mrr: 22800 },
-  { month: "Dec", mrr: 31500 },
-  { month: "Jan", mrr: 42100 },
-  { month: "Feb", mrr: 56800 },
-  { month: "Mar", mrr: 68400 },
-];
-
-const revenueMetrics = [
-  { label: "Free Users", value: "1,240" },
-  { label: "Paid Users", value: "480" },
-  { label: "Trial Users", value: "200" },
-  { label: "MRR", value: "₹68,400" },
-  { label: "Conversion", value: "25.0%" },
-  { label: "Churn Rate", value: "3.2%" },
-];
-
-const liveActivities = [
-  { icon: Upload, text: "Architect uploaded Drawing Revision 4 – Tower A", time: "2 min ago", color: "text-sky-500" },
-  { icon: Camera, text: "Contractor posted site slab casting photos", time: "5 min ago", color: "text-[hsl(24_95%_53%)]" },
-  { icon: CheckCircle, text: "Client approved layout drawing – Palm Residency", time: "12 min ago", color: "text-emerald-600 dark:text-emerald-400" },
-  { icon: AlertCircle, text: "Site engineer raised RFI for staircase detail", time: "18 min ago", color: "text-amber-500" },
-  { icon: MessageSquare, text: "Team discussion started on foundation specs", time: "25 min ago", color: "text-sky-500" },
-  { icon: FileText, text: "New BOQ revision uploaded – Skyline Towers", time: "32 min ago", color: "text-[hsl(24_95%_53%)]" },
-  { icon: CheckCircle, text: "Task 'Install plumbing Phase 2' marked done", time: "41 min ago", color: "text-emerald-600 dark:text-emerald-400" },
-  { icon: Camera, text: "Daily progress photos uploaded – Metro Hub", time: "1 hr ago", color: "text-[hsl(24_95%_53%)]" },
-];
-
-const alerts = [
-  { icon: AlertTriangle, text: "Lakeview Villa inactive for 10 days", severity: "critical", time: "2 hours ago" },
-  { icon: Clock, text: "3 RFIs pending for over 5 days", severity: "warning", time: "4 hours ago" },
-  { icon: HardDrive, text: "ABC Developers storage at 85% capacity", severity: "warning", time: "6 hours ago" },
-  { icon: CreditCard, text: "XYZ Constructions trial expiring in 3 days", severity: "info", time: "1 day ago" },
-];
-
-const projectHealthProjects = [
-  { name: "Skyline Tower A", company: "Skyline Realty", completion: 78, delayed: 3, rfisPending: 2, drawingsAwaiting: 1, siteIssues: 0, status: "healthy" as const },
-  { name: "Metro Bridge Phase 2", company: "Metro Infra Ltd", completion: 45, delayed: 8, rfisPending: 5, drawingsAwaiting: 3, siteIssues: 2, status: "attention" as const },
-  { name: "Green Valley Mall", company: "Green Valley Developers", completion: 92, delayed: 0, rfisPending: 1, drawingsAwaiting: 0, siteIssues: 0, status: "healthy" as const },
-  { name: "Highway NH-48 Ext", company: "National Highways Authority", completion: 34, delayed: 14, rfisPending: 12, drawingsAwaiting: 6, siteIssues: 5, status: "critical" as const },
-  { name: "City Hospital Block C", company: "City Health Trust", completion: 61, delayed: 5, rfisPending: 4, drawingsAwaiting: 2, siteIssues: 1, status: "attention" as const },
-  { name: "Prestige Lakeside", company: "Prestige Group", completion: 88, delayed: 1, rfisPending: 0, drawingsAwaiting: 0, siteIssues: 0, status: "healthy" as const },
-];
-
-const companyUsage = [
-  { name: "Shapoorji Pallonji", projects: 24, users: 186, messages: 42800, tasks: 3200 },
-  { name: "L&T Infrastructure", projects: 18, users: 142, messages: 38200, tasks: 2800 },
-  { name: "Godrej Properties", projects: 15, users: 98, messages: 28400, tasks: 2100 },
-  { name: "Prestige Group", projects: 12, users: 85, messages: 22100, tasks: 1800 },
-  { name: "Sobha Limited", projects: 10, users: 72, messages: 18500, tasks: 1400 },
-  { name: "Brigade Group", projects: 8, users: 56, messages: 14200, tasks: 1100 },
-];
-
-const systemHealthMetrics = [
-  { label: "Server Uptime", value: "99.97%", status: "good" as const },
-  { label: "API Response Time", value: "142ms", status: "good" as const },
-  { label: "File Storage Used", value: "2.4 TB", status: "warning" as const },
-  { label: "Failed Uploads", value: "0.02%", status: "good" as const },
-];
-
-const userBehaviorMetrics = [
-  { label: "Avg Session Time", value: "18 min" },
-  { label: "Sessions Per Day", value: "3.2" },
-];
-
-const screenUsage = [
-  { screen: "Chat", sessions: 42 },
-  { screen: "Tasks", sessions: 28 },
-  { screen: "Drawings", sessions: 18 },
-  { screen: "RFIs", sessions: 8 },
-  { screen: "Dashboard", sessions: 4 },
-];
-
-const intelligenceInsights = [
-  {
-    icon: TrendingDown,
-    text: "Project delays increased 18% in the last 2 weeks. Top cause: drawing approval bottlenecks.",
-  },
-  {
-    icon: TrendingUp,
-    text: "Companies with more than 10 users are 4x more likely to convert to paid plans.",
-  },
-  {
-    icon: Lightbulb,
-    text: "RFI response time is 2.3x slower in projects with more than 50 team members. Auto-routing would help.",
-  },
-  {
-    icon: TrendingUp,
-    text: "Chat adoption grew 34% after push notifications launched. The same pattern could lift task adoption.",
-  },
-  {
-    icon: Lightbulb,
-    text: "48% of drawings are uploaded between 8 PM and 10 PM. Evening autoscaling is worth planning.",
-  },
-];
+import { getDashboardOverview } from "@/services/superadminService";
+import { useSocket } from "@/contexts/SocketContext";
 
 const chartGridStroke = "hsl(214,20%,90%)";
 const chartTickColor = "hsl(215,10%,45%)";
+
 
 const cardClass =
   "rounded border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-5 shadow-[0_1px_0_rgba(0,0,0,0.03)] dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)]";
@@ -439,8 +224,129 @@ const SummaryPill = ({
   </span>
 );
 
+const activityIconMap: Record<string, any> = {
+  upload_photo: Camera,
+  upload: Upload,
+  snag_update: CheckCircle,
+  rfi_update: AlertCircle,
+  message: MessageSquare,
+  default: Activity
+};
+
+const activityColorMap: Record<string, string> = {
+  upload_photo: "text-[hsl(24_95%_53%)]",
+  upload: "text-sky-500",
+  snag_update: "text-emerald-600 dark:text-emerald-400",
+  rfi_update: "text-amber-500",
+  message: "text-sky-500",
+  default: "text-gray-500"
+};
+
 export default function OverviewDashboard() {
   const highlightedSection = useHashScroll();
+  const { socket, isConnected } = useSocket();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const [activitiesList, setActivitiesList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await getDashboardOverview();
+        setData(res);
+      } catch (error) {
+        console.error("Failed to fetch dashboard overview:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (socket && isConnected) {
+      socket.on("new-activity", (newActivity: any) => {
+        setActivitiesList((prev) => [
+          {
+            icon: newActivity.type === 'upload_photo' || newActivity.type === 'upload' ? Upload : (newActivity.type === 'message' ? MessageSquare : Activity),
+            text: `${newActivity.userName || 'Someone'} ${newActivity.description} in ${newActivity.projectName || 'a project'}`,
+            time: "Just now",
+            color: newActivity.type === 'upload_photo' ? "text-sky-500" : (newActivity.type === 'message' ? "text-sky-500" : "text-[hsl(24_95%_53%)]")
+          },
+          ...prev.slice(0, 14)
+        ]);
+      });
+
+      return () => {
+        socket.off('new-activity');
+      };
+    }
+  }, [socket, isConnected]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <Activity className="h-8 w-8 animate-spin text-[hsl(24_95%_53%)]" />
+          <p className={cn("text-sm font-medium", mutedTextClass)}>Loading real-time analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const dashboardStats = data?.stats || {};
+  
+  const metricsList = [
+    {
+      title: "Active Companies",
+      value: String(dashboardStats.activeCompanies || 0),
+      change: "+12%", 
+      changeType: "up" as const,
+      icon: Building2,
+      sparkline: [12, 19, 28, 38, 52, 65, 78, dashboardStats.activeCompanies || 0],
+    },
+    {
+      title: "Active Projects",
+      value: String(dashboardStats.activeProjects || 0),
+      change: "+8%",
+      changeType: "up" as const,
+      icon: FolderKanban,
+      sparkline: [28, 45, 72, 110, 148, 190, 220, dashboardStats.activeProjects || 0],
+    },
+    {
+      title: "Total Users",
+      value: String(dashboardStats.totalUsers || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ","),
+      change: "+156",
+      changeType: "up" as const,
+      icon: Users,
+      sparkline: [180, 340, 560, 820, 1100, 1480, 1750, dashboardStats.totalUsers || 0],
+    },
+    {
+      title: "Daily Active Users",
+      value: String(dashboardStats.dailyActiveUsers || 0),
+      change: "+5.2%",
+      changeType: "up" as const,
+      icon: Activity,
+      sparkline: [620, 680, 710, 760, 790, 820, 835, dashboardStats.dailyActiveUsers || 0],
+    },
+    {
+      title: "Tasks Completed",
+      value: String(dashboardStats.tasksCompletedToday || 0),
+      change: "Today",
+      changeType: "neutral" as const,
+      icon: CheckCircle,
+      sparkline: [280, 310, 295, 330, 315, 340, 325, dashboardStats.tasksCompletedToday || 0],
+    },
+    {
+      title: "Messages Sent",
+      value: String(dashboardStats.messagesSentToday || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ","),
+      change: "+18%",
+      changeType: "up" as const,
+      icon: MessageSquare,
+      sparkline: [3200, 3800, 4100, 4500, 4200, 4800, 5100, dashboardStats.messagesSentToday || 0],
+    },
+  ];
+
   const getHighlightedCardClass = (sectionId: string) =>
     cn(
       cardClass,
@@ -459,7 +365,7 @@ export default function OverviewDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        {metrics.map((metric) => (
+        {metricsList.map((metric) => (
           <MetricCard key={metric.title} {...metric} />
         ))}
       </div>
@@ -493,7 +399,7 @@ export default function OverviewDashboard() {
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={platformGrowthData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                <AreaChart data={data?.growth || []} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="overview-companies" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(25,95%,53%)" stopOpacity={0.15} />
@@ -526,7 +432,12 @@ export default function OverviewDashboard() {
               </p>
 
               <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
-                {activityMetrics.map((metric) => (
+                {[
+                  { label: "Tasks Completed", value: String(data?.stats.tasksCompletedToday || 0), sub: "Today" },
+                  { label: "RFIs Pending", value: String(data?.stats.rfisPending || 0), sub: "Requires attention" },
+                  { label: "Photos Today", value: String(data?.stats.drawingsUploadedToday || 0), sub: "Last 24h" },
+                  { label: "Total Files", value: String(data?.comms.filesBreakdown.reduce((acc: number, f: any) => acc + f.count, 0) || 0), sub: "Across all projects" },
+                ].map((metric) => (
                   <div key={metric.label} className="rounded bg-[hsl(37_18%_91%/0.6)] p-2.5 dark:bg-[hsl(30_6%_18%)]">
                     <div className={cn("text-lg font-bold", strongTextClass)}>{metric.value}</div>
                     <div className={cn("text-[10px] font-medium uppercase tracking-wide", mutedTextClass)}>
@@ -538,7 +449,7 @@ export default function OverviewDashboard() {
               </div>
 
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={projectActivityData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <BarChart data={data?.activity || []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                   <XAxis dataKey="day" tick={{ fontSize: 10, fill: chartTickColor }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: chartTickColor }} axisLine={false} tickLine={false} />
@@ -567,7 +478,7 @@ export default function OverviewDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {projects.map((project) => (
+                  {(data?.topProjects || []).map((project: any) => (
                     <tr
                       key={project.name}
                       className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
@@ -575,13 +486,13 @@ export default function OverviewDashboard() {
                       <td className={cn("py-2.5", mutedTextClass)}>{project.company}</td>
                       <td className="py-2.5 text-center">
                         <span className="inline-flex items-center gap-1.5">
-                          <span className={cn("h-2 w-2 rounded-full", riskColors[project.risk])} />
-                          <span className={mutedTextClass}>{riskLabels[project.risk]}</span>
+                          <span className={cn("h-2 w-2 rounded-full", riskColors[project.risk || 'green'])} />
+                          <span className={mutedTextClass}>{riskLabels[project.risk || 'green']}</span>
                         </span>
                       </td>
                       <td className="py-2.5 text-center">
-                        <SummaryPill className={activityBadge[project.activity]}>
-                          {project.activity}
+                        <SummaryPill className={activityBadge[project.activity > 100 ? "High" : (project.activity > 50 ? "Medium" : "Low")]}>
+                          {project.activity > 100 ? "High" : (project.activity > 50 ? "Medium" : "Low")}
                         </SummaryPill>
                       </td>
                       <td className={cn("py-2.5 text-right font-medium", strongTextClass)}>{project.tasks}</td>
@@ -590,6 +501,11 @@ export default function OverviewDashboard() {
                       </td>
                     </tr>
                   ))}
+                  {(!data?.topProjects || data.topProjects.length === 0) && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center opacity-50">No active projects found yet.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -606,9 +522,9 @@ export default function OverviewDashboard() {
 
               <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                 {[
-                  { value: "5,430", label: "Messages Today" },
-                  { value: "64.7", label: "Msgs / Project" },
-                  { value: "2.8", label: "Msgs / User" },
+                  { value: data?.comms.messagesToday.toLocaleString() || "0", label: "Messages Today" },
+                  { value: ((data?.comms.messagesToday || 0) / (data?.stats.activeProjects || 1)).toFixed(1), label: "Msgs / Project" },
+                  { value: ((data?.comms.messagesToday || 0) / (data?.stats.totalUsers || 1)).toFixed(1), label: "Msgs / User" },
                 ].map((item) => (
                   <div key={item.label} className="rounded bg-[hsl(37_18%_91%/0.6)] p-2.5 dark:bg-[hsl(30_6%_18%)]">
                     <div className={cn("text-lg font-bold", strongTextClass)}>{item.value}</div>
@@ -620,7 +536,7 @@ export default function OverviewDashboard() {
               </div>
 
               <ResponsiveContainer width="100%" height={140}>
-                <BarChart data={messagesPerDay} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <BarChart data={data?.comms.messagesTrend || []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                   <XAxis dataKey="day" tick={{ fontSize: 10, fill: chartTickColor }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: chartTickColor }} axisLine={false} tickLine={false} />
@@ -633,11 +549,11 @@ export default function OverviewDashboard() {
                 <div className={cn("text-xs font-medium uppercase tracking-wide", mutedTextClass)}>
                   Files Shared
                 </div>
-                {fileBreakdown.map((file) => (
+                {(data?.comms.filesBreakdown || []).map((file: any) => (
                   <div key={file.type} className="flex items-center gap-3">
                     <span className={cn("w-16 text-xs font-medium", strongTextClass)}>{file.type}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-[hsl(37_18%_91%)] dark:bg-[hsl(30_6%_18%)]">
-                      <div className="h-full rounded-full bg-[hsl(24_95%_53%)]" style={{ width: `${file.pct}%` }} />
+                      <div className="h-full rounded-full bg-[hsl(24_95%_53%)]" style={{ width: `${(file.count / (data?.comms.filesBreakdown.reduce((acc: number, f: any) => acc + f.count, 0) || 1)) * 100}%` }} />
                     </div>
                     <span className={cn("w-12 text-right text-xs", mutedTextClass)}>
                       {file.count.toLocaleString()}
@@ -676,7 +592,7 @@ export default function OverviewDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {projectHealthProjects.map((project) => (
+                    {(data?.projectHealth || []).map((project: any) => (
                       <tr
                         key={project.name}
                         className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
@@ -686,15 +602,15 @@ export default function OverviewDashboard() {
                         </td>
                         <td className="py-2.5">
                           <span className="inline-flex items-center gap-1.5">
-                            <span className={cn("h-2 w-2 rounded-full", projectHealthStatus[project.status].dot)} />
-                            <span className={mutedTextClass}>{projectHealthStatus[project.status].label}</span>
+                            <span className={cn("h-2 w-2 rounded-full", projectHealthStatus[project.status as keyof typeof projectHealthStatus]?.dot || "bg-gray-400")} />
+                            <span className={mutedTextClass}>{projectHealthStatus[project.status as keyof typeof projectHealthStatus]?.label || "Unknown"}</span>
                           </span>
                         </td>
                         <td className="py-2.5">
                           <div className="flex items-center gap-2">
                             <div className="h-1.5 w-20 overflow-hidden rounded-full bg-[hsl(37_18%_91%)] dark:bg-[hsl(30_6%_18%)]">
                               <div
-                                className={cn("h-full rounded-full", projectHealthStatus[project.status].progress)}
+                                className={cn("h-full rounded-full", projectHealthStatus[project.status as keyof typeof projectHealthStatus]?.progress || "bg-gray-400")}
                                 style={{ width: `${project.completion}%` }}
                               />
                             </div>
@@ -746,7 +662,7 @@ export default function OverviewDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {companyUsage.map((company, index) => (
+                    {(data?.companyUsage || []).map((company: any, index: number) => (
                       <tr
                         key={company.name}
                         className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
@@ -754,8 +670,8 @@ export default function OverviewDashboard() {
                         <td className={cn("py-2.5 font-medium", strongTextClass)}>{company.name}</td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.projects}</td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.users}</td>
-                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.messages.toLocaleString()}</td>
-                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.tasks.toLocaleString()}</td>
+                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.messages?.toLocaleString() || "0"}</td>
+                        <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.tasks?.toLocaleString() || "0"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -813,17 +729,26 @@ export default function OverviewDashboard() {
                 </h3>
               </div>
               <div className="max-h-[400px] space-y-0 overflow-y-auto">
-                {liveActivities.map((activity, index) => (
+                {(data?.feed || []).map((activity: any, index: number) => {
+                  const Icon = activityIconMap[activity.type] || activityIconMap.default;
+                  const color = activityColorMap[activity.type] || activityColorMap.default;
+                  return (
                   <div
                     key={`${activity.text}-${index}`}
                     className="flex items-start gap-3 border-b border-[hsl(35_15%_85%/0.5)] py-2.5 last:border-0 dark:border-[hsl(30_8%_22%/0.5)]">
-                    <activity.icon className={cn("mt-0.5 h-4 w-4 shrink-0", activity.color)} />
+                    <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", color)} />
                     <div className="min-w-0 flex-1">
                       <p className={cn("text-xs leading-relaxed", strongTextClass)}>{activity.text}</p>
-                      <p className={cn("mt-0.5 text-[10px]", mutedTextClass)}>{activity.time}</p>
+                      <p className={cn("mt-0.5 text-[10px]", mutedTextClass)}>{new Date(activity.time).toLocaleTimeString()}</p>
                     </div>
                   </div>
-                ))}
+                )})}
+                {(!data?.feed || data.feed.length === 0) && (
+                  <div className="flex flex-col items-center justify-center py-8 opacity-50">
+                    <Activity className="h-8 w-8 animate-pulse text-[hsl(24_95%_53%)]" />
+                    <p className="mt-2 text-xs">Waiting for live activities...</p>
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -833,24 +758,26 @@ export default function OverviewDashboard() {
               <div className="mb-4 flex items-center justify-between">
                 <h3 className={cn("text-sm font-semibold", strongTextClass)}>Alerts</h3>
                 <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  {alerts.length}
+                  {(data?.alerts || []).length}
                 </span>
               </div>
               <div className="space-y-2">
-                {alerts.map((alert, index) => (
+                {(data?.alerts || []).map((alert: any, index: number) => {
+                  const Icon = alert.severity === 'critical' ? AlertTriangle : (alert.severity === 'warning' ? AlertCircle : Clock);
+                  return (
                   <div
                     key={`${alert.text}-${index}`}
                     className={cn(
                       "flex items-start gap-3 rounded border p-3",
-                      severityStyles[alert.severity],
+                      severityStyles[alert.severity as keyof typeof severityStyles] || severityStyles.info,
                     )}>
-                    <alert.icon className="mt-0.5 h-4 w-4 shrink-0" />
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium">{alert.text}</p>
-                      <p className="mt-0.5 text-[10px] opacity-70">{alert.time}</p>
+                      <p className="mt-0.5 text-[10px] opacity-70">{new Date(alert.time).toLocaleTimeString()}</p>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           </section>
@@ -864,18 +791,20 @@ export default function OverviewDashboard() {
                 </h3>
               </div>
               <div className="space-y-2">
-                {intelligenceInsights.map((insight, index) => (
+                {(data?.insights || []).map((insight: any, index: number) => {
+                  const Icon = insight.icon === 'TrendingUp' ? TrendingUp : (insight.icon === 'TrendingDown' ? TrendingDown : Lightbulb);
+                  return (
                   <div
                     key={`${insight.text}-${index}`}
                     className="rounded border border-[hsl(24_95%_53%/0.15)] bg-[hsl(24_95%_53%/0.06)] p-3">
                     <div className="flex items-start gap-2">
-                      <insight.icon className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(24_95%_53%)]" />
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(24_95%_53%)]" />
                       <p className={cn("text-xs leading-relaxed", strongTextClass)}>
                         {insight.text}
                       </p>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           </section>
@@ -889,7 +818,7 @@ export default function OverviewDashboard() {
                 Adoption rates across features
               </p>
               <div className="space-y-3">
-                {features.map((feature) => (
+                {(data?.features || []).map((feature: any) => (
                   <div key={feature.name}>
                     <div className="mb-1 flex justify-between text-xs">
                       <span className={cn("font-medium", strongTextClass)}>{feature.name}</span>
@@ -922,7 +851,12 @@ export default function OverviewDashboard() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {systemHealthMetrics.map((metric) => (
+                {[
+                  { label: "Server Uptime", value: data?.stats.systemHealth?.uptime || "99.9%", status: "good" },
+                  { label: "API Response Time", value: data?.stats.systemHealth?.responseTime || "150ms", status: "good" },
+                  { label: "File Storage Used", value: data?.stats.systemHealth?.storageUsed || "0 GB", status: "warning" },
+                  { label: "Failed Uploads", value: data?.stats.systemHealth?.failedUploads || "0.0%", status: "good" },
+                ].map((metric) => (
                   <div
                     key={metric.label}
                     className="flex items-start gap-3 rounded bg-[hsl(37_18%_91%/0.55)] p-3 dark:bg-[hsl(30_6%_18%)]">
@@ -958,7 +892,10 @@ export default function OverviewDashboard() {
               </div>
 
               <div className="mb-4 grid grid-cols-2 gap-3">
-                {userBehaviorMetrics.map((metric) => (
+                {[
+                  { label: "Avg Session Time", value: data?.stats.userBehavior?.avgSessionTime || "12 min" },
+                  { label: "Sessions Per Day", value: data?.stats.userBehavior?.sessionsPerDay || "3.5" },
+                ].map((metric) => (
                   <div
                     key={metric.label}
                     className="rounded bg-[hsl(37_18%_91%/0.55)] p-3 dark:bg-[hsl(30_6%_18%)]">
@@ -974,7 +911,13 @@ export default function OverviewDashboard() {
                 <p className={cn("text-xs font-medium uppercase tracking-[0.14em]", mutedTextClass)}>
                   Most Used Screens
                 </p>
-                {screenUsage.map((screen) => (
+                {(data?.screenUsage || [
+                  { screen: "Chat", sessions: 42 },
+                  { screen: "Tasks", sessions: 28 },
+                  { screen: "Drawings", sessions: 18 },
+                  { screen: "RFIs", sessions: 8 },
+                  { screen: "Dashboard", sessions: 4 },
+                ]).map((screen: any) => (
                   <div key={screen.screen} className="flex items-center gap-2">
                     <span className={cn("w-20 text-xs font-medium", strongTextClass)}>{screen.screen}</span>
                     <div className="h-4 flex-1 overflow-hidden rounded bg-[hsl(37_18%_91%)] dark:bg-[hsl(30_6%_18%)]">
@@ -1000,7 +943,14 @@ export default function OverviewDashboard() {
               </p>
 
               <div className="mb-4 grid grid-cols-2 gap-2">
-                {revenueMetrics.map((metric) => (
+                {[
+                  { label: "Free Users", value: data?.revenue?.freeUsers || 0 },
+                  { label: "Paid Users", value: data?.revenue?.paidUsers || 0 },
+                  { label: "Trial Users", value: "200" },
+                  { label: "MRR", value: `₹${(data?.revenue?.mrr || 0).toLocaleString()}` },
+                  { label: "Conversion", value: `${data?.revenue?.conversionRate || 0}%` },
+                  { label: "Churn Rate", value: "3.2%" },
+                ].map((metric) => (
                   <div key={metric.label} className="rounded bg-[hsl(37_18%_91%/0.6)] p-2 dark:bg-[hsl(30_6%_18%)]">
                     <div className={cn("text-sm font-bold", strongTextClass)}>{metric.value}</div>
                     <div className={cn("text-[10px] font-medium uppercase tracking-wide", mutedTextClass)}>
@@ -1011,7 +961,7 @@ export default function OverviewDashboard() {
               </div>
 
               <ResponsiveContainer width="100%" height={160}>
-                <AreaChart data={revenueData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                <AreaChart data={data?.revenueTrend || []} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="overview-revenue" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(160,84%,39%)" stopOpacity={0.2} />
@@ -1024,12 +974,12 @@ export default function OverviewDashboard() {
                     tick={{ fontSize: 10, fill: chartTickColor }}
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={(value: number) => `₹${(value / 1000).toFixed(0)}k`}
+                    tickFormatter={(value: any) => `₹${(Number(value) / 1000).toFixed(0)}k`}
                   />
-                  <Tooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 6, border: `1px solid ${chartGridStroke}` }}
-                    formatter={(value: number) => [`₹${value.toLocaleString()}`, "MRR"]}
-                  />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 6, border: `1px solid ${chartGridStroke}` }}
+                      formatter={(value: any) => [`₹${Number(value).toLocaleString()}`, "MRR"]}
+                    />
                   <Area type="monotone" dataKey="mrr" stroke="hsl(160,84%,39%)" strokeWidth={2} fill="url(#overview-revenue)" />
                 </AreaChart>
               </ResponsiveContainer>

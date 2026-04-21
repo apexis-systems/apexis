@@ -55,6 +55,11 @@ export const initIO = (httpServer: HTTPServer) => {
             console.log(`Socket ${socket.id} joined user-${userId} (Online: ${onlineUsers.size} users)`);
         });
 
+        socket.on('join-superadmin-room', () => {
+            socket.join('superadmin-room');
+            console.log(`[SOCKET] ${socket.id} joined superadmin-room`);
+        });
+
         socket.on('check-user-status', (rawUserId: string | number) => {
             const userId = String(rawUserId);
             const isOnline = onlineUsers.has(userId);
