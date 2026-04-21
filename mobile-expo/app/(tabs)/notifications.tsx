@@ -7,7 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { getNotifications as fetchNotificationsSvc, markAllNotificationsRead, markNotificationRead } from '@/services/notificationService';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { navigateFromNotification } from '@/utils/navigation';
+import { navigateFromNotification, handleNotificationNavigation } from '@/utils/navigation';
 import { getProjects } from '@/services/projectService';
 import { getOrgUsers } from '@/services/userService';
 import * as Notifications from 'expo-notifications';
@@ -269,7 +269,10 @@ export default function NotificationsScreen() {
             ]}
             onPress={() => {
                 markRead(item.id);
-                navigateFromNotification(String(item.id), item.type, item.data, router);
+                // Use handleNotificationNavigation directly — bypasses the dedup singleton
+                // which would block re-tapping the same notification after it was handled
+                // via a push notification tap (different code path, same DB id).
+                handleNotificationNavigation(item.type, item.data, router);
             }}
         >
             <View style={[styles.iconContainer, {

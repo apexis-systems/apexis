@@ -159,15 +159,16 @@ export default function UploadScreen() {
                 // Priority 2: Nav Bar click while inside a project
                 const { projectId, folderId, type } = getActiveProjectContext();
                 if (projectId) {
+                    console.log(`[UPLOAD] Context transition: Project=${projectId}, Type=${type}`);
                     setSelectedProject(projectId);
                     setSelectedFolder(folderId); // This ensures it's set even if null (root)
                     
-                    const isDoc = type === 'document';
+                    const isDoc = type === 'document' || type === 'documents';
                     setIsDocMode(isDoc);
                     
                     setMode('capture');
                     if (isDoc) {
-                        setTimeout(() => captureScan(), 300);
+                        setTimeout(() => captureScan(true), 300);
                     }
                 }
             }
@@ -344,7 +345,8 @@ export default function UploadScreen() {
     };
 
 
-    const capturePhoto = async () => {
+    const capturePhoto = async (forcedDocMode?: boolean) => {
+        const effectiveDocMode = forcedDocMode ?? isDocMode;
         if (!cameraRef.current || isProcessing) return;
         if (fileQueue.length >= 20) {
             Alert.alert('Limit', 'Queue full');
@@ -400,7 +402,7 @@ export default function UploadScreen() {
                 { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
             );
 
-            if (isDocMode) {
+            if (effectiveDocMode) {
                 addToQueue([{
                     asset: {
                         uri: manipulated.uri,
@@ -431,17 +433,17 @@ export default function UploadScreen() {
     };
 
 
-    const captureScan = async () => {
+    const captureScan = async (forcedDocMode?: boolean) => {
         if (!DocumentScanner || Constants.appOwnership === 'expo') {
             if (!hasWarnedScanner) {
                 setHasWarnedScanner(true);
                 Alert.alert(
                     "Native Scanner Unavailable",
                     "Advanced document scanning (auto-edge detection) requires a Development Build. We will use the standard camera instead.",
-                    [{ text: "OK", onPress: () => capturePhoto() }]
+                    [{ text: "OK", onPress: () => capturePhoto(forcedDocMode) }]
                 );
             } else {
-                capturePhoto();
+                capturePhoto(forcedDocMode);
             }
             return;
         }
@@ -815,7 +817,7 @@ export default function UploadScreen() {
                             </TouchableOpacity>
 
 
-                            <TouchableOpacity onPress={isDocMode ? captureScan : capturePhoto} disabled={isProcessing} style={{ alignItems: 'center' }}>
+                            <TouchableOpacity onPress={() => isDocMode ? captureScan() : capturePhoto()} disabled={isProcessing} style={{ alignItems: 'center' }}>
                                 <View style={{
                                     width: 76, height: 76, borderRadius: 38,
                                     borderWidth: 4, borderColor: '#fff',

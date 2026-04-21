@@ -65,7 +65,7 @@ export const addComment = async (req: Request, res: Response) => {
                     projectId: f.project_id,
                     userId: authUser.user_id,
                     type: isImage ? 'photo_comment' : 'comment',
-                    description: `${authUser.name} commented on ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
+                    description: `commented on ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
                     metadata: { folderId: f.folder_id, type: activityCategory }
                 });
 
@@ -105,7 +105,7 @@ export const addComment = async (req: Request, res: Response) => {
                         projectId: f.project_id,
                         userId: authUser.user_id,
                         type: isImage ? 'photo_comment' : 'comment',
-                        description: `${authUser.name} mentioned a user in ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
+                        description: `mentioned a user in ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
                         metadata: { folderId: f.folder_id, type: activityCategory, mentionedUserId: taggedUserId }
                     });
                 }
