@@ -95,15 +95,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         const initScreenCapture = async () => {
             try {
-                const storedValue = await SecureStore.getItemAsync('is_screen_capture_protected_v2');
-                if (storedValue !== null) {
-                    setIsScreenCaptureProtected(storedValue === 'true');
-                } else {
-                    // Default to ON for everyone
-                    setIsScreenCaptureProtected(true);
+                if (user) {
+                    console.log('[AuthContext] Initializing screen capture protection for:', user.email);
+                    const savedValue = await SecureStore.getItemAsync('is_screen_capture_protected_v2');
+                    
+                    if (savedValue === null) {
+                        console.log('[AuthContext] No v2 setting found. Defaulting to ON.');
+                        // Secure by default: set to true for everyone.
+                        setIsScreenCaptureProtected(true);
+                        await SecureStore.setItemAsync('is_screen_capture_protected_v2', 'true');
+                    } else {
+                        console.log('[AuthContext] Loaded v2 setting:', savedValue);
+                        setIsScreenCaptureProtected(savedValue === 'true');
+                    }
                 }
             } catch (e) {
-                console.warn('Failed to init screen capture protection', e);
+                console.warn('[AuthContext] Failed to init screen capture protection', e);
             }
         };
 
@@ -114,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const setScreenCaptureProtection = useCallback(async (value: boolean) => {
         setIsScreenCaptureProtected(value);
+        console.log('[AuthContext] Persisting screen capture protection:', value);
         try {
             await SecureStore.setItemAsync('is_screen_capture_protected_v2', value ? 'true' : 'false');
         } catch (e) {
