@@ -186,6 +186,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
         getLatestExport(projectId)
             .then(data => {
+                if (!data) return; // no export generated yet for this project
                 if (data.downloadUrl) {
                     setLatestExport({ url: data.downloadUrl, date: data.last_export_date });
                 }
@@ -200,7 +201,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         setExportTimerMs(Date.now() - data.activeExport.startTime);
                     }
                 }
-            }).catch(() => { });
+            }).catch((err) => { console.log('getLatestExport:', err?.message); });
     }, [projectId, userRole]);
 
     // Socket Listener
