@@ -23,16 +23,20 @@ import { getRFIs } from '@/services/rfiService';
 import MainHeader from '@/components/shared/MainHeader';
 import EditProjectModal from '@/components/project/EditProjectModal';
 import * as ScreenCapture from 'expo-screen-capture';
+import { setActiveProjectContext } from '@/utils/projectSelection';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Tab = 'overview' | 'documents' | 'photos' | 'rfi' | 'reports' | 'snags' | 'sops';
 
+// Stable reference — defined outside component so it's never recreated per render
+const FLATLIST_TABS: Tab[] = ['overview', 'documents', 'photos', 'rfi'];
+
 export default function ProjectWorkspaceScreen() {
     const { id, tab, folderId: qFolderId, initialFolderId: qInitialFolderId, rfiId, snagId, fileId, photoId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string; initialFolderId?: string; rfiId?: string; snagId?: string; fileId?: string; photoId?: string }>();
     const folderId = qFolderId || qInitialFolderId;
-    const { user } = useAuth();
+    const { user, isScreenCaptureProtected } = useAuth();
     const { colors, isDark } = useTheme();
     const router = useRouter();
 
@@ -40,7 +44,8 @@ export default function ProjectWorkspaceScreen() {
     const [loading, setLoading] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<Tab>('overview');
+    const initialTabKey = (tab && FLATLIST_TABS.includes(tab as Tab) ? tab : 'overview') as Tab;
+    const [activeTab, setActiveTab] = useState<Tab>(initialTabKey);
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editModalFocus, setEditModalFocus] = useState<'start_date' | 'end_date' | null>(null);
@@ -80,24 +85,31 @@ export default function ProjectWorkspaceScreen() {
         }, [activeTab])
     );
 
+    // EXTERNAL navigation effect — handles incoming deep links, notifications, activity taps.
+    // suppressNavEffect prevents this from firing for our own internal router.setParams calls
+    // (handleTabPress, onSwipeSettled) which would cause a scroll feedback loop.
     useEffect(() => {
-        console.log("tab => ", id, tab, qFolderId, qInitialFolderId, rfiId, snagId, fileId, photoId);
-        if (tab && ['overview', 'documents', 'photos', 'rfi', 'reports', 'snags', 'sops'].includes(tab)) {
-            setActiveTab(tab as Tab);
-            // For main tabs, also drive the FlatList scroll.
-            // Without this, setActiveTab alone won't move the pager — the FlatList
-            // stays at whatever page it was already on.
-            const targetIndex = visibleTabs.findIndex(t => t.key === tab);
-            if (targetIndex !== -1) {
-                ignoreScrollSync.current = true;
-                setTimeout(() => {
-                    flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
-                    // Release the scroll lock after the snap animation finishes
-                    setTimeout(() => { ignoreScrollSync.current = false; }, 600);
-                }, 200); // run after the initial-scroll effect (100ms) so we always win
-            }
+        if (!tab) return;
+
+        // Skip if triggered by our own internal setParams (swipe settle / tab press)
+        if (suppressNavEffect.current) {
+            suppressNavEffect.current = false;
+            return;
         }
-    }, [tab]);
+
+        if (!['overview', 'documents', 'photos', 'rfi', 'reports', 'snags', 'sops'].includes(tab)) return;
+
+        setActiveTab(tab as Tab);
+        const targetIndex = visibleTabs.findIndex(t => t.key === tab);
+        if (targetIndex !== -1) {
+            ignoreScrollSync.current = true;
+            setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
+                setTimeout(() => { ignoreScrollSync.current = false; }, 350);
+            }, 150);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab, fileId, folderId, rfiId, snagId, photoId, id, qInitialFolderId]);
 
     const fetchProject = useCallback(async () => {
         try {
@@ -129,6 +141,13 @@ export default function ProjectWorkspaceScreen() {
     }, [id, user?.id]);
 
     const { socket, isConnected } = useSocket();
+
+    useEffect(() => {
+        if (project?.id) {
+            const contextType = activeTab === 'documents' ? 'document' : (activeTab === 'photos' ? 'photo' : null);
+            setActiveProjectContext(project.id, folderId || null, contextType);
+        }
+    }, [project?.id, activeTab, folderId]);
 
     useEffect(() => {
         checkRFIs();
@@ -174,22 +193,25 @@ export default function ProjectWorkspaceScreen() {
 
     const flatListRef = useRef<FlatList<TabDef>>(null);
     const ignoreScrollSync = useRef(false);
+    // Set to true before any internal router.setParams so useEffect([tab]) skips the scroll.
+    // External navigations (notifications, deep links) leave this false → effect runs normally.
+    const suppressNavEffect = useRef(false);
 
     // Sync button press with FlatList
     const handleTabPress = (tabKey: Tab) => {
         if (activeTab === tabKey) return;
         ignoreScrollSync.current = true;
         setActiveTab(tabKey);
-        router.setParams({ folderId: '' });
+        // Suppress the nav effect — this is an internal change, not a deep link.
+        // Safety timeout: reset in case params don't change (no-op setParams → no re-render → effect never fires).
+        suppressNavEffect.current = true;
+        setTimeout(() => { suppressNavEffect.current = false; }, 100);
+        router.setParams({ tab: tabKey, folderId: '', initialFolderId: '', fileId: '', photoId: '', rfiId: '', snagId: '' });
         const index = visibleTabs.findIndex(t => t.key === tabKey);
         if (index !== -1) {
             flatListRef.current?.scrollToIndex({ index, animated: true });
         }
-
-        // Safety timeout to ensure flag is cleared even if momentum doesn't fire
-        setTimeout(() => {
-            ignoreScrollSync.current = false;
-        }, 1000);
+        setTimeout(() => { ignoreScrollSync.current = false; }, 400);
     };
 
     // Helper to render the content for a specific tab
@@ -217,9 +239,9 @@ export default function ProjectWorkspaceScreen() {
                     />
                 );
             case 'documents':
-                return <ProjectDocuments project={project} user={user} initialFolderId={folderId} initialFileId={fileId} />;
+                return <ProjectDocuments project={project} user={user} initialFolderId={tab === 'documents' ? folderId : undefined} initialFileId={fileId} />;
             case 'photos':
-                return <ProjectPhotos project={project} user={user} initialFolderId={folderId} initialFileId={fileId || photoId} />;
+                return <ProjectPhotos project={project} user={user} initialFolderId={tab === 'photos' ? folderId : undefined} initialFileId={fileId || photoId} />;
             case 'rfi':
                 return <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />;
             default:
@@ -227,7 +249,9 @@ export default function ProjectWorkspaceScreen() {
         }
     };
 
-    // Instant sync scroll with header highlight
+    // Instant sync scroll with header highlight ONLY — no URL changes here
+    // (URL changes here caused router.setParams to fire 60x/sec, triggering the
+    //  useEffect([tab]) on every frame and creating a scroll feedback loop)
     const onScroll = useCallback((e: any) => {
         if (ignoreScrollSync.current) return;
         const xOffset = e.nativeEvent.contentOffset.x;
@@ -243,6 +267,27 @@ export default function ProjectWorkspaceScreen() {
             setActiveTab(visibleTabs[index].key);
         }
     }, [activeTab, visibleTabs]);
+
+    // Fires ONCE per swipe after it fully settles — safe place to sync the URL.
+    // suppressNavEffect prevents the URL update from re-triggering the external nav effect.
+    const onSwipeSettled = useCallback((e: any) => {
+        if (ignoreScrollSync.current) {
+            ignoreScrollSync.current = false;
+            return;
+        }
+        const xOffset = e?.nativeEvent?.contentOffset?.x ?? 0;
+        const index = Math.round(xOffset / SCREEN_WIDTH);
+        const settledTab = visibleTabs[index]?.key;
+        if (settledTab) {
+            // Suppress the effect — this is an internal swipe, not external navigation.
+            // Safety timeout: if params are unchanged (no-op), the effect won't fire to reset
+            // the flag — so we reset it here after 100ms to avoid silently swallowing the
+            // next external navigation (activity/notification tap).
+            suppressNavEffect.current = true;
+            setTimeout(() => { suppressNavEffect.current = false; }, 100);
+            router.setParams({ tab: settledTab, folderId: '', initialFolderId: '', fileId: '', photoId: '', rfiId: '', snagId: '' });
+        }
+    }, [visibleTabs]);
 
     const stopIgnoring = useCallback(() => {
         ignoreScrollSync.current = false;
@@ -270,22 +315,25 @@ export default function ProjectWorkspaceScreen() {
     // even during normal viewing on certain devices/simulators.
     // We only enable it for Android for now to ensure iOS visibility is restored.
     useEffect(() => {
-        const enableProtection = async () => {
+        const updateProtection = async () => {
             try {
-                if (Platform.OS === 'android') {
+                if (isScreenCaptureProtected && Platform.OS === 'android') {
                     await ScreenCapture.preventScreenCaptureAsync('project-workspace');
+                } else {
+                    // If protection is disabled or we are on iOS, allow screen capture
+                    await ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
                 }
             } catch (error) {
-                console.warn('Failed to enable ScreenCapture', error);
+                console.warn('Failed to update ScreenCapture protection', error);
             }
         };
-        enableProtection();
+        updateProtection();
         return () => {
             if (Platform.OS === 'android') {
                 ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
             }
         };
-    }, [id]); // Reset only when changing projects or leaving
+    }, [id, isScreenCaptureProtected]); // Reset when project changes or toggle changes
 
     const isMainTab = visibleTabs.some(t => t.key === activeTab);
     const handleDeleteProject = () => {
@@ -453,7 +501,7 @@ export default function ProjectWorkspaceScreen() {
                                     </View>
                                 )}
                                 onScroll={onScroll}
-                                onMomentumScrollEnd={stopIgnoring}
+                                onMomentumScrollEnd={onSwipeSettled}
                                 onScrollEndDrag={stopIgnoring}
                                 scrollEventThrottle={16}
                                 getItemLayout={(_, index) => ({
@@ -461,6 +509,7 @@ export default function ProjectWorkspaceScreen() {
                                     offset: SCREEN_WIDTH * index,
                                     index,
                                 })}
+                                initialScrollIndex={visibleTabs.findIndex(t => t.key === initialTabKey)}
                                 windowSize={Platform.OS === 'ios' ? 5 : 2}
                                 initialNumToRender={Platform.OS === 'ios' ? 2 : 1}
                                 maxToRenderPerBatch={Platform.OS === 'ios' ? 2 : 1}

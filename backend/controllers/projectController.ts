@@ -508,6 +508,53 @@ export const getProjectMembers = async (req: Request, res: Response) => {
     }
 };
 
+
+export const getMemberForTag = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        const project = await projects.findOne({ 
+            where: { id },
+            include: [{
+                model: users,
+                attributes: ['id', 'name']
+            }]
+        });
+
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
+
+        const members = await project_members.findAll({
+            where: { project_id: id },
+            include: [{
+                model: users,
+                attributes: ['id', 'name']
+            }],
+            order: [['createdAt', 'DESC']]
+        });
+
+        // Create a pseudo-member for the creator/admin
+        const creatorMember = {
+            user: (project as any).user,
+            role: 'admin'
+        };
+
+        // Combine creator with other members
+        const allMembers = [creatorMember, ...members];
+
+        res.status(200).json({ members: allMembers });
+    } catch (error) {
+        console.error("Get Project Members for tagging Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const removeProjectMember = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {

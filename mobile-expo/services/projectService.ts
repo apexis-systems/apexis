@@ -56,10 +56,10 @@ export const getLatestExport = async (id: string | number) => {
         const response = await PrivateAxios.get(`/projects/${id}/export-handover`);
         return response.data;
     } catch (error) {
-        console.error("getLatestExport Error", error);
         throw error;
     }
 };
+
 export const getProjectShareLinks = async (id: string | number, role?: string) => {
     try {
         const url = role ? `/projects/${id}/share-links?role=${role}` : `/projects/${id}/share-links`;
@@ -80,6 +80,16 @@ export const getProjectMembers = async (id: string | number) => {
         throw error;
     }
 };
+
+export const getMemberForTag = async (id: string | number) =>{
+    try{
+        const response = await PrivateAxios.get(`/projects/${id}/members-for-tagging`)
+        return response.data;
+    }catch(error){
+        console.error("getMemberForTag Error", error);
+        throw error;
+    }
+}
 
 export const removeProjectMember = async (projectId: string | number, userId: string | number) => {
     try {

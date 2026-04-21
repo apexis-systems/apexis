@@ -54,6 +54,7 @@ export const handleNotificationNavigation = (type: string | undefined | null, da
         const roomId = data?.roomId || data?.room_id;
         const folderId = data?.folderId || data?.folder_id;
         const fileId = data?.fileId || data?.file_id;
+        const photoId = data?.photoId || data?.photo_id;
         const snagId = data?.snagId || data?.snag_id;
         const rfiId = data?.rfiId || data?.rfi_id;
 
@@ -77,19 +78,25 @@ export const handleNotificationNavigation = (type: string | undefined | null, da
             case 'file_visibility':
             case 'folder_visibility':
             case 'file_upload_admin':
+            case 'upload':              // generic upload activity type
                 tab = 'documents';
                 if (folderId) extraParams += `&initialFolderId=${folderId}`;
                 if (fileId) extraParams += `&fileId=${fileId}`;
                 break;
             case 'photo_upload':
             case 'photo_comment':
+            case 'upload_photo':        // alternate upload activity type
+            case 'comment':             // comment on a photo
+            case 'mention':             // user mentioned in a photo comment
                 tab = 'photos';
                 if (folderId) extraParams += `&initialFolderId=${folderId}`;
                 if (fileId) extraParams += `&fileId=${fileId}`;
+                if (photoId) extraParams += `&photoId=${photoId}`;
                 break;
             case 'snag_assigned':
             case 'snag_creation_admin':
             case 'snag_status_update':
+            case 'snag_comment':
                 tab = 'snags';
                 if (snagId) extraParams += `&snagId=${snagId}`;
                 break;

@@ -61,7 +61,7 @@ export const superadminNavItems: SuperadminNavItem[] = [
   { href: `${SUPERADMIN_DASHBOARD_PATH}#system-health`, label: "System Health", icon: Monitor, scrollTo: "system-health" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#user-behavior`, label: "User Behavior", icon: Users, scrollTo: "user-behavior" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#intelligence`, label: "Intelligence", icon: Brain, scrollTo: "intelligence" },
-  { href: `${SUPERADMIN_DASHBOARD_PATH}#alerts`, label: "Alerts", icon: AlertTriangle, scrollTo: "alerts", badge: 4 },
+  { href: `${SUPERADMIN_DASHBOARD_PATH}#alerts`, label: "Alerts", icon: AlertTriangle, scrollTo: "alerts" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#live-activity`, label: "Live Activity", icon: Activity, scrollTo: "live-activity" },
   { href: "/superadmin/teams", label: "Teams", icon: ShieldCheck },
 ];
@@ -75,7 +75,7 @@ export const getVisibleSuperadminNavItems = (user: SuperadminAccessUser) =>
   );
 
 export default function SuperadminSidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
   const router = useRouter();
   const { user, logout } = useAuth();
   const [activeHash, setActiveHash] = useState("");

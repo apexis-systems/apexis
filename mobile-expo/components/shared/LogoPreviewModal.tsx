@@ -108,7 +108,7 @@ export default function LogoPreviewModal({
                             {subtitle}
                         </Text>
 
-                        {canChange && (
+                        {/* {canChange && (
                             <TouchableOpacity
                                 style={{
                                     flexDirection: 'row',
@@ -133,7 +133,7 @@ export default function LogoPreviewModal({
                                     </>
                                 )}
                             </TouchableOpacity>
-                        )}
+                        )} */}
                     </View>
                 </View>
             </View>

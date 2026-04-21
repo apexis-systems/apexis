@@ -42,17 +42,19 @@ const STATUS_CYCLE: SnagStatus[] = ["amber", "green", "red"];
 
 export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const { colors } = useTheme();
+    const { user, isScreenCaptureProtected } = useAuth();
 
     useFocusEffect(
         useCallback(() => {
-            ScreenCapture.preventScreenCaptureAsync('snags-section');
+            if (isScreenCaptureProtected) {
+                ScreenCapture.preventScreenCaptureAsync('snags-section');
+            }
             return () => {
                 ScreenCapture.allowScreenCaptureAsync('snags-section');
             };
-        }, [])
+        }, [isScreenCaptureProtected])
     );
 
-    const { user } = useAuth();
     const router = useRouter();
     const projectId = project.id;
 

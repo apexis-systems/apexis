@@ -470,6 +470,18 @@ export const createRoom = async (req: Request, res: Response) => {
                         having: sequelize.literal('count(DISTINCT "user_id") = 2')
                     });
                     if (sharedProjectCount.length > 0) isVisible = true;
+
+                    // Extra condition: Admins can message anyone in their projects (even if Admin isn't a project_member)
+                    if (!isVisible && (authUser.role === 'admin' || targetUser.role === 'admin')) {
+                        const adminOrgId = authUser.role === 'admin' ? authUser.organization_id : targetUser.organization_id;
+                        const nonAdminId = authUser.role === 'admin' ? targetUserId : authUser.user_id;
+
+                        const hasSharedProject = await project_members.findOne({
+                            where: { user_id: nonAdminId },
+                            include: [{ model: projects, where: { organization_id: adminOrgId } }]
+                        });
+                        if (hasSharedProject) isVisible = true;
+                    }
                 }
 
                 if (!isVisible) {

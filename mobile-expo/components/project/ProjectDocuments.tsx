@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
@@ -24,18 +25,27 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 export default function ProjectDocuments({ project, user, initialFolderId, initialFileId }: { project: any, user: any, initialFolderId?: string, initialFileId?: string }) {
     const { colors, isDark } = useTheme();
 
+    const { isScreenCaptureProtected } = useAuth();
     useFocusEffect(
         useCallback(() => {
-            ScreenCapture.preventScreenCaptureAsync('docs-section');
+            if (isScreenCaptureProtected) {
+                ScreenCapture.preventScreenCaptureAsync('docs-section');
+            }
             return () => {
                 ScreenCapture.allowScreenCaptureAsync('docs-section');
             };
-        }, [])
+        }, [isScreenCaptureProtected])
     );
 
     const router = useRouter();
     const [docs, setDocs] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
+    // Sync selectedFolder whenever the deep-link prop changes.
+    // useState(initialFolderId) only runs on first mount — this effect handles
+    // subsequent navigations while the component stays mounted in the FlatList.
+    useEffect(() => {
+        setSelectedFolder(initialFolderId || null);
+    }, [initialFolderId]);
     const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -605,9 +615,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setProcessing('sharing');
             const ext = doc.file_name?.split('.').pop() || 'pdf';
             const localUri = `${(FileSystem as any).cacheDirectory}${doc.file_name || `doc_${Date.now()}.${ext}`}`;
-            
+
             const { uri } = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
-            
+
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
                     mimeType: doc.file_type || 'application/pdf',
@@ -630,7 +640,24 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     return (
         <View style={{ flex: 1 }}>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-                
+                {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                        <TouchableOpacity
+                            onPress={() => router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${selectedFolder || ''}`)}
+                            style={{ flex: 1, height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                        >
+                            <Feather name="upload" size={13} color="#fff" />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Document</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => setShowCreateFolder(true)}
+                            style={{ height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 }}
+                        >
+                            <Feather name="folder-plus" size={13} color={colors.text} />
+                            <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : null}
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                     {currentFolder && (
@@ -755,11 +782,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 setActiveActionFolder(folder);
                                                 setFolderMenuVisible(true);
                                             }}
-                                            style={{ 
-                                                width: 24, 
-                                                height: 24, 
-                                                alignItems: 'center', 
-                                                justifyContent: 'center' 
+                                            style={{
+                                                width: 24,
+                                                height: 24,
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
                                             }}
                                         >
                                             <Feather
@@ -829,10 +856,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                         setActiveActionFile(doc);
                                                         setActionMenuVisible(true);
                                                     }}
-                                                    style={{ 
-                                                        width: 24, 
-                                                        height: 24, 
-                                                        borderRadius: 12, 
+                                                    style={{
+                                                        width: 24,
+                                                        height: 24,
+                                                        borderRadius: 12,
                                                         backgroundColor: colors.surface,
                                                         borderWidth: 1,
                                                         borderColor: colors.border,
@@ -1178,8 +1205,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 15, alignItems: 'center', paddingRight: 10, paddingLeft: 10, flex: 1, justifyContent: 'flex-end' }}>
                                 {/* Share - Only if files selected */}
                                 {selectedFiles.size > 0 && (
-                                    <TouchableOpacity 
-                                        onPress={handleBulkShare} 
+                                    <TouchableOpacity
+                                        onPress={handleBulkShare}
                                         style={{ padding: 4 }}
                                         disabled={processing !== null}
                                     >

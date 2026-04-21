@@ -81,6 +81,9 @@ export const logActivity = async ({
         try {
             const io = getIO();
             
+            // Broadcast to superadmins
+            io.to('superadmin-room').emit('new-activity', formattedActivity);
+
             // Map activity type to notification type for deep-linking
             let notifType = 'activity';
             if (type === 'upload_photo') notifType = 'photo_upload';

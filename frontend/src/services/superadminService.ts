@@ -72,3 +72,43 @@ export const deleteSuperAdmin = async (id: number | string) => {
         throw error;
     }
 };
+
+export const getDashboardOverview = async () => {
+    try {
+        const response = await PrivateAxios.get('/superadmin/dashboard/overview');
+        return response.data;
+    } catch (error) {
+        console.error("getDashboardOverview Error", error);
+        throw error;
+    }
+};
+
+export const getGrowthAnalytics = async () => {
+    try {
+        const response = await PrivateAxios.get('/superadmin/dashboard/growth');
+        return response.data;
+    } catch (error) {
+        console.error("getGrowthAnalytics Error", error);
+        throw error;
+    }
+};
+
+export const getFreemiumLeads = async () => {
+    try {
+        const response = await PrivateAxios.get('/superadmin/dashboard/leads');
+        return response.data;
+    } catch (error) {
+        console.error("getFreemiumLeads Error", error);
+        throw error;
+    }
+};
+
+export const getRevenueAnalytics = async () => {
+    try {
+        const response = await PrivateAxios.get('/superadmin/dashboard/revenue');
+        return response.data;
+    } catch (error) {
+        console.error("getRevenueAnalytics Error", error);
+        throw error;
+    }
+};

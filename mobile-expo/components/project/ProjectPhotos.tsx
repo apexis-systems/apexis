@@ -10,7 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
-import { getProjectMembers } from '@/services/projectService';
+import { getMemberForTag, getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
@@ -37,6 +37,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
+    // Sync selectedFolder whenever the deep-link prop changes.
+    // useState(initialFolderId) only runs on first mount — this effect handles
+    // subsequent navigations while the component stays mounted in the FlatList.
+    useEffect(() => {
+        setSelectedFolder(initialFolderId || null);
+    }, [initialFolderId]);
     const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -227,8 +233,17 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const loadMembers = async () => {
         if (!project?.id) return;
         try {
-            const data = await getProjectMembers(project.id);
-            if (data.members) setProjectMembers(data.members.map((m: any) => m.user));
+            const data = await getMemberForTag(project.id);
+            if (data.members) {
+                const uniqueUsers = data.members
+                    .map((m: any) => m.user)
+                    .filter((u: any, index: number, self: any[]) =>
+                        u &&
+                        String(u.id) !== String(user?.id) &&
+                        self.findIndex(t => String(t.id) === String(u.id)) === index
+                    );
+                setProjectMembers(uniqueUsers);
+            }
         } catch (e) {
             console.error('loadMembers error:', e);
         }
@@ -676,14 +691,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const handleSharePhoto = async (photo?: any) => {
         const photoToShare = photo || (selectedFiles.size > 0 ? photos.find(p => p.id === Array.from(selectedFiles)[0]) : null);
         if (!photoToShare) return;
-        
+
         try {
             setDownloading(true);
             const ext = photoToShare.file_name?.split('.').pop() || 'jpg';
             const localUri = `${(FileSystem as any).cacheDirectory}${photoToShare.file_name || `photo_${Date.now()}.${ext}`}`;
-            
+
             const { uri } = await FileSystem.downloadAsync(photoToShare.downloadUrl, localUri);
-            
+
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
                     mimeType: photoToShare.file_type || 'image/jpeg',
@@ -938,10 +953,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         setActiveActionFile(photo);
                                                         setActionMenuVisible(true);
                                                     }}
-                                                    style={{ 
-                                                        width: 24, 
-                                                        height: 24, 
-                                                        borderRadius: 12, 
+                                                    style={{
+                                                        width: 24,
+                                                        height: 24,
+                                                        borderRadius: 12,
                                                         backgroundColor: colors.surface,
                                                         borderWidth: 1,
                                                         borderColor: colors.border,
@@ -1119,8 +1134,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 15, alignItems: 'center', paddingRight: 10, paddingLeft: 10, flex: 1, justifyContent: 'flex-end' }}>
                                 {/* Share - Only if files selected */}
                                 {selectedFiles.size > 0 && (
-                                    <TouchableOpacity 
-                                        onPress={() => handleSharePhoto()} 
+                                    <TouchableOpacity
+                                        onPress={() => handleSharePhoto()}
                                         style={{ padding: 4 }}
                                         disabled={processing !== null}
                                     >
@@ -1365,8 +1380,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         {/* Bottom panel: info + comments */}
                         {showViewerUI && (
                             <KeyboardAvoidingView
-                                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
                                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+                                keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
                             >
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
                                     <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
@@ -1521,7 +1537,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 isVisible={actionMenuVisible}
                 onClose={() => setActionMenuVisible(false)}
                 onHideUnhide={() => handleToggleVisibility(activeActionFile)}
-                onDoNotFollow={() => {}} 
+                onDoNotFollow={() => { }}
                 onDelete={() => handleDeleteFile(activeActionFile)}
                 onShare={() => handleSharePhoto(activeActionFile)}
                 showDoNotFollow={false}
@@ -1547,4 +1563,3 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         </View>
     );
 }
-                        

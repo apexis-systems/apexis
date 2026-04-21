@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   AlertTriangle,
   Clock,
@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { getFreemiumLeads } from "@/services/superadminService";
 
 interface Lead {
   id: number;
@@ -38,20 +39,6 @@ interface Lead {
   converted: boolean;
 }
 
-const leads: Lead[] = [
-  { id: 1, name: "Rahul Sharma", email: "rahul@abcdev.com", phone: "+91 9876543210", company: "ABC Developers", installDate: "2026-02-10", trialStart: "2026-02-11", trialEnd: "2026-04-12", remaining: 5, daysUsed: 55, activityScore: 82, isActive: true, converted: false },
-  { id: 2, name: "Priya Patel", email: "priya@xyzcon.com", phone: "+91 9123456789", company: "XYZ Constructions", installDate: "2026-01-31", trialStart: "2026-02-01", trialEnd: "2026-04-02", remaining: 15, daysUsed: 45, activityScore: 45, isActive: true, converted: false },
-  { id: 3, name: "Arjun Mehta", email: "arjun@studioarch.com", phone: "+91 9988776655", company: "Studio Architects", installDate: "2026-01-18", trialStart: "2026-01-19", trialEnd: "2026-03-20", remaining: 0, daysUsed: 58, activityScore: 91, isActive: true, converted: false },
-  { id: 4, name: "Sneha Reddy", email: "sneha@greeninfra.com", phone: "+91 9012345678", company: "Green Infrastructure", installDate: "2026-03-10", trialStart: "2026-03-11", trialEnd: "2026-05-10", remaining: 35, daysUsed: 25, activityScore: 67, isActive: true, converted: false },
-  { id: 5, name: "Vikram Singh", email: "vikram@buildit.com", phone: "+91 9345678901", company: "BuildIt Corp", installDate: "2026-03-20", trialStart: "2026-03-21", trialEnd: "2026-05-20", remaining: 42, daysUsed: 18, activityScore: 23, isActive: true, converted: false },
-  { id: 6, name: "Ananya Gupta", email: "ananya@skyline.com", phone: "+91 9567890123", company: "Skyline Projects", installDate: "2026-02-24", trialStart: "2026-02-25", trialEnd: "2026-04-26", remaining: 18, daysUsed: 42, activityScore: 78, isActive: true, converted: false },
-  { id: 7, name: "Karan Joshi", email: "karan@metrocon.com", phone: "+91 9234567890", company: "Metro Constructions", installDate: "2026-03-05", trialStart: "2026-03-06", trialEnd: "2026-05-05", remaining: 28, daysUsed: 32, activityScore: 55, isActive: true, converted: false },
-  { id: 8, name: "Divya Nair", email: "divya@urbanplan.com", phone: "+91 9678901234", company: "Urban Planners", installDate: "2026-03-26", trialStart: "2026-03-27", trialEnd: "2026-05-26", remaining: 48, daysUsed: 12, activityScore: 12, isActive: false, converted: false },
-  { id: 9, name: "Aditya Kumar", email: "aditya@primebuild.com", phone: "+91 9456789012", company: "Prime Builders", installDate: "2026-02-14", trialStart: "2026-02-15", trialEnd: "2026-04-16", remaining: 12, daysUsed: 48, activityScore: 88, isActive: true, converted: false },
-  { id: 10, name: "Meera Iyer", email: "meera@apexstruct.com", phone: "+91 9789012345", company: "Apex Structures", installDate: "2026-03-30", trialStart: "2026-03-31", trialEnd: "2026-05-30", remaining: 52, daysUsed: 8, activityScore: 70, isActive: true, converted: false },
-  { id: 11, name: "Rohan Das", email: "rohan@novaeng.com", phone: "+91 9890123456", company: "", installDate: "2026-03-14", trialStart: "2026-03-15", trialEnd: "2026-05-14", remaining: 24, daysUsed: 22, activityScore: 34, isActive: true, converted: false },
-  { id: 12, name: "Simran Kaur", email: "simran@topcon.com", phone: "+91 9321654987", company: "TopCon Builders", installDate: "2026-02-20", trialStart: "2026-02-21", trialEnd: "2026-04-22", remaining: 8, daysUsed: 52, activityScore: 60, isActive: true, converted: false },
-];
 
 const cardClass =
   "rounded border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] shadow-[0_1px_0_rgba(0,0,0,0.03)] dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)]";
@@ -115,15 +102,32 @@ export default function FreemiumLeads() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [activeFilter, setActiveFilter] = useState("all");
   const [expiryFilter, setExpiryFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [leadsList, setLeadsList] = useState<Lead[]>([]);
+
+  useEffect(() => {
+    const fetchLeads = async () => {
+      try {
+        const response = await getFreemiumLeads();
+        setLeadsList(response.leads || []);
+      } catch (error) {
+        console.error("Failed to fetch leads:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLeads();
+  }, []);
 
   const filtered = useMemo(() => {
-    return leads.filter((lead) => {
+    return leadsList.filter((lead) => {
       const query = search.toLowerCase();
       const matchesSearch =
         !search ||
-        lead.name.toLowerCase().includes(query) ||
-        lead.company.toLowerCase().includes(query) ||
-        lead.email.toLowerCase().includes(query);
+        lead.name?.toLowerCase().includes(query) ||
+        lead.company?.toLowerCase().includes(query) ||
+        lead.email?.toLowerCase().includes(query);
 
       if (!matchesSearch) return false;
       if (statusFilter === "new" && lead.remaining < 30) return false;
@@ -136,12 +140,23 @@ export default function FreemiumLeads() {
 
       return true;
     });
-  }, [activeFilter, expiryFilter, search, statusFilter]);
+  }, [activeFilter, expiryFilter, search, statusFilter, leadsList]);
 
-  const totalFreemium = leads.length;
-  const expiring15 = leads.filter((lead) => lead.remaining <= 15).length;
-  const expiring7 = leads.filter((lead) => lead.remaining <= 7).length;
-  const converted = leads.filter((lead) => lead.converted).length;
+  if (loading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <Clock className="h-8 w-8 animate-spin text-[hsl(24_95%_53%)]" />
+          <p className={cn("text-sm font-medium", mutedTextClass)}>Loading lead intelligence...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const totalFreemium = leadsList.length;
+  const expiring15 = leadsList.filter((lead) => lead.remaining <= 15).length;
+  const expiring7 = leadsList.filter((lead) => lead.remaining <= 7).length;
+  const converted = leadsList.filter((lead) => lead.converted).length;
 
   const summaryCards = [
     { title: "Total Freemium Users", value: totalFreemium, icon: Users, accent: "bg-[hsl(24_95%_53%/0.1)] text-[hsl(24_95%_53%)]" },
@@ -150,7 +165,7 @@ export default function FreemiumLeads() {
     { title: "Converted to Paid", value: converted, icon: CreditCard, accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   ];
 
-  const remindableLeads = leads.filter((lead) => getReminders(lead.remaining).length > 0);
+  const remindableLeads = leadsList.filter((lead) => getReminders(lead.remaining).length > 0);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -224,7 +239,7 @@ export default function FreemiumLeads() {
           </Select>
 
           <div className={cn("ml-auto text-xs", mutedTextClass)}>
-            Showing {filtered.length} of {leads.length} leads
+            Showing {filtered.length} of {leadsList.length} leads
           </div>
         </div>
       </div>
