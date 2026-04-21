@@ -36,7 +36,7 @@ const FLATLIST_TABS: Tab[] = ['overview', 'documents', 'photos', 'rfi'];
 export default function ProjectWorkspaceScreen() {
     const { id, tab, folderId: qFolderId, initialFolderId: qInitialFolderId, rfiId, snagId, fileId, photoId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string; initialFolderId?: string; rfiId?: string; snagId?: string; fileId?: string; photoId?: string }>();
     const folderId = qFolderId || qInitialFolderId;
-    const { user } = useAuth();
+    const { user, isScreenCaptureProtected } = useAuth();
     const { colors, isDark } = useTheme();
     const router = useRouter();
 
@@ -315,22 +315,25 @@ export default function ProjectWorkspaceScreen() {
     // even during normal viewing on certain devices/simulators.
     // We only enable it for Android for now to ensure iOS visibility is restored.
     useEffect(() => {
-        const enableProtection = async () => {
+        const updateProtection = async () => {
             try {
-                if (Platform.OS === 'android') {
+                if (isScreenCaptureProtected && Platform.OS === 'android') {
                     await ScreenCapture.preventScreenCaptureAsync('project-workspace');
+                } else {
+                    // If protection is disabled or we are on iOS, allow screen capture
+                    await ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
                 }
             } catch (error) {
-                console.warn('Failed to enable ScreenCapture', error);
+                console.warn('Failed to update ScreenCapture protection', error);
             }
         };
-        enableProtection();
+        updateProtection();
         return () => {
             if (Platform.OS === 'android') {
                 ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
             }
         };
-    }, [id]); // Reset only when changing projects or leaving
+    }, [id, isScreenCaptureProtected]); // Reset when project changes or toggle changes
 
     const isMainTab = visibleTabs.some(t => t.key === activeTab);
     const handleDeleteProject = () => {

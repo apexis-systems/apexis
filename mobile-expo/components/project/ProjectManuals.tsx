@@ -23,17 +23,19 @@ const TYPE_OPTIONS: { label: string; value: ManualType }[] = [
 export default function ProjectManuals({ project }: Props) {
     const { colors } = useTheme();
 
+    const { user, isScreenCaptureProtected } = useAuth();
+    const projectId = project?.id;
+
     useFocusEffect(
         useCallback(() => {
-            ScreenCapture.preventScreenCaptureAsync('manuals-section');
+            if (isScreenCaptureProtected) {
+                ScreenCapture.preventScreenCaptureAsync('manuals-section');
+            }
             return () => {
                 ScreenCapture.allowScreenCaptureAsync('manuals-section');
             };
-        }, [])
+        }, [isScreenCaptureProtected])
     );
-
-    const { user } = useAuth();
-    const projectId = project?.id;
 
     const [items, setItems] = useState<Manual[]>([]);
     const [loading, setLoading] = useState(true);

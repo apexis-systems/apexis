@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
@@ -24,13 +25,16 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 export default function ProjectDocuments({ project, user, initialFolderId, initialFileId }: { project: any, user: any, initialFolderId?: string, initialFileId?: string }) {
     const { colors, isDark } = useTheme();
 
+    const { isScreenCaptureProtected } = useAuth();
     useFocusEffect(
         useCallback(() => {
-            ScreenCapture.preventScreenCaptureAsync('docs-section');
+            if (isScreenCaptureProtected) {
+                ScreenCapture.preventScreenCaptureAsync('docs-section');
+            }
             return () => {
                 ScreenCapture.allowScreenCaptureAsync('docs-section');
             };
-        }, [])
+        }, [isScreenCaptureProtected])
     );
 
     const router = useRouter();

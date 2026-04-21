@@ -24,7 +24,7 @@ export default function SuperadminLayout({
 }: SuperadminLayoutProps) {
   const { user, isLoading, logout } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
   const [activeHash, setActiveHash] = useState("");
   const visibleNavItems = getVisibleSuperadminNavItems(user);
   const blockedAccountsRoute = Boolean(
