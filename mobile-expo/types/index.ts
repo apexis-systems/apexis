@@ -13,6 +13,7 @@ export interface User {
     fcm_token?: string;
     createdAt?: string;
     diagnostic_data_permission?: boolean | null;
+    project_id?: string | number | null;
     organization?: {
         id: string;
         name: string;

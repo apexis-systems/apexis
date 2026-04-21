@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform, KeyboardAvoidingView, RefreshControl } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform, KeyboardAvoidingView, RefreshControl, Switch } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +28,7 @@ const roleSwitcherDefs = [
 ];
 
 export default function ProfileScreen() {
-    const { user, login, logout, updateUser } = useAuth() as any;
+    const { user, login, logout, updateUser, isScreenCaptureProtected, setScreenCaptureProtection } = useAuth();
     const router = useRouter();
     const { colors } = useTheme();
 
@@ -471,6 +471,39 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                         )}
                     </View>
+
+                    {/* Security Group */}
+                    {(user.role === 'admin' || require('@/constants/security').MARKETING_EMAILS.some((e: string) => e.toLowerCase() === user.email.toLowerCase())) && (
+                        <View style={{ marginBottom: 24 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 12, marginLeft: 4, textTransform: 'uppercase' }}>Security & Privacy</Text>
+                            <View
+                                style={{
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 16,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 14
+                                }}
+                            >
+                                <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Feather name="shield" size={20} color={colors.text} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Screen Capture Protection</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Prevent screenshots and recordings</Text>
+                                </View>
+                                <Switch
+                                    value={isScreenCaptureProtected}
+                                    onValueChange={setScreenCaptureProtection}
+                                    trackColor={{ false: colors.border, true: colors.primary }}
+                                    thumbColor={Platform.OS === 'ios' ? undefined : (isScreenCaptureProtected ? '#fff' : '#f4f3f4')}
+                                />
+                            </View>
+                        </View>
+                    )}
 
 
 
