@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import {
     View, TouchableOpacity, Alert, ActivityIndicator, Modal, Share, Platform,
 } from 'react-native';
-import * as ScreenCapture from 'expo-screen-capture';
 import { Text } from '@/components/ui/AppText';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
@@ -23,19 +22,8 @@ const TYPE_OPTIONS: { label: string; value: ManualType }[] = [
 export default function ProjectManuals({ project }: Props) {
     const { colors } = useTheme();
 
-    const { user, isScreenCaptureProtected } = useAuth();
+    const { user } = useAuth();
     const projectId = project?.id;
-
-    useFocusEffect(
-        useCallback(() => {
-            if (isScreenCaptureProtected) {
-                ScreenCapture.preventScreenCaptureAsync('manuals-section');
-            }
-            return () => {
-                ScreenCapture.allowScreenCaptureAsync('manuals-section');
-            };
-        }, [isScreenCaptureProtected])
-    );
 
     const [items, setItems] = useState<Manual[]>([]);
     const [loading, setLoading] = useState(true);

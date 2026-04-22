@@ -13,13 +13,19 @@ interface FileActionMenuProps {
     onDoNotFollow: () => void;
     onDelete: () => void;
     onShare?: () => void;
+    onRename?: () => void;
+    onArchive?: () => void;
+    onUnarchive?: () => void;
     clientVisible: boolean;
     doNotFollow: boolean;
     canDelete: boolean;
+    canRename: boolean;
+    showArchive?: boolean;
+    isArchived?: boolean;
     isAdmin: boolean;
     fileName: string;
     showDoNotFollow?: boolean;
-    isProcessing?: boolean;
+    processingAction?: string | null;
 }
 
 export default function FileActionMenu({
@@ -29,15 +35,22 @@ export default function FileActionMenu({
     onDoNotFollow,
     onDelete,
     onShare,
+    onRename,
+    onArchive,
+    onUnarchive,
     clientVisible,
     doNotFollow,
     canDelete,
+    canRename,
+    showArchive = false,
+    isArchived = false,
     isAdmin,
     fileName,
     showDoNotFollow = true,
-    isProcessing = false
+    processingAction = null
 }: FileActionMenuProps) {
     const { colors, isDark } = useTheme();
+    const isProcessing = processingAction !== null;
 
     return (
         <Modal
@@ -68,13 +81,24 @@ export default function FileActionMenu({
                                     </TouchableOpacity>
                                 )}
 
+                                {canRename && onRename && (
+                                    <TouchableOpacity 
+                                        style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                        onPress={() => { !isProcessing && onRename(); !isProcessing && onClose(); }}
+                                        disabled={isProcessing}
+                                    >
+                                        <Feather name="edit-2" size={18} color={colors.primary} />
+                                        <Text style={[styles.optionText, { color: colors.text }]}>Rename</Text>
+                                    </TouchableOpacity>
+                                )}
+
                                 {(isAdmin || !isAdmin) && ( // Both Admin and potentially others can manage visibility
                                     <TouchableOpacity 
                                         style={[styles.option, isProcessing && { opacity: 0.5 }]} 
                                         onPress={() => { !isProcessing && onHideUnhide(); }}
                                         disabled={isProcessing}
                                     >
-                                        {isProcessing ? (
+                                        {processingAction === 'visibility' ? (
                                             <ActivityIndicator size="small" color={colors.primary} />
                                         ) : (
                                             <Feather 
@@ -89,13 +113,13 @@ export default function FileActionMenu({
                                     </TouchableOpacity>
                                 )}
 
-                                {(showDoNotFollow && (isAdmin || !isAdmin)) && ( // Admin and Contributor can toggle DNF
+                                {(!isArchived && showDoNotFollow && (isAdmin || !isAdmin)) && ( // Admin and Contributor can toggle DNF
                                     <TouchableOpacity 
                                         style={[styles.option, isProcessing && { opacity: 0.5 }]} 
                                         onPress={() => { !isProcessing && onDoNotFollow(); }}
                                         disabled={isProcessing}
                                     >
-                                        {isProcessing ? (
+                                        {processingAction === 'dnf' ? (
                                             <ActivityIndicator size="small" color={colors.primary} />
                                         ) : (
                                             <Feather 
@@ -110,13 +134,43 @@ export default function FileActionMenu({
                                     </TouchableOpacity>
                                 )}
 
+                                {showArchive && !isArchived && onArchive && (
+                                    <TouchableOpacity 
+                                        style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                        onPress={() => { !isProcessing && onArchive(); }}
+                                        disabled={isProcessing}
+                                    >
+                                        {processingAction === 'archive' ? (
+                                            <ActivityIndicator size="small" color="#f59e0b" />
+                                        ) : (
+                                            <Feather name="archive" size={18} color="#f59e0b" />
+                                        )}
+                                        <Text style={[styles.optionText, { color: colors.text }]}>Archive File</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {isArchived && onUnarchive && (
+                                    <TouchableOpacity 
+                                        style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                        onPress={() => { !isProcessing && onUnarchive(); }}
+                                        disabled={isProcessing}
+                                    >
+                                        {processingAction === 'unarchive' ? (
+                                            <ActivityIndicator size="small" color={colors.primary} />
+                                        ) : (
+                                            <Feather name="upload" size={18} color={colors.primary} />
+                                        )}
+                                        <Text style={[styles.optionText, { color: colors.text }]}>Unarchive File</Text>
+                                    </TouchableOpacity>
+                                )}
+
                                 {canDelete && (
                                     <TouchableOpacity 
                                         style={[styles.option, styles.deleteOption, isProcessing && { opacity: 0.5 }]} 
                                         onPress={() => { !isProcessing && onDelete(); }}
                                         disabled={isProcessing}
                                     >
-                                        {isProcessing ? (
+                                        {processingAction === 'delete' ? (
                                             <ActivityIndicator size="small" color="#ef4444" />
                                         ) : (
                                             <Feather name="trash-2" size={18} color="#ef4444" />

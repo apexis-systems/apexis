@@ -123,6 +123,8 @@ export default function ProjectWorkspaceScreen() {
     }, [id]);
 
     useEffect(() => {
+        setLoading(true);
+        setProject(null);
         fetchProject();
     }, [fetchProject]);
 
@@ -285,7 +287,9 @@ export default function ProjectWorkspaceScreen() {
             // next external navigation (activity/notification tap).
             suppressNavEffect.current = true;
             setTimeout(() => { suppressNavEffect.current = false; }, 100);
-            router.setParams({ tab: settledTab, folderId: '', initialFolderId: '', fileId: '', photoId: '', rfiId: '', snagId: '' });
+            
+            // router.setParams({ tab: settledTab, folderId: '', initialFolderId: '', fileId: '', photoId: '', rfiId: '', snagId: '' });
+            
         }
     }, [visibleTabs]);
 
@@ -311,16 +315,15 @@ export default function ProjectWorkspaceScreen() {
     }, [id]); // Reset when project changes — intentionally excludes `tab` from deps
 
     // Centralized Screen Capture Protection for the entire Project Workspace
-    // Note: On iOS, expo-screen-capture can cause a total black screen for the user 
-    // even during normal viewing on certain devices/simulators.
-    // We only enable it for Android for now to ensure iOS visibility is restored.
+    // Note: On Android, this prevents screenshots and recordings.
+    // On iOS, this prevents screen recordings and obscures the app in the task switcher.
     useEffect(() => {
         const updateProtection = async () => {
             try {
-                if (isScreenCaptureProtected && Platform.OS === 'android') {
+                // Disable protection for Overview tab, enable for others if setting is ON
+                if (isScreenCaptureProtected && activeTab !== 'overview') {
                     await ScreenCapture.preventScreenCaptureAsync('project-workspace');
                 } else {
-                    // If protection is disabled or we are on iOS, allow screen capture
                     await ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
                 }
             } catch (error) {
@@ -328,12 +331,14 @@ export default function ProjectWorkspaceScreen() {
             }
         };
         updateProtection();
+    }, [id, isScreenCaptureProtected, activeTab]);
+
+    // Ensure protection is released when leaving the project workspace entirely
+    useEffect(() => {
         return () => {
-            if (Platform.OS === 'android') {
-                ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
-            }
+            ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
         };
-    }, [id, isScreenCaptureProtected]); // Reset when project changes or toggle changes
+    }, []);
 
     const isMainTab = visibleTabs.some(t => t.key === activeTab);
     const handleDeleteProject = () => {
@@ -362,17 +367,14 @@ export default function ProjectWorkspaceScreen() {
         );
     };
 
-    if (!user || loading) return (
+    // Simplified loading: if no user, we must block. 
+    // If no project yet, we show a partial loader inside the layout so the Header remains visible.
+    if (!user) return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color={colors.primary} />
         </SafeAreaView>
     );
 
-    if (!project) return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: colors.text }}>Project not found</Text>
-        </SafeAreaView>
-    );
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
@@ -382,7 +384,11 @@ export default function ProjectWorkspaceScreen() {
                 searchPlaceholder="Search in project..."
             />
 
-            {isDeleting ? (
+            {loading || !project ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            ) : isDeleting ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={{ marginTop: 16, color: colors.textMuted, fontSize: 16, fontWeight: '600' }}>Deleting project...</Text>
@@ -586,13 +592,15 @@ export default function ProjectWorkspaceScreen() {
                 </>
             )}
 
-            <EditProjectModal
-                isOpen={isEditModalOpen}
-                onClose={() => { setIsEditModalOpen(false); setEditModalFocus(null); }}
-                project={project}
-                onUpdate={(updated) => setProject(updated)}
-                initialFocus={editModalFocus}
-            />
+            {project && (
+                <EditProjectModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => { setIsEditModalOpen(false); setEditModalFocus(null); }}
+                    project={project}
+                    onUpdate={(updated) => setProject(updated)}
+                    initialFocus={editModalFocus}
+                />
+            )}
         </SafeAreaView>
     );
 }

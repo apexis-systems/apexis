@@ -23,7 +23,6 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ScreenCapture from 'expo-screen-capture';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
 
@@ -62,6 +61,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [showMoveDialog, setShowMoveDialog] = useState(false);
     const [movingItem, setMovingItem] = useState<{ type: 'file' | 'folder', id: string | number } | null>(null);
     const [movingContentsOf, setMovingContentsOf] = useState<any | null>(null);
+    const [showRenameFile, setShowRenameFile] = useState(false);
+    const [renamingFileId, setRenamingFileId] = useState<number | null>(null);
+    const [renamingFileName, setRenamingFileName] = useState('');
 
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
@@ -152,7 +154,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const index = sortedInit.findIndex(p => String(p.id) === String(initialFileId));
             if (index !== -1) {
                 openViewer(index);
-                router.setParams({ fileId: undefined, photoId: undefined });
+                router.setParams({ fileId: '', photoId: ''});
+                
             }
         }
     }, [initialFileId, photos, selectedFolder, sortBy, user.role, router]);
@@ -344,6 +347,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const closeViewer = () => {
         setViewerOpen(false);
         setIsViewerZoomed(false);
+        setViewerIndex(-1);
     };
 
     useFocusEffect(
@@ -449,10 +453,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         try {
             setProcessing('visibility');
             await toggleFileVisibility(file.id, !file.client_visible);
-            await loadFiles(true);
+            
+            // Local update
+            setPhotos((prev) => prev.map((p) => (p.id === file.id ? { ...p, client_visible: !file.client_visible } : p)));
+            
             setActionMenuVisible(false);
         } catch (e) {
             Alert.alert("Error", "Failed to update visibility");
+            await loadFiles(true);
         } finally {
             setProcessing(null);
         }
@@ -507,6 +515,29 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         );
     };
 
+    const handleRenameFileAction = (file: any) => {
+        setRenamingFileId(file.id);
+        setRenamingFileName(file.file_name);
+        setShowRenameFile(true);
+    };
+
+    const handleUpdateFile = async () => {
+        if (!renamingFileName.trim() || !renamingFileId) return;
+        setSubmitting(true);
+        try {
+            const { updateFile } = require('@/services/fileService');
+            await updateFile(renamingFileId, { file_name: renamingFileName.trim() });
+            await loadFiles(true);
+            setShowRenameFile(false);
+            setRenamingFileId(null);
+            setRenamingFileName('');
+        } catch (e) {
+            Alert.alert("Error", "Failed to update file");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
         setSubmitting(true);
@@ -530,7 +561,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!editFolderName.trim() || !editingFolderId) return;
         setSubmitting(true);
         try {
-            await updateFolder(editingFolderId, editFolderName.trim());
+            await updateFolder(editingFolderId, { name: editFolderName.trim() });
             await loadFiles(true);
             setShowEditFolder(false);
             setEditingFolderId(null);
@@ -828,6 +859,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 const count = photos.filter((p) => p.folder_id === folder.id).length;
                                 const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                                 const isSelected = selectedFolders.has(folder.id);
+                                const isArchiveFolder = folder.name.toLowerCase() === 'archive';
                                 return (
                                     <View
                                         key={folder.id}
@@ -846,8 +878,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             shadowOpacity: 0.05,
                                             shadowRadius: 4,
                                             elevation: 1,
-                                            position: 'relative',
-                                            overflow: 'hidden'
+                                            position: 'relative'
                                         }}
                                     >
                                         <TouchableOpacity
@@ -862,14 +893,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             }}
                                         />
                                         <View style={{ marginBottom: 8 }}>
-                                            <Feather name="folder" size={36} color={colors.primary} />
+                                            <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
                                         </View>
                                         {isSelected && (
                                             <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
                                         <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                             {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
                                         </Text>
@@ -998,7 +1029,6 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             padding: 10,
                                             marginVertical: 4,
                                             position: 'relative',
-                                            overflow: 'hidden'
                                         }}
                                     >
                                         <TouchableOpacity
@@ -1016,7 +1046,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                                         </View>
                                         {isSelected && (
-                                            <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                            <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
@@ -1280,7 +1310,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     folders: Array.from(selectedFolders),
                     files: Array.from(selectedFiles)
                 }}
-                onMoveComplete={async () => {
+                onMoveComplete={async (selectedFolderId) => {
                     if (movingContentsOf) {
                         try {
                             await deleteFolder(movingContentsOf.id, false);
@@ -1545,9 +1575,35 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={false}
                 canDelete={activeActionFile && (String(activeActionFile.created_by) === String(user.id))}
+                canRename={['admin', 'superadmin', 'contributor'].includes(user.role)}
+                onRename={() => handleRenameFileAction(activeActionFile)}
                 fileName={activeActionFile?.file_name || ''}
-                isProcessing={processing !== null}
+                processingAction={processing}
             />
+
+            {/* Rename File Modal */}
+            <Modal visible={showRenameFile} transparent animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
+                    <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename Photo</Text>
+                        <TextInput
+                            value={renamingFileName}
+                            onChangeText={setRenamingFileName}
+                            placeholder="Photo name"
+                            placeholderTextColor={colors.textMuted}
+                            style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={() => setShowRenameFile(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleUpdateFile} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
 
             <FolderActionMenu
                 isVisible={folderMenuVisible}
@@ -1558,7 +1614,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
                 clientVisible={activeActionFolder?.client_visible !== false}
                 folderName={activeActionFolder?.name || ''}
-                isProcessing={processing !== null}
+                processingAction={processing}
             />
         </View>
     );

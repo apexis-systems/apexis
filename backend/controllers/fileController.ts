@@ -374,81 +374,6 @@ export const deleteFile = async (req: Request, res: Response) => {
     }
 };
 
-export const toggleFileVisibility = async (req: Request, res: Response) => {
-    try {
-        const authUser = (req as any).user;
-        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
-
-        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
-            return res.status(403).json({ error: "Forbidden: Only Admins can toggle file visibility" });
-        }
-
-        const { fileId } = req.params;
-        const { client_visible } = req.body;
-
-        const file = await files.findByPk(fileId);
-        if (!file) {
-            return res.status(404).json({ error: "File not found" });
-        }
-        const project = await projects.findByPk(file.project_id);
-        if (!project) {
-            return res.status(404).json({ error: "Project not found" });
-        }
-
-        file.client_visible = client_visible;
-        await file.save();
-
-        if (client_visible) {
-            // Notify clients who actually belong to this project.
-            const clients = await project_members.findAll({
-                where: { project_id: file.project_id, role: 'client' },
-                attributes: ['user_id']
-            });
-
-            for (const client of clients) {
-                await sendNotification({
-                    userId: Number((client as any).user_id),
-                    title: 'New File Available',
-                    body: `A new file "${file.file_name}" is now visible to you.`,
-                    type: 'file_visibility',
-                    data: { fileId: String(file.id), projectId: String(file.project_id) }
-                });
-            }
-        }
-
-        res.status(200).json({ message: "File visibility updated", file });
-    } catch (error) {
-        console.error("Toggle File Visibility Error:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
-};
-
-export const toggleDoNotFollow = async (req: Request, res: Response) => {
-    try {
-        const authUser = (req as any).user;
-        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
-
-        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
-            return res.status(403).json({ error: "Forbidden: Only Admins can toggle 'Do Not Follow'" });
-        }
-
-        const { fileId } = req.params;
-        const { do_not_follow } = req.body;
-
-        const file = await files.findByPk(fileId);
-        if (!file) {
-            return res.status(404).json({ error: "File not found" });
-        }
-
-        file.do_not_follow = do_not_follow;
-        await file.save();
-
-        res.status(200).json({ message: "File 'Do Not Follow' status updated", file });
-    } catch (error) {
-        console.error("Toggle Do Not Follow Error:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
-};
 
 export const viewFile = async (req: Request, res: Response) => {
     try {
@@ -556,6 +481,71 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
     }
 };
 
+export const updateFile = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { fileId } = req.params;
+        const { file_name, folder_id, client_visible, do_not_follow } = req.body;
+
+        const file = await files.findByPk(fileId);
+        if (!file) {
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        // Permission check: Admin, Superadmin, or Contributor only
+        const isAuthorized = ['admin', 'superadmin', 'contributor'].includes(authUser.role);
+
+        if (!isAuthorized) {
+            return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can update files" });
+        }
+
+        const previousVisibility = file.client_visible;
+        const updateData: any = {};
+        if (file_name !== undefined) updateData.file_name = file_name;
+        if (folder_id !== undefined) updateData.folder_id = (folder_id === '' || folder_id === 'root') ? null : folder_id;
+        if (client_visible !== undefined) updateData.client_visible = client_visible;
+        if (do_not_follow !== undefined) updateData.do_not_follow = do_not_follow;
+
+        await file.update(updateData);
+
+        // If newly visible, notify clients
+        if (client_visible === true && previousVisibility === false) {
+            const project = await projects.findByPk(file.project_id);
+            if (project) {
+                const clients = await project_members.findAll({
+                    where: { project_id: file.project_id, role: 'client' },
+                    attributes: ['user_id']
+                });
+
+                for (const client of clients) {
+                    await sendNotification({
+                        userId: Number((client as any).user_id),
+                        title: 'New File Available',
+                        body: `A new file "${file.file_name}" is now visible to you.`,
+                        type: 'file_visibility',
+                        data: { fileId: String(file.id), projectId: String(file.project_id) }
+                    });
+                }
+            }
+        }
+
+        await logActivity({
+            projectId: file.project_id,
+            userId: authUser.user_id,
+            type: 'edit',
+            description: `Updated file: ${file.file_name}`,
+            metadata: { fileId: file.id, updates: Object.keys(updateData) }
+        });
+
+        res.status(200).json({ message: "File updated successfully", file });
+    } catch (error) {
+        console.error("Update File Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 
 export const uploadScans = async (req: Request | any, res: Response) => {
     try {
@@ -601,6 +591,13 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             }
         }
 
+        // Get sender name for watermark and notifications
+        let senderName = authUser.name;
+        if (!senderName) {
+            const sender = await users.findByPk(authUser.user_id);
+            senderName = sender?.name || "Someone";
+        }
+
         const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
         const folderPath = validFolderId ? validFolderId.toString() : 'root';
         const isSeparate = mode === 'separate';
@@ -615,13 +612,18 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 const pdfDoc = await PDFDocument.create();
 
                 let imageBuffer = file.buffer;
-                // Use sharp to normalize image before embedding
+                // Use addWatermark to professionalize the scan and normalize it
                 try {
-                    imageBuffer = await sharp(file.buffer)
-                        .jpeg({ quality: 85 })
-                        .toBuffer();
-                } catch (sharpErr) {
-                    console.warn("Sharp standardization failed, using original buffer", sharpErr);
+                    imageBuffer = await addWatermark(file.buffer, project.name, senderName);
+                } catch (watermarkErr) {
+                    console.error("Watermarking scan failed, falling back to basic normalization", watermarkErr);
+                    try {
+                        imageBuffer = await sharp(file.buffer)
+                            .jpeg({ quality: 85 })
+                            .toBuffer();
+                    } catch (sharpErr) {
+                        console.warn("Sharp standardization failed, using original buffer", sharpErr);
+                    }
                 }
 
                 let image;
@@ -685,13 +687,18 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             for (const file of scanFiles) {
                 let imageBuffer = file.buffer;
 
-                // Use sharp to normalize image before embedding in PDF
+                // Use addWatermark to professionalize the scan and normalize it
                 try {
-                    imageBuffer = await sharp(file.buffer)
-                        .jpeg({ quality: 85 })
-                        .toBuffer();
-                } catch (sharpErr) {
-                    console.warn("Sharp standardization failed, using original buffer", sharpErr);
+                    imageBuffer = await addWatermark(file.buffer, project.name, senderName);
+                } catch (watermarkErr) {
+                    console.error("Watermarking scan failed, falling back to basic normalization", watermarkErr);
+                    try {
+                        imageBuffer = await sharp(file.buffer)
+                            .jpeg({ quality: 85 })
+                            .toBuffer();
+                    } catch (sharpErr) {
+                        console.warn("Sharp standardization failed, using original buffer", sharpErr);
+                    }
                 }
 
                 let image;
@@ -776,12 +783,6 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 }]
             });
 
-            let senderName = authUser.name;
-            if (!senderName) {
-                const sender = await users.findByPk(authUser.user_id);
-                senderName = sender?.name || "Someone";
-            }
-
             const scanType = (is_doc_mode === 'true' || is_doc_mode === true) ? "documents" : "photos";
             const fileCount = isSeparate ? scanFiles.length : 1;
             const notificationTitle = (is_doc_mode === 'true' || is_doc_mode === true) ? "New Scans Uploaded" : "New Photos Uploaded";
@@ -830,6 +831,136 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
     } catch (error) {
         console.error("Upload Scans Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const archiveFile = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { fileId } = req.params;
+
+        const file = await files.findByPk(fileId);
+        if (!file) {
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        // Permission check: Admin, Superadmin, or Project Contributor
+        const authId = authUser.user_id || authUser.id;
+        let isAuthorized = ['admin', 'superadmin'].includes(authUser.role) || Number(file.created_by) === Number(authId);
+
+        if (!isAuthorized && authUser.role === 'contributor') {
+            const membership = await checkProjectAccess(Number(authId), file.project_id, authUser.role, authUser.organization_id);
+            if (membership) isAuthorized = true;
+        }
+
+        if (!isAuthorized) {
+            return res.status(403).json({ error: "Forbidden: Only Admins or project contributors can archive this file" });
+        }
+
+        // 1. Find or create the "Archive" folder for this project
+        let archiveFolder = await folders.findOne({
+            where: {
+                project_id: file.project_id,
+                name: { [Op.iLike]: 'Archive' },
+                folder_type: 'document',
+                parent_id: null
+            }
+        });
+
+        if (!archiveFolder) {
+            archiveFolder = await folders.create({
+                project_id: file.project_id,
+                name: "Archive",
+                client_visible: false, // Internal by default
+                parent_id: null,
+                created_by: authUser.user_id,
+                folder_type: 'document'
+            });
+        }
+
+        // 2. Update file: move to archive folder and set do_not_follow = true
+        const oldFileName = file.file_name;
+        file.folder_id = archiveFolder.id;
+        file.do_not_follow = true;
+        await file.save();
+
+        await logActivity({
+            projectId: file.project_id,
+            userId: authUser.user_id,
+            type: 'edit',
+            description: `Archived document "${oldFileName}" (Set to Do Not Follow)`,
+            metadata: { fileId: file.id, folderId: archiveFolder.id }
+        });
+
+        res.status(200).json({ 
+            message: "File archived successfully", 
+            file,
+            archiveFolder 
+        });
+
+    } catch (error) {
+        console.error("Archive File Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const unarchiveFile = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { fileId } = req.params;
+        const { folder_id } = req.body;
+
+        const file = await files.findByPk(fileId);
+        if (!file) {
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        // Permission check: Admin, Superadmin, or Project Contributor
+        const authId = authUser.user_id || authUser.id;
+        let isAuthorized = ['admin', 'superadmin'].includes(authUser.role) || Number(file.created_by) === Number(authId);
+
+        if (!isAuthorized && authUser.role === 'contributor') {
+            const membership = await checkProjectAccess(Number(authId), file.project_id, authUser.role, authUser.organization_id);
+            if (membership) isAuthorized = true;
+        }
+
+        if (!isAuthorized) {
+            return res.status(403).json({ error: "Forbidden: Only Admins or project contributors can unarchive this file" });
+        }
+
+        const oldFileName = file.file_name;
+        
+        // 1. Update file: move to target folder and reset do_not_follow = false
+        file.folder_id = (folder_id === '' || folder_id === 'root' || folder_id === null) ? null : folder_id;
+        file.do_not_follow = false;
+        await file.save({ fields: ['folder_id', 'do_not_follow'] });
+
+        let targetFolderName = "Root";
+        if (file.folder_id) {
+            const targetFolder = await folders.findByPk(file.folder_id);
+            if (targetFolder) targetFolderName = targetFolder.name;
+        }
+
+        await logActivity({
+            projectId: file.project_id,
+            userId: authUser.user_id,
+            type: 'edit',
+            description: `Unarchived document "${oldFileName}" to ${targetFolderName}`,
+            metadata: { fileId: file.id, folderId: file.folder_id }
+        });
+
+        res.status(200).json({ 
+            message: "File unarchived successfully", 
+            file 
+        });
+
+    } catch (error) {
+        console.error("Unarchive File Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

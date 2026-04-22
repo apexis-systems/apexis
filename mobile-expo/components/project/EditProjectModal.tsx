@@ -20,13 +20,13 @@ interface Props {
 
 export default function EditProjectModal({ isOpen, onClose, project, onUpdate, initialFocus }: Props) {
     const { colors, isDark } = useTheme();
-    const [name, setName] = useState(project.name);
-    const [description, setDescription] = useState(project.description || '');
+    const [name, setName] = useState(project?.name || '');
+    const [description, setDescription] = useState(project?.description || '');
     const [startDate, setStartDate] = useState(
-        (project.start_date || project.startDate || '').split('T')[0]
+        (project?.start_date || project?.startDate || '').split('T')[0]
     );
     const [endDate, setEndDate] = useState(
-        (project.end_date || project.endDate || '').split('T')[0]
+        (project?.end_date || project?.endDate || '').split('T')[0]
     );
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
@@ -34,6 +34,7 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate, i
 
 
     useEffect(() => {
+        if (!project) return;
         setName(project.name);
         setDescription(project.description || '');
         setStartDate((project.start_date || project.startDate || '').split('T')[0]);
