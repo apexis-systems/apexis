@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle, Archive } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -13,9 +13,10 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
+import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile } from '@/services/fileService';
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
+import RenameFileDialog from './RenameFileDialog';
 
 import { Checkbox } from '@/components/ui/Checkbox';
 import FileViewer from '@/components/shared/FileViewer';
@@ -49,6 +50,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [folderToDelete, setFolderToDelete] = useState<any | null>(null);
   const [showDeleteConflict, setShowDeleteConflict] = useState(false);
   const [movingContentsOf, setMovingContentsOf] = useState<any | null>(null);
+  const [editFile, setEditFile] = useState<any | null>(null);
 
   // View state
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -204,13 +206,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     }
   };
 
-  const deleteDoc = async (docId: number) => {
+  const archiveDoc = async (docId: number) => {
+    if (!confirm('Are you sure you want to archive this document? It will be moved to the Archive folder and set to "Do Not Follow".')) return;
     try {
-      await deleteFile(docId);
-      setDocs((prev) => prev.filter((d) => d.id !== docId));
-      toast.success('Document deleted');
+      await archiveFile(docId);
+      toast.success('Document archived');
+      importFolders(); // Refresh to see moving to Archive folder
     } catch (error) {
-      toast.error('Failed to delete');
+      toast.error('Failed to archive document');
     }
   };
 
@@ -225,6 +228,10 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   };
 
   const handleCreateFolder = async (name: string) => {
+    if (name.toLowerCase() === 'archive') {
+      toast.error("The name 'Archive' is reserved for system use");
+      return;
+    }
     try {
       const res = await createFolder({ project_id: project.id, name, parent_id: selectedFolder, folder_type: 'document' });
       toast.success(`Folder "${name}" created`);
@@ -239,12 +246,27 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
   const handleRenameFolder = async (newName: string) => {
     if (!editFolder) return;
+    if (newName.toLowerCase() === 'archive') {
+      toast.error("The name 'Archive' is reserved for system use");
+      return;
+    }
     try {
       await updateFolder(editFolder.id, { name: newName });
       toast.success(`Folder renamed to "${newName}"`);
       await importFolders(); // Refetch
     } catch (e) {
       toast.error("Failed to rename folder");
+    }
+  };
+
+  const handleRenameFile = async (newName: string) => {
+    if (!editFile) return;
+    try {
+      await updateFile(editFile.id, { file_name: newName });
+      toast.success(`File renamed to "${newName}"`);
+      await importFolders(); // Refetch
+    } catch (e) {
+      toast.error("Failed to rename file");
     }
   };
 
@@ -480,6 +502,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           const folderDocs = docs.filter((d) => d.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
           const isSelected = selectedFolders.has(folder.id);
+          const isArchiveFolder = folder.name.toLowerCase() === 'archive';
           return (
             <button
               key={folder.id}
@@ -507,16 +530,11 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
                         className="rounded-full p-1 hover:bg-secondary transition-colors" 
                         title="Rename folder"
+                        disabled={isArchiveFolder}
                       >
                         <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
-                      <button 
-                        onClick={(e) => handleDeleteFolder(folder, e)} 
-                        className="rounded-full p-1 hover:bg-destructive/10 transition-colors" 
-                        title="Delete folder"
-                      >
-                        <Trash2 className="h-2.5 w-2.5 text-destructive" />
-                      </button>
+                      {/* No Delete for folders in Docs section */}
                     </>
                   )}
                 </div>
@@ -527,8 +545,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
                 </div>
               )}
-              <FolderIcon className="h-8 w-8 text-accent" />
-              <span className="text-[10px] font-medium text-foreground text-center leading-tight line-clamp-2 mt-1">
+              <FolderIcon className={`h-8 w-8 ${isArchiveFolder ? 'text-amber-500' : 'text-accent'}`} />
+              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-amber-600' : 'text-foreground'}`}>
                 {folder.name}
               </span>
               <div className="flex items-center gap-1 mt-0.5">
@@ -588,23 +606,46 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 </span>
 
                  <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
-                  {!isSelectionMode && (
-                    <>
-                      <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Share via link">
-                        <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
-                      </button>
-                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                      {!isSelectionMode && (
                         <>
-                          <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Toggle Visibility">
-                            {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
+                          <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Share via link">
+                            <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Toggle Do Not Follow">
-                            <ShieldAlert className={`h-2.5 w-2.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
-                          </button>
+                          {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                            <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Rename file">
+                              <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                            </button>
+                          )}
+                          {(user.role === 'admin' || user.role === 'superadmin') && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Toggle Visibility">
+                                {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Toggle Do Not Follow">
+                                <ShieldAlert className={`h-2.5 w-2.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                              </button>
+                            </>
+                          )}
+                          {(user.role === 'admin' || user.role === 'superadmin') && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
+                              className="rounded-full p-1 hover:bg-secondary transition-colors"
+                              title="Move file"
+                            >
+                              <Move className="h-2.5 w-2.5 text-muted-foreground" />
+                            </button>
+                          )}
+                          {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }}
+                              className="rounded-full p-1 hover:bg-amber-500/10 transition-colors"
+                              title="Archive file"
+                            >
+                              <Archive className="h-2.5 w-2.5 text-amber-600" />
+                            </button>
+                          )}
                         </>
                       )}
-                    </>
-                  )}
                 </div>
                 {doc.do_not_follow && (
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
@@ -673,9 +714,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           </button>
                         </>
                       )}
-                      {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
-                        <button onClick={(e) => { e.stopPropagation(); deleteDoc(doc.id); }} className="rounded-md p-1 hover:bg-destructive/10">
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                        <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-md p-1 hover:bg-secondary" title="Rename file">
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      )}
+                       {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
+                        <button onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title="Archive file">
+                          <Archive className="h-3.5 w-3.5 text-amber-600" />
                         </button>
                       )}
                     </>
@@ -793,6 +839,13 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           </div>
         )
       }
+
+      <RenameFileDialog
+        open={!!editFile}
+        onOpenChange={(open) => !open && setEditFile(null)}
+        onRename={handleRenameFile}
+        currentName={editFile?.file_name || ''}
+      />
 
       <MoveToFolderDialog
         open={showMoveDialog}

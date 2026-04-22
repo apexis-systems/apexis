@@ -37,23 +37,11 @@ export const deleteFile = async (fileId: string | number) => {
 };
 
 export const toggleFileVisibility = async (fileId: string | number, client_visible: boolean) => {
-    try {
-        const response = await PrivateAxios.put(`/files/${fileId}/visibility`, { client_visible });
-        return response.data;
-    } catch (error) {
-        console.error("toggleFileVisibility Error", error);
-        throw error;
-    }
+    return updateFile(fileId, { client_visible });
 };
 
 export const toggleDoNotFollow = async (fileId: string | number, do_not_follow: boolean) => {
-    try {
-        const response = await PrivateAxios.patch(`/files/${fileId}/do-not-follow`, { do_not_follow });
-        return response.data;
-    } catch (error) {
-        console.error("toggleDoNotFollow Error", error);
-        throw error;
-    }
+    return updateFile(fileId, { do_not_follow });
 };
 
 export const getSecureFileUrl = async (fileKey: string) => {
@@ -74,6 +62,26 @@ export const bulkUpdateFiles = async (data: { ids: (string | number)[], folder_i
         return response.data;
     } catch (error) {
         console.error("bulkUpdateFiles Error", error);
+        throw error;
+    }
+};
+
+export const updateFile = async (fileId: string | number, data: { file_name?: string, folder_id?: string | null, client_visible?: boolean, do_not_follow?: boolean }) => {
+    try {
+        const response = await PrivateAxios.put(`/files/${fileId}`, data);
+        return response.data;
+    } catch (error) {
+        console.error("updateFile Error", error);
+        throw error;
+    }
+};
+
+export const archiveFile = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.put(`/files/${fileId}/archive`);
+        return response.data;
+    } catch (error) {
+        console.error("archiveFile Error", error);
         throw error;
     }
 };
