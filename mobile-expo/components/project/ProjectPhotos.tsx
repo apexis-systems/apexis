@@ -154,7 +154,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const index = sortedInit.findIndex(p => String(p.id) === String(initialFileId));
             if (index !== -1) {
                 openViewer(index);
-                router.setParams({ fileId: undefined, photoId: undefined });
+                router.setParams({ fileId: '', photoId: ''});
+                
             }
         }
     }, [initialFileId, photos, selectedFolder, sortBy, user.role, router]);
@@ -346,6 +347,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const closeViewer = () => {
         setViewerOpen(false);
         setIsViewerZoomed(false);
+        setViewerIndex(-1);
     };
 
     useFocusEffect(

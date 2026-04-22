@@ -80,7 +80,7 @@ export const logActivity = async ({
         // 4. Emit via Socket & Push Notifications
         try {
             const io = getIO();
-            
+
             // Broadcast to superadmins
             io.to('superadmin-room').emit('new-activity', formattedActivity);
 
@@ -90,6 +90,10 @@ export const logActivity = async ({
             if (type === 'upload') notifType = 'file_upload';
             if (type === 'snag_update') notifType = 'snag_status_update';
             if (type === 'rfi_update') notifType = 'rfi_status_update';
+            if (type === 'photo_comment') notifType = 'photo_comment';
+            if (type === 'comment') notifType = 'comment';
+            if (type === 'edit' && metadata.type === "snags") notifType = 'snag_created';
+            if (type === 'edit' && metadata.type === "rfi") notifType = 'rfi_created';
 
             // Extract extra data from metadata if available for deep-linking
             const extraData: any = { projectId: String(projectId) };
@@ -104,14 +108,14 @@ export const logActivity = async ({
             for (const id of recipientIds) {
                 // Socket
                 io.to(`user-${id}`).emit('new-activity', formattedActivity);
-                
+
                 // Push Notification (only for OTHERS)
                 if (id !== userId) {
                     const senderName = formattedActivity.userName || 'Someone';
                     // Create a friendly body like "John uploaded 5 photos"
                     // If description starts with "Uploaded", lowercase it for better flow
-                    const cleanDescription = description.startsWith('Uploaded') 
-                        ? description.charAt(0).toLowerCase() + description.slice(1) 
+                    const cleanDescription = description.startsWith('Uploaded')
+                        ? description.charAt(0).toLowerCase() + description.slice(1)
                         : description;
 
                     await sendNotification({
