@@ -1207,7 +1207,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     }}>
                                         <ActivityIndicator size="large" color={colors.primary} />
                                         <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
-                                            {isExpoGo ? 'Fetching from Google...' : 'Optimizing View…'}
+                                            {isExpoGo ? 'Optimizing View…' : 'Optimizing View…'}
                                         </Text>
                                     </View>
                                 )}
