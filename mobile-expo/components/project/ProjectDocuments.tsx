@@ -10,7 +10,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import { WebView } from 'react-native-webview';
@@ -81,6 +81,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [folderMenuVisible, setFolderMenuVisible] = useState(false);
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
+
+    const [showRenameFile, setShowRenameFile] = useState(false);
+    const [renamingFileId, setRenamingFileId] = useState<number | null>(null);
+    const [renamingFileName, setRenamingFileName] = useState('');
+    const [isUnarchiving, setIsUnarchiving] = useState(false);
 
     const fetchFolders = async (isRefetch = false) => {
         if (!project?.id) return;
@@ -228,10 +233,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             setProcessing('visibility');
             await toggleFileVisibility(file.id, !file.client_visible);
-            await fetchFolders(true);
+            
+            // Local update for immediate feedback
+            setDocs((prev) => prev.map((d) => (d.id === file.id ? { ...d, client_visible: !file.client_visible } : d)));
+            
             setActionMenuVisible(false);
         } catch (e) {
             Alert.alert("Error", "Failed to update visibility");
+            await fetchFolders(true); // Sync back on error
         } finally {
             setProcessing(null);
         }
@@ -241,10 +250,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             setProcessing('dnf');
             await toggleDoNotFollow(file.id, !file.do_not_follow);
-            await fetchFolders(true);
+            
+            // Local update
+            setDocs((prev) => prev.map((d) => (d.id === file.id ? { ...d, do_not_follow: !file.do_not_follow } : d)));
+            
             setActionMenuVisible(false);
         } catch (e) {
             Alert.alert("Error", "Failed to update 'Do Not Follow' status");
+            await fetchFolders(true);
         } finally {
             setProcessing(null);
         }
@@ -267,6 +280,62 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         setEditingFolderId(folder.id);
         setEditFolderName(folder.name);
         setShowEditFolder(true);
+    };
+
+    const handleRenameFileAction = async (file: any) => {
+        setRenamingFileId(file.id);
+        setRenamingFileName(file.file_name);
+        setShowRenameFile(true);
+    };
+
+    const handleArchiveFileAction = async (file: any) => {
+        Alert.alert(
+            "Archive Document",
+            'Are you sure you want to archive this document? It will be moved to the Archive folder and set to "Do Not Follow".',
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Archive",
+                    onPress: async () => {
+                        try {
+                            setProcessing('archive');
+                            await archiveFile(file.id);
+                            await fetchFolders(true);
+                            setActionMenuVisible(false);
+                            Alert.alert("Success", "Document archived");
+                        } catch (e) {
+                            Alert.alert("Error", "Failed to archive document");
+                        } finally {
+                            setProcessing(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleUnarchiveFile = async (file: any) => {
+        setMovingItem({ type: 'file', id: file.id });
+        setIsUnarchiving(true);
+        setActiveActionFile(file);
+        setActionMenuVisible(false);
+        setShowMoveDialog(true);
+    };
+
+    const handleUpdateFile = async () => {
+        if (!renamingFileName.trim() || !renamingFileId) return;
+        setSubmitting(true);
+        try {
+            await updateFile(renamingFileId, { file_name: renamingFileName.trim() });
+            await fetchFolders(true);
+            setShowRenameFile(false);
+            setRenamingFileId(null);
+            setRenamingFileName('');
+        } catch (e) {
+            Alert.alert("Error", "Failed to update file name");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleDeleteFolderAction = async (folder: any) => {
@@ -382,12 +451,17 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
+        if (newFolderName.trim().toLowerCase() === 'archive') {
+            Alert.alert("Error", "The name 'Archive' is reserved for system use");
+            return;
+        }
         setSubmitting(true);
         try {
             await createFolder({
                 name: newFolderName.trim(),
                 project_id: project.id,
                 parent_id: selectedFolder,
+                folder_type: 'document',
             });
             await fetchFolders(true);
             setNewFolderName('');
@@ -401,9 +475,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleUpdateFolder = async () => {
         if (!editFolderName.trim() || !editingFolderId) return;
+        if (editFolderName.trim().toLowerCase() === 'archive') {
+            Alert.alert("Error", "The name 'Archive' is reserved for system use");
+            return;
+        }
         setSubmitting(true);
         try {
-            await updateFolder(editingFolderId, editFolderName.trim());
+            await updateFolder(editingFolderId, { name: editFolderName.trim() });
             await fetchFolders(true);
             setShowEditFolder(false);
             setEditingFolderId(null);
@@ -731,6 +809,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         const count = docs.filter((d) => d.folder_id === folder.id).length;
                         const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                         const isSelected = selectedFolders.has(folder.id);
+                        const isArchiveFolder = folder.name.toLowerCase() === 'archive';
                         return (
                             <View
                                 key={folder.id}
@@ -750,7 +829,6 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     shadowRadius: 4,
                                     elevation: 1,
                                     position: 'relative',
-                                    overflow: 'hidden'
                                 }}
                             >
                                 <TouchableOpacity
@@ -765,14 +843,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     }}
                                 />
                                 <View style={{ marginBottom: 8 }}>
-                                    <Feather name="folder" size={36} color={colors.primary} />
+                                    <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
                                 </View>
                                 {isSelected && (
                                     <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                         <Feather name="check" size={10} color="#fff" />
                                     </View>
                                 )}
-                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center' }}>{folder.name}</Text>
+                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>{count} files{subcount > 0 ? ` · ${subcount} folders` : ''}</Text>
                                 {/* Folder Action Menu - Hidden for Clients */}
                                 {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
@@ -781,12 +859,6 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             onPress={() => {
                                                 setActiveActionFolder(folder);
                                                 setFolderMenuVisible(true);
-                                            }}
-                                            style={{
-                                                width: 24,
-                                                height: 24,
-                                                alignItems: 'center',
-                                                justifyContent: 'center'
                                             }}
                                         >
                                             <Feather
@@ -915,7 +987,6 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             padding: 10,
                                             position: 'relative',
                                             marginVertical: 4,
-                                            overflow: 'hidden'
                                         }}
                                     >
                                         <TouchableOpacity
@@ -942,7 +1013,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             <Feather name="file-text" size={16} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} />
                                         </View>
                                         {isSelected && (
-                                            <View style={{ position: 'absolute', top: -5, left: -5, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                            <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
@@ -1369,6 +1440,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     setShowMoveDialog(false);
                     setMovingContentsOf(null);
                     setMovingItem(null);
+                    setIsUnarchiving(false);
                 }}
                 project={project}
                 item={movingItem}
@@ -1379,8 +1451,24 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     folders: Array.from(selectedFolders),
                     files: Array.from(selectedFiles)
                 }}
-                onMoveComplete={async () => {
-                    if (movingContentsOf) {
+                hideSuccessAlert={isUnarchiving}
+                onConfirm={isUnarchiving ? async (selectedSubFolderId) => {
+                    if (activeActionFile) {
+                        try {
+                            setProcessing('unarchive');
+                            await unarchiveFile(activeActionFile.id, selectedSubFolderId === 'root' ? null : selectedSubFolderId);
+                            Alert.alert("Success", "Document unarchived successfully");
+                        } catch (e) {
+                            Alert.alert("Error", "Failed to unarchive document");
+                            throw e; // Rethrow to let dialog handle error state if needed
+                        } finally {
+                            setProcessing(null);
+                            setIsUnarchiving(false);
+                        }
+                    }
+                } : undefined}
+                onMoveComplete={async (selectedSubFolderId) => {
+                    if (!isUnarchiving && movingContentsOf) {
                         try {
                             await deleteFolder(movingContentsOf.id, false);
                             Alert.alert("Success", `Folder "${movingContentsOf.name}" deleted after moving contents`);
@@ -1421,19 +1509,49 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 </View>
             </Modal>
 
+            {/* Rename File Modal */}
+            <Modal visible={showRenameFile} transparent animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
+                    <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename File</Text>
+                        <TextInput
+                            value={renamingFileName}
+                            onChangeText={setRenamingFileName}
+                            placeholder="File name"
+                            placeholderTextColor={colors.textMuted}
+                            style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={() => setShowRenameFile(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleUpdateFile} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             <FileActionMenu
                 isVisible={actionMenuVisible}
                 onClose={() => setActionMenuVisible(false)}
                 onHideUnhide={() => handleToggleVisibility(activeActionFile)}
                 onDoNotFollow={() => handleToggleDoNotFollow(activeActionFile)}
                 onDelete={() => handleDeleteFile(activeActionFile)}
+                onArchive={() => handleArchiveFileAction(activeActionFile)}
+                onUnarchive={() => handleUnarchiveFile(activeActionFile)}
                 onShare={() => handleShareDoc(activeActionFile)}
+                onRename={() => handleRenameFileAction(activeActionFile)}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={activeActionFile?.do_not_follow === true}
-                canDelete={activeActionFile && (String(activeActionFile.created_by) === String(user.id))}
+                canDelete={false} // Disable delete in Docs
+                showArchive={true}
+                isArchived={folders.find(f => f.id === activeActionFile?.folder_id)?.name.toLowerCase() === 'archive'}
+                canRename={['admin', 'superadmin', 'contributor'].includes(user.role)}
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
                 fileName={activeActionFile?.file_name || ''}
-                isProcessing={processing !== null}
+                processingAction={processing}
             />
 
             <FolderActionMenu
@@ -1445,7 +1563,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
                 clientVisible={activeActionFolder?.client_visible !== false}
                 folderName={activeActionFolder?.name || ''}
-                isProcessing={processing !== null}
+                processingAction={processing}
             />
         </View>
     );

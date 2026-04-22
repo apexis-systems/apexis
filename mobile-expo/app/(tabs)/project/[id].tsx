@@ -311,16 +311,14 @@ export default function ProjectWorkspaceScreen() {
     }, [id]); // Reset when project changes — intentionally excludes `tab` from deps
 
     // Centralized Screen Capture Protection for the entire Project Workspace
-    // Note: On iOS, expo-screen-capture can cause a total black screen for the user 
-    // even during normal viewing on certain devices/simulators.
-    // We only enable it for Android for now to ensure iOS visibility is restored.
+    // Note: On Android, this prevents screenshots and recordings.
+    // On iOS, this prevents screen recordings and obscures the app in the task switcher.
     useEffect(() => {
         const updateProtection = async () => {
             try {
-                if (isScreenCaptureProtected && Platform.OS === 'android') {
+                if (isScreenCaptureProtected) {
                     await ScreenCapture.preventScreenCaptureAsync('project-workspace');
                 } else {
-                    // If protection is disabled or we are on iOS, allow screen capture
                     await ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
                 }
             } catch (error) {
@@ -329,9 +327,7 @@ export default function ProjectWorkspaceScreen() {
         };
         updateProtection();
         return () => {
-            if (Platform.OS === 'android') {
-                ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
-            }
+            ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
         };
     }, [id, isScreenCaptureProtected]); // Reset when project changes or toggle changes
 

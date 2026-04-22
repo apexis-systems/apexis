@@ -42,9 +42,9 @@ export const bulkUpdateFolders = async (data: { ids: (string | number)[], parent
     }
 };
 
-export const updateFolder = async (folderId: string | number, name: string) => {
+export const updateFolder = async (folderId: string | number, data: { name: string }) => {
     try {
-        const response = await PrivateAxios.put(`/folders/${folderId}`, { name });
+        const response = await PrivateAxios.put(`/folders/${folderId}`, data);
         return response.data;
     } catch (error) {
         console.error("updateFolder Error", error);
