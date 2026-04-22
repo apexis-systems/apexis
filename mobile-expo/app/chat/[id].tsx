@@ -624,7 +624,7 @@ export default function ChatDetailScreen() {
             <KeyboardAvoidingView 
                 style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : isKeyboardVisible ? 0 : -28} // Adjust for Android status bar when keyboard is hidden
             >
                 {loading ? (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
