@@ -16,42 +16,41 @@ export const handleActivityNavigation = (act: any, router: Router) => {
         }
     }
 
-    // 1. Folder-level deep redirection
-    if (metadata?.folderId) {
-        const rawType = metadata.type?.toLowerCase();
-        const tab = (rawType === 'photo' || rawType === 'photos') ? 'photos' : 'documents';
-        let additionalParams = '';
-        if (metadata.fileId) additionalParams += `&fileId=${metadata.fileId}`;
-        router.push(`/(tabs)/project/${projectId}?tab=${tab}&initialFolderId=${metadata.folderId}${additionalParams}` as any);
-        return;
-    }
+// 1. Unified Deep Redirection Helpers
+    const finalProjectId = projectId || act.project_id;
+    if (!finalProjectId && !metadata?.roomId) return; // Cannot navigate without project context unless it's chat
 
-    // 2. Tab-level redirection based on metadata type (if no folderId)
+    // 2. Folder & File level redirection 
+    // Triggered if we have specific metadata indicating where to go
     if (metadata?.type) {
         const rawType = metadata.type.toLowerCase();
         let tab = 'overview';
         let query = '';
-        
-        if ((rawType === 'photo' || rawType === 'photos') && metadata.fileId) {
-            query += `&fileId=${metadata.fileId}`;
-        } else if ((rawType === 'document' || rawType === 'documents') && metadata.fileId) {
-            query += `&fileId=${metadata.fileId}`;
-        }
 
+        // Determine destination tab
         if (rawType === 'photo' || rawType === 'photos') tab = 'photos';
         else if (rawType === 'document' || rawType === 'documents') tab = 'documents';
         else if (rawType === 'snag' || rawType === 'snags') {
             tab = 'snags';
-            if (metadata.snagId) query = `&snagId=${metadata.snagId}`;
+            if (metadata.snagId) query += `&snagId=${metadata.snagId}`;
         }
         else if (rawType === 'rfi') {
             tab = 'rfi';
-            if (metadata.rfiId) query = `&rfiId=${metadata.rfiId}`;
+            if (metadata.rfiId) query += `&rfiId=${metadata.rfiId}`;
         }
         else if (rawType === 'report' || rawType === 'reports') tab = 'reports';
 
+        // Add file/folder context if it exists
+        if (metadata.fileId) query += `&fileId=${metadata.fileId}`;
+        
+        // Handle folderId (can be null for root, so we check for presence, not just truthiness)
+        if (Object.prototype.hasOwnProperty.call(metadata, 'folderId')) {
+            const folderVal = metadata.folderId === null ? '' : metadata.folderId;
+            query += `&initialFolderId=${folderVal}`;
+        }
+
         if (tab !== 'overview') {
-            router.push(`/(tabs)/project/${projectId}?tab=${tab}${query}` as any);
+            router.push(`/(tabs)/project/${finalProjectId}?tab=${tab}${query}` as any);
             return;
         }
     }
@@ -60,6 +59,7 @@ export const handleActivityNavigation = (act: any, router: Router) => {
     let tab = 'overview';
     switch (type) {
         case 'upload':
+        case 'uploaded':
         case 'file_upload':
         case 'file_upload_admin':
         case 'file_visibility':
@@ -75,13 +75,13 @@ export const handleActivityNavigation = (act: any, router: Router) => {
             if (metadata?.type === 'snags') {
                 tab = 'snags';
                 const query = metadata.snagId ? `&snagId=${metadata.snagId}` : '';
-                router.push(`/(tabs)/project/${projectId}?tab=${tab}${query}` as any);
+                router.push(`/(tabs)/project/${finalProjectId}?tab=${tab}${query}` as any);
                 return;
             }
             if (metadata?.type === 'rfi') {
                 tab = 'rfi';
                 const query = metadata.rfiId ? `&rfiId=${metadata.rfiId}` : '';
-                router.push(`/(tabs)/project/${projectId}?tab=${tab}${query}` as any);
+                router.push(`/(tabs)/project/${finalProjectId}?tab=${tab}${query}` as any);
                 return;
             }
             tab = 'overview';
@@ -121,7 +121,7 @@ export const handleActivityNavigation = (act: any, router: Router) => {
             break;
     }
 
-    if (projectId) {
-        router.push(`/(tabs)/project/${projectId}?tab=${tab}` as any);
+    if (finalProjectId) {
+        router.push(`/(tabs)/project/${finalProjectId}?tab=${tab}` as any);
     }
 };
