@@ -624,7 +624,7 @@ export default function ChatDetailScreen() {
             <KeyboardAvoidingView 
                 style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : isKeyboardVisible ? 0 : -28} // Adjust for Android status bar when keyboard is hidden
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : isKeyboardVisible ? 0 : -insets.bottom - 27.5} // Adjust for Android status bar when keyboard is hidden
             >
                 {loading ? (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -720,7 +720,7 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
 
-                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: isKeyboardVisible ? 8 : Math.max(8, insets.bottom), flexDirection: 'row', alignItems: 'flex-end' }}>
+                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: isKeyboardVisible ? 8 : Math.max(8, insets.bottom) +2, flexDirection: 'row', alignItems: 'flex-end' }}>
                             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 4, minHeight: 44 }}>
                                 <TextInput
                                     value={message}
