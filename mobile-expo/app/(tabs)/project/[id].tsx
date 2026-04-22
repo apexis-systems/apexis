@@ -318,7 +318,8 @@ export default function ProjectWorkspaceScreen() {
     useEffect(() => {
         const updateProtection = async () => {
             try {
-                if (isScreenCaptureProtected) {
+                // Disable protection for Overview tab, enable for others if setting is ON
+                if (isScreenCaptureProtected && activeTab !== 'overview') {
                     await ScreenCapture.preventScreenCaptureAsync('project-workspace');
                 } else {
                     await ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
@@ -328,10 +329,14 @@ export default function ProjectWorkspaceScreen() {
             }
         };
         updateProtection();
+    }, [id, isScreenCaptureProtected, activeTab]);
+
+    // Ensure protection is released when leaving the project workspace entirely
+    useEffect(() => {
         return () => {
             ScreenCapture.allowScreenCaptureAsync('project-workspace').catch(() => { });
         };
-    }, [id, isScreenCaptureProtected]); // Reset when project changes or toggle changes
+    }, []);
 
     const isMainTab = visibleTabs.some(t => t.key === activeTab);
     const handleDeleteProject = () => {

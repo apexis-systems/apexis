@@ -57,6 +57,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         await SecureStore.deleteItemAsync('token');
         await SecureStore.deleteItemAsync('subscriptionLocked');
+        await SecureStore.deleteItemAsync('is_screen_capture_protected_v2');
+        setIsScreenCaptureProtected(true);
     }, []);
 
     const fetchUser = useCallback(async (showLoading = true) => {

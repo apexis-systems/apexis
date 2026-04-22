@@ -23,7 +23,6 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ScreenCapture from 'expo-screen-capture';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
 
