@@ -18,7 +18,6 @@ import { Modal, BackHandler } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { parseApiError } from '@/helpers/apiError';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
-import * as ScreenCapture from 'expo-screen-capture';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Step = 'camera' | 'details';
@@ -27,18 +26,6 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
 
 export default function SnagCreateScreen() {
-    const { isScreenCaptureProtected } = useAuth();
-
-    useFocusEffect(
-        useCallback(() => {
-            if (isScreenCaptureProtected) {
-                ScreenCapture.preventScreenCaptureAsync('snag-create-screen');
-            }
-            return () => {
-                ScreenCapture.allowScreenCaptureAsync('snag-create-screen');
-            };
-        }, [isScreenCaptureProtected])
-    );
 
     const { projectId } = useLocalSearchParams<{ projectId: string }>();
     const router = useRouter();

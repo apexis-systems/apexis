@@ -21,8 +21,6 @@ import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 import { parseApiError } from '@/helpers/apiError';
-import * as ScreenCapture from 'expo-screen-capture';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   project: Project;
@@ -42,18 +40,6 @@ const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
 
 export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
   const { colors } = useTheme();
-  const { isScreenCaptureProtected } = useAuth();
-
-  useFocusEffect(
-    useCallback(() => {
-      if (isScreenCaptureProtected) {
-        ScreenCapture.preventScreenCaptureAsync('rfi-section');
-      }
-      return () => {
-        ScreenCapture.allowScreenCaptureAsync('rfi-section');
-      };
-    }, [isScreenCaptureProtected])
-  );
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
