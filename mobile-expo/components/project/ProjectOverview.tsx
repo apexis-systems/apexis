@@ -320,7 +320,12 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             return;
         }
         
-        if (!isRefetch) setOverallLoading(true);
+        // Only show full-screen loader if we have NO data yet (initial load)
+        const hasSomeData = docsCount > 0 || photosCount > 0 || dailyReports.length > 0 || weeklyReports.length > 0;
+        if (!isRefetch && !hasSomeData) {
+            setOverallLoading(true);
+        }
+        
         setCounting(true);
         setReportsLoading(true);
         
@@ -367,7 +372,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
     useFocusEffect(
         useCallback(() => {
-            fetchData();
+            // Don't show overallLoading spinner when just switching back to the tab
+            fetchData(true); 
         }, [projectId])
     );
 
