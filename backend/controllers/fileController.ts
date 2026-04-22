@@ -351,7 +351,7 @@ export const deleteFile = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'delete',
             description: `Deleted ${file.file_name}`,
-            metadata: { fileId: file.id }
+            metadata: { fileId: file.id, type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
         });
 
         await file.destroy({ transaction: t });
@@ -469,7 +469,8 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
                     projectId: firstFile.project_id,
                     userId: authUser.user_id,
                     type: 'edit',
-                    description: `Bulk updated ${ids.length} files`
+                    description: `Bulk updated ${ids.length} files`,
+                    metadata: { type: firstFile.file_type?.startsWith('image/') ? 'photos' : 'documents' }
                 });
             }
         }
@@ -536,7 +537,7 @@ export const updateFile = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Updated file: ${file.file_name}`,
-            metadata: { fileId: file.id, updates: Object.keys(updateData) }
+            metadata: { fileId: file.id, updates: Object.keys(updateData), type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
         });
 
         res.status(200).json({ message: "File updated successfully", file });
@@ -892,7 +893,7 @@ export const archiveFile = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Archived document "${oldFileName}" (Set to Do Not Follow)`,
-            metadata: { fileId: file.id, folderId: archiveFolder.id }
+            metadata: { fileId: file.id, folderId: archiveFolder.id, type: 'documents' }
         });
 
         res.status(200).json({ 
@@ -951,7 +952,7 @@ export const unarchiveFile = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Unarchived document "${oldFileName}" to ${targetFolderName}`,
-            metadata: { fileId: file.id, folderId: file.folder_id }
+            metadata: { fileId: file.id, folderId: file.folder_id, type: 'documents' }
         });
 
         res.status(200).json({ 

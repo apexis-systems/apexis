@@ -79,8 +79,11 @@ export const handleNotificationNavigation = (type: string | undefined | null, da
             case 'folder_visibility':
             case 'file_upload_admin':
             case 'upload':              // generic upload activity type
+            case 'uploaded':            // alternate upload activity type
                 tab = 'documents';
-                if (folderId) extraParams += `&initialFolderId=${folderId}`;
+                if (folderId !== undefined && folderId !== null && folderId !== '') {
+                    extraParams += `&initialFolderId=${folderId}`;
+                }
                 if (fileId) extraParams += `&fileId=${fileId}`;
                 break;
             case 'photo_upload':
@@ -89,7 +92,9 @@ export const handleNotificationNavigation = (type: string | undefined | null, da
             case 'comment':             // comment on a photo
             case 'mention':             // user mentioned in a photo comment
                 tab = 'photos';
-                if (folderId) extraParams += `&initialFolderId=${folderId}`;
+                if (folderId !== undefined && folderId !== null && folderId !== '') {
+                    extraParams += `&initialFolderId=${folderId}`;
+                }
                 if (fileId) extraParams += `&fileId=${fileId}`;
                 if (photoId) extraParams += `&photoId=${photoId}`;
                 break;
