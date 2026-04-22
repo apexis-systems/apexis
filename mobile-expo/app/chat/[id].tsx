@@ -44,7 +44,7 @@ export default function ChatDetailScreen() {
     const pulseAnim = useRef(new Animated.Value(0.3)).current;
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
     const flatListRef = useRef<FlatList>(null);
-    const keyboardHeight = useRef(new Animated.Value(insets.bottom)).current;
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
     const [attachment, setAttachment] = useState<any>(null);
     const [annotatingImage, setAnnotatingImage] = useState<any>(null);
@@ -206,29 +206,18 @@ export default function ChatDetailScreen() {
         const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
         const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-        const showSub = Keyboard.addListener(showEvent as any, (event) => {
-            const h = event?.endCoordinates?.height || 0;
-            // On edge-to-edge Android, sometimes the navigation bar is included in the height.
-            // But usually, the height reported is what we need for the padding.
-            Animated.timing(keyboardHeight, {
-                toValue: h,
-                duration: event?.duration || 250,
-                useNativeDriver: false,
-            }).start();
+        const showSub = Keyboard.addListener(showEvent as any, () => {
+            setIsKeyboardVisible(true);
         });
         const hideSub = Keyboard.addListener(hideEvent as any, () => {
-            Animated.timing(keyboardHeight, {
-                toValue: insets.bottom,
-                duration: 250,
-                useNativeDriver: false,
-            }).start();
+            setIsKeyboardVisible(false);
         });
 
         return () => {
             showSub.remove();
             hideSub.remove();
         };
-    }, [insets.bottom]);
+    }, []);
 
     const handleSend = async () => {
         setIsSending(true);
@@ -632,7 +621,11 @@ export default function ChatDetailScreen() {
             </SafeAreaView>
 
             {/* Chat Area */}
-            <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}>
+            <KeyboardAvoidingView 
+                style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+            >
                 {loading ? (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                         <ActivityIndicator size="large" color={colors.primary} />
@@ -668,7 +661,7 @@ export default function ChatDetailScreen() {
                     </View>
                 )}
 
-                <Animated.View style={{ backgroundColor: colors.background, paddingBottom: keyboardHeight }}>
+                <View style={{ backgroundColor: colors.background }}>
                     {typingUser && (
                         <Animated.View style={{ paddingHorizontal: 20, paddingVertical: 8, opacity: pulseAnim, backgroundColor: 'rgba(0,0,0,0.02)' }}>
                             <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', fontStyle: 'italic' }}>
@@ -727,7 +720,7 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
 
-                        <View style={{ paddingHorizontal: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'flex-end' }}>
+                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: isKeyboardVisible ? 8 : Math.max(8, insets.bottom), flexDirection: 'row', alignItems: 'flex-end' }}>
                             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 4, minHeight: 44 }}>
                                 <TextInput
                                     value={message}
@@ -789,7 +782,7 @@ export default function ChatDetailScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </Animated.View>
+                </View>
 
                 <ChatCameraModal
                     visible={isCameraVisible}
@@ -804,7 +797,7 @@ export default function ChatDetailScreen() {
                     onClose={() => setFullScreenImage(null)}
                     uri={fullScreenImage}
                 />
-            </View>
+            </KeyboardAvoidingView>
 
             {annotatingImage && (
                 <ImageAnnotator
