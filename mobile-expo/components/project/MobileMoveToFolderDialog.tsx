@@ -15,6 +15,8 @@ interface MoveToFolderDialogProps {
     selectedItems?: { folders: (string | number)[], files: (string | number)[] };
     onMoveComplete: (folderId: string | null) => void;
     type?: 'photo' | 'document';
+    hideSuccessAlert?: boolean;
+    onConfirm?: (targetFolderId: string | null) => Promise<void>;
 }
 
 export default function MobileMoveToFolderDialog({
@@ -24,16 +26,19 @@ export default function MobileMoveToFolderDialog({
     item,
     selectedItems,
     onMoveComplete,
-    type
+    type,
+    hideSuccessAlert,
+    onConfirm
 }: MoveToFolderDialogProps) {
     const { colors } = useTheme();
     const [folders, setFolders] = useState<any[]>([]);
-    const [targetFolder, setTargetFolder] = useState<string | null>(null);
+    const [targetFolder, setTargetFolder] = useState<string | null | undefined>(undefined);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         if (visible && project?.id) {
             fetchFolders();
+            setTargetFolder(undefined); // Reset selection when opening
         }
     }, [visible, project?.id]);
 
@@ -50,26 +55,32 @@ export default function MobileMoveToFolderDialog({
     const handleMove = async () => {
         setLoading(true);
         try {
-            const promises = [];
+            if (onConfirm) {
+                await onConfirm(targetFolder as string | null);
+            } else {
+                const promises = [];
 
-            if (item) {
-                if (item.type === 'folder') {
-                    promises.push(bulkUpdateFolders({ ids: [item.id], parent_id: targetFolder }));
-                } else {
-                    promises.push(bulkUpdateFiles({ ids: [item.id], folder_id: targetFolder }));
+                if (item) {
+                    if (item.type === 'folder') {
+                        promises.push(bulkUpdateFolders({ ids: [item.id], parent_id: targetFolder as string | null }));
+                    } else {
+                        promises.push(bulkUpdateFiles({ ids: [item.id], folder_id: targetFolder as string | null }));
+                    }
+                } else if (selectedItems) {
+                    if (selectedItems.folders.length > 0) {
+                        promises.push(bulkUpdateFolders({ ids: selectedItems.folders, parent_id: targetFolder as string | null }));
+                    }
+                    if (selectedItems.files.length > 0) {
+                        promises.push(bulkUpdateFiles({ ids: selectedItems.files, folder_id: targetFolder as string | null }));
+                    }
                 }
-            } else if (selectedItems) {
-                if (selectedItems.folders.length > 0) {
-                    promises.push(bulkUpdateFolders({ ids: selectedItems.folders, parent_id: targetFolder }));
-                }
-                if (selectedItems.files.length > 0) {
-                    promises.push(bulkUpdateFiles({ ids: selectedItems.files, folder_id: targetFolder }));
+
+                await Promise.all(promises);
+                if (!hideSuccessAlert) {
+                    Alert.alert("Success", "Items moved successfully");
                 }
             }
-
-            await Promise.all(promises);
-            Alert.alert("Success", "Items moved successfully");
-            onMoveComplete(targetFolder);
+            onMoveComplete(targetFolder as string | null);
             onClose();
         } catch (e) {
             Alert.alert("Error", "Failed to move items");
@@ -135,7 +146,15 @@ export default function MobileMoveToFolderDialog({
                         <TouchableOpacity onPress={onClose} style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}>
                             <Text style={{ color: colors.textMuted }}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={handleMove} disabled={loading} style={[styles.button, styles.moveButton]}>
+                        <TouchableOpacity 
+                            onPress={handleMove} 
+                            disabled={loading || targetFolder === undefined} 
+                            style={[
+                                styles.button, 
+                                styles.moveButton,
+                                (loading || targetFolder === undefined) && { opacity: 0.5 }
+                            ]}
+                        >
                             <Text style={{ color: '#fff', fontWeight: 'bold' }}>{loading ? 'Moving...' : 'Move Here'}</Text>
                         </TouchableOpacity>
                     </View>

@@ -1451,19 +1451,24 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     folders: Array.from(selectedFolders),
                     files: Array.from(selectedFiles)
                 }}
-                onMoveComplete={async (selectedSubFolderId) => {
-                    if (isUnarchiving && activeActionFile) {
+                hideSuccessAlert={isUnarchiving}
+                onConfirm={isUnarchiving ? async (selectedSubFolderId) => {
+                    if (activeActionFile) {
                         try {
                             setProcessing('unarchive');
                             await unarchiveFile(activeActionFile.id, selectedSubFolderId === 'root' ? null : selectedSubFolderId);
                             Alert.alert("Success", "Document unarchived successfully");
                         } catch (e) {
                             Alert.alert("Error", "Failed to unarchive document");
+                            throw e; // Rethrow to let dialog handle error state if needed
                         } finally {
                             setProcessing(null);
                             setIsUnarchiving(false);
                         }
-                    } else if (movingContentsOf) {
+                    }
+                } : undefined}
+                onMoveComplete={async (selectedSubFolderId) => {
+                    if (!isUnarchiving && movingContentsOf) {
                         try {
                             await deleteFolder(movingContentsOf.id, false);
                             Alert.alert("Success", `Folder "${movingContentsOf.name}" deleted after moving contents`);

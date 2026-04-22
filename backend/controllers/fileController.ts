@@ -847,12 +847,17 @@ export const archiveFile = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "File not found" });
         }
 
-        // Permission check: Admin, Superadmin, or Original Uploader
+        // Permission check: Admin, Superadmin, or Project Contributor
         const authId = authUser.user_id || authUser.id;
-        const isAuthorized = ['admin', 'superadmin'].includes(authUser.role) || Number(file.created_by) === Number(authId);
-        
+        let isAuthorized = ['admin', 'superadmin'].includes(authUser.role) || Number(file.created_by) === Number(authId);
+
+        if (!isAuthorized && authUser.role === 'contributor') {
+            const membership = await checkProjectAccess(Number(authId), file.project_id, authUser.role, authUser.organization_id);
+            if (membership) isAuthorized = true;
+        }
+
         if (!isAuthorized) {
-            return res.status(403).json({ error: "Forbidden: Only Admins or the original uploader can archive this file" });
+            return res.status(403).json({ error: "Forbidden: Only Admins or project contributors can archive this file" });
         }
 
         // 1. Find or create the "Archive" folder for this project
@@ -915,12 +920,17 @@ export const unarchiveFile = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "File not found" });
         }
 
-        // Permission check: Admin, Superadmin, or Original Uploader
+        // Permission check: Admin, Superadmin, or Project Contributor
         const authId = authUser.user_id || authUser.id;
-        const isAuthorized = ['admin', 'superadmin'].includes(authUser.role) || Number(file.created_by) === Number(authId);
-        
+        let isAuthorized = ['admin', 'superadmin'].includes(authUser.role) || Number(file.created_by) === Number(authId);
+
+        if (!isAuthorized && authUser.role === 'contributor') {
+            const membership = await checkProjectAccess(Number(authId), file.project_id, authUser.role, authUser.organization_id);
+            if (membership) isAuthorized = true;
+        }
+
         if (!isAuthorized) {
-            return res.status(403).json({ error: "Forbidden: Only Admins or the original uploader can unarchive this file" });
+            return res.status(403).json({ error: "Forbidden: Only Admins or project contributors can unarchive this file" });
         }
 
         const oldFileName = file.file_name;
@@ -928,7 +938,7 @@ export const unarchiveFile = async (req: Request, res: Response) => {
         // 1. Update file: move to target folder and reset do_not_follow = false
         file.folder_id = (folder_id === '' || folder_id === 'root' || folder_id === null) ? null : folder_id;
         file.do_not_follow = false;
-        await file.save();
+        await file.save({ fields: ['folder_id', 'do_not_follow'] });
 
         let targetFolderName = "Root";
         if (file.folder_id) {
