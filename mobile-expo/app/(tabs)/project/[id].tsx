@@ -123,6 +123,8 @@ export default function ProjectWorkspaceScreen() {
     }, [id]);
 
     useEffect(() => {
+        setLoading(true);
+        setProject(null);
         fetchProject();
     }, [fetchProject]);
 
@@ -365,17 +367,14 @@ export default function ProjectWorkspaceScreen() {
         );
     };
 
-    if (!user || loading) return (
+    // Simplified loading: if no user, we must block. 
+    // If no project yet, we show a partial loader inside the layout so the Header remains visible.
+    if (!user) return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color={colors.primary} />
         </SafeAreaView>
     );
 
-    if (!project) return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: colors.text }}>Project not found</Text>
-        </SafeAreaView>
-    );
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
@@ -385,7 +384,11 @@ export default function ProjectWorkspaceScreen() {
                 searchPlaceholder="Search in project..."
             />
 
-            {isDeleting ? (
+            {loading || !project ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            ) : isDeleting ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={{ marginTop: 16, color: colors.textMuted, fontSize: 16, fontWeight: '600' }}>Deleting project...</Text>
@@ -589,13 +592,15 @@ export default function ProjectWorkspaceScreen() {
                 </>
             )}
 
-            <EditProjectModal
-                isOpen={isEditModalOpen}
-                onClose={() => { setIsEditModalOpen(false); setEditModalFocus(null); }}
-                project={project}
-                onUpdate={(updated) => setProject(updated)}
-                initialFocus={editModalFocus}
-            />
+            {project && (
+                <EditProjectModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => { setIsEditModalOpen(false); setEditModalFocus(null); }}
+                    project={project}
+                    onUpdate={(updated) => setProject(updated)}
+                    initialFocus={editModalFocus}
+                />
+            )}
         </SafeAreaView>
     );
 }
