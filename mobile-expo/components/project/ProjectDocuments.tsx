@@ -42,9 +42,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const { isScreenCaptureProtected } = useAuth();
     useFocusEffect(
         useCallback(() => {
-                if (isScreenCaptureProtected) {
+            if (isScreenCaptureProtected) {
                 ScreenCapture.preventScreenCaptureAsync('docs-section');
-                    }
+            }
             return () => {
                 ScreenCapture.allowScreenCaptureAsync('docs-section');
             };
@@ -247,10 +247,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             setProcessing('visibility');
             await toggleFileVisibility(file.id, !file.client_visible);
-            
+
             // Local update for immediate feedback
             setDocs((prev) => prev.map((d) => (d.id === file.id ? { ...d, client_visible: !file.client_visible } : d)));
-            
+
             setActionMenuVisible(false);
         } catch (e) {
             Alert.alert("Error", "Failed to update visibility");
@@ -264,10 +264,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             setProcessing('dnf');
             await toggleDoNotFollow(file.id, !file.do_not_follow);
-            
+
             // Local update
             setDocs((prev) => prev.map((d) => (d.id === file.id ? { ...d, do_not_follow: !file.do_not_follow } : d)));
-            
+
+            // Sync current doc in viewer
+            if (currentDoc?.id === file.id) {
+                setCurrentDoc((prev: any) => ({ ...prev, do_not_follow: !file.do_not_follow }));
+            }
+
             setActionMenuVisible(false);
         } catch (e) {
             Alert.alert("Error", "Failed to update 'Do Not Follow' status");
@@ -1238,6 +1243,41 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 </View>
                             )
                         )
+                    )}
+
+                    {/* Do Not Follow Watermark Overlay */}
+                    {currentDoc?.do_not_follow && (
+                        <View
+                            pointerEvents="none"
+                            style={{
+                                ...StyleSheet.absoluteFillObject,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                zIndex: 100, // Very high zIndex to ensure it's above native components
+                            }}
+                        >
+                            <View style={{
+                                transform: [{ rotate: '-30deg' }],
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                paddingHorizontal: 30,
+                                paddingVertical: 15,
+                                borderRadius: 8,
+                                borderWidth: 3,
+                                borderColor: 'rgba(239, 68, 68, 0.3)',
+                                borderStyle: 'dashed'
+                            }}>
+                                <Text style={{
+                                    color: 'rgba(239, 68, 68, 0.4)',
+                                    fontSize: 48,
+                                    fontWeight: '900',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 2,
+                                    textAlign: 'center'
+                                }}>
+                                    Do Not Follow
+                                </Text>
+                            </View>
+                        </View>
                     )}
                 </View>
 
