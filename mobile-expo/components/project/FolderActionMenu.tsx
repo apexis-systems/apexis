@@ -15,7 +15,7 @@ interface FolderActionMenuProps {
     clientVisible: boolean;
     isAdmin: boolean;
     folderName: string;
-    isProcessing?: boolean;
+    processingAction?: string | null;
 }
 
 export default function FolderActionMenu({
@@ -27,9 +27,10 @@ export default function FolderActionMenu({
     clientVisible,
     isAdmin,
     folderName,
-    isProcessing = false
+    processingAction = null
 }: FolderActionMenuProps) {
     const { colors, isDark } = useTheme();
+    const isProcessing = processingAction !== null;
 
     return (
         <Modal
@@ -55,7 +56,7 @@ export default function FolderActionMenu({
                                         onPress={() => { !isProcessing && onHideUnhide(); }}
                                         disabled={isProcessing}
                                     >
-                                        {isProcessing ? (
+                                        {processingAction === 'visibility' ? (
                                             <ActivityIndicator size="small" color={colors.primary} />
                                         ) : (
                                             <Feather 

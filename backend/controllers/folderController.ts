@@ -13,6 +13,11 @@ export const createFolder = async (req: Request, res: Response) => {
 
         const { project_id, name, parent_id, folder_type } = req.body;
 
+        // Restriction: Prevent manual creation of "Archive" folder in documents
+        if (folder_type === 'document' && name.toLowerCase() === 'archive') {
+            return res.status(400).json({ error: "The name 'Archive' is reserved for system use in documents" });
+        }
+
         // Restriction: Only "admin" and "contributor" can create folders.
         if (authUser.role !== "admin" && authUser.role !== "contributor") {
             return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can create folders" });
@@ -208,6 +213,11 @@ export const updateFolder = async (req: Request, res: Response) => {
         const folder = await folders.findByPk(folderId);
         if (!folder) {
             return res.status(404).json({ error: "Folder not found" });
+        }
+
+        // Restriction: Prevent renaming to "Archive" in documents
+        if (folder.folder_type === 'document' && name.toLowerCase() === 'archive') {
+            return res.status(400).json({ error: "The name 'Archive' is reserved for system use in documents" });
         }
 
         // Authorization: Admins or Project Contributors

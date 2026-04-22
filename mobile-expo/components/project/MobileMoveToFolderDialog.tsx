@@ -13,7 +13,7 @@ interface MoveToFolderDialogProps {
     project: any;
     item?: { type: 'file' | 'folder', id: string | number } | null;
     selectedItems?: { folders: (string | number)[], files: (string | number)[] };
-    onMoveComplete: () => void;
+    onMoveComplete: (folderId: string | null) => void;
     type?: 'photo' | 'document';
 }
 
@@ -69,7 +69,7 @@ export default function MobileMoveToFolderDialog({
 
             await Promise.all(promises);
             Alert.alert("Success", "Items moved successfully");
-            onMoveComplete();
+            onMoveComplete(targetFolder);
             onClose();
         } catch (e) {
             Alert.alert("Error", "Failed to move items");
