@@ -16,7 +16,6 @@ import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import { WebView } from 'react-native-webview';
 import { formatFileSize } from '@/helpers/format';
 import { groupItemsByMonth } from '@/helpers/grouping';
-import * as ScreenCapture from 'expo-screen-capture';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
 
@@ -25,17 +24,6 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 export default function ProjectDocuments({ project, user, initialFolderId, initialFileId }: { project: any, user: any, initialFolderId?: string, initialFileId?: string }) {
     const { colors, isDark } = useTheme();
 
-    const { isScreenCaptureProtected } = useAuth();
-    useFocusEffect(
-        useCallback(() => {
-            if (isScreenCaptureProtected) {
-                ScreenCapture.preventScreenCaptureAsync('docs-section');
-            }
-            return () => {
-                ScreenCapture.allowScreenCaptureAsync('docs-section');
-            };
-        }, [isScreenCaptureProtected])
-    );
 
     const router = useRouter();
     const [docs, setDocs] = useState<any[]>([]);
