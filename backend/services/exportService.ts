@@ -428,8 +428,8 @@ export const startExportProcess = async (projectId: number, userId: number, orgI
 
 /** --- SHARED PDF LAYOUT HELPERS --- */
 
-const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compact: boolean = false) => {
-    const hasLogo = fs.existsSync(REPORT_PDF_ASSETS.logo);
+const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, orgName: string = 'APEXIS', orgLogo: Buffer | string | null = null, compact: boolean = false) => {
+    const hasLogo = !!orgLogo;
     const hasAngelica = fs.existsSync(REPORT_PDF_ASSETS.angelica);
     const brandFont = hasAngelica ? 'Angelica' : 'Helvetica-Bold';
     const pageW = doc.page.width;
@@ -442,11 +442,20 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     // Centered Logo & Brand
     const logoH = 32;
     const blockTop = 15;
+    const displayOrgName = orgName.split(' ')[0].toUpperCase(); // Use first word for brand if too long, or just use full?
+    // Actually, let's just use the full name if it's reasonably short, or just follow user's "instead of APEXIS"
+    // Usually APEXIS is the brand. Let's use orgName.toUpperCase() but maybe truncate?
+    // For now, let's just use orgName.toUpperCase().
+    const brandText = orgName.toUpperCase();
+
     doc.font(brandFont).fontSize(20);
-    const apexW = doc.widthOfString('APEXIS');
+    const apexW = doc.widthOfString(brandText);
     doc.fontSize(12);
-    const proW = doc.widthOfString('PRO™');
+
+    const isApexis = brandText.includes('APEXIS');
+    const proW = isApexis ? doc.widthOfString('PRO™') : 0;
     const brandTextW = apexW + proW;
+
     doc.font('Helvetica-Bold').fontSize(5.5);
     const tagW = doc.widthOfString(taglineStr);
     const gap = 10;
@@ -456,14 +465,17 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     let textLeft = clusterLeft;
     if (hasLogo) {
         try {
-            doc.image(REPORT_PDF_ASSETS.logo, clusterLeft, blockTop, { height: logoH });
+            const logoSrc = orgLogo ;
+            doc.image(logoSrc, clusterLeft, blockTop, { height: logoH });
         } catch (e) { /* ignore */ }
         textLeft = clusterLeft + logoH + gap;
     }
 
     doc.font(brandFont).fontSize(20).fillColor(BRAND.orange);
-    doc.text('APEXIS', textLeft, blockTop + 4, { lineBreak: false });
-    doc.fontSize(12).text('PRO™', textLeft + apexW, blockTop + 10, { lineBreak: false });
+    doc.text(brandText, textLeft, blockTop + 8, { lineBreak: false });
+    if (isApexis) {
+        doc.fontSize(12).text('PRO™', textLeft + apexW, blockTop + 10, { lineBreak: false });
+    }
     doc.font('Helvetica-Bold').fontSize(5.5).fillColor(BRAND.muted);
     // Moved from +24 to +28 to increase the vertical gap with the BRAND text (as per user tweak)
     doc.text(taglineStr, textLeft + (brandTextW - tagW) / 2 + 3, blockTop + 28, { lineBreak: false });
@@ -484,7 +496,7 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, compa
     }
 };
 
-const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: string) => {
+const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: string, orgLogo: Buffer | string | null = null) => {
     const pageWidth = doc.page.width;
     const pageHeight = doc.page.height;
     const hasLogo = fs.existsSync(REPORT_PDF_ASSETS.logo);
@@ -502,10 +514,12 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
     // Branding Cluster (Centered)
     const logoH = 64;
     const blockTop = 100;
+    const brandText = orgName.toUpperCase();
     doc.font(brandFont).fontSize(48);
-    const apexCoverW = doc.widthOfString('APEXIS');
+    const apexCoverW = doc.widthOfString(brandText);
     doc.fontSize(28);
-    const proCoverW = doc.widthOfString('PRO™');
+    const isApexis = brandText.includes('APEXIS');
+    const proCoverW = isApexis ? doc.widthOfString('PRO™') : 0;
     const brandTextW = apexCoverW + proCoverW;
     const taglineStr = 'RECORD · REPORT · RELEASE .';
     doc.font('Helvetica').fontSize(10);
@@ -514,13 +528,16 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
 
     if (hasLogo) {
         try {
-            doc.image(REPORT_PDF_ASSETS.logo, (pageWidth - logoH) / 2, blockTop, { height: logoH });
+            const logoSrc = orgLogo || REPORT_PDF_ASSETS.logo;
+            doc.image(logoSrc, (pageWidth - logoH) / 2, blockTop, { height: logoH });
         } catch (e) { /* ignore */ }
     }
 
     doc.font(brandFont).fontSize(48).fillColor(BRAND.orange);
-    doc.text('APEXIS', (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
-    doc.fontSize(28).text('PRO™', (pageWidth - brandTextW) / 2 + apexCoverW, blockTop + logoH + 36, { lineBreak: false });
+    doc.text(brandText, (pageWidth - brandTextW) / 2, blockTop + logoH + 20, { lineBreak: false });
+    if (isApexis) {
+        doc.fontSize(28).text('PRO™', (pageWidth - brandTextW) / 2 + apexCoverW, blockTop + logoH + 36, { lineBreak: false });
+    }
 
     doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.muted);
     doc.text(taglineStr, (pageWidth - tagW) / 2, blockTop + logoH + 85, { lineBreak: false });
@@ -761,7 +778,7 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
     const wb = apexFooterW + proFooterW;
 
     // Nudged -2.5 to align better with the baseline of the other text
-    doc.text('APEXIS', m.left + wp, textY - 2.5, { lineBreak: false });
+    doc.fontSize(10).text('APEXIS', m.left + wp, textY - 2.5, { lineBreak: false });
     doc.fontSize(7).text('PRO™', m.left + wp + apexFooterW, textY - 0.5, { lineBreak: false });
 
     doc.font('Helvetica').fontSize(7).fillColor(BRAND.muted);
@@ -788,13 +805,19 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
         doc.registerFont('Angelica', REPORT_PDF_ASSETS.angelica);
     }
 
+    const orgNameBrand = organization?.name || 'APEXIS';
+    let orgLogoBuffer: Buffer | null = null;
+    if (organization?.logo) {
+        try { orgLogoBuffer = await fetchS3Buffer(organization.logo); } catch (e) { console.error("Failed to fetch org logo", e); }
+    }
+
     return new Promise((resolve, reject) => {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
         // Header Pass
-        drawBrandedHeader(doc, 'Daily Project Report', 'RECORD · REPORT · RELEASE');
+        drawBrandedHeader(doc, 'Daily Project Report', '', orgNameBrand, orgLogoBuffer);
         const s = (report.summary || {}) as any;
 
         // Project Info Grid
@@ -862,7 +885,7 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
         const range = doc.bufferedPageRange();
         for (let i = 0; i < range.count; i++) {
             doc.switchToPage(i);
-            if (i > 0) drawBrandedHeader(doc, 'Daily Project Report', '', i > 0);
+            if (i > 0) drawBrandedHeader(doc, 'Daily Project Report', '', orgNameBrand, orgLogoBuffer, i > 0);
             drawBrandedFooter(doc, i, range.count);
         }
 
@@ -887,13 +910,19 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
 
     const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ' ';
 
+    const orgNameBrand = organization?.name || 'APEXIS';
+    let orgLogoBuffer: Buffer | null = null;
+    if (organization?.logo) {
+        try { orgLogoBuffer = await fetchS3Buffer(organization.logo); } catch (e) { console.error("Failed to fetch org logo", e); }
+    }
+
     return new Promise((resolve, reject) => {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
         // --- PAGE 1 ---
-        drawBrandedHeader(doc, 'Weekly Project Report', 'RECORD · REPORT · RELEASE');
+        drawBrandedHeader(doc, 'Weekly Project Report', '', orgNameBrand, orgLogoBuffer);
 
         const left = margin.left;
         const r = doc.page.width - margin.right;
@@ -987,7 +1016,7 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
         const range = doc.bufferedPageRange();
         for (let i = 0; i < range.count; i++) {
             doc.switchToPage(i);
-            if (i > 0) drawBrandedHeader(doc, 'Weekly Project Report', '', i > 0);
+            if (i > 0) drawBrandedHeader(doc, 'Weekly Project Report', '', orgNameBrand, orgLogoBuffer, i > 0);
             drawBrandedFooter(doc, i, range.count);
         }
 
@@ -1013,17 +1042,23 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
     const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ' ';
     const monthName = new Date(report.period_start).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
+    const orgNameBrand = organization?.name || 'APEXIS';
+    let orgLogoBuffer: Buffer | null = null;
+    if (organization?.logo) {
+        try { orgLogoBuffer = await fetchS3Buffer(organization.logo); } catch (e) { console.error("Failed to fetch org logo", e); }
+    }
+
     return new Promise((resolve, reject) => {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
         // --- PAGE 1: COVER ---
-        drawMonthlyCoverPage(doc, project, report, orgName);
+        drawMonthlyCoverPage(doc, project, report, orgName, orgLogoBuffer);
 
         // --- PAGE 2 ---
         doc.addPage();
-        drawBrandedHeader(doc, 'Monthly Project Report', 'RECORD · REPORT · RELEASE');
+        drawBrandedHeader(doc, 'Monthly Project Report', '', orgNameBrand, orgLogoBuffer);
 
         const left = margin.left;
         const r = doc.page.width - margin.right;
@@ -1121,7 +1156,7 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         for (let i = 0; i < range.count; i++) {
             if (i === 0) continue; // No header/footer on cover page
             doc.switchToPage(i);
-            if (i > 1) drawBrandedHeader(doc, 'Monthly Project Report', '', i > 1);
+            if (i > 1) drawBrandedHeader(doc, 'Monthly Project Report', '', orgNameBrand, orgLogoBuffer, i > 1);
             drawBrandedFooter(doc, i, range.count);
         }
 
@@ -1134,7 +1169,7 @@ export const generateSingleReportPDF = async (
 ): Promise<Buffer> => {
 
     const report = await db.reports.findByPk(reportId);
-    console.log("DEBUG: Report Data ->", JSON.stringify(report, null, 2));
+    // console.log("DEBUG: Report Data ->", JSON.stringify(report, null, 2));
 
     if (!report) {
         throw new Error("Report not found");

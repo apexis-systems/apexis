@@ -423,7 +423,7 @@ export default function NotificationsScreen() {
                 <FlatList
                     data={displayNotifications as any[]}
                     renderItem={renderItem}
-                    keyExtractor={item => item.id.toString()}
+                    keyExtractor={(item, index) => item.id.toString() || index.toString()}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
                     }

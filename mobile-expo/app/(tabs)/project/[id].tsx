@@ -285,7 +285,9 @@ export default function ProjectWorkspaceScreen() {
             // next external navigation (activity/notification tap).
             suppressNavEffect.current = true;
             setTimeout(() => { suppressNavEffect.current = false; }, 100);
-            router.setParams({ tab: settledTab, folderId: '', initialFolderId: '', fileId: '', photoId: '', rfiId: '', snagId: '' });
+            
+            // router.setParams({ tab: settledTab, folderId: '', initialFolderId: '', fileId: '', photoId: '', rfiId: '', snagId: '' });
+            
         }
     }, [visibleTabs]);
 

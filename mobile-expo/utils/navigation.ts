@@ -97,6 +97,7 @@ export const handleNotificationNavigation = (type: string | undefined | null, da
             case 'snag_creation_admin':
             case 'snag_status_update':
             case 'snag_comment':
+            case 'snag_created':
                 tab = 'snags';
                 if (snagId) extraParams += `&snagId=${snagId}`;
                 break;

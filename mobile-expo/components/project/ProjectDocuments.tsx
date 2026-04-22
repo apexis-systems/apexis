@@ -13,7 +13,21 @@ import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, up
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { WebView } from 'react-native-webview';
+
+// Detect if we are running in Expo Go
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+// Safe require for native PDF to prevent crashing Expo Go
+let Pdf: any = null;
+if (!isExpoGo) {
+    try {
+        Pdf = require('react-native-pdf').default;
+    } catch (e) {
+        // Fallback handled in UI
+    }
+}
 import { formatFileSize } from '@/helpers/format';
 import { groupItemsByMonth } from '@/helpers/grouping';
 import * as ScreenCapture from 'expo-screen-capture';
@@ -28,9 +42,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const { isScreenCaptureProtected } = useAuth();
     useFocusEffect(
         useCallback(() => {
-            if (isScreenCaptureProtected) {
+                if (isScreenCaptureProtected) {
                 ScreenCapture.preventScreenCaptureAsync('docs-section');
-            }
+                    }
             return () => {
                 ScreenCapture.allowScreenCaptureAsync('docs-section');
             };
@@ -311,9 +325,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 setPdfViewerName(doc.file_name || 'Document');
                 setCurrentDoc(doc);
 
-                // 1. Prepare clean local path in cache
+                // 1. Prepare clean local path in cache (unique by ID to prevent collisions)
                 const ext = doc.file_name?.split('.').pop() || 'pdf';
-                const cleanName = (doc.file_name || `document_${doc.id}.${ext}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+                const sanitizedName = (doc.file_name || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
+                const cleanName = `${doc.id}_${sanitizedName}${sanitizedName.includes('.') ? '' : '.' + ext}`;
                 const localUri = `${FileSystem.cacheDirectory}${cleanName}`;
 
                 // 2. Local Cache Logic
@@ -329,13 +344,20 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 if (Platform.OS === 'ios') {
                     // EXTREMELY FAST: iOS Webview renders local PDFs natively
                     setPdfViewerUrl(uriToOpen);
+
                 } else {
-                    // Android requires Google View for internal rendering
-                    const viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.downloadUrl)}`;
-                    setPdfViewerUrl(viewerUrl);
+                    // Android: Use local URI if native viewer is available (Builds), 
+                    // otherwise use Google View URL for Expo Go compatibility
+                    if (!isExpoGo) {
+                        setPdfViewerUrl(uriToOpen);
+                    } else {
+                        const viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.downloadUrl)}`;
+                        setPdfViewerUrl(viewerUrl);
+                    }
                 }
             } catch (error) {
                 console.error("[PDF] Optimization failed:", error);
+                setPdfLoading(false);
                 // Fallback to basic browser if everything fails
                 await WebBrowser.openBrowserAsync(doc.downloadUrl);
             } finally {
@@ -1102,28 +1124,49 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
                     {/* WebView PDF Rendering Layer */}
                     {pdfViewerUrl && (
-                        <WebView
-                            key={pdfViewerUrl}
-                            source={{ uri: pdfViewerUrl }}
-                            style={{ flex: 1, backgroundColor: '#111' }}
-                            startInLoadingState
-                            scalesPageToFit
-                            allowsInlineMediaPlayback
-                            javaScriptEnabled
-                            domStorageEnabled
-                            originWhitelist={['*']}
-                            onLoadStart={() => setPdfLoading(true)}
-                            onLoadEnd={() => setPdfLoading(false)}
-                            renderLoading={() => (
-                                <View style={{
-                                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                                    justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
-                                }}>
-                                    <ActivityIndicator size="large" color={colors.primary} />
-                                    <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>Optimizing View…</Text>
+                        (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
+                            <WebView
+                                key={pdfViewerUrl}
+                                source={{ uri: pdfViewerUrl }}
+                                style={{ flex: 1, backgroundColor: '#111' }}
+                                startInLoadingState
+                                scalesPageToFit
+                                allowsInlineMediaPlayback
+                                javaScriptEnabled
+                                domStorageEnabled
+                                originWhitelist={['*']}
+                                onLoadStart={() => setPdfLoading(true)}
+                                onLoadEnd={() => setPdfLoading(false)}
+                                renderLoading={() => (
+                                    <View style={{
+                                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                        justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
+                                    }}>
+                                        <ActivityIndicator size="large" color={colors.primary} />
+                                        <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
+                                            {isExpoGo ? 'Fetching from Google...' : 'Optimizing View…'}
+                                        </Text>
+                                    </View>
+                                )}
+                            />
+                        ) : (
+                            Pdf ? (
+                                <Pdf
+                                    source={{ uri: pdfViewerUrl, cache: true }}
+                                    style={{ flex: 1, backgroundColor: '#111' }}
+                                    trustAllCerts={false}
+                                    onLoadComplete={() => setPdfLoading(false)}
+                                    onError={(error: any) => {
+                                        console.error("PDF Load Error:", error);
+                                        setPdfLoading(false);
+                                    }}
+                                />
+                            ) : (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                    <Text style={{ color: '#fff' }}>Viewer not available in this environment</Text>
                                 </View>
-                            )}
-                        />
+                            )
+                        )
                     )}
                 </View>
 
@@ -1158,6 +1201,22 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         <ActivityIndicator size="large" color={colors.primary} />
                         <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Preparing...</Text>
                         <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file to share...</Text>
+                    </View>
+                </View>
+            )}
+
+            {/* Opening Document Overlay (During Download Phase) */}
+            {pdfLoading && !pdfViewerUrl && (
+                <View style={{
+                    ...StyleSheet.absoluteFillObject,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 10000
+                }}>
+                    <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Opening Document</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file for preview...</Text>
                     </View>
                 </View>
             )}

@@ -34,13 +34,14 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
     // Reset state when URI changes
     useEffect(() => {
         setHasError(false);
+        setLoading(true); // Start loading immediately when the URI changes
         dismissY.value = 0;
         dismissScale.value = 1;
-        // Only show loader if we think it might take a moment.
-        // We'll let onLoadStart trigger it for real network loads.
+        
+        // Safety timeout to prevent stuck loader
         const timer = setTimeout(() => {
-            setLoading(false); // Safety timeout
-        }, 8000);
+            setLoading(false);
+        }, 10000);
 
         return () => clearTimeout(timer);
     }, [uri]);
@@ -160,19 +161,23 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
                     source={uri}
                     style={{ width: '100%', height: '100%' }}
                     contentFit="contain"
+                    priority="high"
+                    cachePolicy="memory-disk"
                     onLoadStart={() => {
-                        // Use a flag to avoid flashing loader for cached images
                         setLoading(true);
                     }}
                     onLoad={() => {
-                        setLoading(false);
-                        setHasError(false);
+                        // Small delay to allow the device to finish decoding/rendering 
+                        // before hiding the loader, preventing the "black screen" gap.
+                        setTimeout(() => {
+                            setLoading(false);
+                            setHasError(false);
+                        }, 150);
                     }}
                     onError={() => {
                         setLoading(false);
                         setHasError(true);
                     }}
-                    // standard fallback
                     transition={200}
                 />
 
