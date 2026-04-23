@@ -351,7 +351,7 @@ export const deleteFile = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'delete',
             description: `Deleted ${file.file_name}`,
-            metadata: { fileId: file.id }
+            metadata: { fileId: file.id, type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
         });
 
         await file.destroy({ transaction: t });
@@ -469,7 +469,8 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
                     projectId: firstFile.project_id,
                     userId: authUser.user_id,
                     type: 'edit',
-                    description: `Bulk updated ${ids.length} files`
+                    description: `Bulk updated ${ids.length} files`,
+                    metadata: { type: firstFile.file_type?.startsWith('image/') ? 'photos' : 'documents' }
                 });
             }
         }
@@ -536,7 +537,7 @@ export const updateFile = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Updated file: ${file.file_name}`,
-            metadata: { fileId: file.id, updates: Object.keys(updateData) }
+            metadata: { fileId: file.id, updates: Object.keys(updateData), type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
         });
 
         res.status(200).json({ message: "File updated successfully", file });
@@ -604,65 +605,101 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         const shouldSkip = req.body.skipActivity === 'true' || req.body.skipActivity === true;
 
         const createdFiles = [];
+        
+        // We only merge if mode is 'single' AND there's more than 1 file.
+        // If there's only 1 file, we ALWAYS "just save" it to preserve integrity.
+        const shouldMerge = !isSeparate && scanFiles.length > 1;
 
-        if (isSeparate) {
-            // mode === 'separate' -> each scan becomes its own PDF
+        console.log(`[DEBUG] uploadScans Start: mode=${mode}, files=${scanFiles.length}, shouldMerge=${shouldMerge}`);
+
+        if (!shouldMerge) {
+            // mode === 'separate' or a single file -> preserve original files/names
             for (let i = 0; i < scanFiles.length; i++) {
                 const file = scanFiles[i];
-                const pdfDoc = await PDFDocument.create();
+                console.log(`[DEBUG] Processing file ${i}: name=${file.originalname}, mimetype=${file.mimetype}`);
+                
+                let uploadBuffer: Buffer = file.buffer;
+                const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
+                const isImage = file.mimetype.startsWith('image/');
+                
+                const originalName = file.originalname;
+                let finalFileName = originalName;
+                let finalMimeType = file.mimetype;
+                let extension = '.pdf';
 
-                let imageBuffer = file.buffer;
-                // Use addWatermark to professionalize the scan and normalize it
-                try {
-                    imageBuffer = await addWatermark(file.buffer, project.name, senderName);
-                } catch (watermarkErr) {
-                    console.error("Watermarking scan failed, falling back to basic normalization", watermarkErr);
+                const extMatch = originalName.match(/\.[0-9a-z]+$/i);
+                if (extMatch) {
+                    extension = extMatch[0].toLowerCase();
+                }
+
+                // CASE 1: It's an image and we're in doc mode -> Convert to PDF
+                if (isImage && (is_doc_mode === 'true' || is_doc_mode === true)) {
+                    console.log(`[DEBUG] Converting image to PDF: ${originalName}`);
                     try {
-                        imageBuffer = await sharp(file.buffer)
-                            .jpeg({ quality: 85 })
-                            .toBuffer();
-                    } catch (sharpErr) {
-                        console.warn("Sharp standardization failed, using original buffer", sharpErr);
+                        const pdfDoc = await PDFDocument.create();
+                        let imageBuffer = file.buffer;
+
+                        // 1. Always use sharp to normalize to JPEG first (fixes HEIC/PNG issues)
+                        try {
+                            imageBuffer = await addWatermark(file.buffer, project.name, senderName);
+                            imageBuffer = await sharp(imageBuffer).jpeg({ quality: 85 }).toBuffer();
+                        } catch (watermarkErr) {
+                            imageBuffer = await sharp(file.buffer).jpeg({ quality: 85 }).toBuffer();
+                        }
+
+                        // 2. Embed the normalized JPEG
+                        const image = await pdfDoc.embedJpg(imageBuffer);
+                        const page = pdfDoc.addPage([image.width, image.height]);
+                        page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+                        
+                        const pdfBytes = await pdfDoc.save();
+                        uploadBuffer = Buffer.from(pdfBytes);
+                        
+                        // Use requested naming convention
+                        finalFileName = (file_name || `Scan_${Date.now()}`) + ".pdf";
+                        finalMimeType = 'application/pdf';
+                        extension = '.pdf';
+                    } catch (err) {
+                        console.error("Image to PDF conversion failed:", err);
+                        // Fallback to original image if conversion fails
+                        uploadBuffer = file.buffer;
+                        finalFileName = originalName;
+                        extension = extMatch ? extMatch[0] : '.jpg';
                     }
+                } 
+                // CASE 2: It's already a PDF -> JUST SAVE (Preserve everything)
+                else if (isPdf) {
+                    console.log(`[DEBUG] Preserving original PDF: ${originalName}`);
+                    uploadBuffer = file.buffer;
+                    finalFileName = originalName;
+                    finalMimeType = 'application/pdf';
+                    extension = '.pdf';
+                }
+                // CASE 3: Other files (photos in photo mode)
+                else {
+                    uploadBuffer = file.buffer;
+                    finalFileName = originalName;
+                    finalMimeType = file.mimetype;
                 }
 
-                let image;
-                try {
-                    image = await pdfDoc.embedJpg(imageBuffer);
-                } catch (embedJpgErr) {
-                    try {
-                        image = await pdfDoc.embedPng(imageBuffer);
-                    } catch (embedPngErr) {
-                        console.error("Failed to embed image in PDF:", embedPngErr);
-                        continue;
-                    }
-                }
-
-                if (image) {
-                    const page = pdfDoc.addPage([image.width, image.height]);
-                    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
-                }
-
-                const pdfBytes = await pdfDoc.save();
-                const timeSuffix = Date.now() + i;
-                const s3Key = `projects/${project_id}/folders/${folderPath}/${timeSuffix}.pdf`;
-                const individualFileName = `${file_name || 'Scan'}_${i + 1}.pdf`;
+                const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}_${i}${extension}`;
 
                 await s3Client.send(new PutObjectCommand({
                     Bucket: BUCKET_NAME,
                     Key: s3Key,
-                    ContentType: 'application/pdf',
-                    Body: pdfBytes
+                    ContentType: finalMimeType,
+                    ContentDisposition: 'inline',
+                    Body: uploadBuffer
                 }));
 
                 const newFile = await files.create({
                     folder_id: validFolderId,
                     project_id: parseInt(project_id, 10),
                     file_url: s3Key,
-                    file_name: individualFileName,
+                    file_name: finalFileName,
                     client_visible: true,
-                    file_type: 'application/pdf',
-                    file_size_mb: Math.max(1, Math.round(pdfBytes.length / (1024 * 1024))),
+                    file_type: finalMimeType,
+                    file_size_mb: Math.max(1, Math.round(uploadBuffer.length / (1024 * 1024))),
                     created_by: authUser.user_id,
                     location: location || null,
                     tags: tags || null,
@@ -671,123 +708,123 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 createdFiles.push(newFile);
 
                 if (!shouldSkip) {
-                    // Log Activity for Scan
                     await logActivity({
                         projectId: parseInt(project_id, 10),
                         userId: authUser.user_id,
                         type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
-                        description: `Uploaded scan: ${individualFileName}`,
+                        description: `Uploaded: ${finalFileName}`,
                         metadata: { folderId: validFolderId, fileId: newFile.id, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
                     });
                 }
             }
         } else {
-            // mode === 'single' or empty -> merge all into one PDF
+            // mode === 'single' and multiple files -> merge all into one PDF
+            console.log(`[DEBUG] Merging ${scanFiles.length} files into single PDF`);
             const pdfDoc = await PDFDocument.create();
+            let pagesAdded = 0;
+
             for (const file of scanFiles) {
-                let imageBuffer = file.buffer;
-
-                // Use addWatermark to professionalize the scan and normalize it
-                try {
-                    imageBuffer = await addWatermark(file.buffer, project.name, senderName);
-                } catch (watermarkErr) {
-                    console.error("Watermarking scan failed, falling back to basic normalization", watermarkErr);
+                const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
+                
+                if (isPdf) {
                     try {
-                        imageBuffer = await sharp(file.buffer)
-                            .jpeg({ quality: 85 })
-                            .toBuffer();
-                    } catch (sharpErr) {
-                        console.warn("Sharp standardization failed, using original buffer", sharpErr);
+                        const srcDoc = await PDFDocument.load(file.buffer);
+                        const copiedPages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+                        copiedPages.forEach((page) => {
+                            pdfDoc.addPage(page);
+                            pagesAdded++;
+                        });
+                    } catch (pdfErr) {
+                        console.error(`Failed to load PDF for merging:`, pdfErr);
                     }
-                }
-
-                let image;
-                // Since we normalized to JPEG via sharp, we try embedJpg first
-                try {
-                    image = await pdfDoc.embedJpg(imageBuffer);
-                } catch (embedJpgErr) {
-                    // Fallback to PNG if it was actually a PNG that sharp didn't convert (unlikely with .jpeg())
+                } else if (file.mimetype.startsWith('image/')) {
                     try {
-                        image = await pdfDoc.embedPng(imageBuffer);
-                    } catch (embedPngErr) {
-                        console.error("Failed to embed image in PDF:", embedPngErr);
-                        continue;
-                    }
-                }
+                        let imageBuffer = file.buffer;
+                        try {
+                            imageBuffer = await addWatermark(file.buffer, project.name, senderName);
+                            imageBuffer = await sharp(imageBuffer).jpeg({ quality: 85 }).toBuffer();
+                        } catch (e) {
+                            imageBuffer = await sharp(file.buffer).jpeg({ quality: 85 }).toBuffer();
+                        }
 
-                if (image) {
-                    const page = pdfDoc.addPage([image.width, image.height]);
-                    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+                        const image = await pdfDoc.embedJpg(imageBuffer);
+                        const page = pdfDoc.addPage([image.width, image.height]);
+                        page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+                        pagesAdded++;
+                    } catch (imgErr) {
+                        console.error("Failed to embed image in merge:", imgErr);
+                    }
                 }
             }
 
-            const pdfBytes = await pdfDoc.save();
-            const finalFileName = (file_name || `Scan_${Date.now()}`) + ".pdf";
-            const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}.pdf`;
+            if (pagesAdded > 0) {
+                const pdfBytes = await pdfDoc.save();
+                const uploadBuffer = Buffer.from(pdfBytes);
+                
+                // Use requested naming convention
+                const finalFileName = (file_name || `Scan_${Date.now()}`) + ".pdf";
+                const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}.pdf`;
 
-            await s3Client.send(new PutObjectCommand({
-                Bucket: BUCKET_NAME,
-                Key: s3Key,
-                ContentType: 'application/pdf',
-                Body: pdfBytes
-            }));
+                await s3Client.send(new PutObjectCommand({
+                    Bucket: BUCKET_NAME,
+                    Key: s3Key,
+                    ContentType: 'application/pdf',
+                    ContentDisposition: 'inline',
+                    Body: uploadBuffer
+                }));
 
-            const newFile = await files.create({
-                folder_id: validFolderId,
-                project_id: parseInt(project_id, 10),
-                file_url: s3Key,
-                file_name: finalFileName,
-                client_visible: true,
-                file_type: 'application/pdf',
-                file_size_mb: Math.max(1, Math.round(pdfBytes.length / (1024 * 1024))),
-                created_by: authUser.user_id,
-                location: location || null,
-                tags: tags || null,
-            });
-
-            createdFiles.push(newFile);
-
-            if (!shouldSkip) {
-                // Log Activity for Scan
-                await logActivity({
-                    projectId: parseInt(project_id, 10),
-                    userId: authUser.user_id,
-                    type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
-                    description: `Uploaded scan: ${finalFileName}`,
-                    metadata: { folderId: validFolderId, fileId: newFile.id, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                const newFile = await files.create({
+                    folder_id: validFolderId,
+                    project_id: parseInt(project_id, 10),
+                    file_url: s3Key,
+                    file_name: finalFileName,
+                    client_visible: true,
+                    file_type: 'application/pdf',
+                    file_size_mb: Math.max(1, Math.round(uploadBuffer.length / (1024 * 1024))),
+                    created_by: authUser.user_id,
+                    location: location || null,
+                    tags: tags || null,
                 });
+
+                createdFiles.push(newFile);
+
+                if (!shouldSkip) {
+                    await logActivity({
+                        projectId: parseInt(project_id, 10),
+                        userId: authUser.user_id,
+                        type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'upload' : 'upload_photo',
+                        description: `Uploaded merged file: ${finalFileName}`,
+                        metadata: { folderId: validFolderId, fileId: newFile.id, type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                    });
+                }
             }
         }
 
         res.status(200).json({
             success: true,
-            message: isSeparate ? "Scans uploaded as separate PDFs" : "Scans merged and uploaded successfully",
+            message: createdFiles.length > 0 ? "Files uploaded successfully" : "No files were processed",
             files: createdFiles,
-            file: isSeparate ? createdFiles[0] : createdFiles[0]
+            file: createdFiles[0] || null
         });
 
         // Update organization storage usage
-        const totalFilesSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
-        await updateOrganizationStorage(project.organization_id, totalFilesSizeMb);
+        if (createdFiles.length > 0) {
+            const totalFilesSizeMb = createdFiles.reduce((acc, f) => acc + (f.file_size_mb || 0), 0);
+            await updateOrganizationStorage(project.organization_id, totalFilesSizeMb);
+        }
 
-        // Notify project members based on project membership, not the user's home organization.
+        // Notifications logic...
         try {
+            if (createdFiles.length === 0) return;
             const members = await project_members.findAll({
-                where: {
-                    project_id: parseInt(project_id, 10),
-                    user_id: { [Op.ne]: authUser.user_id }
-                },
-                include: [{
-                    model: UsersModel,
-                    attributes: ['id', 'name']
-                }]
+                where: { project_id: parseInt(project_id, 10), user_id: { [Op.ne]: authUser.user_id } },
+                include: [{ model: UsersModel, attributes: ['id', 'name'] }]
             });
 
             const scanType = (is_doc_mode === 'true' || is_doc_mode === true) ? "documents" : "photos";
-            const fileCount = isSeparate ? scanFiles.length : 1;
-            const notificationTitle = (is_doc_mode === 'true' || is_doc_mode === true) ? "New Scans Uploaded" : "New Photos Uploaded";
+            const fileCount = createdFiles.length;
+            const notificationTitle = (is_doc_mode === 'true' || is_doc_mode === true) ? "New Documents Uploaded" : "New Photos Uploaded";
             const notificationBody = `${senderName} uploaded ${fileCount} ${scanType}`;
-
 
             for (const member of members) {
                 if (!shouldSkip) {
@@ -801,19 +838,12 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 }
             }
 
-            // Also notify organization admins (if they are not project members)
             const orgAdmins = await users.findAll({
-                where: {
-                    organization_id: project.organization_id,
-                    role: 'admin',
-                    id: { [Op.ne]: authUser.user_id }
-                }
+                where: { organization_id: project.organization_id, role: 'admin', id: { [Op.ne]: authUser.user_id } }
             });
 
             for (const admin of orgAdmins) {
-                // Check if already notified via project members
                 if (members.some((m: any) => m.user_id === admin.id)) continue;
-
                 if (!shouldSkip) {
                     await sendNotification({
                         userId: admin.id,
@@ -825,7 +855,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 }
             }
         } catch (notifErr) {
-            console.error("Notification Error in uploadScans:", notifErr);
+            console.error("Notification Error:", notifErr);
         }
 
 
@@ -892,13 +922,13 @@ export const archiveFile = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Archived document "${oldFileName}" (Set to Do Not Follow)`,
-            metadata: { fileId: file.id, folderId: archiveFolder.id }
+            metadata: { fileId: file.id, folderId: archiveFolder.id, type: 'documents' }
         });
 
-        res.status(200).json({ 
-            message: "File archived successfully", 
+        res.status(200).json({
+            message: "File archived successfully",
             file,
-            archiveFolder 
+            archiveFolder
         });
 
     } catch (error) {
@@ -934,7 +964,7 @@ export const unarchiveFile = async (req: Request, res: Response) => {
         }
 
         const oldFileName = file.file_name;
-        
+
         // 1. Update file: move to target folder and reset do_not_follow = false
         file.folder_id = (folder_id === '' || folder_id === 'root' || folder_id === null) ? null : folder_id;
         file.do_not_follow = false;
@@ -951,12 +981,12 @@ export const unarchiveFile = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Unarchived document "${oldFileName}" to ${targetFolderName}`,
-            metadata: { fileId: file.id, folderId: file.folder_id }
+            metadata: { fileId: file.id, folderId: file.folder_id, type: 'documents' }
         });
 
-        res.status(200).json({ 
-            message: "File unarchived successfully", 
-            file 
+        res.status(200).json({
+            message: "File unarchived successfully",
+            file
         });
 
     } catch (error) {

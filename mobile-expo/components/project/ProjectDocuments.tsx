@@ -149,7 +149,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const index = sortedInit.findIndex(d => String(d.id) === String(initialFileId));
             if (index !== -1) {
                 openDoc(sortedInit[index]);
-                router.setParams({ fileId: undefined, documentId: undefined });
+                router.setParams({ fileId: '', documentId: '' });
             }
         }
     }, [initialFileId, docs, selectedFolder, sortBy, user.role, router]);
