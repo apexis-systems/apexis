@@ -558,35 +558,68 @@ const drawMonthlyCoverPage = (doc: any, project: any, report: any, orgName: stri
     const boxW = pageWidth * 0.8;
     const boxX = (pageWidth - boxW) / 2;
     const boxY = blockTop + logoH + 280;
-    const boxH = 200;
-
-    doc.save().roundedRect(boxX, boxY, boxW, boxH, 15).fill('#d6d3d1').restore();
-
-    const drawLine = (label: string, value: string, yPos: number) => {
-        doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text(label, boxX + 40, yPos);
-        doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND.tableHeader).text(value || ' ', boxX + 180, yPos, { width: boxW - 220, ellipsis: true });
-    };
 
     const s = (report.summary || {}) as any;
-    drawLine('Project', project?.name || ' ', boxY + 30);
-    drawLine('Client', (s.client || []).join(', ') || ' ', boxY + 65);
-    drawLine('Consultant', s.consultant || orgName, boxY + 100);
-    drawLine('Contributors', (s.contributors || []).join(', ') || ' ', boxY + 135);
-    drawLine('Period', monthStr, boxY + 170);
+    const items = [
+        { label: 'Project', value: project?.name || ' ' },
+        { label: 'Client', value: (s.client || []).join(', ') || ' ' },
+        { label: 'Consultant', value: s.consultant || orgName },
+        { label: 'Contributors', value: (s.contributors || []).join(', ') || ' ' },
+        { label: 'Period', value: monthStr }
+    ];
+
+    doc.font('Helvetica-Bold').fontSize(11);
+    let totalH = 0;
+    const heights = items.map(item => {
+        const h = doc.heightOfString(item.value, { width: boxW - 220 });
+        const rowH = Math.max(35, h + 10);
+        totalH += rowH;
+        return rowH;
+    });
+
+    const boxH = totalH + 30;
+    doc.save().roundedRect(boxX, boxY, boxW, boxH, 15).fill('#d6d3d1').restore();
+
+    let currY = boxY + 30;
+    items.forEach((item, i) => {
+        doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text(item.label, boxX + 40, currY);
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND.tableHeader).text(item.value, boxX + 180, currY, { width: boxW - 220 });
+        currY += heights[i];
+    });
 
     // Footer Platform Title
     doc.font('Helvetica-Bold').fontSize(8).fillColor(BRAND.muted).text('CONSTRUCTION COMMUNICATION PLATFORM', 0, pageHeight - 50, { width: pageWidth, align: 'center', lineBreak: false });
 };
 
-const drawInfoBox = (doc: any, x: number, y: number, w: number, label: string, value: string) => {
-    const h = 34;
+const drawInfoBox = (doc: any, x: number, y: number, w: number, h: number, label: string, value: string) => {
     doc.save();
     doc.roundedRect(x, y, w, h, 7).fill('#f4f4f5');
     // doc.roundedRect(x, y, w, h, 3).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
     doc.restore();
 
     doc.font('Helvetica-Bold').fontSize(6).fillColor(BRAND.muted).text(label.toUpperCase(), x + 8, y + 6);
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND.ink).text(value || ' ', x + 8, y + 16, { width: w - 16, height: 14, ellipsis: true });
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND.ink).text(value || ' ', x + 8, y + 16, { width: w - 16 });
+};
+
+const drawInfoGrid = (doc: any, left: number, gridY: number, colW: number, items: {label: string, value: string}[]) => {
+    let currentY = gridY;
+    
+    for (let i = 0; i < items.length; i += 2) {
+        const item1 = items[i];
+        const item2 = items[i+1];
+        
+        doc.font('Helvetica-Bold').fontSize(9);
+        const h1 = item1 ? doc.heightOfString(item1.value || ' ', { width: colW - 16 }) + 22 : 34;
+        const h2 = item2 ? doc.heightOfString(item2.value || ' ', { width: colW - 16 }) + 22 : 34;
+        const rowH = Math.max(34, h1, h2);
+        
+        if (item1) drawInfoBox(doc, left, currentY, colW, rowH, item1.label, item1.value);
+        if (item2) drawInfoBox(doc, left + colW + 10, currentY, colW, rowH, item2.label, item2.value);
+        
+        currentY += rowH + 4;
+    }
+    
+    return currentY;
 };
 
 const drawDashboardKPIs = (doc: any, kpis: { label: string, value: string | number }[]) => {
@@ -828,13 +861,15 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
 
         const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ' ';
 
-        drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
-        drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
-        drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
-        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || orgName);
-        drawInfoBox(doc, left, gridY + 76, colW, 'Date', fmtDate(report.period_start));
+        const gridEndY = drawInfoGrid(doc, left, gridY, colW, [
+            { label: 'Project', value: project?.name || ' ' },
+            { label: 'Contributors', value: (s.contributors || []).join(', ') || ' ' },
+            { label: 'Client', value: (s.client || []).join(', ') || ' ' },
+            { label: 'Consultant', value: s.consultant || orgName },
+            { label: 'Date', value: fmtDate(report.period_start) }
+        ]);
 
-        doc.y = gridY + 120;
+        doc.y = gridEndY + 10;
 
         // Sections
         const summary = (report.summary || {}) as any;
@@ -930,13 +965,15 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
         const gridY = doc.y + 10;
 
         const s = (report.summary || {}) as any;
-        drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
-        drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
-        drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
-        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || orgName);
-        drawInfoBox(doc, left, gridY + 76, colW, 'Date', `${fmtDate(report.period_start)} — ${fmtDate(report.period_end)}`);
+        const gridEndY = drawInfoGrid(doc, left, gridY, colW, [
+            { label: 'Project', value: project?.name || ' ' },
+            { label: 'Contributors', value: (s.contributors || []).join(', ') || ' ' },
+            { label: 'Client', value: (s.client || []).join(', ') || ' ' },
+            { label: 'Consultant', value: s.consultant || orgName },
+            { label: 'Date', value: `${fmtDate(report.period_start)} — ${fmtDate(report.period_end)}` }
+        ]);
 
-        doc.y = gridY + 120;
+        doc.y = gridEndY + 10;
 
         // Section 1 - Dashboard
         doc.moveDown(0.5);
@@ -1066,13 +1103,15 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         const gridY = doc.y + 10;
 
         const s = (report.summary || {}) as any;
-        drawInfoBox(doc, left, gridY, colW, 'Project', project?.name);
-        drawInfoBox(doc, left + colW + 10, gridY, colW, 'Contributors', (s.contributors || []).join(', ') || ' ');
-        drawInfoBox(doc, left, gridY + 38, colW, 'Client', (s.client || []).join(', ') || ' ');
-        drawInfoBox(doc, left + colW + 10, gridY + 38, colW, 'Consultant', s.consultant || orgName);
-        drawInfoBox(doc, left, gridY + 76, colW, 'Date', monthName);
+        const gridEndY = drawInfoGrid(doc, left, gridY, colW, [
+            { label: 'Project', value: project?.name || ' ' },
+            { label: 'Contributors', value: (s.contributors || []).join(', ') || ' ' },
+            { label: 'Client', value: (s.client || []).join(', ') || ' ' },
+            { label: 'Consultant', value: s.consultant || orgName },
+            { label: 'Date', value: monthName }
+        ]);
 
-        doc.y = gridY + 120;
+        doc.y = gridEndY + 10;
 
         // Section 1 - Dashboard
         doc.moveDown(0.5);
