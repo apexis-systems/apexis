@@ -473,7 +473,7 @@ export default function ProfileScreen() {
                     </View>
 
                     {/* Security Group */}
-                    {(user.role === 'admin' || (user.email && require('@/constants/security').MARKETING_EMAILS.some((e: string) => e.toLowerCase() === user.email?.toLowerCase()))) && (
+                    {(user.email && require('@/constants/security').MARKETING_EMAILS.some((e: string) => e.toLowerCase() === user.email?.toLowerCase())) && (
                         <View style={{ marginBottom: 24 }}>
                             <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 12, marginLeft: 4, textTransform: 'uppercase' }}>Security & Privacy</Text>
                             <View
