@@ -54,8 +54,9 @@ export const authorizeQrSession = async (req: AuthRequest, res: Response) => {
         // Generate a new JWT for the web session (same payload as mobile)
         const webToken = jwt.sign(
             {
-                id: user.id || user.user_id, // Normalize based on your JWT payload
+                id: user.id || user.user_id,
                 user_id: user.id || user.user_id,
+                name: user.name,
                 role: user.role,
                 organization_id: user.organization_id,
                 project_id: user.project_id
