@@ -90,7 +90,7 @@ export const addComment = async (req: Request, res: Response) => {
                     await sendNotification({
                         userId: taggedUserId,
                         title: isImage ? 'Tagged in Photo' : 'Tagged in Comment',
-                        body: `${authUser.name} tagged you in a ${isImage ? 'photo' : 'file'}: "${cleanText.substring(0, 50)}..."`,
+                        body: `${authUser.name || "Someone"} tagged you in a ${isImage ? 'photo' : 'file'}: "${cleanText.substring(0, 50)}..."`,
                         type: isImage ? 'photo_comment' : 'comment',
                         data: {
                             fileId: String(f.id),
@@ -121,7 +121,7 @@ export const addComment = async (req: Request, res: Response) => {
                         await sendNotification({
                             userId: f.created_by,
                             title: isImage ? 'New Photo Comment' : 'New File Comment',
-                            body: `${authUser.name} commented on your ${isImage ? 'photo' : 'file'}: "${cleanText.substring(0, 50)}..."`,
+                            body: `${authUser.name || "Someone"} commented on your ${isImage ? 'photo' : 'file'}: "${cleanText.substring(0, 50)}..."`,
                             type: isImage ? 'photo_comment' : 'comment',
                             data: {
                                 fileId: String(f.id),
