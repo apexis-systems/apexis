@@ -119,7 +119,8 @@ export const createSnag = async (req: Request, res: Response) => {
       userId: authUser.user_id,
       type: "edit",
       description: `Added snag "${title.trim()}"`,
-      metadata: { snagId: snag.id, type: 'snags' }
+      metadata: { snagId: snag.id, type: 'snags' },
+      skipNotifications: true
     });
 
     // Notify assignee if they belong to this project.
@@ -205,7 +206,8 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
         userId: authUser.user_id,
         type: "edit",
         description: `Updated status for snag "${(snag as any).title}"`,
-        metadata: { snagId: snag.id, type: 'snags' }
+        metadata: { snagId: snag.id, type: 'snags' },
+        skipNotifications: true
       });
     }
     res.json({ snag });

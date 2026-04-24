@@ -60,31 +60,32 @@ export const addComment = async (req: Request, res: Response) => {
                 const isImage = f.file_type?.startsWith('image/');
                 const activityCategory = isImage ? 'photos' : 'documents';
 
-                // 1. Log Activity
+                // 1. Parse mentions FIRST so we know whether to skip logActivity's broadcast
+                const mentionRegex = /@\[(\d+):([^\]]+)\]/g;
+                let match;
+                const mentionedUserIds = new Set<number>();
+                while ((match = mentionRegex.exec(text)) !== null) {
+                    const mentionedId = Number(match[1]);
+                    if (mentionedId !== authUser.user_id) {
+                        mentionedUserIds.add(mentionedId);
+                    }
+                }
+                const hasMentions = mentionedUserIds.size > 0;
+                const cleanText = (text as string).replace(/@\[(\d+):([^\]]+)\]/g, (_m: string, _id: string, name: string) => `@${name}`);
+
+                // 2. Log Activity
+                // - If there are tags: skip broadcast push (tagged users get their own "Tagged in Photo" notification below)
+                // - If no tags: let logActivity broadcast to all project members normally
                 await logActivity({
                     projectId: f.project_id,
                     userId: authUser.user_id,
                     type: isImage ? 'photo_comment' : 'comment',
                     description: `commented on ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
-                    metadata: { folderId: f.folder_id, type: activityCategory }
+                    metadata: { folderId: f.folder_id, type: activityCategory },
+                    skipNotifications: hasMentions
                 });
 
-                // 2. Parsed Mentions (Tagging)
-                const mentionRegex = /@\[(\d+):([^\]]+)\]/g;
-                let match;
-                const mentionedUserIds = new Set<number>();
-                while ((match = mentionRegex.exec(text)) !== null) {
-                    const userId = Number(match[1]);
-                    if (userId !== authUser.user_id) {
-                        mentionedUserIds.add(userId);
-                    }
-                }
-
-                const cleanText = (text as string).replace(/@\[(\d+):([^\]]+)\]/g, (m: string, id: string, name: string) => `@${name}`);
-
-                console.log("taggedUser", mentionedUserIds);
-
-                // 3. Send Notification + log activity for each mentioned user
+                // 3. Send targeted "Tagged in Photo" notification + log mention activity for each tagged user
                 for (const taggedUserId of mentionedUserIds) {
                     await sendNotification({
                         userId: taggedUserId,
@@ -106,7 +107,8 @@ export const addComment = async (req: Request, res: Response) => {
                         userId: authUser.user_id,
                         type: isImage ? 'photo_comment' : 'comment',
                         description: `mentioned a user in ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
-                        metadata: { folderId: f.folder_id, type: activityCategory, mentionedUserId: taggedUserId }
+                        metadata: { folderId: f.folder_id, type: activityCategory, mentionedUserId: taggedUserId },
+                        skipNotifications: true  // always skip — tagged user already got direct push above
                     });
                 }
 

@@ -17,7 +17,7 @@ export const getComments = async (
     targetType: string
 ): Promise<Comment[]> => {
     const res = await PrivateAxios.get('/comments', {
-        params: { target_id: targetId, target_type: targetType },
+        params: { file_id: targetId },
     });
     return res.data.comments || [];
 };
@@ -28,6 +28,10 @@ export const addComment = async (data: {
     text: string;
     parent_id?: number;
 }): Promise<Comment> => {
-    const res = await PrivateAxios.post('/comments', data);
+    const res = await PrivateAxios.post('/comments', {
+        file_id: data.target_id,
+        text: data.text,
+        parent_id: data.parent_id
+    });
     return res.data.comment;
 };
