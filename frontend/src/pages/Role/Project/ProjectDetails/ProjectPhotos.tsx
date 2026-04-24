@@ -691,6 +691,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         open={viewerState.open}
         onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
         user={user}
+        onUpdate={(updatedFile) => setPhotos(prev => prev.map(p => p.id === updatedFile.id ? updatedFile : p))}
       />
 
       {

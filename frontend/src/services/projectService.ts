@@ -81,6 +81,16 @@ export const getProjectMembers = async (id: string | number) => {
     }
 };
 
+export const getMemberForTag = async (id: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/projects/${id}/members-for-tagging`);
+        return response.data;
+    } catch (error) {
+        console.error("getMemberForTag Error", error);
+        throw error;
+    }
+};
+
 export const removeProjectMember = async (projectId: string | number, userId: string | number) => {
     try {
         const response = await PrivateAxios.delete(`/projects/${projectId}/members/${userId}`);

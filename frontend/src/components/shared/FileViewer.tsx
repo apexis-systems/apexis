@@ -3,10 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon } from 'lucide-react';
+import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
+import { updateFile } from '@/services/fileService';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 interface FileViewerProps {
   files: any[];
@@ -14,11 +17,23 @@ interface FileViewerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: any;
+  onUpdate?: (updatedFile: any) => void;
 }
 
-const FileViewer = ({ files, initialIndex, open, onOpenChange, user }: FileViewerProps) => {
+const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate }: FileViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [downloading, setDownloading] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // Reset zoom and pan when changing files
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, [currentIndex]);
 
   useEffect(() => {
     if (open) {
@@ -27,6 +42,8 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user }: FileViewe
   }, [open, initialIndex]);
 
   const currentFile = files[currentIndex];
+
+
 
   const goNext = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % files.length);
@@ -77,6 +94,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user }: FileViewe
     }
   };
 
+
   if (!currentFile) return null;
 
   const isImage = currentFile.file_type?.startsWith('image/');
@@ -88,7 +106,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user }: FileViewe
         "max-w-[100vw] md:max-w-7xl w-full h-full md:h-[95vh] p-0 overflow-hidden flex flex-col bg-background text-foreground border-none shadow-2xl transition-all duration-300"
       )}>
         {/* Main Content Area (Background) */}
-        <div className="relative flex-1 flex items-center justify-center bg-muted/20 dark:bg-black overflow-hidden group">
+        <div className="relative flex-1 flex flex-col items-center bg-muted/20 dark:bg-black overflow-hidden group">
           
           {/* Top Bar Controls (Floating) */}
           <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 bg-gradient-to-b from-background/80 to-transparent">
@@ -114,38 +132,77 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user }: FileViewe
               >
                 <Download className="h-4 w-4" />
               </Button>
+              {isImage && (
+                <>
+                  <div className="h-4 w-[1px] bg-border mx-1" />
+                  <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => {
+                    setZoom(z => { const nz = Math.max(z - 0.5, 1); if(nz <= 1) setPan({x:0, y:0}); return nz; });
+                  }} title="Zoom Out">
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setZoom(z => Math.min(z + 0.5, 5))} title="Zoom In">
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
+                    {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </Button>
+                </>
+              )}
               <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-10 w-10 ml-2 backdrop-blur-md rounded-full border border-border" onClick={() => onOpenChange(false)}>
                 <X className="h-5 w-5" />
               </Button>
             </div>
           </div>
 
-          {/* Navigation Arrows (Large Overlays) */}
-          <button
-            onClick={goPrev}
-            className="absolute left-0 top-0 bottom-0 w-[15%] z-20 flex items-center justify-start pl-4 group/nav bg-transparent transition-all cursor-pointer"
-          >
-            <div className="h-14 w-14 rounded-full bg-background/50 backdrop-blur-sm flex items-center justify-center text-foreground opacity-0 group-hover/nav:opacity-100 transition-opacity border border-border">
-              <ChevronLeft className="h-8 w-8" />
-            </div>
-          </button>
-          <button
-            onClick={goNext}
-            className="absolute right-0 top-0 bottom-0 w-[15%] z-20 flex items-center justify-end pr-4 group/nav bg-transparent transition-all cursor-pointer"
-          >
-            <div className="h-14 w-14 rounded-full bg-background/50 backdrop-blur-sm flex items-center justify-center text-foreground opacity-0 group-hover/nav:opacity-100 transition-opacity border border-border">
-              <ChevronRight className="h-8 w-8" />
-            </div>
-          </button>
-
           {/* Actual Content Area */}
-          <div className="w-full h-full flex items-center justify-center">
+          <div 
+            className="flex-1 w-full min-h-0 flex items-center justify-center relative overflow-hidden"
+            onMouseDown={(e) => { 
+              if (zoom > 1) {
+                setIsDragging(true); 
+                setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+              }
+            }}
+            onMouseMove={(e) => { 
+              if (isDragging && zoom > 1) {
+                setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+              }
+            }}
+            onMouseUp={() => setIsDragging(false)}
+            onMouseLeave={() => setIsDragging(false)}
+          >
+            {/* Navigation Arrows (Large Overlays) */}
+            <button
+              onClick={goPrev}
+              className="absolute left-0 top-0 bottom-0 w-[15%] z-20 flex items-center justify-start pl-4 group/nav bg-transparent transition-all cursor-pointer"
+            >
+              <div className="h-14 w-14 rounded-full bg-background/50 backdrop-blur-sm flex items-center justify-center text-foreground opacity-0 group-hover/nav:opacity-100 transition-opacity border border-border">
+                <ChevronLeft className="h-8 w-8" />
+              </div>
+            </button>
+            <button
+              onClick={goNext}
+              className="absolute right-0 top-0 bottom-0 w-[15%] z-20 flex items-center justify-end pr-4 group/nav bg-transparent transition-all cursor-pointer"
+            >
+              <div className="h-14 w-14 rounded-full bg-background/50 backdrop-blur-sm flex items-center justify-center text-foreground opacity-0 group-hover/nav:opacity-100 transition-opacity border border-border">
+                <ChevronRight className="h-8 w-8" />
+              </div>
+            </button>
+
             {isImage ? (
-              <img
-                src={currentFile.downloadUrl}
-                alt={currentFile.file_name}
-                className="max-w-full max-h-full object-contain select-none pointer-events-none drop-shadow-2xl"
-              />
+              <div 
+                className="w-full h-full flex items-center justify-center transition-transform duration-75"
+                style={{ 
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                }}
+              >
+                <img
+                  src={currentFile.downloadUrl}
+                  alt={currentFile.file_name}
+                  className="max-w-full max-h-full object-contain pointer-events-none drop-shadow-2xl"
+                />
+              </div>
             ) : isPdf ? (
               <iframe
                 src={`${currentFile.downloadUrl}#toolbar=0`}
@@ -173,11 +230,12 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user }: FileViewe
             )}
           </div>
 
-          {/* Bottom Panel (Overlay Style) */}
-          <div className={cn(
-            "absolute bottom-0 left-0 right-0 z-40 bg-background/95 md:bg-background/85 backdrop-blur-xl border-t border-border transition-all duration-300 flex flex-col pt-2 overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)]",
-            isImage ? "h-[32%] md:h-[28%]" : "h-auto p-4"
-          )}>
+          {/* Bottom Panel (Fixed height, scrollable content) */}
+          {!isFullscreen && (
+            <div className={cn(
+              "w-full bg-background border-t border-border flex flex-col pt-2 shrink-0",
+              isImage ? "h-[35vh] md:h-[40vh]" : "h-auto p-4"
+            )}>
             {/* Metadata Bar */}
             <div className="px-6 pb-4 flex flex-wrap items-center justify-between gap-y-4 gap-x-12 border-b border-border/50">
               <div className="flex flex-wrap items-center gap-x-10 gap-y-2">
@@ -224,19 +282,23 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user }: FileViewe
               </div>
             </div>
 
-            {/* Comments Section (Photo Only) */}
+            {/* Metadata & Discussion Section (Photo Only) */}
             {isImage ? (
-              <div className="flex-1 overflow-hidden flex flex-col px-6 py-2">
-                 <div className="flex items-center gap-2 mb-2">
+              <div className="flex-1 overflow-hidden flex flex-col px-6 py-4">
+                {/* Comments & Tags Section */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex items-center gap-2 mb-3">
                     <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                    <span className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">Discussion</span>
-                 </div>
-                 <div className="flex-1 overflow-hidden">
-                    <CommentThread targetId={currentFile.id} targetType="photo" />
-                 </div>
+                    <span className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">Comments & Tags</span>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <CommentThread targetId={currentFile.id} targetType="photo" projectId={currentFile.project_id} />
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

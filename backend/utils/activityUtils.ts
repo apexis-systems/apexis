@@ -8,13 +8,15 @@ export const logActivity = async ({
     userId,
     type,
     description,
-    metadata
+    metadata,
+    skipNotifications = false
 }: {
     projectId: number;
     userId: number;
     type: string;
     description: string;
     metadata?: any;
+    skipNotifications?: boolean;
 }) => {
     try {
         // 1. Create activity in DB
@@ -106,14 +108,12 @@ export const logActivity = async ({
             }
 
             for (const id of recipientIds) {
-                // Socket
+                // Socket (always emit for real-time activity feed)
                 io.to(`user-${id}`).emit('new-activity', formattedActivity);
 
-                // Push Notification (only for OTHERS)
-                if (id !== userId) {
+                // Push Notification — skip if caller handles its own notifications
+                if (!skipNotifications && id !== userId) {
                     const senderName = formattedActivity.userName || 'Someone';
-                    // Create a friendly body like "John uploaded 5 photos"
-                    // If description starts with "Uploaded", lowercase it for better flow
                     const cleanDescription = description.startsWith('Uploaded')
                         ? description.charAt(0).toLowerCase() + description.slice(1)
                         : description;
@@ -137,3 +137,4 @@ export const logActivity = async ({
         throw error;
     }
 };
+
