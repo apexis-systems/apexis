@@ -149,7 +149,8 @@ export const createRFI = async (req: Request | any, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Created RFI "${title.trim()}"`,
-            metadata: { rfiId: rfi.id, type: 'rfi' }
+            metadata: { rfiId: rfi.id, type: 'rfi' },
+            skipNotifications: true
         });
 
         // Notification Logic
@@ -247,7 +248,8 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
                 userId: authUser.user_id,
                 type: 'edit',
                 description: `Updated status for RFI "${(rfi as any).title}" to ${status}`,
-                metadata: { rfiId: rfi.id, type: 'rfi' }
+                metadata: { rfiId: rfi.id, type: 'rfi' },
+                skipNotifications: true
             });
         }
 
@@ -390,7 +392,8 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
             userId: authUser.user_id,
             type: 'edit',
             description: `Updated response for RFI "${(rfi as any).title}"`,
-            metadata: { rfiId: rfi.id, type: 'rfi' }
+            metadata: { rfiId: rfi.id, type: 'rfi' },
+            skipNotifications: true
         });
 
         // Notify creator if assignee responded
