@@ -31,6 +31,27 @@ const withPresignedUrl = async (snag: any) => {
       json.photoDownloadUrl = null;
     }
   }
+
+  if (json.response_photos && Array.isArray(json.response_photos)) {
+    try {
+      json.responsePhotoUrls = await Promise.all(
+        json.response_photos.map(async (key: string) => {
+          const cmd = new GetObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: key,
+          });
+          return await getSignedUrl(s3Client, cmd, {
+            expiresIn: 3600,
+          });
+        })
+      );
+    } catch {
+      json.responsePhotoUrls = [];
+    }
+  } else {
+    json.responsePhotoUrls = [];
+  }
+
   return json;
 };
 
@@ -180,7 +201,7 @@ export const createSnag = async (req: Request, res: Response) => {
 };
 
 // PATCH /snags/:id/status  — cycle status
-export const updateSnagStatus = async (req: Request, res: Response) => {
+export const updateSnagStatus = async (req: Request | any, res: Response) => {
   try {
     const authUser = (req as any).user;
     const { id } = req.params;
@@ -198,6 +219,40 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
     }
 
     (snag as any).status = status;
+
+    const { response } = req.body;
+    if (response) (snag as any).response = response;
+
+    // Handle response photos: Replace existing if new ones uploaded
+    let uploadedResponsePhotos: string[] = [];
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      const project = await projects.findByPk(snag.project_id);
+      for (const file of req.files) {
+        let fileBuffer = file.buffer;
+        if (file.mimetype.startsWith('image/')) {
+          try {
+            const senderName = authUser.name || 'Someone';
+            fileBuffer = await addWatermark(file.buffer, project?.name || 'Apexis', senderName);
+          } catch (err) {
+            console.error('Watermarking failed for snag response photo:', err);
+          }
+        }
+
+        const ext = file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
+        const key = `projects/${snag.project_id}/snags/responses/${Date.now()}_${Math.random().toString(36).substr(2, 5)}${ext}`;
+        await s3Client.send(new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          ContentType: file.mimetype,
+          Body: fileBuffer,
+        }));
+        uploadedResponsePhotos.push(key);
+      }
+    } else {
+        uploadedResponsePhotos = snag.response_photos || [];
+    }
+    (snag as any).response_photos = uploadedResponsePhotos;
+
     await snag.save();
 
     if (authUser) {
@@ -210,7 +265,7 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
         skipNotifications: true
       });
     }
-    res.json({ snag });
+    res.json({ snag: await withPresignedUrl(snag) });
 
     // Notify assignee and creator if status changed by someone else
     const notifyIds = new Set<number>();
@@ -234,7 +289,7 @@ export const updateSnagStatus = async (req: Request, res: Response) => {
         green: "Completed",
         red: "No Action Required",
       };
-      const friendlyStatus = statusLabels[status] || status;
+      const friendlyStatus = statusLabels[status as string] || status;
 
       for (const recipient of validRecipients) {
         await sendNotification({
@@ -264,10 +319,25 @@ export const deleteSnag = async (req: Request, res: Response) => {
       authUser.role !== "admin" &&
       authUser.role !== "superadmin" &&
       (snag as any).created_by !== authUser.user_id
-    )
+    ) {
       return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (snag.response) {
+      return res.status(400).json({ error: "Cannot delete snag because a response has already been generated" });
+    }
 
     await snag.destroy();
+
+    await logActivity({
+      projectId: snag.project_id,
+      userId: authUser.user_id,
+      type: "edit",
+      description: `Deleted snag "${snag.title}"`,
+      metadata: { snagId: id, type: 'snags' },
+      skipNotifications: true
+    });
+
     res.json({ message: "Deleted" });
   } catch (err) {
     console.error("deleteSnag error:", err);
@@ -329,6 +399,85 @@ export const getAssignees = async (req: Request, res: Response) => {
     res.json({ assignees });
   } catch (err) {
     console.error("getAssignees error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// PATCH /snags/:id
+export const updateSnag = async (req: Request | any, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    const { id } = req.params;
+    const { title, description, assigned_to } = req.body;
+
+    const snag = await snags.findByPk(id);
+    if (!snag) return res.status(404).json({ error: "Snag not found" });
+
+    // Only creator or admin can edit
+    if (
+      authUser.role !== "admin" &&
+      authUser.role !== "superadmin" &&
+      Number(snag.created_by) !== Number(authUser.user_id)
+    ) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (snag.response) {
+      return res.status(400).json({ error: "Cannot edit snag because a response has already been generated" });
+    }
+
+    if (title) snag.title = title.trim();
+    if (description !== undefined) snag.description = description?.trim() || null;
+    if (assigned_to) snag.assigned_to = Number(assigned_to);
+
+    if (req.file) {
+      const project = await projects.findByPk(snag.project_id);
+      let fileBuffer = req.file.buffer;
+      let ext = req.file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
+
+      if (req.file.mimetype.startsWith("image/")) {
+        try {
+          const senderName = authUser.name || "Someone";
+          fileBuffer = await addWatermark(req.file.buffer, project?.name || 'Apexis', senderName);
+          ext = ".jpg";
+        } catch (e) {
+          console.error("Sharp error in snag edit", e);
+        }
+      }
+
+      const key = `projects/${snag.project_id}/snags/${Date.now()}${ext}`;
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          ContentType: req.file.mimetype,
+          Body: fileBuffer,
+        }),
+      );
+      snag.photo_url = key;
+    }
+
+    await snag.save();
+
+    await logActivity({
+      projectId: snag.project_id,
+      userId: authUser.user_id,
+      type: "edit",
+      description: `Updated snag "${snag.title}"`,
+      metadata: { snagId: snag.id, type: 'snags' },
+      skipNotifications: true
+    });
+
+    const full = await snags.findByPk(id, {
+      include: [
+        { model: users, as: "assignee", attributes: ["id", "name"] },
+        { model: users, as: "creator", attributes: ["id", "name"] },
+      ],
+    });
+
+    res.json({ snag: await withPresignedUrl(full!) });
+  } catch (err) {
+    console.error("updateSnag error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };

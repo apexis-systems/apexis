@@ -13,8 +13,10 @@ export interface Snag {
     assignee?: { id: number; name: string; email: string };
     creator?: { id: number; name: string };
     status: SnagStatus;
-    last_comment?: string;
+    response?: string;
     createdAt: string;
+    created_by?: number;
+    responsePhotoUrls?: string[];
 }
 
 export interface Assignee {
@@ -56,11 +58,26 @@ export const createSnag = async (data: FormData): Promise<Snag> => {
     }
 };
 
-export const updateSnagStatus = async (id: number, status: SnagStatus): Promise<void> => {
+export const updateSnagStatus = async (id: number, formData: FormData): Promise<Snag> => {
     try {
-        await PrivateAxios.patch(`/snags/${id}/status`, { status });
+        const res = await PrivateAxios.patch(`/snags/${id}/status`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data.snag;
     } catch (error) {
         console.error("updateSnagStatus Error", error);
+        throw error;
+    }
+};
+
+export const updateSnag = async (id: number, formData: FormData): Promise<Snag> => {
+    try {
+        const res = await PrivateAxios.patch(`/snags/${id}`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data.snag;
+    } catch (error) {
+        console.error("updateSnag Error", error);
         throw error;
     }
 };

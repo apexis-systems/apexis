@@ -53,6 +53,10 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.TEXT,
                 allowNull: true,
             },
+            response_photos: {
+                type: DataTypes.JSON,
+                allowNull: true,
+            },
         },
         {
             tableName: "rfis",

@@ -19,6 +19,7 @@ export interface RFI {
     photoDownloadUrls?: string[];
     expiry_date?: string;
     response?: string;
+    responsePhotoUrls?: string[];
 }
 
 export const getRFIs = async (projectId: number | string): Promise<RFI[]> => {
@@ -47,7 +48,20 @@ export const getRFIById = async (id: number): Promise<RFI> => {
     return res.data.rfi;
 };
 
-export const updateRFIResponse = async (id: number, data: { response?: string; status?: RFIStatus }): Promise<RFI> => {
-    const res = await PrivateAxios.patch(`/rfis/${id}/response`, data);
+export const updateRFIResponse = async (id: number, form: FormData): Promise<RFI> => {
+    const res = await PrivateAxios.patch(`/rfis/${id}/response`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.rfi;
+};
+
+export const deleteRFI = async (id: number): Promise<void> => {
+    await PrivateAxios.delete(`/rfis/${id}`);
+};
+
+export const updateRFI = async (id: number, form: FormData): Promise<RFI> => {
+    const res = await PrivateAxios.patch(`/rfis/${id}`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return res.data.rfi;
 };

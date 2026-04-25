@@ -19,7 +19,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { getApiErrorMessage } from '@/helpers/apiError';
 import {
-    RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse
+    RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse,
+    deleteRFI,
+    updateRFI
 } from '@/services/rfiService';
 import { getAssignees, Assignee } from '@/services/snagService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
@@ -63,7 +65,10 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [newPhotos, setNewPhotos] = useState<File[]>([]);
     const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
     const [responseBody, setResponseBody] = useState('');
+    const [responsePhotos, setResponsePhotos] = useState<File[]>([]);
+    const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
     const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
+    const [isEditing, setIsEditing] = useState(false);
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -150,9 +155,14 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         });
     };
 
-    const removePhoto = (idx: number) => {
-        setNewPhotos((prev: File[]) => prev.filter((_, i) => i !== idx));
-        setPhotoPreviews((prev: string[]) => prev.filter((_, i) => i !== idx));
+    const removePhoto = (idx: number, isResponse = false) => {
+        if (isResponse) {
+            setResponsePhotos(prev => prev.filter((_, i) => i !== idx));
+            setResponsePhotoPreviews(prev => prev.filter((_, i) => i !== idx));
+        } else {
+            setNewPhotos((prev: File[]) => prev.filter((_, i) => i !== idx));
+            setPhotoPreviews((prev: string[]) => prev.filter((_, i) => i !== idx));
+        }
     };
 
     const addRFI = async () => {
@@ -193,6 +203,44 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         }
     };
 
+    const handleUpdateRFI = async () => {
+        if (!selectedRFI) return;
+        if (!newTitle.trim()) { toast.error('Title is required'); return; }
+        setSubmitting(true);
+        try {
+            const form = new FormData();
+            form.append('title', newTitle.trim());
+            form.append('description', newDescription.trim());
+            form.append('assigned_to', newAssignee);
+            if (newExpiryDate) form.append('expiry_date', newExpiryDate);
+            newPhotos.forEach(photo => form.append('photos', photo));
+
+            const updated = await updateRFI(selectedRFI.id, form);
+            toast.success('RFI updated successfully');
+            setIsEditing(false);
+            setSelectedRFI(updated);
+            load();
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, 'Failed to update RFI'));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDeleteRFI = async (id: number) => {
+        if (!confirm('Are you sure you want to delete this RFI?')) return;
+        try {
+            await deleteRFI(id);
+            toast.success('RFI deleted');
+            setSelectedRFI(null);
+            load();
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, 'Failed to delete RFI'));
+        }
+    };
+
     const resetForm = () => {
         setNewTitle('');
         setNewDescription('');
@@ -206,9 +254,16 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         if (!selectedRFI) return;
         setSubmitting(true);
         try {
-            const updated = await updateRFIResponse(selectedRFI.id, { response: responseBody });
+            const form = new FormData();
+            form.append('response', responseBody);
+            responsePhotos.forEach(p => form.append('photos', p));
+            
+            const updated = await updateRFIResponse(selectedRFI.id, form);
             toast.success('Response updated');
             setSelectedRFI(updated);
+            setResponseBody('');
+            setResponsePhotos([]);
+            setResponsePhotoPreviews([]);
             load();
             if (onUpdate) onUpdate();
         } catch {
@@ -380,11 +435,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 )}
             </div>
 
-            {/* Create Dialog */}
-            <Dialog open={showAdd} onOpenChange={setShowAdd}>
+            {/* Create/Edit Dialog */}
+            <Dialog open={showAdd || isEditing} onOpenChange={(open) => { if (!open) { setShowAdd(false); setIsEditing(false); resetForm(); } }}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
-                        <DialogTitle>New Request for Information</DialogTitle>
+                        <DialogTitle>{isEditing ? 'Edit Request for Information' : 'New Request for Information'}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
@@ -434,10 +489,10 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
-                        <Button onClick={addRFI} disabled={submitting || !newTitle.trim()} className="bg-accent text-accent-foreground">
-                            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                            Create RFI
+                        <Button variant="ghost" onClick={() => { setShowAdd(false); setIsEditing(false); resetForm(); }} disabled={submitting}>Cancel</Button>
+                        <Button onClick={isEditing ? handleUpdateRFI : addRFI} disabled={submitting || !newTitle.trim()} className="bg-accent text-accent-foreground">
+                            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : (isEditing ? <CheckCircle className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />)}
+                            {isEditing ? 'Save Changes' : 'Create RFI'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -449,11 +504,40 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                     {selectedRFI && (
                         <>
                             <DialogHeader>
-                                <div className="flex items-center gap-3 mb-2">
-                                    <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", STATUS_CONFIG[selectedRFI.status].bg, STATUS_CONFIG[selectedRFI.status].color)}>
-                                        {STATUS_CONFIG[selectedRFI.status].label}
-                                    </span>
-                                    <span className="text-[10px] text-muted-foreground">RFI #{selectedRFI.id}</span>
+                                <div className="flex items-center justify-between gap-3 mb-2">
+                                    <div className="flex items-center gap-3">
+                                        <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", STATUS_CONFIG[selectedRFI.status].bg, STATUS_CONFIG[selectedRFI.status].color)}>
+                                            {STATUS_CONFIG[selectedRFI.status].label}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">RFI #{selectedRFI.id}</span>
+                                    </div>
+                                    {String(selectedRFI.created_by) === String(user?.id) && !selectedRFI.response && (
+                                        <div className="flex items-center gap-2">
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                className="h-7 text-[10px]"
+                                                onClick={() => {
+                                                    setNewTitle(selectedRFI.title);
+                                                    setNewDescription(selectedRFI.description || '');
+                                                    setNewAssignee(String(selectedRFI.assigned_to));
+                                                    setNewExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date).toISOString().slice(0, 16) : '');
+                                                    setPhotoPreviews(selectedRFI.photoDownloadUrls || []);
+                                                    setIsEditing(true);
+                                                }}
+                                            >
+                                                Edit
+                                            </Button>
+                                            <Button 
+                                                variant="destructive" 
+                                                size="sm" 
+                                                className="h-7 text-[10px]"
+                                                onClick={() => handleDeleteRFI(selectedRFI.id)}
+                                            >
+                                                Delete
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                                 <DialogTitle className="text-xl leading-tight">{selectedRFI.title}</DialogTitle>
                             </DialogHeader>
@@ -487,7 +571,19 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                 {selectedRFI.response && (
                                     <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
                                         <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">Response</p>
-                                        <p className="text-sm text-foreground whitespace-pre-wrap">{selectedRFI.response}</p>
+                                        <p className="text-sm text-foreground whitespace-pre-wrap mb-3">{selectedRFI.response}</p>
+                                        {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {selectedRFI.responsePhotoUrls.map((url, idx) => (
+                                                    <a key={idx} href={url} target="_blank" rel="noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                                                        <img src={url} alt="Response photo" className="w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <ZoomIn className="h-4 w-4 text-white" />
+                                                        </div>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -502,9 +598,43 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                             onChange={e => setResponseBody(e.target.value)}
                                             className="min-h-[100px] text-sm"
                                         />
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Response Attachments</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {responsePhotoPreviews.map((src, idx) => (
+                                                    <div key={idx} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border group">
+                                                        <img src={src} alt="Preview" className="w-full h-full object-cover" />
+                                                        <button 
+                                                            onClick={() => removePhoto(idx, true)} 
+                                                            className="absolute top-1 right-1 bg-destructive p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <X className="h-2 w-2 text-white" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <label className="w-16 h-16 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
+                                                    <ImagePlus className="h-4 w-4 text-muted-foreground" />
+                                                    <input 
+                                                        type="file" 
+                                                        multiple 
+                                                        accept="image/*" 
+                                                        className="hidden" 
+                                                        onChange={(e) => {
+                                                            const files = Array.from(e.target.files || []);
+                                                            setResponsePhotos(prev => [...prev, ...files]);
+                                                            files.forEach(f => {
+                                                                const r = new FileReader();
+                                                                r.onload = () => setResponsePhotoPreviews(prev => [...prev, r.result as string]);
+                                                                r.readAsDataURL(f);
+                                                            });
+                                                        }} 
+                                                    />
+                                                </label>
+                                            </div>
+                                        </div>
                                         <Button 
                                             onClick={handleUpdateResponse} 
-                                            disabled={submitting || !responseBody.trim()}
+                                            disabled={submitting || (!responseBody.trim() && responsePhotos.length === 0)}
                                             className="w-full bg-accent text-accent-foreground"
                                         >
                                             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
