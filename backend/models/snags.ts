@@ -36,8 +36,12 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: "amber",
             },
-            last_comment: {
+            response: {
                 type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            response_photos: {
+                type: DataTypes.JSON,
                 allowNull: true,
             },
             created_by: {

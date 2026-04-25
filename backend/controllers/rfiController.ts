@@ -32,6 +32,19 @@ const withPresignedUrls = async (rfi: any) => {
     } else {
         json.photoDownloadUrls = [];
     }
+
+    if (json.response_photos && Array.isArray(json.response_photos)) {
+        try {
+            json.responsePhotoUrls = await Promise.all(
+                json.response_photos.map(async (key: string) => {
+                    const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+                    return await getSignedUrl(s3Client, cmd, { expiresIn: 3600 });
+                })
+            );
+        } catch { json.responsePhotoUrls = []; }
+    } else {
+        json.responsePhotoUrls = [];
+    }
     return json;
 };
 
@@ -368,7 +381,7 @@ export const getRFIAssignees = async (req: Request, res: Response) => {
 };
 
 // PATCH /rfis/:id/response
-export const updateRFIResponse = async (req: Request, res: Response) => {
+export const updateRFIResponse = async (req: Request | any, res: Response) => {
     try {
         const authUser = (req as any).user;
         const { id } = req.params;
@@ -382,8 +395,39 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Only the assignee can update the response' });
         }
 
+        // Handle response photo uploads: Replace existing if new ones provided
+        let uploadedResponsePhotos: string[] = [];
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+            const project = await projects.findByPk(rfi.project_id);
+            for (const file of req.files) {
+                let fileBuffer = file.buffer;
+                if (file.mimetype.startsWith('image/')) {
+                    try {
+                        const senderName = authUser.name || 'Someone';
+                        fileBuffer = await addWatermark(file.buffer, project?.name || 'Apexis', senderName);
+                    } catch (err) {
+                        console.error('Watermarking failed for RFI response photo:', err);
+                    }
+                }
+
+                const ext = file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
+                const key = `projects/${rfi.project_id}/rfis/responses/${Date.now()}_${Math.random().toString(36).substr(2, 5)}${ext}`;
+                await s3Client.send(new PutObjectCommand({
+                    Bucket: BUCKET,
+                    Key: key,
+                    ContentType: file.mimetype,
+                    Body: fileBuffer,
+                }));
+                uploadedResponsePhotos.push(key);
+            }
+        } else {
+            uploadedResponsePhotos = rfi.response_photos || [];
+        }
+
         if (response !== undefined) (rfi as any).response = response;
         if (status && ['open', 'closed', 'overdue'].includes(status)) (rfi as any).status = status;
+        (rfi as any).response_photos = uploadedResponsePhotos;
+        rfi.changed('response_photos', true);
         
         await rfi.save();
 
@@ -419,6 +463,135 @@ export const updateRFIResponse = async (req: Request, res: Response) => {
         res.json({ rfi: rfiWithUrls });
     } catch (err) {
         console.error('updateRFIResponse error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// DELETE /rfis/:id
+export const deleteRFI = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { id } = req.params;
+
+        const rfi = await rfis.findByPk(id);
+        if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+
+        // Only creator can delete
+        if (Number(rfi.created_by) !== Number(authUser.user_id)) {
+            return res.status(403).json({ error: 'Only the creator can delete this RFI' });
+        }
+
+        // Cannot delete if there is a response
+        if (rfi.response) {
+            return res.status(400).json({ error: 'Cannot delete RFI because a response has already been generated' });
+        }
+
+        await rfi.destroy();
+
+        await logActivity({
+            projectId: rfi.project_id,
+            userId: authUser.user_id,
+            type: 'edit',
+            description: `Deleted RFI "${rfi.title}"`,
+            metadata: { rfiId: id, type: 'rfi' },
+            skipNotifications: true
+        });
+
+        res.json({ message: 'RFI deleted successfully' });
+    } catch (err) {
+        console.error('deleteRFI error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// PATCH /rfis/:id
+export const updateRFI = async (req: Request | any, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { id } = req.params;
+        const { title, description, assigned_to, expiry_date, removedPhotos } = req.body;
+
+        const rfi = await rfis.findByPk(id);
+        if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+
+        // Only creator can edit
+        if (Number(rfi.created_by) !== Number(authUser.user_id)) {
+            return res.status(403).json({ error: 'Only the creator can edit this RFI' });
+        }
+
+        // Cannot edit if there is a response
+        if (rfi.response) {
+            return res.status(400).json({ error: 'Cannot edit RFI because a response has already been generated' });
+        }
+
+        if (title) rfi.title = title.trim();
+        if (description !== undefined) rfi.description = description?.trim() || null;
+        if (assigned_to) rfi.assigned_to = Number(assigned_to);
+        if (expiry_date !== undefined) rfi.expiry_date = expiry_date ? new Date(expiry_date) : null;
+
+        let currentPhotos: string[] = rfi.photos || [];
+        if (req.files && Array.isArray(req.files) && (req.files as any[]).length > 0) {
+            currentPhotos = [];
+        } else if (removedPhotos) {
+            const toRemove = Array.isArray(removedPhotos) ? removedPhotos : [removedPhotos];
+            currentPhotos = currentPhotos.filter(p => !toRemove.includes(p));
+        }
+        if (req.files && Array.isArray(req.files)) {
+            const project = await projects.findByPk(rfi.project_id);
+            for (const file of req.files) {
+                let fileBuffer = file.buffer;
+                if (file.mimetype.startsWith('image/')) {
+                    try {
+                        const senderName = authUser.name || 'Someone';
+                        fileBuffer = await addWatermark(file.buffer, project?.name || 'Apexis', senderName);
+                    } catch (err) {
+                        console.error('Watermarking failed for edited RFI photo:', err);
+                    }
+                }
+
+                const ext = file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
+                const key = `projects/${rfi.project_id}/rfis/${Date.now()}_${Math.random().toString(36).substr(2, 5)}${ext}`;
+                await s3Client.send(new PutObjectCommand({
+                    Bucket: BUCKET,
+                    Key: key,
+                    ContentType: file.mimetype,
+                    Body: fileBuffer,
+                }));
+                currentPhotos.push(key);
+            }
+        }
+
+        rfi.photos = currentPhotos;
+        rfi.changed('photos', true);
+        await rfi.save();
+
+        await logActivity({
+            projectId: rfi.project_id,
+            userId: authUser.user_id,
+            type: 'edit',
+            description: `Updated RFI "${rfi.title}"`,
+            metadata: { rfiId: rfi.id, type: 'rfi' },
+            skipNotifications: true
+        });
+
+        const full = await rfis.findByPk(id, {
+            include: [
+                { model: users, as: 'assignee', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                { model: users, as: 'creator', attributes: ['id', 'name', 'role', 'profile_pic'] },
+            ],
+        });
+
+        const rfiWithUrls = await withPresignedUrls(full!);
+        
+        try {
+            getIO().to(`project-${rfi.project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
+        } catch (e) {
+            console.error('Socket emit error (updateRFI):', e);
+        }
+
+        res.json({ rfi: rfiWithUrls });
+    } catch (err) {
+        console.error('updateRFI error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
