@@ -10,11 +10,12 @@ export interface Snag {
     photo_url?: string;
     assigned_to?: number;
     status: SnagStatus;
-    last_comment?: string;
+    response?: string;
     created_by?: number;
     assignee?: { id: number; name: string; email: string };
     creator?: { id: number; name: string };
     photoDownloadUrl?: string;
+    responsePhotoUrls?: string[];
     createdAt: string;
 }
 
@@ -37,8 +38,18 @@ export const createSnag = async (form: FormData): Promise<Snag> => {
     return res.data.snag;
 };
 
-export const updateSnagStatus = async (id: number, status: SnagStatus): Promise<void> => {
-    await PrivateAxios.patch(`/snags/${id}/status`, { status });
+export const updateSnagStatus = async (id: number, form: FormData): Promise<Snag> => {
+    const res = await PrivateAxios.patch(`/snags/${id}/status`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.snag;
+};
+
+export const updateSnag = async (id: number, form: FormData): Promise<Snag> => {
+    const res = await PrivateAxios.patch(`/snags/${id}`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.snag;
 };
 
 export const deleteSnag = async (id: number): Promise<void> => {

@@ -17,6 +17,7 @@ import { getApiErrorMessage } from '@/helpers/apiError';
 import {
   Snag, SnagStatus, Assignee,
   getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees,
+  updateSnag,
 } from '@/services/snagService';
 
 interface ProjectSnagListProps {
@@ -52,7 +53,15 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+  
+  const [selectedSnag, setSelectedSnag] = useState<Snag | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [responseComment, setResponseComment] = useState('');
+  const [responsePhotos, setResponsePhotos] = useState<File[]>([]);
+  const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const responseFileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -77,19 +86,30 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
   // ── Status cycle ────────────────────────────────────────────────────────────
 
-  const cycleStatus = async (snag: Snag) => {
+  const cycleStatus = async (snag: Snag, nextStatus?: SnagStatus, comment?: string, files?: File[]) => {
     const idx = STATUS_CYCLE.indexOf(snag.status);
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    const next = nextStatus || STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
     const prevStatus = snag.status;
 
-    setSnags(prev => prev.map(s => s.id === snag.id ? { ...s, status: next } : s));
-
+    setSubmitting(true);
     try {
-      await updateSnagStatus(snag.id, next);
+      const form = new FormData();
+      form.append('status', next);
+      if (comment) form.append('response', comment);
+      if (files) files.forEach(f => form.append('photos', f));
+
+      const updated = await updateSnagStatus(snag.id, form);
+      setSnags(prev => prev.map(s => s.id === snag.id ? updated : s));
+      if (selectedSnag?.id === snag.id) setSelectedSnag(updated);
+      
       toast.success(`Status updated to ${STATUS_CONFIG[next].label}`);
+      setResponseComment('');
+      setResponsePhotos([]);
+      setResponsePhotoPreviews([]);
     } catch (error) {
-      setSnags(prev => prev.map(s => s.id === snag.id ? { ...s, status: prevStatus } : s));
       toast.error('Failed to update status');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -145,6 +165,30 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     }
   };
 
+  const handleUpdateSnag = async () => {
+    if (!selectedSnag) return;
+    if (!newTitle.trim()) { toast.error('Title is required'); return; }
+    
+    setSubmitting(true);
+    try {
+      const form = new FormData();
+      form.append('title', newTitle.trim());
+      if (newDescription.trim()) form.append('description', newDescription.trim());
+      if (newAssignee) form.append('assigned_to', newAssignee);
+      if (newPhoto) form.append('photo', newPhoto);
+
+      const updated = await updateSnag(selectedSnag.id, form);
+      setSnags(prev => prev.map(s => s.id === selectedSnag.id ? updated : s));
+      setSelectedSnag(updated);
+      setIsEditing(false);
+      toast.success('Snag updated');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to update snag'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // ── Delete ──────────────────────────────────────────────────────────────────
 
   const handleDelete = async (snag: Snag) => {
@@ -173,10 +217,14 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           const photoUrl = snag.photoDownloadUrl || snag.photo_url;
           const isTarget = initialSnagId && String(snag.id) === String(initialSnagId);
           return (
-            <div key={snag.id} className={cn(
-              "flex items-start gap-3 rounded-lg border p-3 transition-all",
-              isTarget ? "border-accent bg-accent/5 ring-1 ring-accent" : "border-border bg-card"
-            )}>
+            <div 
+              key={snag.id} 
+              onClick={() => setSelectedSnag(snag)}
+              className={cn(
+                "flex items-start gap-3 rounded-lg border p-3 transition-all cursor-pointer hover:border-accent/50",
+                isTarget ? "border-accent bg-accent/5 ring-1 ring-accent" : "border-border bg-card"
+              )}
+            >
               {/* Status circle */}
               <button
                 onClick={() => {
@@ -206,15 +254,18 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <span>By: <span className="text-foreground font-medium">{snag.creator?.name || '—'}</span></span>
                   <span>· {cfg.label}</span>
                 </div>
-                {snag.last_comment && (
-                  <div className="flex items-center gap-1 mt-1 text-[9px] text-muted-foreground">
-                    <MessageSquare className="h-2.5 w-2.5" />
-                    {snag.last_comment}
+                {snag.response && (
+                  <div className="flex items-center gap-1 mt-1 text-[9px] text-muted-foreground bg-accent/5 p-1 rounded">
+                    <MessageSquare className="h-2.5 w-2.5 text-accent" />
+                    <span className="truncate">{snag.response}</span>
+                    {snag.responsePhotoUrls && snag.responsePhotoUrls.length > 0 && (
+                      <span className="text-accent font-bold ml-1">+{snag.responsePhotoUrls.length} photos</span>
+                    )}
                   </div>
                 )}
               </div>
               {/* Delete */}
-              {(user?.role === 'admin' || user?.role === 'contributor') && (String(snag.created_by) === String(user.id) || String(snag.creator?.id) === String(user.id)) && (
+              {(user?.role === 'admin' || user?.role === 'contributor') && (String(snag.created_by) === String(user.id) || String(snag.creator?.id) === String(user.id)) && !snag.response && (
                 <button onClick={() => handleDelete(snag)} className="rounded-md p-1 hover:bg-destructive/10 shrink-0">
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </button>
@@ -244,18 +295,17 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
         </div>
       )}
 
-      {/* Add Snag Dialog */}
-      <Dialog open={showAdd} onOpenChange={(open) => {
+      {/* Add/Edit Snag Dialog */}
+      <Dialog open={showAdd || isEditing} onOpenChange={(open) => {
         if (!open) {
-          // setAddStep('photo'); // Reset on close // Removed addStep
           setNewPhoto(null); setPhotoPreview(null);
           setNewTitle(''); setNewDescription(''); setNewAssignee('');
+          setShowAdd(false); setIsEditing(false);
         }
-        setShowAdd(open);
       }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Add Snag</DialogTitle>
+            <DialogTitle className="text-sm">{isEditing ? 'Edit Snag' : 'Add Snag'}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3 py-1">
@@ -311,11 +361,158 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
-            <Button onClick={addSnag} disabled={submitting || !newTitle.trim() || !newPhoto || !newAssignee} className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add Snag'}
+            <Button variant="outline" onClick={() => { setShowAdd(false); setIsEditing(false); }} disabled={submitting}>Cancel</Button>
+            <Button onClick={isEditing ? handleUpdateSnag : addSnag} disabled={submitting || !newTitle.trim() || (!isEditing && !newPhoto) || !newAssignee} className="bg-accent text-accent-foreground hover:bg-accent/90">
+              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (isEditing ? 'Save Changes' : 'Add Snag')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Snag Detail Dialog */}
+      <Dialog open={!!selectedSnag} onOpenChange={(open) => !open && setSelectedSnag(null)}>
+        <DialogContent className="max-w-md overflow-y-auto max-h-[90vh]">
+          {selectedSnag && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center justify-between mb-2">
+                  <div className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", STATUS_CONFIG[selectedSnag.status].bg, STATUS_CONFIG[selectedSnag.status].text)}>
+                    {STATUS_CONFIG[selectedSnag.status].label}
+                  </div>
+                  {(user?.role === 'admin' || String(selectedSnag.created_by) === String(user?.id)) && !selectedSnag.response && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-7 text-[10px]"
+                      onClick={() => {
+                        setNewTitle(selectedSnag.title);
+                        setNewDescription(selectedSnag.description || '');
+                        setNewAssignee(String(selectedSnag.assigned_to));
+                        setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
+                        setIsEditing(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </div>
+                <DialogTitle className="text-lg">{selectedSnag.title}</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                {selectedSnag.photoDownloadUrl && (
+                  <div className="aspect-video rounded-lg overflow-hidden border border-border">
+                    <img src={selectedSnag.photoDownloadUrl} alt="Snag" className="w-full h-full object-cover" />
+                  </div>
+                )}
+
+                <div className="text-xs text-muted-foreground">
+                  <p>{selectedSnag.description}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 p-3 bg-secondary/20 rounded-lg border border-border text-[10px]">
+                  <div>
+                    <p className="font-bold text-muted-foreground uppercase">Assigned To</p>
+                    <p className="font-medium">{selectedSnag.assignee?.name || 'Unassigned'}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-muted-foreground uppercase">Created By</p>
+                    <p className="font-medium">{selectedSnag.creator?.name || '—'}</p>
+                  </div>
+                </div>
+
+                {selectedSnag.response && (
+                  <div className="p-3 bg-accent/5 rounded-lg border border-accent/10">
+                    <p className="text-[10px] font-bold text-accent uppercase mb-1">Last Response</p>
+                    <p className="text-xs">{selectedSnag.response}</p>
+                    {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        {selectedSnag.responsePhotoUrls.map((url, i) => (
+                          <div key={i} className="aspect-square rounded border border-border overflow-hidden cursor-pointer" onClick={() => setViewPhoto(url)}>
+                            <img src={url} alt="Response" className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Respond Section */}
+                {String(selectedSnag.assigned_to) === String(user?.id) && (
+                  <div className="pt-4 border-t border-border space-y-3">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Update Status & Respond</p>
+                    <div className="flex gap-2">
+                      {STATUS_CYCLE.map(s => (
+                        <Button 
+                          key={s} 
+                          size="sm" 
+                          variant={selectedSnag.status === s ? 'default' : 'outline'}
+                          className={cn("flex-1 text-[10px] h-8", selectedSnag.status === s && STATUS_CONFIG[s].bg && STATUS_CONFIG[s].text)}
+                          onClick={() => cycleStatus(selectedSnag, s, responseComment, responsePhotos)}
+                        >
+                          {STATUS_CONFIG[s].label.split(' ')[0]}
+                        </Button>
+                      ))}
+                    </div>
+                    <Textarea 
+                      placeholder="Add a comment..." 
+                      className="text-xs min-h-[60px]" 
+                      value={responseComment}
+                      onChange={e => setResponseComment(e.target.value)}
+                    />
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {responsePhotoPreviews.map((src, i) => (
+                          <div key={i} className="relative w-12 h-12 rounded border border-border overflow-hidden group">
+                            <img src={src} className="w-full h-full object-cover" />
+                            <button 
+                              onClick={() => {
+                                setResponsePhotos(prev => prev.filter((_, idx) => idx !== i));
+                                setResponsePhotoPreviews(prev => prev.filter((_, idx) => idx !== i));
+                              }}
+                              className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3 text-white" />
+                            </button>
+                          </div>
+                        ))}
+                        <button 
+                          className="w-12 h-12 border-2 border-dashed border-border rounded flex items-center justify-center hover:border-accent/50 transition-colors"
+                          onClick={() => responseFileInputRef.current?.click()}
+                        >
+                          <Plus className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </div>
+                      <input 
+                        ref={responseFileInputRef} 
+                        type="file" 
+                        multiple 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          setResponsePhotos(prev => [...prev, ...files]);
+                          files.forEach(f => {
+                            const r = new FileReader();
+                            r.onload = () => setResponsePhotoPreviews(prev => [...prev, r.result as string]);
+                            r.readAsDataURL(f);
+                          });
+                        }}
+                      />
+                    </div>
+                    <Button 
+                      className="w-full text-xs h-9 bg-accent hover:bg-accent/90" 
+                      onClick={() => cycleStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos)}
+                      disabled={submitting || (!responseComment.trim() && responsePhotos.length === 0)}
+                    >
+                      {submitting ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <MessageSquare className="h-3 w-3 mr-2" />}
+                      Post Response
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
