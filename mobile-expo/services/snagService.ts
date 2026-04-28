@@ -17,6 +17,7 @@ export interface Snag {
     createdAt: string;
     created_by?: number;
     responsePhotoUrls?: string[];
+    response_photos?: string[] | null;
 }
 
 export interface Assignee {

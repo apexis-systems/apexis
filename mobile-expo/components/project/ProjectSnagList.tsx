@@ -159,7 +159,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         try {
             const formData = new FormData();
             formData.append('status', next);
-            if (comment) formData.append('response', comment);
+            formData.append('response', comment || "");
             if (files) {
                 files.forEach((uri, i) => {
                     const filename = uri.split('/').pop() || `resp_${i}.jpg`;
@@ -168,6 +168,8 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                     formData.append('photos', { uri, name: filename, type } as any);
                 });
             }
+
+            
 
             const updated = await updateSnagStatus(snag.id, formData);
             setSnags(prev => prev.map(s => s.id === snag.id ? updated : s));
@@ -518,9 +520,16 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                     )}
                 </View>
             )}
+            </ScrollView>
 
             {/* Snag Detail Modal */}
-            <Modal visible={!!selectedSnag} animationType="slide" transparent onRequestClose={() => { setSelectedSnag(null); setIsEditing(false); setResponseComment(""); setResponsePhotos([]); }}>
+            <Modal 
+                visible={!!selectedSnag} 
+                animationType="slide" 
+                transparent 
+                presentationStyle="overFullScreen"
+                onRequestClose={() => { setSelectedSnag(null); setIsEditing(false); setResponseComment(""); setResponsePhotos([]); }}
+            >
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
                     <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '85%', padding: 16 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
@@ -629,7 +638,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             <View style={{ backgroundColor: STATUS_CONFIG[selectedSnag.status].bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
                                                 <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>{STATUS_CONFIG[selectedSnag.status].label}</Text>
                                             </View>
-                                            {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id)) && !selectedSnag.response && (
+                                            {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id)) && !selectedSnag.response && !selectedSnag.response_photos && (
                                                 <View style={{ flexDirection: 'row', gap: 12 }}>
                                                     <TouchableOpacity onPress={() => startEditing(selectedSnag)}>
                                                         <Feather name="edit" size={18} color={colors.primary} />
@@ -782,137 +791,160 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                 )}
                             </ScrollView>
                         )}
-                    </View>
-                </View>
-            </Modal>
 
-            {/* ── Photo viewer ───────────────────────────────────────────────── */}
-            <FullScreenImageModal
-                visible={!!viewPhoto}
-                onClose={() => setViewPhoto(null)}
-                uri={viewPhoto}
-            />
+                        {/* ── Secondary Modals (Nested for iOS compatibility) ──────────────── */}
+                        <FullScreenImageModal
+                            visible={!!viewPhoto}
+                            onClose={() => setViewPhoto(null)}
+                            uri={viewPhoto}
+                        />
 
-            </ScrollView>
-
-            {/* Camera Modal */}
-            <Modal
-                visible={cameraVisible}
-                animationType="slide"
-                transparent={false}
-                presentationStyle="fullScreen"
-                statusBarTranslucent={true}
-                onRequestClose={() => setCameraVisible(false)}
-            >
-                <View style={{ flex: 1, backgroundColor: '#000' }}>
-                    <View style={{ flex: 1 }}>
-                        {cameraPermission?.granted && cameraReady ? (
-                            <>
-                                <View style={{
-                                    width: SCREEN_W,
-                                    height: CAMERA_HEIGHT,
-                                    overflow: 'hidden',
-                                    marginTop: Math.max(insets.top, 20) + 60,
-                                }}>
-                                    <CameraView
-                                        key={cameraSessionKey}
-                                        style={StyleSheet.absoluteFill}
-                                        facing="back"
-                                        ref={cameraRef}
-                                        ratio="4:3"
-                                    />
-                                </View>
-
-                                {/* Header Overlay */}
-                                <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
-                                    <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
-                                        <Feather name="x" size={24} color="#fff" />
-                                    </TouchableOpacity>
-                                    <Text style={cameraStyles.headerTitle}>Snag Photo</Text>
-                                    <View style={{ width: 60 }} />
-                                </View>
-
-                                {/* Bottom Controls Overlay */}
-                                <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
-                                    {/* Preview row (Only for response mode as edit mode triggers annotator automatically) */}
-                                    {/* Preview row (Only for response mode as edit mode triggers annotator automatically) */}
-                                    {cameraMode === 'response' && responsePhotos.length > 0 && (
-                                        <View style={cameraStyles.previewContainer}>
-                                            <View style={cameraStyles.previewWrapper}>
-                                                <Image 
-                                                    source={{ uri: responsePhotos[0] }} 
-                                                    style={cameraStyles.previewThumb} 
+                        {/* Camera Modal */}
+                        <Modal
+                            visible={cameraVisible}
+                            animationType="slide"
+                            transparent={false}
+                            presentationStyle="fullScreen"
+                            statusBarTranslucent={true}
+                            onRequestClose={() => setCameraVisible(false)}
+                        >
+                            <View style={{ flex: 1, backgroundColor: '#000' }}>
+                                <View style={{ flex: 1 }}>
+                                    {cameraPermission?.granted && cameraReady ? (
+                                        <>
+                                            <View style={{
+                                                width: SCREEN_W,
+                                                height: CAMERA_HEIGHT,
+                                                overflow: 'hidden',
+                                                marginTop: Math.max(insets.top, 20) + 60,
+                                            }}>
+                                                <CameraView
+                                                    key={cameraSessionKey}
+                                                    style={StyleSheet.absoluteFill}
+                                                    facing="back"
+                                                    ref={cameraRef}
+                                                    ratio="4:3"
                                                 />
-                                                <TouchableOpacity
-                                                    onPress={() => setResponsePhotos([])}
-                                                    style={cameraStyles.removeBtn}
-                                                >
-                                                    <Feather name="x" size={12} color="#fff" />
-                                                </TouchableOpacity>
-                                                <TouchableOpacity
-                                                    onPress={() => setAnnotatingImageIndex(0)}
-                                                    style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 10 }}
-                                                >
-                                                    <Feather name="edit-2" size={12} color="#fff" />
-                                                </TouchableOpacity>
                                             </View>
+
+                                            <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                                                <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
+                                                    <Feather name="x" size={24} color="#fff" />
+                                                </TouchableOpacity>
+                                                <Text style={cameraStyles.headerTitle}>Snag Photo</Text>
+                                                <View style={{ width: 60 }} />
+                                            </View>
+
+                                            <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                                                {cameraMode === 'response' && responsePhotos.length > 0 && (
+                                                    <View style={cameraStyles.previewContainer}>
+                                                        <View style={cameraStyles.previewWrapper}>
+                                                            <Image 
+                                                                source={{ uri: responsePhotos[0] }} 
+                                                                style={cameraStyles.previewThumb} 
+                                                            />
+                                                            <TouchableOpacity
+                                                                onPress={() => setResponsePhotos([])}
+                                                                style={cameraStyles.removeBtn}
+                                                            >
+                                                                <Feather name="x" size={12} color="#fff" />
+                                                            </TouchableOpacity>
+                                                            <TouchableOpacity
+                                                                onPress={() => setAnnotatingImageIndex(0)}
+                                                                style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 10 }}
+                                                            >
+                                                                <Feather name="edit-2" size={12} color="#fff" />
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    </View>
+                                                )}
+
+                                                <View style={cameraStyles.shutterRow}>
+                                                    <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
+                                                        <View style={cameraStyles.iconCircle}>
+                                                            <Feather name="image" size={24} color="#fff" />
+                                                        </View>
+                                                        <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                                                        <View style={cameraStyles.shutterOuter}>
+                                                            <View style={cameraStyles.shutterInner} />
+                                                        </View>
+                                                        <Text style={cameraStyles.btnLabel}>Photo</Text>
+                                                    </TouchableOpacity>
+                                                    <View style={{ width: 70 }} />
+                                                </View>
+                                            </View>
+                                        </>
+                                    ) : (
+                                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                                            {cameraPermission?.granted ? (
+                                                <ActivityIndicator color="#fff" />
+                                            ) : (
+                                                <>
+                                                    <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                                                    <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
+                                                        <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                                                    </TouchableOpacity>
+                                                </>
+                                            )}
                                         </View>
                                     )}
-
-                                    <View style={cameraStyles.shutterRow}>
-                                        <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
-                                            <View style={cameraStyles.iconCircle}>
-                                                <Feather name="image" size={24} color="#fff" />
-                                            </View>
-                                            <Text style={cameraStyles.btnLabel}>Gallery</Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
-                                            <View style={cameraStyles.shutterOuter}>
-                                                <View style={cameraStyles.shutterInner} />
-                                            </View>
-                                            <Text style={cameraStyles.btnLabel}>Photo</Text>
-                                        </TouchableOpacity>
-                                        <View style={{ width: 70 }} />
-                                    </View>
                                 </View>
-
-                                </>
-                            ) : (
-                            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-                                {cameraPermission?.granted ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <>
-                                        <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
-                                        <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                            <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
-                                        </TouchableOpacity>
-                                    </>
-                                )}
                             </View>
+
+                            {/* Nested Image Annotator for immediate capture editing on iOS */}
+                            {annotatingImageIndex !== null && (
+                                <ImageAnnotator
+                                    uri={annotatingImageIndex === -1 ? editPhoto! : 
+                                         annotatingImageIndex === -2 ? (selectedSnag?.photoDownloadUrl || selectedSnag?.photo_url)! :
+                                         responsePhotos[annotatingImageIndex]}
+                                    onSave={(newUri) => {
+                                        if (annotatingImageIndex === -1 || annotatingImageIndex === -2) {
+                                            setEditPhoto(newUri);
+                                        } else {
+                                            const newImages = [...responsePhotos];
+                                            newImages[annotatingImageIndex] = newUri;
+                                            setResponsePhotos(newImages);
+                                        }
+                                        setAnnotatingImageIndex(null);
+                                        setCameraVisible(false);
+                                    }}
+                                    onCancel={() => setAnnotatingImageIndex(null)}
+                                />
+                            )}
+                        </Modal>
+
+                        {/* Image Annotator for editing from the response list (when camera is closed) */}
+                        {!cameraVisible && annotatingImageIndex !== null && (
+                            <ImageAnnotator
+                                uri={annotatingImageIndex === -1 ? editPhoto! : 
+                                     annotatingImageIndex === -2 ? (selectedSnag?.photoDownloadUrl || selectedSnag?.photo_url)! :
+                                     responsePhotos[annotatingImageIndex]}
+                                onSave={(newUri) => {
+                                    if (annotatingImageIndex === -1 || annotatingImageIndex === -2) {
+                                        setEditPhoto(newUri);
+                                    } else {
+                                        const newImages = [...responsePhotos];
+                                        newImages[annotatingImageIndex] = newUri;
+                                        setResponsePhotos(newImages);
+                                    }
+                                    setAnnotatingImageIndex(null);
+                                }}
+                                onCancel={() => setAnnotatingImageIndex(null)}
+                            />
                         )}
                     </View>
                 </View>
             </Modal>
-            {/* Image Annotator for Camera Flow */}
-            {annotatingImageIndex !== null && (
-                <ImageAnnotator
-                    uri={annotatingImageIndex === -1 ? editPhoto! : 
-                         annotatingImageIndex === -2 ? (selectedSnag?.photoDownloadUrl || selectedSnag?.photo_url)! :
-                         responsePhotos[annotatingImageIndex]}
-                    onSave={(newUri) => {
-                        if (annotatingImageIndex === -1 || annotatingImageIndex === -2) {
-                            setEditPhoto(newUri);
-                        } else {
-                            const newImages = [...responsePhotos];
-                            newImages[annotatingImageIndex] = newUri;
-                            setResponsePhotos(newImages);
-                        }
-                        setAnnotatingImageIndex(null);
-                        setCameraVisible(false); // Close camera modal after annotation
-                    }}
-                    onCancel={() => setAnnotatingImageIndex(null)}
+
+            {/* Root-level Photo Viewer (for list view clicks when detail modal is closed) */}
+            {!selectedSnag && (
+                <FullScreenImageModal
+                    visible={!!viewPhoto}
+                    onClose={() => setViewPhoto(null)}
+                    uri={viewPhoto}
                 />
             )}
         </View>
@@ -956,6 +988,7 @@ const cameraStyles = StyleSheet.create({
     previewWrapper: {
         position: 'relative',
         marginRight: 5,
+        alignSelf: 'flex-start',
     },
     previewThumb: {
         width: 56,
