@@ -105,8 +105,18 @@ export default function Trash() {
                     {projects.map((project) => (
                         <div
                             key={project.id}
-                            className="rounded-2xl bg-card border border-border p-5 flex flex-col items-start w-full transition-colors relative"
+                            className="rounded-2xl bg-card border border-border p-5 flex flex-col items-start w-full transition-colors relative group"
                         >
+                            {/* Days Remaining Badge */}
+                            <div className={cn(
+                                "absolute -top-2 -right-2 px-3 py-1 rounded-full text-[10px] font-bold border shadow-sm z-10",
+                                project.daysRemaining <= 5 
+                                    ? "bg-destructive text-destructive-foreground border-destructive" 
+                                    : "bg-orange-500 text-white border-orange-600"
+                            )}>
+                                {project.daysRemaining} {project.daysRemaining === 1 ? 'DAY' : 'DAYS'} LEFT
+                            </div>
+
                             <div className="flex items-center justify-between w-full mb-3">
                                 <h3 className="font-bold text-foreground text-lg truncate pr-2">
                                     {project.name}
@@ -134,6 +144,9 @@ export default function Trash() {
                                     <Camera className="h-3.5 w-3.5" />
                                     <span className="font-medium text-foreground">{project.totalPhotos || 0}</span> {t('photos').toLowerCase()}
                                 </div>
+                                <div className="ml-auto text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">
+                                    Deleted: {new Date(project.deletedAt).toLocaleDateString()}
+                                </div>
                             </div>
 
                             {(user.role === 'admin' || user.role === 'superadmin') && (
@@ -159,7 +172,8 @@ export default function Trash() {
                         </div>
                     ))}
                 </div>
-            )}
+            )
+}
         </div>
     );
 }
