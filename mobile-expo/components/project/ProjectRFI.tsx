@@ -474,6 +474,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         formData.append('photos', { uri, name: filename, type } as any);
       });
 
+
       const updated = await updateRFIResponse(selectedRFI.id, formData);
       Alert.alert('Success', 'Response updated successfully');
       setSelectedRFI(updated);
@@ -685,7 +686,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>RFI Details</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                {selectedRFI && String(selectedRFI.created_by) === String(user.id) && !selectedRFI.response && (
+                {selectedRFI && String(selectedRFI.created_by) === String(user.id) && !selectedRFI.response && !selectedRFI?.response_photos && (
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <TouchableOpacity onPress={() => {
                       setTitle(selectedRFI.title);
@@ -796,7 +797,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   {String(selectedRFI.assigned_to) === String(user.id) && (
                     <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? 'Update Response' : 'Provide Response'}</Text>
-                      
+
                       {selectedRFI.status !== 'closed' ? (
                         <>
                           <TextInput
@@ -901,216 +902,473 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
               </ScrollView>
             )}
           </View>
-
-          {/* Nested Photo Viewer for iOS support inside detail modal */}
-          <FullScreenImageModal
-            visible={!!previewImage}
-            onClose={() => setPreviewImage(null)}
-            uri={previewImage}
-            onEdit={(u) => { if (u) setAnnotatingRemoteUri(u); }}
-          />
-
         </View>
-      </Modal>
 
-      {/* Create Modal */}
-      <Modal
-        visible={createModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setCreateModalVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{
-            backgroundColor: colors.background,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            height: '90%',
-            padding: 20
-          }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{isEditing ? 'Edit RFI' : 'New RFI'}</Text>
-              <TouchableOpacity onPress={() => { setCreateModalVisible(false); setIsEditing(false); }} disabled={submitting}>
-                <Feather name="x" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 20 }}>
-                <View>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title *</Text>
-                  <TextInput
-                    value={title}
-                    onChangeText={setTitle}
-                    placeholder="Enter RFI title"
-                    placeholderTextColor={colors.textMuted}
-                    style={{
-                      height: 48,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      paddingHorizontal: 16,
-                      color: colors.text,
-                      fontSize: 14,
-                      backgroundColor: colors.surface
-                    }}
-                  />
-                </View>
-
-                <View>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
-                  <TextInput
-                    value={description}
-                    onChangeText={setDescription}
-                    placeholder="Provide more details..."
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    numberOfLines={4}
-                    style={{
-                      minHeight: 100,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      padding: 16,
-                      color: colors.text,
-                      fontSize: 14,
-                      backgroundColor: colors.surface,
-                      textAlignVertical: 'top'
-                    }}
-                  />
-                </View>
-
-                <View>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To *</Text>
-                  <TouchableOpacity
-                    onPress={() => setShowAssigneeDropdown(true)}
-                    style={{
-                      height: 48,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: assignedToId ? colors.primary : colors.border,
-                      paddingHorizontal: 16,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      backgroundColor: colors.surface,
-                    }}
-                  >
-                    <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
-                      {assignedToId
-                        ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
-                        : 'Select assignee *'}
-                    </Text>
-                    <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
+        {/* ── Secondary Modals (Russian Doll nesting for iOS compatibility) ── */}
+        {createModalVisible ? (
+          /* When editing, the sub-modals MUST be inside the Create Modal */
+          <Modal
+            visible={createModalVisible}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setCreateModalVisible(false)}
+          >
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+              <View style={{
+                backgroundColor: colors.background,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                height: '90%',
+                padding: 20
+              }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{isEditing ? 'Edit RFI' : 'New RFI'}</Text>
+                  <TouchableOpacity onPress={() => { setCreateModalVisible(false); setIsEditing(false); }} disabled={submitting}>
+                    <Feather name="x" size={24} color={colors.text} />
                   </TouchableOpacity>
                 </View>
 
-                <View>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
-                  <TouchableOpacity
-                    onPress={() => setShowDatePicker(true)}
-                    style={{
-                      height: 48,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      paddingHorizontal: 16,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      backgroundColor: colors.surface
-                    }}
-                  >
-                    <Text style={{ color: expiryDate ? colors.text : colors.textMuted }}>
-                      {expiryDate ? expiryDate.toLocaleString() : 'Select Date & Time'}
-                    </Text>
-                    <Feather name="calendar" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={expiryDate || new Date()}
-                      mode="date"
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      onChange={handleDateChange}
-                    />
-                  )}
-                  {showTimePicker && Platform.OS === 'android' && (
-                    <DateTimePicker
-                      value={expiryDate || new Date()}
-                      mode="time"
-                      display="default"
-                      onChange={handleDateChange}
-                    />
-                  )}
-                </View>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={{ gap: 20 }}>
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title *</Text>
+                      <TextInput
+                        value={title}
+                        onChangeText={setTitle}
+                        placeholder="Enter RFI title"
+                        placeholderTextColor={colors.textMuted}
+                        style={{
+                          height: 48,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          paddingHorizontal: 16,
+                          color: colors.text,
+                          fontSize: 14,
+                          backgroundColor: colors.surface
+                        }}
+                      />
+                    </View>
 
-                <View>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                    {selectedImages.map((uri: string, idx: number) => (
-                      <View key={idx} style={{ position: 'relative' }}>
-                          <Image
-                            source={{ uri }}
-                            style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
-                          />
-                          <TouchableOpacity
-                            onPress={() => setSelectedImages(selectedImages.filter((_: string, i: number) => i !== idx))}
-                            style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
-                          >
-                            <Feather name="x" size={14} color="#fff" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => setAnnotatingImageIndex(idx)}
-                            style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
-                          >
-                            <Feather name="edit-2" size={12} color="#fff" />
-                          </TouchableOpacity>
-                        </View>
-                    ))}
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                      <TextInput
+                        value={description}
+                        onChangeText={setDescription}
+                        placeholder="Provide more details..."
+                        placeholderTextColor={colors.textMuted}
+                        multiline
+                        numberOfLines={4}
+                        style={{
+                          minHeight: 100,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          padding: 16,
+                          color: colors.text,
+                          fontSize: 14,
+                          backgroundColor: colors.surface,
+                          textAlignVertical: 'top'
+                        }}
+                      />
+                    </View>
+
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To *</Text>
+                      <TouchableOpacity
+                        onPress={() => setShowAssigneeDropdown(true)}
+                        style={{
+                          height: 48,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: assignedToId ? colors.primary : colors.border,
+                          paddingHorizontal: 16,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          backgroundColor: colors.surface,
+                        }}
+                      >
+                        <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
+                          {assignedToId
+                            ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
+                            : 'Select assignee *'}
+                        </Text>
+                        <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
+                      <TouchableOpacity
+                        onPress={() => setShowDatePicker(true)}
+                        style={{
+                          height: 48,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          paddingHorizontal: 16,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          backgroundColor: colors.surface
+                        }}
+                      >
+                        <Text style={{ color: expiryDate ? colors.text : colors.textMuted }}>
+                          {expiryDate ? expiryDate.toLocaleString() : 'Select Date & Time'}
+                        </Text>
+                        <Feather name="calendar" size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                      {showDatePicker && (
+                        <DateTimePicker
+                          value={expiryDate || new Date()}
+                          mode="date"
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          onChange={handleDateChange}
+                        />
+                      )}
+                      {showTimePicker && Platform.OS === 'android' && (
+                        <DateTimePicker
+                          value={expiryDate || new Date()}
+                          mode="time"
+                          display="default"
+                          onChange={handleDateChange}
+                        />
+                      )}
+                    </View>
+
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                        {selectedImages.map((uri: string, idx: number) => (
+                          <View key={idx} style={{ position: 'relative' }}>
+                            <Image
+                              source={{ uri }}
+                              style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+                            />
+                            <TouchableOpacity
+                              onPress={() => setSelectedImages(selectedImages.filter((_: string, i: number) => i !== idx))}
+                              style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                            >
+                              <Feather name="x" size={14} color="#fff" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => setAnnotatingImageIndex(idx)}
+                              style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
+                            >
+                              <Feather name="edit-2" size={12} color="#fff" />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                        <TouchableOpacity
+                          onPress={handleImageSelection}
+                          style={{
+                            width: 80,
+                            height: 80,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            borderStyle: 'dashed',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: colors.surface
+                          }}
+                        >
+                          <Feather name="plus" size={24} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
                     <TouchableOpacity
-                      onPress={handleImageSelection}
+                      onPress={isEditing ? handleUpdateRFI : handleCreateRFI}
+                      disabled={submitting}
                       style={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        borderStyle: 'dashed',
+                        backgroundColor: colors.primary,
+                        height: 52,
+                        borderRadius: 12,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: colors.surface
+                        marginTop: 20,
+                        marginBottom: 40,
+                        opacity: submitting ? 0.7 : 1
                       }}
                     >
-                      <Feather name="plus" size={24} color={colors.textMuted} />
+                      {submitting ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>{isEditing ? 'Save Changes' : 'Create RFI'}</Text>
+                      )}
                     </TouchableOpacity>
                   </View>
-                </View>
-
-                <TouchableOpacity
-                  onPress={isEditing ? handleUpdateRFI : handleCreateRFI}
-                  disabled={submitting}
-                  style={{
-                    backgroundColor: colors.primary,
-                    height: 52,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginTop: 20,
-                    marginBottom: 40,
-                    opacity: submitting ? 0.7 : 1
-                  }}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>{isEditing ? 'Save Changes' : 'Create RFI'}</Text>
-                  )}
-                </TouchableOpacity>
+                </ScrollView>
               </View>
-            </ScrollView>
-          </View>
-        </View>
+
+              {/* Camera Stack nested inside Create Modal for iOS compatibility while editing */}
+              {cameraVisible && (
+                <Modal
+                  visible={cameraVisible}
+                  animationType="slide"
+                  transparent={false}
+                  presentationStyle="fullScreen"
+                  statusBarTranslucent={true}
+                  onRequestClose={() => setCameraVisible(false)}
+                >
+                  <View style={{ flex: 1, backgroundColor: '#000' }}>
+                    <View style={{ flex: 1 }}>
+                      {cameraPermission?.granted && cameraReady ? (
+                        <>
+                          <View style={{
+                            width: SCREEN_W,
+                            height: CAMERA_HEIGHT,
+                            overflow: 'hidden',
+                            marginTop: Math.max(insets.top, 20) + 60,
+                          }}>
+                            <CameraView
+                              key={cameraSessionKey}
+                              style={StyleSheet.absoluteFill}
+                              facing="back"
+                              ref={cameraRef}
+                              ratio="4:3"
+                            />
+                          </View>
+
+                          <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                            <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
+                              <Feather name="x" size={24} color="#fff" />
+                            </TouchableOpacity>
+                            <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                            <View style={{ width: 60 }} />
+                          </View>
+
+                          <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                            <View style={cameraStyles.shutterRow}>
+                              <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
+                                <View style={cameraStyles.iconCircle}>
+                                  <Feather name="image" size={24} color="#fff" />
+                                </View>
+                                <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                                <View style={cameraStyles.shutterOuter}>
+                                  <View style={cameraStyles.shutterInner} />
+                                </View>
+                                <Text style={cameraStyles.btnLabel}>Photo</Text>
+                              </TouchableOpacity>
+
+                              <View style={{ width: 70 }} />
+                            </View>
+                          </View>
+                        </>
+                      ) : (
+                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                          {cameraPermission?.granted ? (
+                            <ActivityIndicator color="#fff" />
+                          ) : (
+                            <>
+                              <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                              <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
+                                <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                              </TouchableOpacity>
+                            </>
+                          )}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Annotator nested inside Camera for immediate editing on iOS */}
+                    {annotatingImageIndex !== null && (
+                      <ImageAnnotator
+                        uri={cameraMode === 'create' ? selectedImages[annotatingImageIndex] : responseImages[annotatingImageIndex]}
+                        onSave={(newUri) => {
+                          if (cameraMode === 'create') {
+                            const newImages = [...selectedImages];
+                            newImages[annotatingImageIndex] = newUri;
+                            setSelectedImages(newImages);
+                          } else {
+                            const newImages = [...responseImages];
+                            newImages[annotatingImageIndex] = newUri;
+                            setResponseImages(newImages);
+                          }
+                          setAnnotatingImageIndex(null);
+                          setCameraVisible(false);
+                        }}
+                        onCancel={() => setAnnotatingImageIndex(null)}
+                      />
+                    )}
+                  </View>
+                </Modal>
+              )}
+
+              {/* Annotator for gallery picks while inside Create Modal */}
+              {!cameraVisible && annotatingImageIndex !== null && (
+                <ImageAnnotator
+                  uri={cameraMode === 'create' ? selectedImages[annotatingImageIndex] : responseImages[annotatingImageIndex]}
+                  onSave={(newUri) => {
+                    if (cameraMode === 'create') {
+                      const newImages = [...selectedImages];
+                      newImages[annotatingImageIndex] = newUri;
+                      setSelectedImages(newImages);
+                    } else {
+                      const newImages = [...responseImages];
+                      newImages[annotatingImageIndex] = newUri;
+                      setResponseImages(newImages);
+                    }
+                    setAnnotatingImageIndex(null);
+                  }}
+                  onCancel={() => setAnnotatingImageIndex(null)}
+                />
+              )}
+            </View>
+          </Modal>
+        ) : (
+          /* When NOT editing, sub-modals (for response or existing) are nested in Detail Modal */
+          <>
+            {cameraVisible && (
+              <Modal
+                visible={cameraVisible}
+                animationType="slide"
+                transparent={false}
+                presentationStyle="fullScreen"
+                statusBarTranslucent={true}
+                onRequestClose={() => setCameraVisible(false)}
+              >
+                <View style={{ flex: 1, backgroundColor: '#000' }}>
+                  <View style={{ flex: 1 }}>
+                    {cameraPermission?.granted && cameraReady ? (
+                      <>
+                        <View style={{
+                          width: SCREEN_W,
+                          height: CAMERA_HEIGHT,
+                          overflow: 'hidden',
+                          marginTop: Math.max(insets.top, 20) + 60,
+                        }}>
+                          <CameraView
+                            key={cameraSessionKey}
+                            style={StyleSheet.absoluteFill}
+                            facing="back"
+                            ref={cameraRef}
+                            ratio="4:3"
+                          />
+                        </View>
+
+                        <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                          <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
+                            <Feather name="x" size={24} color="#fff" />
+                          </TouchableOpacity>
+                          <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                          <View style={{ width: 60 }} />
+                        </View>
+
+                        <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                          <View style={cameraStyles.shutterRow}>
+                            <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
+                              <View style={cameraStyles.iconCircle}>
+                                <Feather name="image" size={24} color="#fff" />
+                              </View>
+                              <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                              <View style={cameraStyles.shutterOuter}>
+                                <View style={cameraStyles.shutterInner} />
+                              </View>
+                              <Text style={cameraStyles.btnLabel}>Photo</Text>
+                            </TouchableOpacity>
+
+                            <View style={{ width: 70 }} />
+                          </View>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                        {cameraPermission?.granted ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <>
+                            <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                            <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
+                              <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Nested Annotator for immediate capture in camera on iOS */}
+                  {annotatingImageIndex !== null && (
+                    <ImageAnnotator
+                      uri={cameraMode === 'create' ? selectedImages[annotatingImageIndex] : responseImages[annotatingImageIndex]}
+                      onSave={(newUri) => {
+                        if (cameraMode === 'create') {
+                          const newImages = [...selectedImages];
+                          newImages[annotatingImageIndex] = newUri;
+                          setSelectedImages(newImages);
+                        } else {
+                          const newImages = [...responseImages];
+                          newImages[annotatingImageIndex] = newUri;
+                          setResponseImages(newImages);
+                        }
+                        setAnnotatingImageIndex(null);
+                        setCameraVisible(false);
+                      }}
+                      onCancel={() => setAnnotatingImageIndex(null)}
+                    />
+                  )}
+                </View>
+              </Modal>
+            )}
+
+            {/* Image Annotators for when camera is closed (response mode) */}
+            {!cameraVisible && annotatingImageIndex !== null && (
+              <ImageAnnotator
+                uri={cameraMode === 'create' ? selectedImages[annotatingImageIndex] : responseImages[annotatingImageIndex]}
+                onSave={(newUri) => {
+                  if (cameraMode === 'create') {
+                    const newImages = [...selectedImages];
+                    newImages[annotatingImageIndex] = newUri;
+                    setSelectedImages(newImages);
+                  } else {
+                    const newImages = [...responseImages];
+                    newImages[annotatingImageIndex] = newUri;
+                    setResponseImages(newImages);
+                  }
+                  setAnnotatingImageIndex(null);
+                }}
+                onCancel={() => setAnnotatingImageIndex(null)}
+              />
+            )}
+          </>
+        )}
+
+        {/* Annotator for remote/existing RFI images */}
+        {annotatingRemoteUri && (
+          <ImageAnnotator
+            uri={annotatingRemoteUri}
+            onSave={(newUri) => {
+              if (selectedRFI) {
+                const newUrls = (selectedRFI.photoDownloadUrls || []).map(u => (u === annotatingRemoteUri ? newUri : u));
+                setSelectedRFI({ ...selectedRFI, photoDownloadUrls: newUrls });
+                setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, photoDownloadUrls: newUrls } : r));
+                if (previewImage === annotatingRemoteUri) setPreviewImage(newUri);
+              }
+              setAnnotatingRemoteUri(null);
+            }}
+            onCancel={() => setAnnotatingRemoteUri(null)}
+          />
+        )}
+
+        {/* Nested Photo Viewer for iOS support inside detail modal */}
+        <FullScreenImageModal
+          visible={!!previewImage}
+          onClose={() => setPreviewImage(null)}
+          uri={previewImage}
+          onEdit={(u) => { if (u) setAnnotatingRemoteUri(u); }}
+        />
       </Modal>
+
+      {/* Removed old redundant Create Modal location as it is now nested for iOS support */}
 
 
 
@@ -1192,127 +1450,401 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       </Modal>
       {/* Removed root-level modal for RFI as it needs to be nested for iOS compatibility */}
 
-      {/* Photo Viewer */}
-      <FullScreenImageModal
-        visible={!!previewImage}
-        onClose={() => setPreviewImage(null)}
-        uri={previewImage}
-        onEdit={(u) => { if (u) setAnnotatingRemoteUri(u); }}
-      />
-
-      {/* Image Annotator */}
-      {annotatingImageIndex !== null && (
-        <ImageAnnotator
-          uri={cameraMode === 'create' ? selectedImages[annotatingImageIndex] : responseImages[annotatingImageIndex]}
-          onSave={(newUri) => {
-            if (cameraMode === 'create') {
-              const newImages = [...selectedImages];
-              newImages[annotatingImageIndex] = newUri;
-              setSelectedImages(newImages);
-            } else {
-              const newImages = [...responseImages];
-              newImages[annotatingImageIndex] = newUri;
-              setResponseImages(newImages);
-            }
-            setAnnotatingImageIndex(null);
-            setCameraVisible(false); // Close camera modal after annotation
-          }}
-          onCancel={() => setAnnotatingImageIndex(null)}
-        />
-      )}
-
-      {/* Annotator for remote/existing RFI images */}
-      {annotatingRemoteUri && (
-        <ImageAnnotator
-          uri={annotatingRemoteUri}
-          onSave={(newUri) => {
-            if (selectedRFI) {
-              const newUrls = (selectedRFI.photoDownloadUrls || []).map(u => (u === annotatingRemoteUri ? newUri : u));
-              setSelectedRFI({ ...selectedRFI, photoDownloadUrls: newUrls });
-              setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, photoDownloadUrls: newUrls } : r));
-              if (previewImage === annotatingRemoteUri) setPreviewImage(newUri);
-            }
-            setAnnotatingRemoteUri(null);
-          }}
-          onCancel={() => setAnnotatingRemoteUri(null)}
-        />
-      )}
-
-      {/* Camera Modal */}
-      <Modal
-        visible={cameraVisible}
-        animationType="slide"
-        transparent={false}
-        presentationStyle="fullScreen"
-        statusBarTranslucent={true}
-        onRequestClose={() => setCameraVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
-          <View style={{ flex: 1 }}>
-            {cameraPermission?.granted && cameraReady ? (
-              <>
+      {/* Root-level fallbacks for iOS compatibility (Russian Doll nesting) */}
+      {!detailModalVisible && (
+        <>
+          {createModalVisible ? (
+            <Modal
+              visible={createModalVisible}
+              animationType="slide"
+              transparent
+              onRequestClose={() => setCreateModalVisible(false)}
+            >
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
                 <View style={{
-                  width: SCREEN_W,
-                  height: CAMERA_HEIGHT,
-                  overflow: 'hidden',
-                  marginTop: Math.max(insets.top, 20) + 60, // Place after header
+                  backgroundColor: colors.background,
+                  borderTopLeftRadius: 24,
+                  borderTopRightRadius: 24,
+                  height: '90%',
+                  padding: 20
                 }}>
-                  <CameraView
-                    key={cameraSessionKey}
-                    style={StyleSheet.absoluteFill}
-                    facing="back"
-                    ref={cameraRef}
-                    ratio="4:3"
-                  />
-                </View>
-
-                {/* Header Overlay */}
-                <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
-                  <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
-                    <Feather name="x" size={24} color="#fff" />
-                  </TouchableOpacity>
-                  <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
-                  <View style={{ width: 60 }} />
-                </View>
-
-                {/* Bottom Controls Overlay */}
-                <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
-                  <View style={cameraStyles.shutterRow}>
-                          <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
-                            <View style={cameraStyles.iconCircle}>
-                              <Feather name="image" size={24} color="#fff" />
-                            </View>
-                            <Text style={cameraStyles.btnLabel}>Gallery</Text>
-                          </TouchableOpacity>
-
-                    <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
-                      <View style={cameraStyles.shutterOuter}>
-                        <View style={cameraStyles.shutterInner} />
-                      </View>
-                      <Text style={cameraStyles.btnLabel}>Photo</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{isEditing ? 'Edit RFI' : 'New RFI'}</Text>
+                    <TouchableOpacity onPress={() => { setCreateModalVisible(false); setIsEditing(false); }} disabled={submitting}>
+                      <Feather name="x" size={24} color={colors.text} />
                     </TouchableOpacity>
-
-                    <View style={{ width: 70 }} />
                   </View>
+
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    <View style={{ gap: 20 }}>
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title *</Text>
+                        <TextInput
+                          value={title}
+                          onChangeText={setTitle}
+                          placeholder="Enter RFI title"
+                          placeholderTextColor={colors.textMuted}
+                          style={{
+                            height: 48,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            paddingHorizontal: 16,
+                            color: colors.text,
+                            fontSize: 14,
+                            backgroundColor: colors.surface
+                          }}
+                        />
+                      </View>
+
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                        <TextInput
+                          value={description}
+                          onChangeText={setDescription}
+                          placeholder="Provide more details..."
+                          placeholderTextColor={colors.textMuted}
+                          multiline
+                          numberOfLines={4}
+                          style={{
+                            minHeight: 100,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            padding: 16,
+                            color: colors.text,
+                            fontSize: 14,
+                            backgroundColor: colors.surface,
+                            textAlignVertical: 'top'
+                          }}
+                        />
+                      </View>
+
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To *</Text>
+                        <TouchableOpacity
+                          onPress={() => setShowAssigneeDropdown(true)}
+                          style={{
+                            height: 48,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: assignedToId ? colors.primary : colors.border,
+                            paddingHorizontal: 16,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: colors.surface,
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
+                            {assignedToId
+                              ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
+                              : 'Select assignee *'}
+                          </Text>
+                          <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
+                        <TouchableOpacity
+                          onPress={() => setShowDatePicker(true)}
+                          style={{
+                            height: 48,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            paddingHorizontal: 16,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: colors.surface
+                          }}
+                        >
+                          <Text style={{ color: expiryDate ? colors.text : colors.textMuted }}>
+                            {expiryDate ? expiryDate.toLocaleString() : 'Select Date & Time'}
+                          </Text>
+                          <Feather name="calendar" size={18} color={colors.textMuted} />
+                        </TouchableOpacity>
+                        {showDatePicker && (
+                          <DateTimePicker
+                            value={expiryDate || new Date()}
+                            mode="date"
+                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                            onChange={handleDateChange}
+                          />
+                        )}
+                        {showTimePicker && Platform.OS === 'android' && (
+                          <DateTimePicker
+                            value={expiryDate || new Date()}
+                            mode="time"
+                            display="default"
+                            onChange={handleDateChange}
+                          />
+                        )}
+                      </View>
+
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                          {selectedImages.map((uri: string, idx: number) => (
+                            <View key={idx} style={{ position: 'relative' }}>
+                              <Image
+                                source={{ uri }}
+                                style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+                              />
+                              <TouchableOpacity
+                                onPress={() => setSelectedImages(selectedImages.filter((_: string, i: number) => i !== idx))}
+                                style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                              >
+                                <Feather name="x" size={14} color="#fff" />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => setAnnotatingImageIndex(idx)}
+                                style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
+                              >
+                                <Feather name="edit-2" size={12} color="#fff" />
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                          <TouchableOpacity
+                            onPress={handleImageSelection}
+                            style={{
+                              width: 80,
+                              height: 80,
+                              borderRadius: 10,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                              borderStyle: 'dashed',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: colors.surface
+                            }}
+                          >
+                            <Feather name="plus" size={24} color={colors.textMuted} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={isEditing ? handleUpdateRFI : handleCreateRFI}
+                        disabled={submitting}
+                        style={{
+                          backgroundColor: colors.primary,
+                          height: 52,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginTop: 20,
+                          marginBottom: 40,
+                          opacity: submitting ? 0.7 : 1
+                        }}
+                      >
+                        {submitting ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>{isEditing ? 'Save Changes' : 'Create RFI'}</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
                 </View>
-              </>
-            ) : (
-              <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-                {cameraPermission?.granted ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
-                    <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                      <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
-                    </TouchableOpacity>
-                  </>
+
+                {/* Camera Stack nested inside Create Modal for root-level new RFI on iOS */}
+                {cameraVisible && (
+                  <Modal
+                    visible={cameraVisible}
+                    animationType="slide"
+                    transparent={false}
+                    presentationStyle="fullScreen"
+                    statusBarTranslucent={true}
+                    onRequestClose={() => setCameraVisible(false)}
+                  >
+                    <View style={{ flex: 1, backgroundColor: '#000' }}>
+                      <View style={{ flex: 1 }}>
+                        {cameraPermission?.granted && cameraReady ? (
+                          <>
+                            <View style={{
+                              width: SCREEN_W,
+                              height: CAMERA_HEIGHT,
+                              overflow: 'hidden',
+                              marginTop: Math.max(insets.top, 20) + 60,
+                            }}>
+                              <CameraView
+                                key={cameraSessionKey}
+                                style={StyleSheet.absoluteFill}
+                                facing="back"
+                                ref={cameraRef}
+                                ratio="4:3"
+                              />
+                            </View>
+
+                            <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                              <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
+                                <Feather name="x" size={24} color="#fff" />
+                              </TouchableOpacity>
+                              <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                              <View style={{ width: 60 }} />
+                            </View>
+
+                            <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                              <View style={cameraStyles.shutterRow}>
+                                <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
+                                  <View style={cameraStyles.iconCircle}>
+                                    <Feather name="image" size={24} color="#fff" />
+                                  </View>
+                                  <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                                  <View style={cameraStyles.shutterOuter}>
+                                    <View style={cameraStyles.shutterInner} />
+                                  </View>
+                                  <Text style={cameraStyles.btnLabel}>Photo</Text>
+                                </TouchableOpacity>
+
+                                <View style={{ width: 70 }} />
+                              </View>
+                            </View>
+                          </>
+                        ) : (
+                          <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                            {cameraPermission?.granted ? (
+                              <ActivityIndicator color="#fff" />
+                            ) : (
+                              <>
+                                <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                                <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
+                                  <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                      {annotatingImageIndex !== null && (
+                        <ImageAnnotator
+                          uri={cameraMode === 'create' ? selectedImages[annotatingImageIndex] : responseImages[annotatingImageIndex]}
+                          onSave={(newUri) => {
+                            if (cameraMode === 'create') {
+                              const newImages = [...selectedImages];
+                              newImages[annotatingImageIndex] = newUri;
+                              setSelectedImages(newImages);
+                            } else {
+                              const newImages = [...responseImages];
+                              newImages[annotatingImageIndex] = newUri;
+                              setResponseImages(newImages);
+                            }
+                            setAnnotatingImageIndex(null);
+                            setCameraVisible(false);
+                          }}
+                          onCancel={() => setAnnotatingImageIndex(null)}
+                        />
+                      )}
+                    </View>
+                  </Modal>
                 )}
               </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+            </Modal>
+          ) : (
+            <>
+              {cameraVisible && (
+                <Modal
+                  visible={cameraVisible}
+                  animationType="slide"
+                  transparent={false}
+                  presentationStyle="fullScreen"
+                  statusBarTranslucent={true}
+                  onRequestClose={() => setCameraVisible(false)}
+                >
+                  {/* Camera UI - same as above */}
+                  <View style={{ flex: 1, backgroundColor: '#000' }}>
+                    <View style={{ flex: 1 }}>
+                      {cameraPermission?.granted && cameraReady ? (
+                        <>
+                          <View style={{
+                            width: SCREEN_W,
+                            height: CAMERA_HEIGHT,
+                            overflow: 'hidden',
+                            marginTop: Math.max(insets.top, 20) + 60,
+                          }}>
+                            <CameraView
+                              key={cameraSessionKey}
+                              style={StyleSheet.absoluteFill}
+                              facing="back"
+                              ref={cameraRef}
+                              ratio="4:3"
+                            />
+                          </View>
+                          {/* ... Header and Controls ... */}
+                          <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                            <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
+                              <Feather name="x" size={24} color="#fff" />
+                            </TouchableOpacity>
+                            <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                            <View style={{ width: 60 }} />
+                          </View>
+                          <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                            <View style={cameraStyles.shutterRow}>
+                              <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
+                                <View style={cameraStyles.iconCircle}>
+                                  <Feather name="image" size={24} color="#fff" />
+                                </View>
+                                <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                                <View style={cameraStyles.shutterOuter}>
+                                  <View style={cameraStyles.shutterInner} />
+                                </View>
+                                <Text style={cameraStyles.btnLabel}>Photo</Text>
+                              </TouchableOpacity>
+                              <View style={{ width: 70 }} />
+                            </View>
+                          </View>
+                        </>
+                      ) : (
+                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                          <ActivityIndicator color="#fff" />
+                        </View>
+                      )}
+                    </View>
+                    {annotatingImageIndex !== null && (
+                      <ImageAnnotator
+                        uri={cameraMode === 'create' ? selectedImages[annotatingImageIndex] : responseImages[annotatingImageIndex]}
+                        onSave={(newUri) => {
+                          if (cameraMode === 'create') {
+                            const newImages = [...selectedImages];
+                            newImages[annotatingImageIndex] = newUri;
+                            setSelectedImages(newImages);
+                          } else {
+                            const newImages = [...responseImages];
+                            newImages[annotatingImageIndex] = newUri;
+                            setResponseImages(newImages);
+                          }
+                          setAnnotatingImageIndex(null);
+                          setCameraVisible(false);
+                        }}
+                        onCancel={() => setAnnotatingImageIndex(null)}
+                      />
+                    )}
+                  </View>
+                </Modal>
+              )}
+            </>
+          )}
+
+          <FullScreenImageModal
+            visible={!!previewImage}
+            onClose={() => setPreviewImage(null)}
+            uri={previewImage}
+            onEdit={(u) => { if (u) setAnnotatingRemoteUri(u); }}
+          />
+        </>
+      )}
+
+      {/* Removed old Annotator locations as they are now handled by nested/conditional rendering */}
+
+      {/* Removed old Camera location as it is now nested for iOS support */}
 
       {/* Assignee Picker Modal (moved out of nested) */}
       <Modal visible={showAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowAssigneeDropdown(false)}>
@@ -1415,6 +1947,7 @@ const cameraStyles = StyleSheet.create({
   previewWrapper: {
     position: 'relative',
     marginRight: 5,
+    alignSelf: 'flex-start',
   },
   previewThumb: {
     width: 56,
