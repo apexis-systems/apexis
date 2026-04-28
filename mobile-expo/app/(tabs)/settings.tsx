@@ -470,6 +470,31 @@ export default function ProfileScreen() {
                                 <Feather name="chevron-right" size={18} color={colors.textMuted} />
                             </TouchableOpacity>
                         )}
+
+                        {(user.role === 'admin' || user.role === 'superadmin') && (
+                            <TouchableOpacity
+                                onPress={() => router.push('/trash')}
+                                style={{
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 16,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 14
+                                }}
+                            >
+                                <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Feather name="trash-2" size={20} color="#ef4444" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Trash Management</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Recover or purge deleted projects</Text>
+                                </View>
+                                <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* Security Group */}

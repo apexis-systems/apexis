@@ -344,11 +344,11 @@ export default function ProjectWorkspaceScreen() {
     const handleDeleteProject = () => {
         Alert.alert(
             "Delete Project",
-            "Are you sure you want to permanently delete this project? This action cannot be undone.",
+            "Are you sure you want to delete this project? It will be moved to the Trash and can be recovered later from Settings.",
             [
                 { text: "Cancel", style: "cancel" },
                 {
-                    text: "Delete",
+                    text: "Move to Trash",
                     style: "destructive",
                     onPress: async () => {
                         try {
