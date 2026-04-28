@@ -201,13 +201,27 @@ export const getProjects = async (req: Request, res: Response) => {
             subQuery: false,
         });
 
-        // Strip sensitive codes for non-admins
+        // Strip sensitive codes for non-admins and calculate daysRemaining for trash
         const safeRows = result.map((p: any) => {
             const json = p.toJSON();
             if (authUser.role !== 'admin') {
                 delete json.contributor_code;
                 delete json.client_code;
             }
+
+            // Calculate days remaining if in trash
+            if (isTrash && json.deletedAt) {
+                const deletedDate = new Date(json.deletedAt);
+                const expiryDate = new Date(deletedDate);
+                expiryDate.setDate(deletedDate.getDate() + 30);
+                
+                const now = new Date();
+                const diffTime = expiryDate.getTime() - now.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                json.daysRemaining = Math.max(0, diffDays);
+            }
+
             return json;
         });
 
@@ -660,77 +674,8 @@ export const deleteProject = async (req: Request, res: Response) => {
         }
 
         if (force === 'true') {
-            // --- PERMANENT DELETE LOGIC (Original logic) ---
-            // 1. Fetch Assets for S3 Cleanup & Storage Stats
-            const projectFiles = await files.findAll({ where: { project_id: id }, transaction: t });
-            const projectManuals = await manuals.findAll({ where: { project_id: id }, transaction: t });
-            const projectSnags = await snags.findAll({ where: { project_id: id }, transaction: t });
-            const projectRFIs = await rfis.findAll({ where: { project_id: id }, transaction: t });
-            const projectRooms = await rooms.findAll({ where: { project_id: id }, transaction: t });
-            const roomIds = projectRooms.map((r: any) => r.id);
-            const fileIds = projectFiles.map((f: any) => f.id);
-
-            let totalSizeToDeleteMb = 0;
-
-            // --- S3 Cleanup ---
-            const allFileUnits = [...projectFiles, ...projectManuals];
-            for (const item of allFileUnits) {
-                if (item.file_url) {
-                    try {
-                        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: (item as any).file_url }));
-                    } catch (s3Err) { console.error(`S3 deletion failed for item ${item.id}:`, s3Err); }
-                }
-                totalSizeToDeleteMb += ((item as any).file_size_mb || 0);
-            }
-
-            for (const snag of projectSnags) {
-                if (snag.photo_url) {
-                    try {
-                        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: snag.photo_url }));
-                    } catch (s3Err) { console.error(`S3 deletion failed for snag ${snag.id}:`, s3Err); }
-                }
-            }
-
-            for (const rfi of projectRFIs) {
-                if (rfi.photos && Array.isArray(rfi.photos)) {
-                    for (const photo of rfi.photos) {
-                        try {
-                            await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: photo }));
-                        } catch (s3Err) { console.error(`S3 deletion failed for RFI photo in RFI ${rfi.id}:`, s3Err); }
-                    }
-                }
-            }
-
-            // --- Database Cleanup ---
-            if (fileIds.length > 0) {
-                await comments.destroy({ where: { file_id: { [Op.in]: fileIds } }, transaction: t });
-            }
-            await files.destroy({ where: { project_id: id }, transaction: t });
-            await manuals.destroy({ where: { project_id: id }, transaction: t });
-            await snags.destroy({ where: { project_id: id }, transaction: t });
-            await rfis.destroy({ where: { project_id: id }, transaction: t });
-            await activities.destroy({ where: { project_id: id }, transaction: t });
-            await notifications.destroy({ where: { project_id: id }, transaction: t });
-            await reports.destroy({ where: { project_id: id }, transaction: t });
-            await folders.destroy({ where: { project_id: id }, transaction: t });
-
-            if (roomIds.length > 0) {
-                await chat_messages.destroy({ where: { room_id: { [Op.in]: roomIds } }, transaction: t });
-                await room_members.destroy({ where: { room_id: { [Op.in]: roomIds } }, transaction: t });
-                await rooms.destroy({ where: { project_id: id }, transaction: t });
-            }
-            await project_members.destroy({ where: { project_id: id }, transaction: t });
-
-            if (totalSizeToDeleteMb > 0) {
-                await organizations.decrement('storage_used_mb', {
-                    by: totalSizeToDeleteMb,
-                    where: { id: authUser.organization_id },
-                    transaction: t
-                });
-            }
-
-            await project.destroy({ force: true, transaction: t });
-            await t.commit();
+            const { permanentlyDeleteProject } = await import('../services/projectService.ts');
+            await permanentlyDeleteProject(Number(id), authUser.organization_id);
             return res.status(200).json({ message: "Project permanently deleted" });
         } else {
             // --- SOFT DELETE LOGIC ---

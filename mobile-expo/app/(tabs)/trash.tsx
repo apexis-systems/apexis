@@ -121,13 +121,28 @@ export default function TrashScreen() {
             </Text>
           </View>
         ) : (
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: 16 }}>
             {projects.map((project) => (
-              <View key={project.id} style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.border }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }} numberOfLines={1}>{project.name}</Text>
-                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>{project.description || 'No description'}</Text>
+              <View key={project.id} style={{ backgroundColor: colors.surface, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: colors.border, position: 'relative', overflow: 'hidden' }}>
+                {/* Days Remaining Badge */}
+                <View style={{ 
+                  position: 'absolute', 
+                  top: 0, 
+                  right: 0, 
+                  backgroundColor: project.daysRemaining <= 5 ? '#ef4444' : '#f59e0b', 
+                  paddingHorizontal: 12, 
+                  paddingVertical: 4, 
+                  borderBottomLeftRadius: 16 
+                }}>
+                  <Text style={{ fontSize: 10, fontWeight: '900', color: '#fff' }}>
+                    {project.daysRemaining} {project.daysRemaining === 1 ? 'DAY' : 'DAYS'} LEFT
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 4 }}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }} numberOfLines={1}>{project.name}</Text>
+                    <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>{project.description || 'No description'}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <View style={{ backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
@@ -139,33 +154,38 @@ export default function TrashScreen() {
                   </View>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 16, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Feather name="file-text" size={12} color={colors.textMuted} />
-                    <Text style={{ fontSize: 12, color: colors.textMuted }}><Text style={{ fontWeight: '700', color: colors.text }}>{project.totalDocs || 0}</Text> Documents</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <View style={{ flexDirection: 'row', gap: 16 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Feather name="file-text" size={14} color={colors.textMuted} />
+                      <Text style={{ fontSize: 13, color: colors.textMuted }}><Text style={{ fontWeight: '700', color: colors.text }}>{project.totalDocs || 0}</Text> Documents</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Feather name="camera" size={14} color={colors.textMuted} />
+                      <Text style={{ fontSize: 13, color: colors.textMuted }}><Text style={{ fontWeight: '700', color: colors.text }}>{project.totalPhotos || 0}</Text> Photos</Text>
+                    </View>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Feather name="camera" size={12} color={colors.textMuted} />
-                    <Text style={{ fontSize: 12, color: colors.textMuted }}><Text style={{ fontWeight: '700', color: colors.text }}>{project.totalPhotos || 0}</Text> Photos</Text>
-                  </View>
+                  <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                    {new Date(project.deletedAt).toLocaleDateString()}
+                  </Text>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
                   <TouchableOpacity
                     onPress={() => handleRestore(project.id)}
                     disabled={isRestoring === project.id}
-                    style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
+                    style={{ flex: 1, height: 48, borderRadius: 16, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
                   >
-                    {isRestoring === project.id ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="rotate-ccw" size={16} color={colors.primary} />}
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.primary }}>Restore</Text>
+                    {isRestoring === project.id ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="rotate-ccw" size={18} color={colors.primary} />}
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.primary }}>Restore</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handlePermanentDelete(project.id)}
                     disabled={isDeleting === project.id}
-                    style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
+                    style={{ flex: 1, height: 48, borderRadius: 16, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
                   >
-                    {isDeleting === project.id ? <ActivityIndicator size="small" color="#ef4444" /> : <Feather name="trash-2" size={16} color="#ef4444" />}
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: "#ef4444" }}>Delete</Text>
+                    {isDeleting === project.id ? <ActivityIndicator size="small" color="#ef4444" /> : <Feather name="trash-2" size={18} color="#ef4444" />}
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: "#ef4444" }}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               </View>
