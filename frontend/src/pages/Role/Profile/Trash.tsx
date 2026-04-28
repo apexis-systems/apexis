@@ -76,7 +76,7 @@ export default function Trash() {
         <div className="p-8 max-w-4xl mx-auto">
             <div className="flex items-center gap-4 mb-8">
                 <button 
-                    onClick={() => router.back()}
+                    onClick={() => router.push(`/${user.role}/profile`)}
                     className="h-10 w-10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
                 >
                     <ChevronLeft className="h-6 w-6" />

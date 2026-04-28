@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, BackHandler } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +22,14 @@ export default function TrashScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchTrash();
+
+      const onBackPress = () => {
+        router.push('/settings');
+        return true; // Prevent default behavior
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
     }, [])
   );
 
@@ -85,18 +93,17 @@ export default function TrashScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 20, gap: 16 }}>
-        <TouchableOpacity onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}>
-          <Feather name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text }}>Trash Management</Text>
-          <Text style={{ fontSize: 12, color: colors.textMuted }}>Restore or permanently delete projects</Text>
+      <View style={{ paddingTop: 20, paddingHorizontal: 24, marginBottom: 30 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => router.push('/settings')} style={{ marginRight: 16 }}>
+            <Feather name="arrow-left" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>Trash Management</Text>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {loading ? (
