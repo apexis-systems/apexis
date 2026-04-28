@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert } from 'lucide-react';
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
@@ -109,14 +109,21 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate }:
         <div className="relative flex-1 flex flex-col items-center bg-muted/20 dark:bg-black overflow-hidden group">
           
           {/* Top Bar Controls (Floating) */}
-          <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 bg-gradient-to-b from-background/80 to-transparent">
+          <div className="absolute top-0 left-0 right-0 z-[120] flex items-center justify-between p-4 bg-gradient-to-b from-background/80 to-transparent">
             <div className="flex flex-col pl-2">
                <span className="text-[10px] font-black tracking-[0.2em] opacity-50 uppercase">
                 {currentIndex + 1} / {files.length}
               </span>
-              <h3 className="text-sm font-bold truncate max-w-[40vw]">
-                {currentFile.file_name}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold truncate max-w-[40vw]">
+                  {currentFile.file_name}
+                </h3>
+                {currentFile.do_not_follow && (
+                  <div className="flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
+                    <ShieldAlert className="h-2.5 w-2.5" /> DO NOT FOLLOW
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-1.5 pr-2">
               <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title="View Original">
@@ -132,7 +139,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate }:
               >
                 <Download className="h-4 w-4" />
               </Button>
-              {isImage && (
+              {(isImage || isPdf) && (
                 <>
                   <div className="h-4 w-[1px] bg-border mx-1" />
                   <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => {
@@ -174,7 +181,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate }:
             {/* Navigation Arrows (Large Overlays) */}
             <button
               onClick={goPrev}
-              className="absolute left-0 top-0 bottom-0 w-[15%] z-20 flex items-center justify-start pl-4 group/nav bg-transparent transition-all cursor-pointer"
+              className="absolute left-0 top-20 bottom-20 w-[5%] z-[110] flex items-center justify-start pl-4 group/nav bg-transparent transition-all cursor-pointer"
             >
               <div className="h-14 w-14 rounded-full bg-background/50 backdrop-blur-sm flex items-center justify-center text-foreground opacity-0 group-hover/nav:opacity-100 transition-opacity border border-border">
                 <ChevronLeft className="h-8 w-8" />
@@ -182,7 +189,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate }:
             </button>
             <button
               onClick={goNext}
-              className="absolute right-0 top-0 bottom-0 w-[15%] z-20 flex items-center justify-end pr-4 group/nav bg-transparent transition-all cursor-pointer"
+              className="absolute right-0 top-20 bottom-20 w-[5%] z-[110] flex items-center justify-end pr-4 group/nav bg-transparent transition-all cursor-pointer"
             >
               <div className="h-14 w-14 rounded-full bg-background/50 backdrop-blur-sm flex items-center justify-center text-foreground opacity-0 group-hover/nav:opacity-100 transition-opacity border border-border">
                 <ChevronRight className="h-8 w-8" />
@@ -204,11 +211,19 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate }:
                 />
               </div>
             ) : isPdf ? (
-              <iframe
-                src={`${currentFile.downloadUrl}#toolbar=0`}
-                className="w-full h-full border-none bg-white md:max-w-5xl md:h-[95%] md:my-auto md:rounded-lg shadow-2xl z-10"
-                title={currentFile.file_name}
-              />
+              <div 
+                className="w-full h-full flex items-center justify-center transition-transform duration-75"
+                style={{ 
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                }}
+              >
+                <iframe
+                  src={`${currentFile.downloadUrl}#toolbar=0`}
+                  className="w-full h-full border-none bg-white md:max-w-5xl md:h-[95%] md:my-auto md:rounded-lg shadow-2xl z-10"
+                  title={currentFile.file_name}
+                />
+              </div>
             ) : (
               <div className="flex flex-col items-center gap-6 text-center p-12 bg-card rounded-[2.5rem] backdrop-blur-xl border border-border z-10 shadow-2xl">
                 <div className="p-8 bg-accent/10 rounded-full">
@@ -226,6 +241,17 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate }:
                 >
                   <Download className="h-4 w-4 mr-2" /> {downloading ? 'Downloading...' : 'Download File'}
                 </Button>
+              </div>
+            )}
+
+            {/* Do Not Follow Watermark Overlay */}
+            {currentFile.do_not_follow && (
+              <div className="absolute inset-0 pointer-events-none z-[100] flex items-center justify-center overflow-hidden">
+                <div className="transform -rotate-[30deg] border-4 md:border-[10px] border-dashed border-red-500/20 rounded-xl md:rounded-3xl px-8 py-4 md:px-20 md:py-10 bg-red-500/[0.02] select-none">
+                  <h1 className="text-red-500/25 text-4xl md:text-8xl lg:text-9xl font-black uppercase tracking-widest text-center whitespace-nowrap">
+                    Do Not Follow
+                  </h1>
+                </div>
               </div>
             )}
           </div>

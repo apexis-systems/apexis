@@ -53,7 +53,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [editFile, setEditFile] = useState<any | null>(null);
 
   // View state
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
 
   if (!project) return null;
@@ -671,22 +671,29 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950' : 'bg-blue-50 dark:bg-blue-950'}`}>
                   <FileText className={`h-4 w-4 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
                 </div>
-                <button
-                  onClick={(e) => {
-                    if (isSelectionMode) {
-                      e.stopPropagation();
-                      toggleSelection('file', doc.id);
-                    } else {
-                      setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
-                    }
-                  }}
-                  className="flex-1 min-w-0 text-left hover:underline"
-                >
-                  <p className="text-[10px] font-semibold truncate">{doc.file_name}</p>
-                  <p className="text-[9px] text-muted-foreground">
-                    {formatFileSize(doc.file_size_mb)}
-                  </p>
-                </button>
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      if (isSelectionMode) {
+                        e.stopPropagation();
+                        toggleSelection('file', doc.id);
+                      } else {
+                        setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
+                      }
+                    }}
+                    className="min-w-0 text-left hover:underline"
+                  >
+                    <p className="text-[10px] font-semibold truncate">{doc.file_name}</p>
+                    <p className="text-[9px] text-muted-foreground">
+                      {formatFileSize(doc.file_size_mb)}
+                    </p>
+                  </button>
+                  {doc.do_not_follow && (
+                    <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
+                      <ShieldAlert className="h-2.5 w-2.5" /> DO NOT FOLLOW
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center gap-1">
                   {!isSelectionMode && (
                     <>
@@ -727,12 +734,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                     </>
                   )}
                 </div>
-                {doc.do_not_follow && (
-                  <div className="flex items-center gap-1 bg-red-500/10 text-red-500 text-[9px] font-bold px-2 py-0.5 rounded-full ml-1">
-                    <ShieldAlert className="h-3 w-3" /> DO NOT FOLLOW
-                  </div>
-                )}
               </div>
+            </div>
+          );
+        })}
+      </div>
+
       <FileViewer
         files={sortedDocs}
         initialIndex={viewerState.index}
@@ -740,10 +747,6 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
         user={user}
       />
-            </div>
-          );
-        })}
-      </div>
 
       {
         currentFolders.length === 0 && visibleDocs.length === 0 && (
