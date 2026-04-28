@@ -104,9 +104,10 @@ export const getProjects = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { organization_id: queryOrgId } = req.query;
+        const { organization_id: queryOrgId, deleted } = req.query;
         const activeOrgId = authUser.organization_id;
         const activeRole = authUser.role;
+        const isTrash = deleted === 'true';
 
         // Build WHERE condition based on role and organization context
         let whereCondition: any = {};
@@ -149,8 +150,13 @@ export const getProjects = async (req: Request, res: Response) => {
             }
         }
 
+        if (isTrash) {
+            whereCondition.deletedAt = { [Op.ne]: null };
+        }
+
         const result = await projects.findAll({
             where: whereCondition,
+            paranoid: !isTrash,
             attributes: {
                 include: [
                     [
@@ -634,6 +640,7 @@ export const deleteProject = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
         const { id } = req.params;
+        const { force } = req.query; // If force=true, perform permanent delete
         const authUser = (req as any).user;
 
         if (!authUser || authUser.role !== "admin") {
@@ -643,7 +650,8 @@ export const deleteProject = async (req: Request, res: Response) => {
 
         const project = await projects.findOne({ 
             where: { id, organization_id: authUser.organization_id },
-            transaction: t
+            transaction: t,
+            paranoid: false // Find even if already soft-deleted
         });
 
         if (!project) {
@@ -651,99 +659,118 @@ export const deleteProject = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Project not found or not authorized" });
         }
 
-        // 1. Fetch Assets for S3 Cleanup & Storage Stats
-        const projectFiles = await files.findAll({ where: { project_id: id }, transaction: t });
-        const projectManuals = await manuals.findAll({ where: { project_id: id }, transaction: t });
-        const projectSnags = await snags.findAll({ where: { project_id: id }, transaction: t });
-        const projectRFIs = await rfis.findAll({ where: { project_id: id }, transaction: t });
-        const projectRooms = await rooms.findAll({ where: { project_id: id }, transaction: t });
-        const roomIds = projectRooms.map((r: any) => r.id);
-        const fileIds = projectFiles.map((f: any) => f.id);
+        if (force === 'true') {
+            // --- PERMANENT DELETE LOGIC (Original logic) ---
+            // 1. Fetch Assets for S3 Cleanup & Storage Stats
+            const projectFiles = await files.findAll({ where: { project_id: id }, transaction: t });
+            const projectManuals = await manuals.findAll({ where: { project_id: id }, transaction: t });
+            const projectSnags = await snags.findAll({ where: { project_id: id }, transaction: t });
+            const projectRFIs = await rfis.findAll({ where: { project_id: id }, transaction: t });
+            const projectRooms = await rooms.findAll({ where: { project_id: id }, transaction: t });
+            const roomIds = projectRooms.map((r: any) => r.id);
+            const fileIds = projectFiles.map((f: any) => f.id);
 
-        let totalSizeToDeleteMb = 0;
+            let totalSizeToDeleteMb = 0;
 
-        // --- S3 Cleanup ---
-        // Files & Manuals
-        const allFileUnits = [...projectFiles, ...projectManuals];
-        for (const item of allFileUnits) {
-            if (item.file_url) {
-                try {
-                    await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: (item as any).file_url }));
-                } catch (s3Err) { console.error(`S3 deletion failed for item ${item.id}:`, s3Err); }
-            }
-            totalSizeToDeleteMb += ((item as any).file_size_mb || 0);
-        }
-
-        // Snags (photo_url)
-        for (const snag of projectSnags) {
-            if (snag.photo_url) {
-                try {
-                    await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: snag.photo_url }));
-                } catch (s3Err) { console.error(`S3 deletion failed for snag ${snag.id}:`, s3Err); }
-            }
-        }
-
-        // RFIs (photos JSON array)
-        for (const rfi of projectRFIs) {
-            if (rfi.photos && Array.isArray(rfi.photos)) {
-                for (const photo of rfi.photos) {
+            // --- S3 Cleanup ---
+            const allFileUnits = [...projectFiles, ...projectManuals];
+            for (const item of allFileUnits) {
+                if (item.file_url) {
                     try {
-                        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: photo }));
-                    } catch (s3Err) { console.error(`S3 deletion failed for RFI photo in RFI ${rfi.id}:`, s3Err); }
+                        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: (item as any).file_url }));
+                    } catch (s3Err) { console.error(`S3 deletion failed for item ${item.id}:`, s3Err); }
+                }
+                totalSizeToDeleteMb += ((item as any).file_size_mb || 0);
+            }
+
+            for (const snag of projectSnags) {
+                if (snag.photo_url) {
+                    try {
+                        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: snag.photo_url }));
+                    } catch (s3Err) { console.error(`S3 deletion failed for snag ${snag.id}:`, s3Err); }
                 }
             }
+
+            for (const rfi of projectRFIs) {
+                if (rfi.photos && Array.isArray(rfi.photos)) {
+                    for (const photo of rfi.photos) {
+                        try {
+                            await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: photo }));
+                        } catch (s3Err) { console.error(`S3 deletion failed for RFI photo in RFI ${rfi.id}:`, s3Err); }
+                    }
+                }
+            }
+
+            // --- Database Cleanup ---
+            if (fileIds.length > 0) {
+                await comments.destroy({ where: { file_id: { [Op.in]: fileIds } }, transaction: t });
+            }
+            await files.destroy({ where: { project_id: id }, transaction: t });
+            await manuals.destroy({ where: { project_id: id }, transaction: t });
+            await snags.destroy({ where: { project_id: id }, transaction: t });
+            await rfis.destroy({ where: { project_id: id }, transaction: t });
+            await activities.destroy({ where: { project_id: id }, transaction: t });
+            await notifications.destroy({ where: { project_id: id }, transaction: t });
+            await reports.destroy({ where: { project_id: id }, transaction: t });
+            await folders.destroy({ where: { project_id: id }, transaction: t });
+
+            if (roomIds.length > 0) {
+                await chat_messages.destroy({ where: { room_id: { [Op.in]: roomIds } }, transaction: t });
+                await room_members.destroy({ where: { room_id: { [Op.in]: roomIds } }, transaction: t });
+                await rooms.destroy({ where: { project_id: id }, transaction: t });
+            }
+            await project_members.destroy({ where: { project_id: id }, transaction: t });
+
+            if (totalSizeToDeleteMb > 0) {
+                await organizations.decrement('storage_used_mb', {
+                    by: totalSizeToDeleteMb,
+                    where: { id: authUser.organization_id },
+                    transaction: t
+                });
+            }
+
+            await project.destroy({ force: true, transaction: t });
+            await t.commit();
+            return res.status(200).json({ message: "Project permanently deleted" });
+        } else {
+            // --- SOFT DELETE LOGIC ---
+            await project.destroy({ transaction: t });
+            await t.commit();
+            return res.status(200).json({ message: "Project moved to trash" });
         }
-
-        // --- Manual Database Cleanup (Order matters for Foreign Keys) ---
-        
-        // A. Comments (on files)
-        if (fileIds.length > 0) {
-            await comments.destroy({ where: { file_id: { [Op.in]: fileIds } }, transaction: t });
-        }
-
-        // B. Files & Manuals
-        await files.destroy({ where: { project_id: id }, transaction: t });
-        await manuals.destroy({ where: { project_id: id }, transaction: t });
-
-        // C. Snags & RFIs
-        await snags.destroy({ where: { project_id: id }, transaction: t });
-        await rfis.destroy({ where: { project_id: id }, transaction: t });
-
-        // D. Activities, Notifications, Reports
-        await activities.destroy({ where: { project_id: id }, transaction: t });
-        await notifications.destroy({ where: { project_id: id }, transaction: t });
-        await reports.destroy({ where: { project_id: id }, transaction: t });
-
-        // E. Folders
-        await folders.destroy({ where: { project_id: id }, transaction: t });
-
-        // F. Rooms, Messages, Members
-        if (roomIds.length > 0) {
-            await chat_messages.destroy({ where: { room_id: { [Op.in]: roomIds } }, transaction: t });
-            await room_members.destroy({ where: { room_id: { [Op.in]: roomIds } }, transaction: t });
-            await rooms.destroy({ where: { project_id: id }, transaction: t });
-        }
-
-        // G. Project Members
-        await project_members.destroy({ where: { project_id: id }, transaction: t });
-
-        // H. Storage Update
-        if (totalSizeToDeleteMb > 0) {
-            await organizations.decrement('storage_used_mb', {
-                by: totalSizeToDeleteMb,
-                where: { id: authUser.organization_id },
-                transaction: t
-            });
-        }
-
-        // I. Finally, the Project itself
-        await project.destroy({ transaction: t });
-
-        await t.commit();
-        res.status(200).json({ message: "Project and all associated data deleted successfully" });
     } catch (error) {
         if (t) await t.rollback();
         console.error("Delete Project Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const restoreProject = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can restore projects" });
+        }
+
+        const project = await projects.findOne({ 
+            where: { id, organization_id: authUser.organization_id },
+            paranoid: false 
+        });
+
+        if (!project) {
+            return res.status(404).json({ error: "Project not found or not authorized" });
+        }
+
+        if (!project.deletedAt) {
+            return res.status(400).json({ error: "Project is not in trash" });
+        }
+
+        await project.restore();
+        res.status(200).json({ message: "Project restored successfully", project });
+    } catch (error) {
+        console.error("Restore Project Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

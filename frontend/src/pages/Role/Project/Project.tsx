@@ -130,14 +130,14 @@ export default function Project({ id }: ProjectProps) {
 
     const handleDeleteProject = async () => {
         if (!user) return;
-        if (!window.confirm("Are you sure you want to permanently delete this project? This action cannot be undone.")) {
+        if (!window.confirm("Are you sure you want to delete this project? It will be moved to the Trash and can be recovered later from your Profile settings.")) {
             return;
         }
 
         try {
             setIsDeleting(true);
             await deleteProject(id);
-            toast.success("Project deleted successfully");
+            toast.success("Project moved to Trash");
             router.push(`/${user.role}/dashboard`);
         } catch (error) {
             console.error("Failed to delete project:", error);

@@ -83,11 +83,16 @@ export const projectLogin = async (req: Request, res: Response) => {
                     { contributor_code: code },
                     { client_code: code }
                 ]
-            }
+            },
+            paranoid: false
         });
 
         if (!project) {
             return res.status(404).json({ error: "Invalid project code" });
+        }
+
+        if (project.deletedAt) {
+            return res.status(400).json({ error: "Project is deleted" });
         }
 
         if (!email && !phone) {
@@ -393,10 +398,15 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                     { contributor_code: project_code },
                     { client_code: project_code }
                 ]
-            }
+            },
+            paranoid: false
         });
 
         if (!project) return res.status(404).json({ error: "Invalid project code" });
+
+        if (project.deletedAt) {
+            return res.status(400).json({ error: "Project is deleted" });
+        }
 
         const normalizedEmail = email?.toLowerCase() || null;
         const normalizedPhone = phone ? normalizePhone(phone) : null;
@@ -654,6 +664,7 @@ export const getMyMemberships = async (req: Request, res: Response) => {
             where: { user_id: authUser.user_id },
             include: [{ 
                 model: projects, 
+                required: true,
                 attributes: ['id', 'name', 'organization_id'],
                 include: [{ model: organizations, attributes: ['name'] }]
             }]
