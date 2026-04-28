@@ -565,19 +565,26 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary overflow-hidden">
                   <img src={photo.downloadUrl} alt={photo.file_name} className="w-full h-full object-cover" />
                 </div>
-                <div
-                  className="flex-1 min-w-0 text-left cursor-pointer hover:underline"
-                  onClick={(e) => {
-                    if (!isSelectionMode) {
-                      e.stopPropagation();
-                      setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
-                    }
-                  }}
-                >
-                  <p className="text-[10px] font-semibold truncate">{photo.file_name}</p>
-                  <p className="text-[9px] text-muted-foreground">
-                    {formatFileSize(photo.file_size_mb)} • {new Date(photo.created_at).toLocaleDateString()}
-                  </p>
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <div
+                    className="min-w-0 text-left cursor-pointer hover:underline"
+                    onClick={(e) => {
+                      if (!isSelectionMode) {
+                        e.stopPropagation();
+                        setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
+                      }
+                    }}
+                  >
+                    <p className="text-[10px] font-semibold truncate">{photo.file_name}</p>
+                    <p className="text-[9px] text-muted-foreground">
+                      {formatFileSize(photo.file_size_mb)} • {new Date(photo.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {photo.do_not_follow && (
+                    <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
+                      <ShieldAlert className="h-2.5 w-2.5" /> DO NOT FOLLOW
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   {!isSelectionMode && (
@@ -637,42 +644,44 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 <img src={photo.downloadUrl} alt={photo.file_name} className={`w-full h-full object-cover ${isSelected ? 'opacity-80' : ''}`} />
               </button>
 
-              <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
-                {isSelectionMode ? (
+              {isSelectionMode && (
+                <div className="absolute top-2 right-2 z-10">
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} />
-                ) : (
-                  <>
+                </div>
+              )}
+
+              {!isSelectionMode && (
+                <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShareItem(photo); }}
+                    className="rounded-full p-1 hover:bg-secondary transition-colors"
+                  >
+                    <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
+                  </button>
+                  {(user.role === 'admin' || user.role === 'superadmin') && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setShareItem(photo); }}
+                      onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
                       className="rounded-full p-1 hover:bg-secondary transition-colors"
+                      title={`Toggle client visibility (Currently: ${photo.client_visible !== false ? 'Visible' : 'Hidden'})`}
                     >
-                      <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
+                      {photo.client_visible !== false ? (
+                        <Eye className="h-2.5 w-2.5 text-accent" />
+                      ) : (
+                        <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />
+                      )}
                     </button>
-                    {(user.role === 'admin' || user.role === 'superadmin') && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
-                        className="rounded-full p-1 hover:bg-secondary transition-colors"
-                        title={`Toggle client visibility (Currently: ${photo.client_visible !== false ? 'Visible' : 'Hidden'})`}
-                      >
-                        {photo.client_visible !== false ? (
-                          <Eye className="h-2.5 w-2.5 text-accent" />
-                        ) : (
-                          <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />
-                        )}
-                      </button>
-                    )}
-                    {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
-                        className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
-                        title="Delete photo"
-                      >
-                        <Trash2 className="h-2.5 w-2.5 text-destructive" />
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
+                  )}
+                  {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
+                      className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
+                      title="Delete photo"
+                    >
+                      <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                    </button>
+                  )}
+                </div>
+              )}
               {photo.do_not_follow && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
                   DNF
