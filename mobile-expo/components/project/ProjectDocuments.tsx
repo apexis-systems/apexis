@@ -1496,17 +1496,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 {((selectedFolders.size > 0 && (user.role === 'admin' || user.role === 'superadmin')) || (selectedFiles.size > 0)) && (
                                     <TouchableOpacity
                                         onPress={() => {
-                                            if (selectedFolders.size === 1 && selectedFiles.size === 0) {
-                                                const folderId = Array.from(selectedFolders)[0];
-                                                setMovingItem({ type: 'folder', id: folderId });
-                                                setShowMoveDialog(true);
-                                            } else if (selectedFiles.size === 1 && selectedFolders.size === 0) {
-                                                const fileId = Array.from(selectedFiles)[0];
-                                                setMovingItem({ type: 'file', id: fileId });
-                                                setShowMoveDialog(true);
-                                            } else {
-                                                Alert.alert("Info", "Select a single item to move");
-                                            }
+                                            setMovingItem(null);
+                                            setShowMoveDialog(true);
                                         }}
                                         style={{ padding: 4 }}
                                         disabled={processing !== null}

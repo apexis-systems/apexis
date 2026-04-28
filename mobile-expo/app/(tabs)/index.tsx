@@ -612,7 +612,9 @@ export default function DashboardScreen() {
             {filteredProjects.map((project) => (
               <TouchableOpacity
                 key={project.id}
-                onPress={() => router.push(`/project/${project.id}`)}
+                onPress={() => {
+                  router.push(`/project/${project.id}`);
+                }}
                 style={{ width: '22%', alignItems: 'center', gap: 6 }}
               >
                 {/* Thumbnail */}

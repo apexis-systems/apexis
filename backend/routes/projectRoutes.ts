@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createProject, getProjects, getProjectById, updateProject, exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember, deleteProject, getMemberForTag } from "../controllers/projectController.ts";
+import { createProject, getProjects, getProjectById, updateProject, exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember, deleteProject, getMemberForTag, restoreProject } from "../controllers/projectController.ts";
 import { verifyToken, isAdmin } from "../middleware/verifyToken.ts";
 import { checkLimit } from "../middleware/checkLimit.ts";
 
@@ -16,6 +16,7 @@ router.get("/:id/members-for-tagging", getMemberForTag);
 router.delete("/:id/members/:userId", isAdmin, removeProjectMember);
 router.get("/:id/share-links", getProjectShareLinks);
 router.patch("/:id", isAdmin, updateProject);
+router.post("/:id/restore", isAdmin, restoreProject);
 router.delete("/:id", isAdmin, deleteProject);
 router.post("/:id/export-handover", isAdmin, checkLimit('export_handover'), exportHandoverPackage);
 router.get("/:id/export-handover", isAdmin, getLatestExport);

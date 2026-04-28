@@ -18,6 +18,7 @@ export interface RFI {
     expiry_date?: string;
     response?: string;
     responsePhotoUrls?: string[];
+    response_photos?: string[] | null;
 }
 
 export const getRFIs = async (projectId: number): Promise<RFI[]> => {

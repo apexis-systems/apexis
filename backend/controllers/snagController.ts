@@ -221,7 +221,7 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
     (snag as any).status = status;
 
     const { response } = req.body;
-    if (response) (snag as any).response = response;
+    if (response !== undefined) (snag as any).response = response;
 
     // Handle response photos: Replace existing if new ones uploaded
     let uploadedResponsePhotos: string[] = [];
@@ -249,7 +249,7 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
         uploadedResponsePhotos.push(key);
       }
     } else {
-        uploadedResponsePhotos = snag.response_photos || [];
+      uploadedResponsePhotos = snag.response_photos || [];
     }
     (snag as any).response_photos = uploadedResponsePhotos;
 

@@ -174,9 +174,9 @@ export const createRFI = async (req: Request | any, res: Response) => {
             });
             const projectContributors = await project_members.findAll({
                 where: { project_id: Number(project_id), role: 'contributor' },
-                include: [{ 
-                    model: users, 
-                    as: 'user', 
+                include: [{
+                    model: users,
+                    as: 'user',
                     attributes: ['id']
                 }]
             });
@@ -221,7 +221,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
         });
 
         const rfiWithUrls = await withPresignedUrls(full!);
-        
+
         try {
             getIO().to(`project-${project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
         } catch (e) {
@@ -428,7 +428,7 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
         if (status && ['open', 'closed', 'overdue'].includes(status)) (rfi as any).status = status;
         (rfi as any).response_photos = uploadedResponsePhotos;
         rfi.changed('response_photos', true);
-        
+
         await rfi.save();
 
         await logActivity({
@@ -582,7 +582,7 @@ export const updateRFI = async (req: Request | any, res: Response) => {
         });
 
         const rfiWithUrls = await withPresignedUrls(full!);
-        
+
         try {
             getIO().to(`project-${rfi.project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
         } catch (e) {

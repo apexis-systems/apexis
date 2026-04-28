@@ -57,6 +57,7 @@ export default (sequelize: Sequelize) => {
         {
             tableName: "projects",
             timestamps: true,
+            paranoid: true,
         }
     );
 
