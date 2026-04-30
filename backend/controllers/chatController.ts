@@ -392,6 +392,48 @@ export const uploadChatFile = async (req: Request, res: Response) => {
     }
 };
 
+export const downloadFileProxy = async (req: Request, res: Response) => {
+    try {
+        const { messageId } = req.params;
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
+
+        const msg = await chat_messages.findByPk(messageId);
+        if (!msg || !msg.file_url) return res.status(404).json({ error: 'File not found' });
+
+        // Check room membership
+        const membership = await room_members.findOne({
+            where: { room_id: msg.room_id, user_id: authUser.user_id }
+        });
+        if (!membership) return res.status(403).json({ error: 'Forbidden' });
+
+        const s3Client = new S3Client({
+            region: process.env.AWS_REGION || "ap-south-2",
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+            }
+        });
+        const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
+
+        const command = new GetObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: msg.file_url
+        });
+
+        const response = await s3Client.send(command);
+        const stream = response.Body as any;
+
+        res.setHeader('Content-Disposition', `attachment; filename="${msg.file_name || 'download'}"`);
+        res.setHeader('Content-Type', msg.file_type || 'application/octet-stream');
+        
+        stream.pipe(res);
+    } catch (error) {
+        console.error('Download Proxy Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 export const createRoom = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;

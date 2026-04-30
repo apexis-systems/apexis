@@ -61,10 +61,15 @@ export const uploadScans = async (
     }
 };
 
-export const getProjectFiles = async (projectId: string | number, folder_type?: string) => {
+export const getProjectFiles = async (projectId: string | number, folder_type?: string, search?: string) => {
     try {
         let url = `/files/${projectId}`;
-        if (folder_type) url += `?folder_type=${folder_type}`;
+        const params: string[] = [];
+        if (folder_type) params.push(`folder_type=${folder_type}`);
+        if (search) params.push(`search=${encodeURIComponent(search)}`);
+        
+        if (params.length > 0) url += `?${params.join('&')}`;
+        
         const response = await PrivateAxios.get(url);
         return response.data;
     } catch (error) {
