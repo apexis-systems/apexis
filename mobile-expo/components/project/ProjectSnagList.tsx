@@ -36,6 +36,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import FullScreenImageModal from "@/components/shared/FullScreenImageModal";
 import ImageAnnotator from "../common/ImageAnnotator";
+import { KeyboardAvoidingView } from "react-native";
 
 interface Props {
     project: Project;
@@ -530,6 +531,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 presentationStyle="overFullScreen"
                 onRequestClose={() => { setSelectedSnag(null); setIsEditing(false); setResponseComment(""); setResponsePhotos([]); }}
             >
+                <KeyboardAvoidingView
+                          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                          style={{ flex: 1 }}
+                        >
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
                     <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '85%', padding: 16 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
@@ -937,6 +942,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                         )}
                     </View>
                 </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Root-level Photo Viewer (for list view clicks when detail modal is closed) */}

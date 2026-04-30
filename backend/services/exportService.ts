@@ -465,7 +465,7 @@ const drawBrandedHeader = (doc: any, titleStr: string, taglineStr: string, orgNa
     let textLeft = clusterLeft;
     if (hasLogo) {
         try {
-            const logoSrc = orgLogo ;
+            const logoSrc = orgLogo;
             doc.image(logoSrc, clusterLeft, blockTop, { height: logoH });
         } catch (e) { /* ignore */ }
         textLeft = clusterLeft + logoH + gap;
@@ -601,24 +601,24 @@ const drawInfoBox = (doc: any, x: number, y: number, w: number, h: number, label
     doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND.ink).text(value || ' ', x + 8, y + 16, { width: w - 16 });
 };
 
-const drawInfoGrid = (doc: any, left: number, gridY: number, colW: number, items: {label: string, value: string}[]) => {
+const drawInfoGrid = (doc: any, left: number, gridY: number, colW: number, items: { label: string, value: string }[]) => {
     let currentY = gridY;
-    
+
     for (let i = 0; i < items.length; i += 2) {
         const item1 = items[i];
-        const item2 = items[i+1];
-        
+        const item2 = items[i + 1];
+
         doc.font('Helvetica-Bold').fontSize(9);
         const h1 = item1 ? doc.heightOfString(item1.value || ' ', { width: colW - 16 }) + 22 : 34;
         const h2 = item2 ? doc.heightOfString(item2.value || ' ', { width: colW - 16 }) + 22 : 34;
         const rowH = Math.max(34, h1, h2);
-        
+
         if (item1) drawInfoBox(doc, left, currentY, colW, rowH, item1.label, item1.value);
         if (item2) drawInfoBox(doc, left + colW + 10, currentY, colW, rowH, item2.label, item2.value);
-        
+
         currentY += rowH + 4;
     }
-    
+
     return currentY;
 };
 
@@ -834,6 +834,8 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
     const doc = new PDFDocument({ size: 'A4', margins: margin, bufferPages: true });
     const chunks: any[] = [];
 
+    console.log("report pdf assets::", JSON.stringify(report));
+
     if (fs.existsSync(REPORT_PDF_ASSETS.angelica)) {
         doc.registerFont('Angelica', REPORT_PDF_ASSETS.angelica);
     }
@@ -844,19 +846,29 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
         try { orgLogoBuffer = await fetchS3Buffer(organization.logo); } catch (e) { console.error("Failed to fetch org logo", e); }
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
-
         // Header Pass
         drawBrandedHeader(doc, 'Daily Project Report', '', orgNameBrand, orgLogoBuffer);
         const s = (report.summary || {}) as any;
 
-        // Project Info Grid
-        const gridY = doc.y + 10;
         const left = margin.left;
         const r = doc.page.width - margin.right;
+        const contentBottom = doc.page.height - margin.bottom - 40;
+
+        const ensureSpace = (h: number) => {
+            if (doc.y + h > contentBottom) {
+                doc.addPage();
+                doc.y = 85; // Reserve space for header
+                return true;
+            }
+            return false;
+        };
+
+        // Project Info Grid
+        const gridY = doc.y + 10;
         const colW = (r - left - 10) / 2;
 
         const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ' ';
@@ -916,6 +928,68 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
             { text: 'Raised By', w: snagW * 0.2 }
         ], snagRows);
 
+        // 5. Uploaded Photos
+        const uploadedPhotos = summary.uploaded_photos || [];
+        if (uploadedPhotos.length > 0) {
+            // Start Section 5 on a new page to ensure the 6-photo grid covers the page
+            doc.addPage();
+            doc.y = 85;
+
+            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 5 - UPLOADED PHOTOS', left, doc.y).restore();
+            doc.moveDown(1);
+
+            const gridCols = 2;
+            const gridRows = 3;
+            const photosPerPage = gridCols * gridRows;
+            const gapX = 25;
+            const gapY = 35; // Space for image + caption + margin
+            
+            const imgW = (r - left - gapX) / gridCols;
+            const imgH = imgW * 0.75; // 4:3 aspect ratio
+
+            let currentX = left;
+            let startY = doc.y;
+
+            for (let i = 0; i < uploadedPhotos.length; i++) {
+                const photo = uploadedPhotos[i];
+
+                // Page break logic: if we've filled the current page (6 photos)
+                if (i > 0 && i % photosPerPage === 0) {
+                    doc.addPage();
+                    doc.y = 85;
+                    startY = doc.y;
+                    currentX = left;
+                }
+
+                try {
+                    const imgBuffer = await fetchS3Buffer(photo.key);
+                    doc.image(imgBuffer, currentX, startY, { width: imgW, height: imgH });
+                    
+                    // Draw path below image
+                    doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(
+                        photo.path,
+                        currentX,
+                        startY + imgH + 4,
+                        { width: imgW, align: 'center', lineBreak: false }
+                    );
+                } catch (e) {
+                    console.error("Failed to draw photo in report", e);
+                    doc.rect(currentX, startY, imgW, imgH).stroke();
+                    doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });
+                }
+
+                // Move to next column
+                if ((i + 1) % gridCols === 0) {
+                    currentX = left;
+                    startY += imgH + gapY;
+                    doc.y = startY;
+                } else {
+                    currentX += imgW + gapX;
+                }
+            }
+            doc.y = startY + (uploadedPhotos.length % gridCols !== 0 ? imgH + gapY : 0);
+        }
+
         // Finalize Headers & Footers
         const range = doc.bufferedPageRange();
         for (let i = 0; i < range.count; i++) {
@@ -951,16 +1025,27 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
         try { orgLogoBuffer = await fetchS3Buffer(organization.logo); } catch (e) { console.error("Failed to fetch org logo", e); }
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
+        const left = margin.left;
+        const r = doc.page.width - margin.right;
+        const contentBottom = doc.page.height - margin.bottom - 40;
+
+        const ensureSpace = (h: number) => {
+            if (doc.y + h > contentBottom) {
+                doc.addPage();
+                doc.y = 85; // Reserve space for header
+                return true;
+            }
+            return false;
+        };
+
         // --- PAGE 1 ---
         drawBrandedHeader(doc, 'Weekly Project Report', '', orgNameBrand, orgLogoBuffer);
 
-        const left = margin.left;
-        const r = doc.page.width - margin.right;
         const colW = (r - left - 10) / 2;
         const gridY = doc.y + 10;
 
@@ -1028,6 +1113,49 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
             { text: 'Raised By', w: rfiW * 0.2 }
         ], rfiRows);
 
+        // 6. Uploaded Photos
+        const uploadedPhotos = summary.uploaded_photos || [];
+        if (uploadedPhotos.length > 0) {
+            doc.addPage();
+            doc.y = 85;
+            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 6 - UPLOADED PHOTOS', left, doc.y).restore();
+            doc.moveDown(1);
+            const gridCols = 2;
+            const gridRows = 3;
+            const photosPerPage = gridCols * gridRows;
+            const gapX = 25;
+            const gapY = 35;
+            const imgW = (r - left - gapX) / gridCols;
+            const imgH = imgW * 0.75;
+            let currentX = left;
+            let startY = doc.y;
+            for (let i = 0; i < uploadedPhotos.length; i++) {
+                const photo = uploadedPhotos[i];
+                if (i > 0 && i % photosPerPage === 0) {
+                    doc.addPage();
+                    doc.y = 85;
+                    startY = doc.y;
+                    currentX = left;
+                }
+                try {
+                    const imgBuffer = await fetchS3Buffer(photo.key);
+                    doc.image(imgBuffer, currentX, startY, { width: imgW, height: imgH });
+                    doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
+                } catch (e) {
+                    doc.rect(currentX, startY, imgW, imgH).stroke();
+                    doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });
+                }
+                if ((i + 1) % gridCols === 0) {
+                    currentX = left;
+                    startY += imgH + gapY;
+                    doc.y = startY;
+                } else {
+                    currentX += imgW + gapX;
+                }
+            }
+            doc.y = startY + (uploadedPhotos.length % gridCols !== 0 ? imgH + gapY : 0);
+        }
+
         // // --- PAGE 2 ---
         // doc.addPage();
         // drawBrandedHeader(doc, 'Weekly Project Report', 'RECORD · REPORT · RELEASE', true);
@@ -1085,10 +1213,23 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         try { orgLogoBuffer = await fetchS3Buffer(organization.logo); } catch (e) { console.error("Failed to fetch org logo", e); }
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
+
+        const left = margin.left;
+        const r = doc.page.width - margin.right;
+        const contentBottom = doc.page.height - margin.bottom - 40;
+
+        const ensureSpace = (h: number) => {
+            if (doc.y + h > contentBottom) {
+                doc.addPage();
+                doc.y = 85; // Reserve space for header
+                return true;
+            }
+            return false;
+        };
 
         // --- PAGE 1: COVER ---
         drawMonthlyCoverPage(doc, project, report, orgName, orgLogoBuffer);
@@ -1097,8 +1238,7 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         doc.addPage();
         drawBrandedHeader(doc, 'Monthly Project Report', '', orgNameBrand, orgLogoBuffer);
 
-        const left = margin.left;
-        const r = doc.page.width - margin.right;
+        
         const colW = (r - left - 10) / 2;
         const gridY = doc.y + 10;
 
@@ -1167,6 +1307,49 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
             { text: 'Raised By', w: tblW * 0.2 },
             { text: 'Status', w: tblW * 0.2 }
         ], snagRows);
+
+        // 6. Uploaded Photos
+        const uploadedPhotos = summary.uploaded_photos || [];
+        if (uploadedPhotos.length > 0) {
+            doc.addPage();
+            doc.y = 85;
+            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 6 - UPLOADED PHOTOS', left, doc.y).restore();
+            doc.moveDown(1);
+            const gridCols = 2;
+            const gridRows = 3;
+            const photosPerPage = gridCols * gridRows;
+            const gapX = 25;
+            const gapY = 35;
+            const imgW = (r - left - gapX) / gridCols;
+            const imgH = imgW * 0.75;
+            let currentX = left;
+            let startY = doc.y;
+            for (let i = 0; i < uploadedPhotos.length; i++) {
+                const photo = uploadedPhotos[i];
+                if (i > 0 && i % photosPerPage === 0) {
+                    doc.addPage();
+                    doc.y = 85;
+                    startY = doc.y;
+                    currentX = left;
+                }
+                try {
+                    const imgBuffer = await fetchS3Buffer(photo.key);
+                    doc.image(imgBuffer, currentX, startY, { width: imgW, height: imgH });
+                    doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
+                } catch (e) {
+                    doc.rect(currentX, startY, imgW, imgH).stroke();
+                    doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });
+                }
+                if ((i + 1) % gridCols === 0) {
+                    currentX = left;
+                    startY += imgH + gapY;
+                    doc.y = startY;
+                } else {
+                    currentX += imgW + gapX;
+                }
+            }
+            doc.y = startY + (uploadedPhotos.length % gridCols !== 0 ? imgH + gapY : 0);
+        }
 
 
         // // Section 7 - Key Decisions

@@ -510,6 +510,7 @@ export const updateRFI = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         const { id } = req.params;
         const { title, description, assigned_to, expiry_date, removedPhotos } = req.body;
+        
 
         const rfi = await rfis.findByPk(id);
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
@@ -530,10 +531,20 @@ export const updateRFI = async (req: Request | any, res: Response) => {
         if (expiry_date !== undefined) rfi.expiry_date = expiry_date ? new Date(expiry_date) : null;
 
         let currentPhotos: string[] = rfi.photos || [];
-        if (req.files && Array.isArray(req.files) && (req.files as any[]).length > 0) {
-            currentPhotos = [];
-        } else if (removedPhotos) {
-            const toRemove = Array.isArray(removedPhotos) ? removedPhotos : [removedPhotos];
+        if (removedPhotos) {
+            let toRemove: string[] = [];
+            if (Array.isArray(removedPhotos)) {
+                toRemove = removedPhotos;
+            } else if (typeof removedPhotos === 'string') {
+                // Handle comma separated or single string
+                if (removedPhotos.startsWith('[') && removedPhotos.endsWith(']')) {
+                    try { toRemove = JSON.parse(removedPhotos); } catch (e) { toRemove = [removedPhotos]; }
+                } else {
+                    toRemove = removedPhotos.split(',').map(s => s.trim());
+                }
+            }
+            
+            console.log('RFI Update - Photos to remove (parsed):', toRemove);
             currentPhotos = currentPhotos.filter(p => !toRemove.includes(p));
         }
         if (req.files && Array.isArray(req.files)) {

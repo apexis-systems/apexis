@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
-  Modal, ScrollView, TextInput, Alert, StyleSheet, Platform, RefreshControl, Dimensions
+  Modal, ScrollView, TextInput, Alert, StyleSheet, Platform, RefreshControl, Dimensions,
+  KeyboardAvoidingView
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,6 +62,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [assignedToId, setAssignedToId] = useState<number | null>(null);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [expiryDate, setExpiryDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -284,11 +286,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       }
 
       if (cameraMode === 'create') {
-        setSelectedImages([uri]);
-        setAnnotatingImageIndex(0);
+        setSelectedImages(prev => [...prev, uri]);
+        setAnnotatingImageIndex(selectedImages.length);
       } else {
-        setResponseImages([uri]);
-        setAnnotatingImageIndex(0);
+        setResponseImages(prev => [...prev, uri]);
+        setAnnotatingImageIndex(responseImages.length);
       }
     } catch (error) {
       console.error('pickImageFiles error', error);
@@ -333,13 +335,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       );
 
       if (cameraMode === 'create') {
-        // Single photo for create to match snag-create
-        setSelectedImages([manipulated.uri]);
-        setAnnotatingImageIndex(0);
+        // Append photo for create
+        setSelectedImages(prev => [...prev, manipulated.uri]);
+        setAnnotatingImageIndex(selectedImages.length);
       } else {
-        // Single photo for response: replace existing
-        setResponseImages([manipulated.uri]);
-        setAnnotatingImageIndex(0);
+        // Append photo for response
+        setResponseImages(prev => [...prev, manipulated.uri]);
+        setAnnotatingImageIndex(responseImages.length);
       }
     } catch (e: any) {
       console.error('capturePhoto error', e);
@@ -355,7 +357,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     setAssignedToId(null);
     setExpiryDate(null);
     setSelectedImages([]);
+    setRemovedPhotos([]);
     setIsEditing(false);
+    setSelectedRFI(null);
   };
 
   const handleCreateRFI = async () => {
@@ -408,6 +412,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       formData.append('description', description.trim());
       formData.append('assigned_to', String(assignedToId));
       if (expiryDate) formData.append('expiry_date', expiryDate.toISOString());
+
+
+      if (removedPhotos.length > 0) {
+        removedPhotos.forEach(key => {
+          
+          formData.append('removedPhotos', key);
+        });
+      }
 
       selectedImages.forEach((uri, index) => {
         if (uri.startsWith('http')) return; // skip existing
@@ -673,236 +685,243 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         transparent
         onRequestClose={() => { setDetailModalVisible(false); setResponseBody(''); setResponseImages([]); }}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{
-            backgroundColor: colors.background,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            height: '80%',
-            padding: 20
-          }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>RFI Details</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{
+              backgroundColor: colors.background,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              height: '80%',
+              padding: 20
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>RFI Details</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                  {selectedRFI && String(selectedRFI.created_by) === String(user.id) && !selectedRFI.response && !selectedRFI?.response_photos && (
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity onPress={() => {
+                        setTitle(selectedRFI.title);
+                        setDescription(selectedRFI.description || '');
+                        setAssignedToId(selectedRFI.assigned_to);
+                        setExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date) : null);
+                        setSelectedImages(selectedRFI.photoDownloadUrls || []);
+                        setIsEditing(true);
+                        setCreateModalVisible(true);
+                      }}>
+                        <Feather name="edit" size={20} color={colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteRFI(selectedRFI.id)}>
+                        <Feather name="trash-2" size={20} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  <TouchableOpacity onPress={() => { setDetailModalVisible(false); setResponseBody(''); setResponseImages([]); }}>
+                    <Feather name="x" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                {selectedRFI && String(selectedRFI.created_by) === String(user.id) && !selectedRFI.response && !selectedRFI?.response_photos && (
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity onPress={() => {
-                      setTitle(selectedRFI.title);
-                      setDescription(selectedRFI.description || '');
-                      setAssignedToId(selectedRFI.assigned_to);
-                      setExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date) : null);
-                      setSelectedImages(selectedRFI.photoDownloadUrls || []);
-                      setIsEditing(true);
-                      setCreateModalVisible(true);
-                    }}>
-                      <Feather name="edit" size={20} color={colors.primary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDeleteRFI(selectedRFI.id)}>
-                      <Feather name="trash-2" size={20} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                <TouchableOpacity onPress={() => { setDetailModalVisible(false); setResponseBody(''); setResponseImages([]); }}>
-                  <Feather name="x" size={24} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-            </View>
 
-            {selectedRFI && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={{ marginBottom: 20 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <View style={{
-                      backgroundColor: statusConfig[selectedRFI.status]?.bg || 'rgba(0,0,0,0.1)',
-                      paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20
-                    }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: statusConfig[selectedRFI.status]?.color }}>
-                        {statusConfig[selectedRFI.status]?.label}
+              {selectedRFI && (
+                <ScrollView showsVerticalScrollIndicator={false}>
+
+                  <View style={{ marginBottom: 20 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <View style={{
+                        backgroundColor: statusConfig[selectedRFI.status]?.bg || 'rgba(0,0,0,0.1)',
+                        paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20
+                      }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: statusConfig[selectedRFI.status]?.color }}>
+                          {statusConfig[selectedRFI.status]?.label}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                        Created on {new Date(selectedRFI.createdAt).toLocaleDateString()}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                      Created on {new Date(selectedRFI.createdAt).toLocaleDateString()}
+
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text, marginBottom: 12 }}>
+                      {selectedRFI.title}
                     </Text>
-                  </View>
 
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text, marginBottom: 12 }}>
-                    {selectedRFI.title}
-                  </Text>
+                    <Text style={{ fontSize: 14, color: colors.text, lineHeight: 22, marginBottom: 20 }}>
+                      {selectedRFI.description}
+                    </Text>
 
-                  <Text style={{ fontSize: 14, color: colors.text, lineHeight: 22, marginBottom: 20 }}>
-                    {selectedRFI.description}
-                  </Text>
-
-                  <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 16, gap: 12, marginBottom: 20 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 13, color: colors.textMuted }}>Created by</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{selectedRFI.creator?.name}</Text>
+                    <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 16, gap: 12, marginBottom: 20 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>Created by</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{selectedRFI.creator?.name}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>Assigned to</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{selectedRFI.assignee?.name || 'Unassigned'}</Text>
+                      </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 13, color: colors.textMuted }}>Assigned to</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{selectedRFI.assignee?.name || 'Unassigned'}</Text>
-                    </View>
-                  </View>
 
-                  {(selectedRFI?.photoDownloadUrls?.length || 0) > 0 && (
-                    <View style={{ marginBottom: 20 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>Attachments</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                        {(selectedRFI?.photoDownloadUrls || []).map((url, idx) => (
-                          <View key={idx} style={{ position: 'relative' }}>
-                            <TouchableOpacity onPress={() => setPreviewImage(url)}>
-                              <Image
-                                source={url}
-                                style={{ width: 120, height: 120, borderRadius: 12 }}
-                                contentFit="cover"
-                                transition={200}
-                              />
-                            </TouchableOpacity>
-                          </View>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {selectedRFI.expiry_date && (
-                    <View style={{ marginBottom: 20, padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: selectedRFI.status === 'overdue' ? '#ef4444' : colors.primary }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase' }}>Expiry Date</Text>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: selectedRFI.status === 'overdue' ? '#ef4444' : colors.text }}>
-                        {new Date(selectedRFI.expiry_date).toLocaleString()}
-                      </Text>
-                    </View>
-                  )}
-
-                  {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
-                    <View style={{ marginBottom: 20, padding: 16, backgroundColor: colors.primary + '08', borderRadius: 16, borderWidth: 1, borderColor: colors.primary + '20' }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, marginBottom: 8, textTransform: 'uppercase' }}>Response</Text>
-                      {selectedRFI.response ? <Text style={{ fontSize: 14, color: colors.text, lineHeight: 22, marginBottom: 12 }}>{selectedRFI.response}</Text> : null}
-                      {/* Existing Response Photos */}
-                      {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
-                          {selectedRFI.responsePhotoUrls.map((uri, idx) => (
+                    {(selectedRFI?.photoDownloadUrls?.length || 0) > 0 && (
+                      <View style={{ marginBottom: 20 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>Attachments</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                          {(selectedRFI?.photoDownloadUrls || []).map((url, idx) => (
                             <View key={idx} style={{ position: 'relative' }}>
-                              <TouchableOpacity onPress={() => setPreviewImage(uri)}>
-                                <Image source={{ uri }} style={{ width: 100, height: 100, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
+                              <TouchableOpacity onPress={() => setPreviewImage(url)}>
+                                <Image
+                                  source={url}
+                                  style={{ width: 120, height: 120, borderRadius: 12 }}
+                                  contentFit="cover"
+                                  transition={200}
+                                />
                               </TouchableOpacity>
                             </View>
                           ))}
-                        </View>
-                      )}
-                    </View>
-                  )}
+                        </ScrollView>
+                      </View>
+                    )}
 
-                  {String(selectedRFI.assigned_to) === String(user.id) && (
-                    <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? 'Update Response' : 'Provide Response'}</Text>
+                    {selectedRFI.expiry_date && (
+                      <View style={{ marginBottom: 20, padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: selectedRFI.status === 'overdue' ? '#ef4444' : colors.primary }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase' }}>Expiry Date</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: selectedRFI.status === 'overdue' ? '#ef4444' : colors.text }}>
+                          {new Date(selectedRFI.expiry_date).toLocaleString()}
+                        </Text>
+                      </View>
+                    )}
 
-                      {selectedRFI.status !== 'closed' ? (
-                        <>
-                          <TextInput
-                            value={responseBody}
-                            onChangeText={setResponseBody}
-                            placeholder="Type your response here..."
-                            placeholderTextColor={colors.textMuted}
-                            multiline
-                            style={{
-                              minHeight: 100,
-                              backgroundColor: colors.surface,
-                              borderRadius: 12,
-                              padding: 12,
-                              color: colors.text,
-                              borderWidth: 1,
-                              borderColor: colors.border,
-                              textAlignVertical: 'top'
-                            }}
-                          />
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                            {responseImages.map((uri, idx) => (
+                    {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
+                      <View style={{ marginBottom: 20, padding: 16, backgroundColor: colors.primary + '08', borderRadius: 16, borderWidth: 1, borderColor: colors.primary + '20' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, marginBottom: 8, textTransform: 'uppercase' }}>Response</Text>
+                        {selectedRFI.response ? <Text style={{ fontSize: 14, color: colors.text, lineHeight: 22, marginBottom: 12 }}>{selectedRFI.response}</Text> : null}
+                        {/* Existing Response Photos */}
+                        {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+                            {selectedRFI.responsePhotoUrls.map((uri, idx) => (
                               <View key={idx} style={{ position: 'relative' }}>
-                                <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
-                                <TouchableOpacity
-                                  onPress={() => setResponseImages(prev => prev.filter((_, i) => i !== idx))}
-                                  style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
-                                >
-                                  <Feather name="x" size={14} color="#fff" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => { setCameraMode('response'); setAnnotatingImageIndex(idx); }}
-                                  style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
-                                >
-                                  <Feather name="edit-2" size={12} color="#fff" />
+                                <TouchableOpacity onPress={() => setPreviewImage(uri)}>
+                                  <Image source={{ uri }} style={{ width: 100, height: 100, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
                                 </TouchableOpacity>
                               </View>
                             ))}
-                            <TouchableOpacity
-                              onPress={pickResponsePhotos}
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {String(selectedRFI.assigned_to) === String(user.id) && (
+                      <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? 'Update Response' : 'Provide Response'}</Text>
+
+                        {selectedRFI.status !== 'closed' ? (
+                          <>
+                            <TextInput
+                              value={responseBody}
+                              onChangeText={setResponseBody}
+                              placeholder="Type your response here..."
+                              placeholderTextColor={colors.textMuted}
+                              multiline
                               style={{
-                                width: 80, height: 80, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
-                                alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
+                                minHeight: 100,
+                                backgroundColor: colors.surface,
+                                borderRadius: 12,
+                                padding: 12,
+                                color: colors.text,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                textAlignVertical: 'top'
+                              }}
+                            />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                              {responseImages.map((uri, idx) => (
+                                <View key={idx} style={{ position: 'relative' }}>
+                                  <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
+                                  <TouchableOpacity
+                                    onPress={() => setResponseImages(prev => prev.filter((_, i) => i !== idx))}
+                                    style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                                  >
+                                    <Feather name="x" size={14} color="#fff" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() => { setCameraMode('response'); setAnnotatingImageIndex(idx); }}
+                                    style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
+                                  >
+                                    <Feather name="edit-2" size={12} color="#fff" />
+                                  </TouchableOpacity>
+                                </View>
+                              ))}
+                              <TouchableOpacity
+                                onPress={pickResponsePhotos}
+                                style={{
+                                  width: 80, height: 80, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
+                                  alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
+                                }}
+                              >
+                                <Feather name="camera" size={24} color={colors.textMuted} />
+                              </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity
+                              onPress={handleUpdateResponse}
+                              disabled={updatingResponse || (!responseBody.trim() && responseImages.length === 0)}
+                              style={{
+                                backgroundColor: colors.primary,
+                                height: 48,
+                                borderRadius: 12,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                opacity: (updatingResponse || (!responseBody.trim() && responseImages.length === 0)) ? 0.6 : 1
                               }}
                             >
-                              <Feather name="camera" size={24} color={colors.textMuted} />
+                              {updatingResponse ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Submit Response</Text>}
                             </TouchableOpacity>
+                          </>
+                        ) : (
+                          <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 12, color: colors.textMuted }}>Closed RFIs cannot be updated</Text>
                           </View>
-                          <TouchableOpacity
-                            onPress={handleUpdateResponse}
-                            disabled={updatingResponse || (!responseBody.trim() && responseImages.length === 0)}
-                            style={{
-                              backgroundColor: colors.primary,
-                              height: 48,
-                              borderRadius: 12,
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              opacity: (updatingResponse || (!responseBody.trim() && responseImages.length === 0)) ? 0.6 : 1
-                            }}
-                          >
-                            {updatingResponse ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Submit Response</Text>}
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, alignItems: 'center' }}>
-                          <Text style={{ fontSize: 12, color: colors.textMuted }}>Closed RFIs cannot be updated</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                  {String(selectedRFI.assigned_to) === String(user.id) && (
-                    <View style={{ gap: 12 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Update Status</Text>
-                      <View style={{ flexDirection: 'row', gap: 10 }}>
-                        {['open', 'closed', 'overdue'].map((s) => (
-                          <TouchableOpacity
-                            key={s}
-                            onPress={() => handleStatusUpdate(selectedRFI.id, s)}
-                            style={{
-                              flex: 1,
-                              height: 40,
-                              borderRadius: 10,
-                              backgroundColor: selectedRFI.status === s ? statusConfig[s as keyof typeof statusConfig].color : colors.surface,
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              borderWidth: 1,
-                              borderColor: colors.border
-                            }}
-                          >
-                            <Text style={{
-                              fontSize: 12, fontWeight: '700',
-                              color: selectedRFI.status === s ? '#fff' : colors.text
-                            }}>
-                              {s.charAt(0).toUpperCase() + s.slice(1)}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
+                        )}
                       </View>
-                    </View>
-                  )}
-                </View>
-              </ScrollView>
-            )}
+                    )}
+
+                    {String(selectedRFI.assigned_to) === String(user.id) && (
+                      <View style={{ gap: 12 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Update Status</Text>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                          {['open', 'closed', 'overdue'].map((s) => (
+                            <TouchableOpacity
+                              key={s}
+                              onPress={() => handleStatusUpdate(selectedRFI.id, s)}
+                              style={{
+                                flex: 1,
+                                height: 40,
+                                borderRadius: 10,
+                                backgroundColor: selectedRFI.status === s ? statusConfig[s as keyof typeof statusConfig].color : colors.surface,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 1,
+                                borderColor: colors.border
+                              }}
+                            >
+                              <Text style={{
+                                fontSize: 12, fontWeight: '700',
+                                color: selectedRFI.status === s ? '#fff' : colors.text
+                              }}>
+                                {s.charAt(0).toUpperCase() + s.slice(1)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+
+                </ScrollView>
+              )}
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
 
         {/* ── Secondary Modals (Russian Doll nesting for iOS compatibility) ── */}
         {createModalVisible ? (
@@ -1047,7 +1066,34 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
                             />
                             <TouchableOpacity
-                              onPress={() => setSelectedImages(selectedImages.filter((_: string, i: number) => i !== idx))}
+                              onPress={() => {
+                                console.log('X clicked (NESTED) for URI:', uri);
+                                // If this was an original photo, we need to track its key for deletion
+                                if (isEditing && selectedRFI && uri.startsWith('http')) {
+                                  // Strip query params for more robust matching
+                                  const baseUri = uri.split('?')[0];
+                                  const originalIdx = selectedRFI.photoDownloadUrls?.findIndex(url => {
+                                    const baseUrl = url.split('?')[0];
+                                    return baseUrl === baseUri;
+                                  });
+                                  
+                                  console.log('Matching (NESTED) against original photos. Base URI:', baseUri);
+                                  console.log('Match found at index:', originalIdx);
+
+                                  if (originalIdx !== undefined && originalIdx !== -1) {
+                                    const keyToRemove = selectedRFI.photos[originalIdx];
+                                    console.log('Key to remove found:', keyToRemove);
+                                    if (keyToRemove) {
+                                      setRemovedPhotos(prev => {
+                                        const next = [...prev, keyToRemove];
+                                        console.log('Updated removedPhotos state (NESTED):', next);
+                                        return next;
+                                      });
+                                    }
+                                  }
+                                }
+                                setSelectedImages(selectedImages.filter((_, i) => i !== idx));
+                              }}
                               style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
                             >
                               <Feather name="x" size={14} color="#fff" />
@@ -1426,6 +1472,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           uri={previewImage}
           onEdit={(u) => { if (u) setAnnotatingRemoteUri(u); }}
         />
+
       </Modal>
 
       {/* Removed old redundant Create Modal location as it is now nested for iOS support */}
@@ -1654,7 +1701,33 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
                               />
                               <TouchableOpacity
-                                onPress={() => setSelectedImages(selectedImages.filter((_: string, i: number) => i !== idx))}
+                                onPress={() => {
+                                 
+                                  // If this was an original photo, we need to track its key for deletion
+                                  if (isEditing && selectedRFI && uri.startsWith('http')) {
+                                    // Strip query params for more robust matching
+                                    const baseUri = uri.split('?')[0];
+                                    const originalIdx = selectedRFI.photoDownloadUrls?.findIndex(url => {
+                                      const baseUrl = url.split('?')[0];
+                                      return baseUrl === baseUri;
+                                    });
+                                    
+                                   
+
+                                    if (originalIdx !== undefined && originalIdx !== -1) {
+                                      const keyToRemove = selectedRFI.photos[originalIdx];
+                                      
+                                      if (keyToRemove) {
+                                        setRemovedPhotos(prev => {
+                                          const next = [...prev, keyToRemove];
+                                          
+                                          return next;
+                                        });
+                                      }
+                                    }
+                                  }
+                                  setSelectedImages(selectedImages.filter((_, i) => i !== idx));
+                                }}
                                 style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
                               >
                                 <Feather name="x" size={14} color="#fff" />
