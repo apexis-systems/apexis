@@ -12,6 +12,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { Accelerometer } from 'expo-sensors';
 import Constants from 'expo-constants';
 import { parseApiError } from '@/helpers/apiError';
 
@@ -98,6 +99,29 @@ export default function UploadScreen() {
     const [isDocMode, setIsDocMode] = useState(params.type === 'documents');
     const [scanMode, setScanMode] = useState<'single' | 'separate'>('single');
 
+    // Physical Orientation Tracking (to bypass iOS Orientation Lock)
+    const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
+
+    useEffect(() => {
+        let subscription: any;
+        const _subscribe = () => {
+            subscription = Accelerometer.addListener(accelerometerData => {
+                const { x, y } = accelerometerData;
+                if (Math.abs(x) > Math.abs(y)) {
+                    if (x > 0.5) setPhysicalOrientation(90); // Landscape Left (Home button right)
+                    else if (x < -0.5) setPhysicalOrientation(270); // Landscape Right (Home button left)
+                } else {
+                    if (y > 0.5) setPhysicalOrientation(180); // Portrait Upside Down
+                    else if (y < -0.5) setPhysicalOrientation(0); // Portrait
+                }
+            });
+            Accelerometer.setUpdateInterval(500);
+        };
+
+        _subscribe();
+        return () => subscription && subscription.remove();
+    }, []);
+
 
 
     // Breadcrumbs for folder navigation
@@ -144,13 +168,13 @@ export default function UploadScreen() {
                 if (params.folderId) {
                     setSelectedFolder(params.folderId as string);
                 }
-                
+
                 // Update doc mode based on type param
                 const isDoc = params.type === 'documents' || params.type === 'document';
                 setIsDocMode(isDoc);
-                
+
                 setMode('capture');
-                
+
                 // Auto trigger scanner if in doc mode
                 if (isDoc) {
                     setTimeout(() => captureScan(), 300);
@@ -162,10 +186,10 @@ export default function UploadScreen() {
                     console.log(`[UPLOAD] Context transition: Project=${projectId}, Type=${type}`);
                     setSelectedProject(projectId);
                     setSelectedFolder(folderId); // This ensures it's set even if null (root)
-                    
+
                     const isDoc = type === 'document' || type === 'documents';
                     setIsDocMode(isDoc);
-                    
+
                     setMode('capture');
                     if (isDoc) {
                         setTimeout(() => captureScan(true), 300);
@@ -363,36 +387,30 @@ export default function UploadScreen() {
 
             if (!photo?.uri) return;
 
-            // 1. Calculate the crop to enforce a 4:3 aspect ratio (Portrait 3:4) - iOS ONLY
-            // Android uses the native 'ratio' prop which is much more stable.
             const { width, height } = photo;
-            let crop = undefined;
 
-            if (Platform.OS === 'ios') {
-                const targetRatio = 3 / 4;
-                const currentRatio = width / height;
-                const tolerance = 0.01;
+            // 1. Fix orientation and apply resolution constraint
+            const manipActions: any[] = [];
 
-                if (currentRatio > targetRatio + tolerance) {
-                    const newWidth = Math.min(width, Math.floor(height * targetRatio));
-                    const originX = Math.max(0, Math.floor((width - newWidth) / 2));
-                    const safeWidth = Math.min(newWidth, width - originX);
-                    crop = { originX, originY: 0, width: safeWidth, height };
-                } else if (currentRatio < targetRatio - tolerance) {
-                    const newHeight = Math.min(height, Math.floor(width / targetRatio));
-                    const originY = Math.max(0, Math.floor((height - newHeight) / 2));
-                    const safeHeight = Math.min(newHeight, height - originY);
-                    crop = { originX: 0, originY, width, height: safeHeight };
-                }
+            // AUTOMATIC ROTATION CORRECTION
+            // If physical orientation is landscape (90 or 270) but the photo is portrait (height > width)
+            // or vice-versa, we apply the physical rotation.
+            const isLandscapePhysically = physicalOrientation === 90 || physicalOrientation === 270;
+            const isPortraitPhysically = physicalOrientation === 0 || physicalOrientation === 180;
+            const isPhotoPortrait = height > width;
+
+            if (isLandscapePhysically && isPhotoPortrait) {
+                // Phone was sideways but photo is vertical -> Rotate to fix
+                // We rotate based on which side the phone was tilted
+                manipActions.push({ rotate: physicalOrientation });
+            } else {
+                // Otherwise just bake the standard EXIF rotation
+                manipActions.push({ rotate: 0 });
             }
 
-            // 2. Fix orientation and apply resolution constraint (Capping longest side at 1920)
-            const manipActions: any[] = [];
-            if (crop) manipActions.push({ crop });
-            
-            // Recalculate dimensions for resize after crop
-            const finalWidth = crop ? crop.width : width;
-            const finalHeight = crop ? crop.height : height;
+            // Apply resolution constraint (Capping longest side at 1920)
+            const finalWidth = (isLandscapePhysically && isPhotoPortrait) ? height : width;
+            const finalHeight = (isLandscapePhysically && isPhotoPortrait) ? width : height;
             const resizeOptions = finalWidth > finalHeight ? { width: 1920 } : { height: 1920 };
             manipActions.push({ resize: resizeOptions });
 
@@ -762,12 +780,12 @@ export default function UploadScreen() {
                     </View>
 
                     {cameraPermission?.granted && isFocused ? (
-                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 60 }}>
-                            <View style={{ width: '100%', aspectRatio: 3 / 4, backgroundColor: '#111', overflow: 'hidden' }}>
-                                <CameraView 
-                                    style={{ flex: 1 }} 
-                                    facing="back" 
-                                    ref={cameraRef} 
+                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                            <View style={{ width: '100%', height: '70%', backgroundColor: '#111', overflow: 'hidden' }}>
+                                <CameraView
+                                    style={{ flex: 1 }}
+                                    facing="back"
+                                    ref={cameraRef}
                                     ratio="4:3"
                                 />
                             </View>
