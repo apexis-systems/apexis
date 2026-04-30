@@ -1120,12 +1120,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     })()}
                 </View>
 
-                {sortedPhotos.length === 0 && sortedFolders.length > 0 && (
+                {/* {sortedFolders.length === 0 && (
                     <View style={{ marginTop: 30, alignItems: 'center' }}>
                         <Feather name="camera" size={32} color={colors.border} />
-                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No photos yet</Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders yet</Text>
                     </View>
-                )}
+                )} */}
             </ScrollView>
 
             {/* New Folder Modal */}

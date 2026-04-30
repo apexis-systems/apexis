@@ -12,10 +12,10 @@ router.use(verifyToken);
 router.get('/', getRFIs);
 router.get('/assignees', getRFIAssignees);
 router.get('/:id', getRFIById);
-router.post('/', upload.array('photos', 3), checkLimit('rfi'), createRFI);
+router.post('/', upload.array('photos', 4), checkLimit('rfi'), createRFI);
 router.patch('/:id/status', updateRFIStatus);
-router.patch('/:id/response', upload.array('photos', 3), updateRFIResponse);
-router.patch('/:id', upload.array('photos', 3), updateRFI);
+router.patch('/:id/response', upload.array('photos', 4), updateRFIResponse);
+router.patch('/:id', upload.array('photos', 4), updateRFI);
 router.delete('/:id', deleteRFI);
 
 export default router;

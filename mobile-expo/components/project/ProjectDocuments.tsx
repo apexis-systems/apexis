@@ -1109,12 +1109,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     })()}
                 </View>
 
-                {sortedDocs.length === 0 && sortedFolders.length > 0 && (
+                {/* {sortedFolders.length === 0 && (
                     <View style={{ marginTop: 30, alignItems: 'center' }}>
                         <Feather name="file-text" size={32} color={colors.border} />
-                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No documents yet</Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders yet</Text>
                     </View>
-                )}
+                )} */}
             </ScrollView>
 
             {/* ── PDF Viewer Modal ── */}
