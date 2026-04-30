@@ -111,13 +111,21 @@ export default function DashboardScreen() {
       if (user.role === 'superadmin') {
         fetchOrganizations();
       }
-      fetchProjects(selectedOrgId);
+      fetchProjects(selectedOrgId, searchQuery);
       const orgs = (user as any).organizations || (user as any).organization;
       if (orgs?.logo) {
         setLocalLogoKey(orgs.logo);
       }
     }
   }, [user, selectedOrgId, sortType]);
+
+  useEffect(() => {
+    if (!user) return;
+    const timer = setTimeout(() => {
+      fetchProjects(selectedOrgId, searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Register push token once when the user is available (isolated from selectedOrgId)
   useEffect(() => {
@@ -198,8 +206,8 @@ export default function DashboardScreen() {
     useCallback(() => {
       // Clear out the active project scope if they return to Dashboard
       setActiveProjectContext(null, null);
-      fetchProjects(selectedOrgId);
-    }, [selectedOrgId])
+      fetchProjects(selectedOrgId, searchQuery);
+    }, [selectedOrgId, searchQuery])
   );
 
   useEffect(() => {
@@ -225,10 +233,10 @@ export default function DashboardScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchProjects = async (orgId?: string | null) => {
+  const fetchProjects = async (orgId?: string | null, search?: string) => {
     try {
       if (projects.length === 0 && !refreshing) setLoading(true);
-      const data = await getProjects(orgId || undefined);
+      const data = await getProjects(orgId || undefined, false, search);
       let sortedProjects = data.projects || [];
       
       if (sortType === 'newest') {
@@ -251,7 +259,7 @@ export default function DashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchProjects(selectedOrgId);
+    await fetchProjects(selectedOrgId, searchQuery);
     setRefreshing(false);
   };
 
@@ -269,9 +277,8 @@ export default function DashboardScreen() {
     ? { totalDocs: 20, totalPhotos: 77, totalFolders: 8 }
     : { totalDocs, totalPhotos, totalFolders };
 
-  const filteredProjects = displayProjects.filter((p) =>
-    p.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // No longer needed as we filter on the server now
+  const filteredProjects = displayProjects;
 
   const handleCreate = async () => {
     if (!newProject.name || !newProject.start_date || !newProject.end_date) return;
@@ -280,7 +287,7 @@ export default function DashboardScreen() {
       await createProject(newProject);
       setIsCreating(false);
       setNewProject({ name: '', description: '', start_date: '', end_date: '' });
-      fetchProjects();
+      fetchProjects(selectedOrgId, searchQuery);
     } catch (e: any) {
       const message = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Failed to create project';
       Alert.alert('Create Project Failed', message);
@@ -378,7 +385,7 @@ export default function DashboardScreen() {
         <UsageAlert />
         <MainHeader
           onSearchChange={setSearchQuery}
-          searchPlaceholder="Search projects by name..."
+          searchPlaceholder="Search..."
         />
 
 

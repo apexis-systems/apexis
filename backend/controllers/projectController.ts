@@ -104,7 +104,7 @@ export const getProjects = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { organization_id: queryOrgId, deleted } = req.query;
+        const { organization_id: queryOrgId, deleted, search } = req.query;
         const activeOrgId = authUser.organization_id;
         const activeRole = authUser.role;
         const isTrash = deleted === 'true';
@@ -152,6 +152,18 @@ export const getProjects = async (req: Request, res: Response) => {
 
         if (isTrash) {
             whereCondition.deletedAt = { [Op.ne]: null };
+        }
+
+        if (search) {
+            whereCondition[Op.and] = [
+                ...(whereCondition[Op.and] || []),
+                {
+                    [Op.or]: [
+                        { name: { [Op.iLike]: `%${search}%` } },
+                        { description: { [Op.iLike]: `%${search}%` } }
+                    ]
+                }
+            ];
         }
 
         const result = await projects.findAll({

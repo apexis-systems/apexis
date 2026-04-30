@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listRooms, getRoomMessages, sendChatMessage, uploadChatFile, markMessageSeen, createRoom, markRoomRead } from '../controllers/chatController.ts';
+import { listRooms, getRoomMessages, sendChatMessage, uploadChatFile, markMessageSeen, createRoom, markRoomRead, downloadFileProxy } from '../controllers/chatController.ts';
 import { verifyToken } from '../middleware/verifyToken.ts';
 import multer from 'multer';
 
@@ -14,5 +14,6 @@ router.post('/send', verifyToken, sendChatMessage);
 router.post('/upload', verifyToken, upload.single('file'), uploadChatFile);
 router.patch('/seen', verifyToken, markMessageSeen);
 router.patch('/:roomId/read', verifyToken, markRoomRead);
+router.get('/download/:messageId', verifyToken, downloadFileProxy);
 
 export default router;

@@ -35,7 +35,7 @@ import FolderActionMenu from './FolderActionMenu';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectDocuments({ project, user, initialFolderId, initialFileId }: { project: any, user: any, initialFolderId?: string, initialFileId?: string }) {
+export default function ProjectDocuments({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any, user: any, initialFolderId?: string, initialFileId?: string, searchQuery?: string }) {
     const { colors, isDark } = useTheme();
 
     const router = useRouter();
@@ -92,7 +92,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         if (!project?.id) return;
         if (!isRefetch && folders.length === 0 && docs.length === 0) setLoading(true);
         try {
-            const data = await getProjectFiles(project.id, 'document');
+            const data = await getProjectFiles(project.id, 'document', searchQuery);
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) {
                 setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
@@ -107,8 +107,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     useFocusEffect(
         useCallback(() => {
             fetchFolders();
-        }, [project?.id])
+        }, [project?.id, searchQuery])
     );
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchFolders(true);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     const onRefresh = async () => {
         setRefreshing(true);
