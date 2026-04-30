@@ -26,6 +26,7 @@ import { initIO } from './socket.ts';
 import qrAuthRoutes from "./routes/qrAuthRoutes.ts";
 import analyticsRoutes from "./routes/analyticsRoutes.ts";
 import subscriptionRoutes from "./routes/subscriptionRoutes.ts";
+import systemRoutes from "./routes/systemRoutes.ts";
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -71,6 +72,7 @@ app.use("/api/chats", chatRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/subscription", subscriptionRoutes);
+app.use("/api/system", systemRoutes);
 
 // Global Error Handler
 app.use((err: any, req: Request, res: Response, next: any) => {
