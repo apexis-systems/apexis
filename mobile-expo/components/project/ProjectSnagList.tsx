@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { Accelerometer } from 'expo-sensors';
 import { Project } from "@/types";
 import {
     Snag,
@@ -89,6 +90,29 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const [isCapturing, setIsCapturing] = useState(false);
     const cameraRef = React.useRef<CameraView>(null);
+
+    // Physical Orientation Tracking
+    const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
+
+    useEffect(() => {
+        let subscription: any;
+        const _subscribe = () => {
+            subscription = Accelerometer.addListener(accelerometerData => {
+                const { x, y } = accelerometerData;
+                if (Math.abs(x) > Math.abs(y)) {
+                    if (x > 0.5) setPhysicalOrientation(90); // Landscape Left
+                    else if (x < -0.5) setPhysicalOrientation(270); // Landscape Right
+                } else {
+                    if (y > 0.5) setPhysicalOrientation(180); // Upside Down
+                    else if (y < -0.5) setPhysicalOrientation(0); // Portrait
+                }
+            });
+            Accelerometer.setUpdateInterval(500);
+        };
+
+        _subscribe();
+        return () => subscription && subscription.remove();
+    }, []);
 
     useEffect(() => {
         if (!cameraVisible) {
@@ -312,16 +336,22 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
             const { width, height } = photo;
             const manipActions: any[] = [];
-            if (Platform.OS === 'ios') {
-                const targetRatio = 3 / 4;
-                const currentRatio = width / height;
-                if (Math.abs(currentRatio - targetRatio) > 0.01) {
-                    const newHeight = Math.min(height, Math.floor(width / targetRatio));
-                    const originY = Math.max(0, Math.floor((height - newHeight) / 2));
-                    manipActions.push({ crop: { originX: 0, originY, width, height: newHeight } });
-                }
+            
+            // Orientation Correction
+            const isLandscapePhysically = physicalOrientation === 90 || physicalOrientation === 270;
+            const isPhotoPortrait = height > width;
+
+            if (isLandscapePhysically && isPhotoPortrait) {
+                manipActions.push({ rotate: physicalOrientation });
+            } else {
+                manipActions.push({ rotate: 0 });
             }
-            manipActions.push({ resize: { width: 1920 } });
+
+            // Resize
+            const finalWidth = (isLandscapePhysically && isPhotoPortrait) ? height : width;
+            const finalHeight = (isLandscapePhysically && isPhotoPortrait) ? width : height;
+            const resizeOptions = finalWidth > finalHeight ? { width: 1920 } : { height: 1920 };
+            manipActions.push({ resize: resizeOptions });
 
             const manipulated = await ImageManipulator.manipulateAsync(
                 photo.uri,
