@@ -241,9 +241,9 @@ export default function ProjectWorkspaceScreen() {
                     />
                 );
             case 'documents':
-                return <ProjectDocuments project={project} user={user} initialFolderId={tab === 'documents' ? folderId : undefined} initialFileId={fileId} />;
+                return <ProjectDocuments project={project} user={user} initialFolderId={tab === 'documents' ? folderId : undefined} initialFileId={fileId} searchQuery={searchQuery} />;
             case 'photos':
-                return <ProjectPhotos project={project} user={user} initialFolderId={tab === 'photos' ? folderId : undefined} initialFileId={fileId || photoId} />;
+                return <ProjectPhotos project={project} user={user} initialFolderId={tab === 'photos' ? folderId : undefined} initialFileId={fileId || photoId} searchQuery={searchQuery} />;
             case 'rfi':
                 return <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />;
             default:

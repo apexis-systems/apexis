@@ -256,7 +256,7 @@ export const listFiles = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
         const { projectId } = req.params;
-        const { folder_type } = req.query;
+        const { folder_type, search } = req.query;
 
         // Verify access
         const access = await checkProjectAccess(authUser.user_id, Number(projectId), authUser.role, authUser.organization_id);
@@ -282,10 +282,15 @@ export const listFiles = async (req: Request, res: Response) => {
         // Get all files for this project (either by explicit project_id or via folder_id)
         const fileData = await files.findAll({
             where: {
-                [Op.or]: [
-                    { project_id: projectId },
-                    { folder_id: { [Op.in]: folderIds } }
-                ]
+                [Op.and]: [
+                    {
+                        [Op.or]: [
+                            { project_id: projectId },
+                            { folder_id: { [Op.in]: folderIds } }
+                        ]
+                    },
+                    search ? { file_name: { [Op.iLike]: `%${search}%` } } : {}
+                ].filter(Boolean) as any
             },
             include: [{
                 model: UsersModel,

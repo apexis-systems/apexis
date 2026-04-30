@@ -264,12 +264,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   </div>
                 )}
               </div>
-              {/* Delete */}
-              {(user?.role === 'admin' || user?.role === 'contributor') && (String(snag.created_by) === String(user.id) || String(snag.creator?.id) === String(user.id)) && !snag.response && (
-                <button onClick={() => handleDelete(snag)} className="rounded-md p-1 hover:bg-destructive/10 shrink-0">
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </button>
-              )}
+
               {/* Photo thumbnail */}
               {photoUrl && (
                 <button
@@ -371,29 +366,43 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
       {/* Snag Detail Dialog */}
       <Dialog open={!!selectedSnag} onOpenChange={(open) => !open && setSelectedSnag(null)}>
-        <DialogContent className="max-w-md overflow-y-auto max-h-[90vh]">
+        <DialogContent className="max-w-md overflow-y-auto max-h-[90vh] no-scrollbar">
           {selectedSnag && (
             <>
               <DialogHeader>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 pr-8">
                   <div className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", STATUS_CONFIG[selectedSnag.status].bg, STATUS_CONFIG[selectedSnag.status].text)}>
                     {STATUS_CONFIG[selectedSnag.status].label}
                   </div>
-                  {(user?.role === 'admin' || String(selectedSnag.created_by) === String(user?.id)) && !selectedSnag.response && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-7 text-[10px]"
-                      onClick={() => {
-                        setNewTitle(selectedSnag.title);
-                        setNewDescription(selectedSnag.description || '');
-                        setNewAssignee(String(selectedSnag.assigned_to));
-                        setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
-                        setIsEditing(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
+                  {(String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && !selectedSnag.response && (
+                    <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-7 text-[10px]"
+                          onClick={() => {
+                            setNewTitle(selectedSnag.title);
+                            setNewDescription(selectedSnag.description || '');
+                            setNewAssignee(String(selectedSnag.assigned_to));
+                            setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
+                            setIsEditing(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+
+                      <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="h-7 text-[10px]"
+                        onClick={() => {
+                          handleDelete(selectedSnag);
+                          setSelectedSnag(null);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   )}
                 </div>
                 <DialogTitle className="text-lg">{selectedSnag.title}</DialogTitle>
@@ -401,7 +410,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
               <div className="space-y-4 py-2">
                 {selectedSnag.photoDownloadUrl && (
-                  <div className="aspect-video rounded-lg overflow-hidden border border-border">
+                  <div className="aspect-video rounded-lg overflow-hidden border border-border cursor-pointer" onClick={() => setViewPhoto(selectedSnag.photoDownloadUrl || null)}>
                     <img src={selectedSnag.photoDownloadUrl} alt="Snag" className="w-full h-full object-cover" />
                   </div>
                 )}

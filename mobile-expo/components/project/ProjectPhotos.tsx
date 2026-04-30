@@ -30,7 +30,7 @@ import FolderActionMenu from './FolderActionMenu';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectPhotos({ project, user, initialFolderId, initialFileId }: { project: any; user: any; initialFolderId?: string; initialFileId?: string }) {
+export default function ProjectPhotos({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any; user: any; initialFolderId?: string; initialFileId?: string; searchQuery?: string }) {
     const { colors, isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
@@ -96,7 +96,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!project?.id) return;
         if (!isRefetch && folders.length === 0 && photos.length === 0) setLoading(true);
         try {
-            const data = await getProjectFiles(project.id, 'photo');
+            const data = await getProjectFiles(project.id, 'photo', searchQuery);
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) {
                 setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
@@ -112,8 +112,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         useCallback(() => {
             loadFiles();
             return () => { };
-        }, [project?.id])
+        }, [project?.id, searchQuery])
     );
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            loadFiles(true);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     const onRefresh = async () => {
         setRefreshing(true);

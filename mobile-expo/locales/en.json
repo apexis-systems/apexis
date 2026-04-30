@@ -1,7 +1,7 @@
 {
     "translation": {
         "dashboard": {
-            "greeting": "Hi, {{name}} 👋",
+            "greeting": "Hi, {{name}} ",
             "roles": {
                 "admin": "Manage all your projects",
                 "contributor": "Your assigned projects",

@@ -1,7 +1,7 @@
 {
     "translation": {
         "dashboard": {
-            "greeting": "नमस्ते, {{name}} 👋",
+            "greeting": "नमस्ते, {{name}} ",
             "roles": {
                 "admin": "अपने सभी प्रोजेक्ट प्रबंधित करें",
                 "contributor": "आपके असाइन किए गए प्रोजेक्ट",

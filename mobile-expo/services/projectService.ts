@@ -1,11 +1,12 @@
 import { PrivateAxios } from '../helpers/PrivateAxios';
 
-export const getProjects = async (organization_id?: string, deleted: boolean = false) => {
+export const getProjects = async (organization_id?: string, deleted: boolean = false, search?: string) => {
     try {
         let url = '/projects';
         const params: string[] = [];
         if (organization_id) params.push(`organization_id=${organization_id}`);
         if (deleted) params.push('deleted=true');
+        if (search) params.push(`search=${encodeURIComponent(search)}`);
         
         if (params.length > 0) url += `?${params.join('&')}`;
         

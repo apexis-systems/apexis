@@ -69,6 +69,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
     const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -500,18 +501,18 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
             {/* Detail Dialog */}
             <Dialog open={!!selectedRFI} onOpenChange={(open) => !open && setSelectedRFI(null)}>
-                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto no-scrollbar">
                     {selectedRFI && (
                         <>
                             <DialogHeader>
-                                <div className="flex items-center justify-between gap-3 mb-2">
+                                <div className="flex items-center justify-between gap-3 mb-2 pr-8">
                                     <div className="flex items-center gap-3">
                                         <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", STATUS_CONFIG[selectedRFI.status].bg, STATUS_CONFIG[selectedRFI.status].color)}>
                                             {STATUS_CONFIG[selectedRFI.status].label}
                                         </span>
                                         <span className="text-[10px] text-muted-foreground">RFI #{selectedRFI.id}</span>
                                     </div>
-                                    {String(selectedRFI.created_by) === String(user?.id) && !selectedRFI.response && (
+                                    {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && !selectedRFI.response && (
                                         <div className="flex items-center gap-2">
                                             <Button 
                                                 variant="outline" 
@@ -568,6 +569,22 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     )}
                                 </div>
 
+                                {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
+                                    <div>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Attachments</p>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {selectedRFI.photoDownloadUrls.map((url, idx) => (
+                                                <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group cursor-pointer">
+                                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <ZoomIn className="h-5 w-5 text-white" />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {selectedRFI.response && (
                                     <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
                                         <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">Response</p>
@@ -575,12 +592,12 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
                                             <div className="grid grid-cols-3 gap-2">
                                                 {selectedRFI.responsePhotoUrls.map((url, idx) => (
-                                                    <a key={idx} href={url} target="_blank" rel="noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                                                    <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border group cursor-pointer">
                                                         <img src={url} alt="Response photo" className="w-full h-full object-cover" />
                                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                             <ZoomIn className="h-4 w-4 text-white" />
                                                         </div>
-                                                    </a>
+                                                    </div>
                                                 ))}
                                             </div>
                                         )}
@@ -643,21 +660,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 )}
 
-                                {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
-                                    <div>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Attachments</p>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            {selectedRFI.photoDownloadUrls.map((url, idx) => (
-                                                <a key={idx} href={url} target="_blank" rel="noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group">
-                                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" />
-                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <ZoomIn className="h-5 w-5 text-white" />
-                                                    </div>
-                                                </a>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+
 
                                 {String(selectedRFI.assigned_to) === String(user?.id) && (
                                     <div className="pt-4 border-t border-border space-y-3">
@@ -690,6 +693,15 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                     onCancel={() => setAnnotatingIdx(null)} 
                 />
             )}
-        </div>
+
+        {/* Photo Viewer */}
+        <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
+            <DialogContent className="max-w-2xl p-2 no-scrollbar">
+                {viewPhoto && (
+                    <img src={viewPhoto} alt="Preview" className="w-full h-auto rounded-lg" />
+                )}
+            </DialogContent>
+        </Dialog>
+    </div>
     );
 }

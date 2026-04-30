@@ -30,6 +30,10 @@ import * as SecureStore from 'expo-secure-store';
 import { useUsage } from '@/contexts/UsageContext';
 import * as Notifications from 'expo-notifications';
 import { navigateFromNotification } from '@/utils/navigation';
+import Constants from 'expo-constants';
+import { getSystemConfig } from '@/services/systemService';
+import { isUpdateRequired } from '@/utils/versionHelper';
+import ForceUpdateScreen from '@/components/ForceUpdateScreen';
 
 function RootLayoutNav() {
   const { isLoggedIn, isLoading: isAuthLoading, user, logout, isPendingName } = useAuth();
@@ -45,17 +49,25 @@ function RootLayoutNav() {
   const lastProcessedUrl = useRef<string | null>(null);
   const lastProcessedNotifId = useRef<string | null>(null);
 
+  const [versionConfig, setVersionConfig] = useState<{
+    minAppVersion: string;
+    androidStoreUrl: string;
+    iosStoreUrl: string;
+    isOutdated: boolean;
+  } | null>(null);
+  const [isVersionChecking, setIsVersionChecking] = useState(true);
+
   // Hardened Deep Link Watcher (Reacts to useURL changes on background resume)
   useEffect(() => {
     if (!nativeUrl) return;
-    
+
     // LOOP GUARD: Stop if we've already handled this exact URL string
     if (nativeUrl === lastProcessedUrl.current) return;
     lastProcessedUrl.current = nativeUrl;
 
     const handleDeepLink = async (url: string) => {
       console.log('[DEBUG] Incoming URL detected:', url);
-      
+
       const parsed = Linking.parse(url);
       const { code, role } = parsed.queryParams || {};
 
@@ -63,7 +75,7 @@ function RootLayoutNav() {
 
       if (isInvitation) {
         console.log('[NAV] Invitation deep-link matched! Redirection starting...', { code, role });
-        
+
         if (isLoggedIn) {
           setIsProcessingInvitation(true);
           try {
@@ -140,7 +152,7 @@ function RootLayoutNav() {
       pendingNotification.data,
       router
     );
-    
+
     // Clear the queue after processing
     setPendingNotification(null);
   }, [pendingNotification, isAuthLoading, isLoggedIn, hasSeenOnboarding, subscriptionLocked]);
@@ -310,6 +322,46 @@ function RootLayoutNav() {
 
     checkAndRedirect();
   }, [isLoggedIn, isAuthLoading, isPendingName, segments, code, hasSeenOnboarding, subscriptionLocked]);
+
+  useEffect(() => {
+    const checkVersion = async () => {
+      try {
+        const response = await getSystemConfig();``
+        if (response.success && response.data) {
+          const currentVersion = Constants.expoConfig?.version || '1.0.0';
+          console.log(currentVersion);
+          const minVersion = response.data.minAppVersion;
+          const outdated = isUpdateRequired(currentVersion, minVersion);
+
+          setVersionConfig({
+            ...response.data,
+            isOutdated: outdated
+          });
+        }
+      } catch (error) {
+        console.error("[VERSION] Check failed:", error);
+      } finally {
+        setIsVersionChecking(false);
+      }
+    };
+
+    checkVersion();
+  }, []);
+
+  if (isAuthLoading || !fontsLoaded || isVersionChecking) {
+    return null;
+  }
+
+  if (versionConfig?.isOutdated) {
+    return (
+      <ForceUpdateScreen
+        minVersion={versionConfig.minAppVersion}
+        currentVersion={Constants.expoConfig?.version || '1.0.0'}
+        androidStoreUrl={versionConfig.androidStoreUrl}
+        iosStoreUrl={versionConfig.iosStoreUrl}
+      />
+    );
+  }
 
   if (isAuthLoading || !fontsLoaded) {
     return null;
