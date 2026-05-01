@@ -20,6 +20,7 @@ export interface RFI {
     expiry_date?: string;
     response?: string;
     responsePhotoUrls?: string[];
+    linked_folders?: { id: number; name: string; folder_type: string }[];
 }
 
 export const getRFIs = async (projectId: number | string): Promise<RFI[]> => {
@@ -64,4 +65,9 @@ export const updateRFI = async (id: number, form: FormData): Promise<RFI> => {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
     return res.data.rfi;
+};
+
+export const getFolderRFIs = async (folderId: number | string): Promise<RFI[]> => {
+    const res = await PrivateAxios.get(`/rfis/folder/${folderId}`);
+    return res.data.rfis;
 };

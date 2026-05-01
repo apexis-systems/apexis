@@ -16,13 +16,15 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Accelerometer } from 'expo-sensors';
 import { Project, User } from '@/types';
 import {
-  getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI
+  getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI,
+  getRFIById
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 import { parseApiError } from '@/helpers/apiError';
+import MobileFolderPickerDialog from './MobileFolderPickerDialog';
 
 interface Props {
   project: Project;
@@ -70,6 +72,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [responseBody, setResponseBody] = useState('');
   const [updatingResponse, setUpdatingResponse] = useState(false);
   const [isLoadingRFIs, setIsLoadingRFIs] = useState(false);
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
 
   // Physical Orientation Tracking
   const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
@@ -138,15 +142,26 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   };
 
   useEffect(() => {
-    if (initialRfiId && rfis.length > 0) {
-      const target = rfis.find(r => String(r.id) === String(initialRfiId));
-      if (target) {
+    if (initialRfiId && !detailModalVisible) {
+      const openRFI = (target: RFI) => {
+        if (detailModalVisible) return;
         setResponseBody('');
         setResponseImages([]);
         setSelectedRFI(target);
         setDetailModalVisible(true);
-        // Clear param to prevent loop
         router.setParams({ rfiId: undefined });
+      };
+
+      // If already in list, open it
+      const existing = rfis.find(r => String(r.id) === String(initialRfiId));
+      if (existing) {
+        openRFI(existing);
+      } else {
+        // Fetch it specifically for faster redirection
+        getRFIById(Number(initialRfiId)).then(openRFI).catch(err => {
+          console.error("Failed to fetch initial RFI", err);
+          router.setParams({ rfiId: undefined });
+        });
       }
     }
   }, [initialRfiId, rfis, router]);
@@ -388,6 +403,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     setExpiryDate(null);
     setSelectedImages([]);
     setRemovedPhotos([]);
+    setSelectedFolderIds([]);
     setIsEditing(false);
     setSelectedRFI(null);
   };
@@ -409,6 +425,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       formData.append('description', description.trim());
       formData.append('assigned_to', String(assignedToId));
       if (expiryDate) formData.append('expiry_date', expiryDate.toISOString());
+      if (selectedFolderIds.length > 0) formData.append('folder_ids', selectedFolderIds.join(','));
 
       selectedImages.forEach((uri, index) => {
         const filename = uri.split('/').pop() || `photo_${index}.jpg`;
@@ -442,6 +459,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       formData.append('description', description.trim());
       formData.append('assigned_to', String(assignedToId));
       if (expiryDate) formData.append('expiry_date', expiryDate.toISOString());
+      formData.append('folder_ids', selectedFolderIds.join(','));
 
 
       if (removedPhotos.length > 0) {
@@ -558,6 +576,26 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       (assigneeFilter === 'null' ? !r.assigned_to : String(r.assigned_to) === assigneeFilter);
     return matchesStatus && matchesCreator && matchesAssignee;
   });
+
+  const handleUpdateLinks = async (ids: (string | number)[]) => {
+    if (!selectedRFI) return;
+    try {
+      setSubmitting(true);
+      const numericIds = ids.map(Number);
+      const formData = new FormData();
+      formData.append('folder_ids', numericIds.join(','));
+      const updatedRFI = await updateRFI(selectedRFI.id, formData);
+      setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, folder_ids: numericIds, linked_folders: updatedRFI.linked_folders } : r));
+      setSelectedRFI(prev => prev ? { ...prev, folder_ids: numericIds, linked_folders: updatedRFI.linked_folders } : null);
+      Alert.alert("Success", "Links updated successfully");
+    } catch (err) {
+      console.error("Update Links Error:", err);
+      const { message } = parseApiError(err, 'Failed to update links');
+      Alert.alert("Error", message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const renderRFI = ({ item }: { item: RFI }) => {
     const config = statusConfig[item.status] || statusConfig.open;
@@ -732,13 +770,22 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>RFI Details</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                  {selectedRFI && String(selectedRFI.created_by) === String(user.id) && !selectedRFI.response && !selectedRFI?.response_photos && (
+                  {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id)) && (
+                    <TouchableOpacity onPress={() => {
+                      setSelectedFolderIds(selectedRFI.folder_ids || []);
+                      setShowFolderPicker(true);
+                    }}>
+                      <Feather name="link-2" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+                  )}
+                  {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id)) && !selectedRFI.response && !selectedRFI?.response_photos && (
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                       <TouchableOpacity onPress={() => {
                         setTitle(selectedRFI.title);
                         setDescription(selectedRFI.description || '');
                         setAssignedToId(selectedRFI.assigned_to);
                         setExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date) : null);
+                        setSelectedFolderIds(selectedRFI.folder_ids || []);
                         setSelectedImages(selectedRFI.photoDownloadUrls || []);
                         setIsEditing(true);
                         setCreateModalVisible(true);
@@ -819,6 +866,50 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         <Text style={{ fontSize: 14, fontWeight: '700', color: selectedRFI.status === 'overdue' ? '#ef4444' : colors.text }}>
                           {new Date(selectedRFI.expiry_date).toLocaleString()}
                         </Text>
+                      </View>
+                    )}
+
+                    {selectedRFI.linked_folders && selectedRFI.linked_folders.length > 0 && (
+                      <View style={{ marginBottom: 20 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Linked Folders</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {selectedRFI.linked_folders.map((f: any) => (
+                            <TouchableOpacity 
+                              key={f.id}
+                              onPress={() => {
+                                // 1. Close the modal first
+                                setDetailModalVisible(false);
+                                
+                                // 2. Clear any other active overlays just in case
+                                setShowFolderPicker(false);
+                                setSelectedRFI(null);
+
+                                // 3. Small delay to allow modal backdrop to clear before navigation
+                                setTimeout(() => {
+                                  router.setParams({ 
+                                    tab: f.folder_type === 'photo' ? 'photos' : 'documents', 
+                                    folderId: String(f.id),
+                                    rfiId: undefined // Explicitly clear any RFI trigger
+                                  });
+                                }, 100);
+                              }}
+                              style={{ 
+                                flexDirection: 'row', 
+                                alignItems: 'center', 
+                                gap: 6, 
+                                paddingHorizontal: 10, 
+                                paddingVertical: 6, 
+                                backgroundColor: colors.primary + '10', 
+                                borderRadius: 8,
+                                borderWidth: 1,
+                                borderColor: colors.primary + '20'
+                              }}
+                            >
+                              <Feather name="folder" size={12} color={colors.primary} />
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>{f.name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
                       </View>
                     )}
 
@@ -1086,6 +1177,30 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       )}
                     </View>
 
+                    {/* Link Folders */}
+                    <View style={{ marginBottom: 20 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 10 }}>Link to Folders</Text>
+                      <TouchableOpacity
+                        onPress={() => setShowFolderPicker(true)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: 12,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface
+                        }}
+                      >
+                        <Feather name="folder" size={18} color={colors.primary} />
+                        <Text style={{ flex: 1, fontSize: 14, color: colors.text }}>
+                          {selectedFolderIds.length > 0 ? `${selectedFolderIds.length} folders selected` : 'Select Folders'}
+                        </Text>
+                        <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+
                     <View>
                       <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -1249,6 +1364,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             </>
                           )}
                         </View>
+
                       )}
                     </View>
 
@@ -2091,6 +2207,22 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
       {/* Removed old redundant Assignee Picker location as it is now nested for iOS support */}
 
+      <MobileFolderPickerDialog
+        visible={showFolderPicker}
+        onClose={() => setShowFolderPicker(false)}
+        project={project}
+        selectedFolderIds={selectedFolderIds}
+        submitting={submitting}
+        onConfirm={async (ids) => {
+          setSelectedFolderIds(ids);
+          // If we are currently viewing an RFI in detail mode (not just creating a new one)
+          // immediately update the links in the backend
+          if (selectedRFI && detailModalVisible && !createModalVisible) {
+            await handleUpdateLinks(ids);
+          }
+          setShowFolderPicker(false);
+        }}
+      />
     </View>
   );
 }

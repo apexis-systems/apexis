@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { rfis, users, activities, projects, project_members } from '../models/index.ts';
+import { rfis, users, activities, projects, project_members, folders, sequelize, Sequelize } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
 import { logActivity } from "../utils/activityUtils.ts";
 import { addWatermark } from '../utils/watermark.ts';
@@ -45,6 +45,17 @@ const withPresignedUrls = async (rfi: any) => {
     } else {
         json.responsePhotoUrls = [];
     }
+    if (json.folder_ids && Array.isArray(json.folder_ids) && json.folder_ids.length > 0) {
+        try {
+            json.linked_folders = await folders.findAll({
+                where: { id: json.folder_ids },
+                attributes: ['id', 'name', 'folder_type']
+            });
+        } catch { json.linked_folders = []; }
+    } else {
+        json.linked_folders = [];
+    }
+
     return json;
 };
 
@@ -85,7 +96,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        const { project_id, title, description, assigned_to, expiry_date } = req.body;
+        const { project_id, title, description, assigned_to, expiry_date, folder_ids } = req.body;
         if (!project_id || !title || !assigned_to) {
             return res.status(400).json({ error: 'project_id, title and assigned_to are required' });
         }
@@ -155,6 +166,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
             is_client_visible,
             photos: uploadedPhotos,
             expiry_date: expiry_date ? new Date(expiry_date) : null,
+            folder_ids: folder_ids ? (Array.isArray(folder_ids) ? folder_ids.map(Number) : folder_ids.split(',').map((s: any) => Number(s.trim())).filter((n:any) => !isNaN(n))) : [],
         });
 
         await logActivity({
@@ -509,8 +521,8 @@ export const updateRFI = async (req: Request | any, res: Response) => {
     try {
         const authUser = (req as any).user;
         const { id } = req.params;
-        const { title, description, assigned_to, expiry_date, removedPhotos } = req.body;
-        
+        const { title, description, assigned_to, expiry_date, removedPhotos, folder_ids } = req.body;
+
 
         const rfi = await rfis.findByPk(id);
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
@@ -520,9 +532,10 @@ export const updateRFI = async (req: Request | any, res: Response) => {
             return res.status(403).json({ error: 'Only the creator can edit this RFI' });
         }
 
-        // Cannot edit if there is a response
-        if (rfi.response) {
-            return res.status(400).json({ error: 'Cannot edit RFI because a response has already been generated' });
+        // Cannot edit core fields if there is a response, but folder linking is always allowed
+        const isCoreUpdate = title || (description !== undefined) || assigned_to || expiry_date || (req.files && req.files.length > 0) || removedPhotos;
+        if (rfi.response && isCoreUpdate) {
+            return res.status(400).json({ error: 'Cannot edit RFI details because a response has already been generated. However, folder links can still be updated.' });
         }
 
         if (title) rfi.title = title.trim();
@@ -543,7 +556,7 @@ export const updateRFI = async (req: Request | any, res: Response) => {
                     toRemove = removedPhotos.split(',').map(s => s.trim());
                 }
             }
-            
+
             console.log('RFI Update - Photos to remove (parsed):', toRemove);
             currentPhotos = currentPhotos.filter(p => !toRemove.includes(p));
         }
@@ -573,7 +586,11 @@ export const updateRFI = async (req: Request | any, res: Response) => {
         }
 
         rfi.photos = currentPhotos;
+        if (folder_ids !== undefined) {
+            rfi.folder_ids = Array.isArray(folder_ids) ? folder_ids.map(Number) : folder_ids.split(',').map((s:any) => Number(s.trim())).filter((n:any) => !isNaN(n));
+        }
         rfi.changed('photos', true);
+        rfi.changed('folder_ids', true);
         await rfi.save();
 
         await logActivity({
@@ -604,5 +621,51 @@ export const updateRFI = async (req: Request | any, res: Response) => {
     } catch (err) {
         console.error('updateRFI error:', err);
         res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// GET /rfis/folder/:folder_id
+export const getFolderRFIs = async (req: Request, res: Response) => {
+    const { folder_id } = req.params;
+    const fid = Number(folder_id);
+
+    try {
+        const folder = await folders.findByPk(folder_id);
+        if (!folder) return res.status(404).json({ error: 'Folder not found' });
+
+        const data = await rfis.findAll({
+            where: sequelize.where(
+                Sequelize.fn('JSON_CONTAINS', Sequelize.col('folder_ids'), Sequelize.literal(`'${fid}'`)),
+                1
+            ),
+            include: [
+                { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
+                { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },
+            ],
+            order: [['createdAt', 'DESC']],
+        });
+
+        const result = await Promise.all(data.map(withPresignedUrls));
+        res.json({ rfis: result });
+    } catch (err) {
+        console.error('getFolderRFIs error:', err);
+        // Fallback for non-MySQL or if JSON_CONTAINS fails
+        try {
+            const data = await rfis.findAll({
+                include: [
+                    { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
+                    { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },
+                ],
+                order: [['createdAt', 'DESC']],
+            });
+            const filtered = data.filter((r:any) => {
+                const ids = r.folder_ids;
+                return Array.isArray(ids) && ids.map(Number).includes(fid);
+            });
+            const result = await Promise.all(filtered.map(withPresignedUrls));
+            res.json({ rfis: result });
+        } catch (e2) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 };

@@ -19,7 +19,19 @@ export interface RFI {
     response?: string;
     responsePhotoUrls?: string[];
     response_photos?: string[] | null;
+    folder_ids?: number[];
+    linked_folders?: { id: number; name: string; folder_type: string }[];
 }
+
+export const getFolderRFIs = async (folderId: string | number): Promise<RFI[]> => {
+    try {
+        const res = await PrivateAxios.get(`/rfis/folder/${folderId}`);
+        return res.data.rfis || [];
+    } catch (error) {
+        console.error("getFolderRFIs Error", error);
+        throw error;
+    }
+};
 
 export const getRFIs = async (projectId: number): Promise<RFI[]> => {
     try {
