@@ -6,11 +6,11 @@ import { FileText, Loader2, Calendar, User, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface LinkedRFITabProps {
-    folderId: string | number;
-    projectId: string | number;
+    folderId?: string | number | null;
+    projectId?: string | number | null;
 }
 
-const LinkedRFITab = ({ folderId, projectId }: LinkedRFITabProps) => {
+const LinkedRFITab = ({ folderId = null, projectId = null }: LinkedRFITabProps) => {
     const [rfis, setRfis] = useState<RFI[]>([]);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
@@ -39,7 +39,7 @@ const LinkedRFITab = ({ folderId, projectId }: LinkedRFITabProps) => {
         );
     }
 
-    if (rfis.length === 0) {
+    if (rfis?.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center mb-3">
