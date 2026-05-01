@@ -14,10 +14,15 @@ export const uploadFile = async (formData: FormData) => {
     }
 };
 
-export const getFiles = async (projectId: string | number, folder_type?: string) => {
+export const getFiles = async (projectId: string | number, folder_type?: string, search?: string) => {
     try {
         let url = `/files/${projectId}`;
-        if (folder_type) url += `?folder_type=${folder_type}`;
+        const params = new URLSearchParams();
+        if (folder_type) params.append('folder_type', folder_type);
+        if (search) params.append('search', search);
+        
+        if (params.toString()) url += `?${params.toString()}`;
+        
         const response = await PrivateAxios.get(url);
         return response.data;
     } catch (error) {

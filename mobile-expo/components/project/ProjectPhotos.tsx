@@ -25,16 +25,20 @@ import ZoomableImage from '../shared/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
+import { getFolderRFIs } from '@/services/rfiService';
 
 // Removed local ZoomableImage
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectPhotos({ project, user, initialFolderId, initialFileId }: { project: any; user: any; initialFolderId?: string; initialFileId?: string }) {
+export default function ProjectPhotos({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any; user: any; initialFolderId?: string; initialFileId?: string; searchQuery?: string }) {
     const { colors, isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
+    const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfis'>('files');
+    const [linkedRFIs, setLinkedRFIs] = useState<any[]>([]);
+    const [loadingRFIs, setLoadingRFIs] = useState(false);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
@@ -96,7 +100,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!project?.id) return;
         if (!isRefetch && folders.length === 0 && photos.length === 0) setLoading(true);
         try {
-            const data = await getProjectFiles(project.id, 'photo');
+            const data = await getProjectFiles(project.id, 'photo', searchQuery);
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) {
                 setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
@@ -112,8 +116,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         useCallback(() => {
             loadFiles();
             return () => { };
-        }, [project?.id])
+        }, [project?.id, searchQuery])
     );
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            loadFiles(true);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -134,10 +145,27 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     useEffect(() => {
         if (selectedFolder) {
             setSortBy('newest');
+            setLinkedRFIs([]); // Reset immediately
+            fetchLinkedRFIs();
         } else {
             setSortBy('name');
+            setActiveFolderTab('files');
+            setLinkedRFIs([]);
         }
     }, [selectedFolder]);
+
+    const fetchLinkedRFIs = async () => {
+        if (!selectedFolder) return;
+        setLoadingRFIs(true);
+        try {
+            const data = await getFolderRFIs(selectedFolder);
+            setLinkedRFIs(data);
+        } catch (e) {
+            console.error("fetchLinkedRFIs error", e);
+        } finally {
+            setLoadingRFIs(false);
+        }
+    };
 
     useEffect(() => {
         if (initialFileId && photos.length > 0) {
@@ -154,8 +182,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const index = sortedInit.findIndex(p => String(p.id) === String(initialFileId));
             if (index !== -1) {
                 openViewer(index);
-                router.setParams({ fileId: '', photoId: ''});
-                
+                router.setParams({ fileId: '', photoId: '' });
+
             }
         }
     }, [initialFileId, photos, selectedFolder, sortBy, user.role, router]);
@@ -453,10 +481,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         try {
             setProcessing('visibility');
             await toggleFileVisibility(file.id, !file.client_visible);
-            
+
             // Local update
             setPhotos((prev) => prev.map((p) => (p.id === file.id ? { ...p, client_visible: !file.client_visible } : p)));
-            
+
             setActionMenuVisible(false);
         } catch (e) {
             Alert.alert("Error", "Failed to update visibility");
@@ -854,271 +882,365 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
                             </TouchableOpacity>
                         </View>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
-                            {sortedFolders.map((folder) => {
-                                const count = photos.filter((p) => p.folder_id === folder.id).length;
-                                const subcount = folders.filter((f) => f.parent_id === folder.id).length;
-                                const isSelected = selectedFolders.has(folder.id);
-                                const isArchiveFolder = folder.name.toLowerCase() === 'archive';
-                                return (
-                                    <View
-                                        key={folder.id}
-                                        style={{
-                                            width: '24%',
-                                            aspectRatio: 1,
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            borderRadius: 16,
-                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
-                                            borderWidth: 1,
-                                            borderColor: isSelected ? colors.primary : colors.border,
-                                            padding: 8,
-                                            shadowColor: '#000',
-                                            shadowOffset: { width: 0, height: 2 },
-                                            shadowOpacity: 0.05,
-                                            shadowRadius: 4,
-                                            elevation: 1,
-                                            position: 'relative'
-                                        }}
-                                    >
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                if (isSelectionMode) toggleSelection('folder', folder.id);
-                                                else setSelectedFolder(folder.id);
-                                            }}
-                                            onLongPress={() => handleLongPress('folder', folder.id)}
-                                            style={{
-                                                ...StyleSheet.absoluteFillObject,
-                                                zIndex: 5,
-                                            }}
-                                        />
-                                        <View style={{ marginBottom: 8 }}>
-                                            <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
-                                        </View>
-                                        {isSelected && (
-                                            <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                                <Feather name="check" size={10} color="#fff" />
-                                            </View>
-                                        )}
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
-                                        <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
-                                            {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
-                                        </Text>
-                                        {/* Folder Action Menu - Hidden for Clients */}
-                                        {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                            <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        setActiveActionFolder(folder);
-                                                        setFolderMenuVisible(true);
-                                                    }}
-                                                >
-                                                    <Feather
-                                                        name="more-vertical"
-                                                        size={14}
-                                                        color={colors.textMuted}
-                                                    />
-                                                </TouchableOpacity>
-                                            </View>
-                                        )}
-                                    </View>
-                                );
-                            })}
-                        </View>
-                    </View>
-                )}
 
-                {!loading && currentFolders.length === 0 && visiblePhotos.length === 0 && (
-                    <View style={{ marginTop: 30, alignItems: 'center' }}>
-                        <Feather name="camera" size={32} color={colors.border} />
-                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or photos yet</Text>
-                    </View>
-                )}
-
-                <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
-                    {(() => {
-                        const renderPhotoItem = (photo: any, index: number) => {
-                            const isSelected = selectedFiles.has(photo.id);
-                            if (viewMode === 'grid') {
-                                return (
-                                    <View
-                                        key={photo.id}
-                                        style={{
-                                            width: '23.8%',
-                                            aspectRatio: 1,
-                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                            borderRadius: 10,
-                                            overflow: 'hidden',
-                                            borderWidth: 1,
-                                            borderColor: isSelected ? colors.primary : colors.border,
-                                            position: 'relative'
-                                        }}
-                                    >
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                if (isSelectionMode) toggleSelection('file', photo.id);
-                                                else openViewer(sortedPhotos.findIndex(p => p.id === photo.id));
-                                            }}
-                                            onLongPress={() => handleLongPress('file', photo.id)}
-                                            style={{
-                                                ...StyleSheet.absoluteFillObject,
-                                                zIndex: 5,
-                                            }}
-                                        />
-                                        <Image
-                                            source={photo.downloadUrl}
-                                            style={{ width: '100%', height: '100%' }}
-                                            contentFit="cover"
-                                            transition={200}
-                                        />
-
-                                        {isSelected && (
-                                            <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                                <Feather name="check" size={10} color="#fff" />
-                                            </View>
-                                        )}
-                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                            <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 10 }}>
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        setActiveActionFile(photo);
-                                                        setActionMenuVisible(true);
-                                                    }}
-                                                    style={{
-                                                        width: 24,
-                                                        height: 24,
-                                                        borderRadius: 12,
-                                                        backgroundColor: colors.surface,
-                                                        borderWidth: 1,
-                                                        borderColor: colors.border,
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        shadowColor: '#000',
-                                                        shadowOffset: { width: 0, height: 1 },
-                                                        shadowOpacity: isDark ? 0.3 : 0.1,
-                                                        shadowRadius: 1,
-                                                        elevation: 2
-                                                    }}
-                                                >
-                                                    <Feather
-                                                        name="more-vertical"
-                                                        size={14}
-                                                        color={colors.text}
-                                                    />
-                                                </TouchableOpacity>
-                                            </View>
-                                        )}
-                                        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 6 }}>
-                                            <Text numberOfLines={1} style={{ fontSize: 9, color: '#fff', textAlign: 'center' }}>{photo.file_name}</Text>
-                                        </View>
-                                    </View>
-                                );
-                            } else {
-                                // List View Mode
-                                return (
-                                    <View
-                                        key={photo.id}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 12,
-                                            borderRadius: 12,
-                                            backgroundColor: isSelected ? (isDark ? 'rgba(249,115,22,0.2)' : 'rgba(249,115,22,0.1)') : colors.surface,
-                                            borderWidth: 1,
-                                            borderColor: isSelected ? colors.primary : colors.border,
-                                            padding: 10,
-                                            marginVertical: 4,
-                                            position: 'relative',
-                                        }}
-                                    >
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                if (isSelectionMode) toggleSelection('file', photo.id);
-                                                else openViewer(sortedPhotos.findIndex(p => p.id === photo.id));
-                                            }}
-                                            onLongPress={() => handleLongPress('file', photo.id)}
-                                            style={{
-                                                ...StyleSheet.absoluteFillObject,
-                                                zIndex: 5,
-                                            }}
-                                        />
-                                        <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface }}>
-                                            <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-                                        </View>
-                                        {isSelected && (
-                                            <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                                <Feather name="check" size={10} color="#fff" />
-                                            </View>
-                                        )}
-                                        <View style={{ flex: 1 }}>
-                                            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{photo.file_name}</Text>
-                                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(photo.file_size_mb)}</Text>
-                                        </View>
-                                        <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
-                                            {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        setActiveActionFile(photo);
-                                                        setActionMenuVisible(true);
-                                                    }}
-                                                    style={{ padding: 4 }}
-                                                >
-                                                    <Feather
-                                                        name="more-vertical"
-                                                        size={16}
-                                                        color={colors.textMuted}
-                                                    />
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-                                    </View>
-                                );
-                            }
-                        };
-
-                        if (sortBy === 'newest' || sortBy === 'oldest') {
-                            const groups = groupItemsByMonth(sortedPhotos);
-                            return groups.map((group) => (
-                                <View key={group.title} style={{ marginBottom: 20 }}>
-                                    <View style={{
-                                        paddingVertical: 12,
-                                        backgroundColor: 'transparent',
-                                        flexDirection: 'row',
+                        {selectedFolder && linkedRFIs.length > 0 && (
+                            <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#f1f5f9', borderRadius: 10, padding: 3, marginBottom: 12 }}>
+                                <TouchableOpacity
+                                    onPress={() => setActiveFolderTab('files')}
+                                    style={{
+                                        flex: 1,
+                                        paddingVertical: 8,
+                                        borderRadius: 8,
                                         alignItems: 'center',
-                                        justifyContent: 'space-between'
-                                    }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
-                                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
-                                    </View>
-                                    <View style={{
-                                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
-                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
-                                        gap: viewMode === 'grid' ? 4 : 8
-                                    }}>
-                                        {group.data.map((p, i) => renderPhotoItem(p, i))}
-                                    </View>
-                                </View>
-                            ));
-                        }
-
-                        return (
-                            <View style={{
-                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
-                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
-                                gap: viewMode === 'grid' ? 4 : 4
-                            }}>
-                                {sortedPhotos.map((photo, index) => renderPhotoItem(photo, index))}
+                                        backgroundColor: activeFolderTab === 'files' ? colors.surface : 'transparent',
+                                        ...(activeFolderTab === 'files' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'files' ? colors.primary : colors.textMuted }}>Photos ({sortedFolders.length + sortedPhotos.length})</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setActiveFolderTab('rfis')}
+                                    style={{
+                                        flex: 1,
+                                        paddingVertical: 8,
+                                        borderRadius: 8,
+                                        alignItems: 'center',
+                                        backgroundColor: activeFolderTab === 'rfis' ? colors.surface : 'transparent',
+                                        ...(activeFolderTab === 'rfis' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>Linked RFIs ({linkedRFIs.length})</Text>
+                                </TouchableOpacity>
                             </View>
-                        );
-                    })()}
-                </View>
+                        )}
 
-                {sortedPhotos.length === 0 && sortedFolders.length > 0 && (
-                    <View style={{ marginTop: 30, alignItems: 'center' }}>
-                        <Feather name="camera" size={32} color={colors.border} />
-                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No photos yet</Text>
+                        {activeFolderTab === 'rfis' ? (
+                            <View style={{ gap: 10 }}>
+                                {loadingRFIs ? (
+                                    <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 20 }} />
+                                ) : linkedRFIs.length > 0 ? (
+                                    linkedRFIs.map((rfi) => (
+                                        <TouchableOpacity
+                                            key={rfi.id}
+                                            onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                            style={{
+                                                backgroundColor: colors.surface,
+                                                borderRadius: 12,
+                                                padding: 12,
+                                                borderWidth: 1,
+                                                borderColor: colors.border,
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                gap: 12
+                                            }}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{rfi.title}</Text>
+                                                    <View style={{ 
+                                                        paddingHorizontal: 8, 
+                                                        paddingVertical: 2, 
+                                                        borderRadius: 6, 
+                                                        backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)' 
+                                                    }}>
+                                                        <Text style={{ 
+                                                            fontSize: 9, 
+                                                            fontWeight: '800', 
+                                                            textTransform: 'uppercase',
+                                                            color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444' 
+                                                        }}>{rfi.status}</Text>
+                                                    </View>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                        <Feather name="calendar" size={10} color={colors.textMuted} />
+                                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(rfi.createdAt).toLocaleDateString()}</Text>
+                                                    </View>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                        <Feather name="user" size={10} color={colors.textMuted} />
+                                                        <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || 'Unassigned'}</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                            <Feather name="chevron-right" size={16} color={colors.textMuted} />
+                                        </TouchableOpacity>
+                                    ))
+                                ) : (
+                                    <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                                        <Feather name="link-2" size={32} color={colors.border} />
+                                        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>No RFIs linked to this folder</Text>
+                                    </View>
+                                )}
+                            </View>
+                        ) : (
+                            <>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                                    {sortedFolders.map((folder) => {
+                                        const count = photos.filter((p) => p.folder_id === folder.id).length;
+                                        const subcount = folders.filter((f) => f.parent_id === folder.id).length;
+                                        const isSelected = selectedFolders.has(folder.id);
+                                        const isArchiveFolder = folder.name.toLowerCase() === 'archive';
+                                        return (
+                                            <View
+                                                key={folder.id}
+                                                style={{
+                                                    width: '24%',
+                                                    aspectRatio: 1,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    borderRadius: 16,
+                                                    backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
+                                                    borderWidth: 1,
+                                                    borderColor: isSelected ? colors.primary : colors.border,
+                                                    padding: 8,
+                                                    shadowColor: '#000',
+                                                    shadowOffset: { width: 0, height: 2 },
+                                                    shadowOpacity: 0.05,
+                                                    shadowRadius: 4,
+                                                    elevation: 1,
+                                                    position: 'relative'
+                                                }}
+                                            >
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        if (isSelectionMode) toggleSelection('folder', folder.id);
+                                                        else setSelectedFolder(folder.id);
+                                                    }}
+                                                    onLongPress={() => handleLongPress('folder', folder.id)}
+                                                    style={{
+                                                        ...StyleSheet.absoluteFillObject,
+                                                        zIndex: 5,
+                                                    }}
+                                                />
+                                                <View style={{ marginBottom: 8 }}>
+                                                    <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
+                                                </View>
+                                                {isSelected && (
+                                                    <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                        <Feather name="check" size={10} color="#fff" />
+                                                    </View>
+                                                )}
+                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
+                                                <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
+                                                    {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
+                                                </Text>
+                                                {/* Folder Action Menu - Hidden for Clients */}
+                                                {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                    <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                setActiveActionFolder(folder);
+                                                                setFolderMenuVisible(true);
+                                                            }}
+                                                        >
+                                                            <Feather
+                                                                name="more-vertical"
+                                                                size={14}
+                                                                color={colors.textMuted}
+                                                            />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+
+                                {!loading && currentFolders.length === 0 && visiblePhotos.length === 0 && (
+                                    <View style={{ marginTop: 30, alignItems: 'center' }}>
+                                        <Feather name="camera" size={32} color={colors.border} />
+                                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or photos yet</Text>
+                                    </View>
+                                )}
+
+                                <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                                    {(() => {
+                                        const renderPhotoItem = (photo: any, index: number) => {
+                                            const isSelected = selectedFiles.has(photo.id);
+                                            if (viewMode === 'grid') {
+                                                return (
+                                                    <View
+                                                        key={photo.id}
+                                                        style={{
+                                                            width: '23.8%',
+                                                            aspectRatio: 1,
+                                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
+                                                            borderRadius: 10,
+                                                            overflow: 'hidden',
+                                                            borderWidth: 1,
+                                                            borderColor: isSelected ? colors.primary : colors.border,
+                                                            position: 'relative'
+                                                        }}
+                                                    >
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                if (isSelectionMode) toggleSelection('file', photo.id);
+                                                                else openViewer(sortedPhotos.findIndex(p => p.id === photo.id));
+                                                            }}
+                                                            onLongPress={() => handleLongPress('file', photo.id)}
+                                                            style={{
+                                                                ...StyleSheet.absoluteFillObject,
+                                                                zIndex: 5,
+                                                            }}
+                                                        />
+                                                        <Image
+                                                            source={photo.downloadUrl}
+                                                            style={{ width: '100%', height: '100%' }}
+                                                            contentFit="cover"
+                                                            transition={200}
+                                                        />
+
+                                                        {isSelected && (
+                                                            <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                                <Feather name="check" size={10} color="#fff" />
+                                                            </View>
+                                                        )}
+                                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                            <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 10 }}>
+                                                                <TouchableOpacity
+                                                                    onPress={() => {
+                                                                        setActiveActionFile(photo);
+                                                                        setActionMenuVisible(true);
+                                                                    }}
+                                                                    style={{
+                                                                        width: 24,
+                                                                        height: 24,
+                                                                        borderRadius: 12,
+                                                                        backgroundColor: colors.surface,
+                                                                        borderWidth: 1,
+                                                                        borderColor: colors.border,
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        shadowColor: '#000',
+                                                                        shadowOffset: { width: 0, height: 1 },
+                                                                        shadowOpacity: isDark ? 0.3 : 0.1,
+                                                                        shadowRadius: 1,
+                                                                        elevation: 2
+                                                                    }}
+                                                                >
+                                                                    <Feather
+                                                                        name="more-vertical"
+                                                                        size={14}
+                                                                        color={colors.text}
+                                                                    />
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                        )}
+                                                        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 6 }}>
+                                                            <Text numberOfLines={1} style={{ fontSize: 9, color: '#fff', textAlign: 'center' }}>{photo.file_name}</Text>
+                                                        </View>
+                                                    </View>
+                                                );
+                                            } else {
+                                                // List View Mode
+                                                return (
+                                                    <View
+                                                        key={photo.id}
+                                                        style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            gap: 12,
+                                                            borderRadius: 12,
+                                                            backgroundColor: isSelected ? (isDark ? 'rgba(249,115,22,0.2)' : 'rgba(249,115,22,0.1)') : colors.surface,
+                                                            borderWidth: 1,
+                                                            borderColor: isSelected ? colors.primary : colors.border,
+                                                            padding: 10,
+                                                            marginVertical: 4,
+                                                            position: 'relative',
+                                                        }}
+                                                    >
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                if (isSelectionMode) toggleSelection('file', photo.id);
+                                                                else openViewer(sortedPhotos.findIndex(p => p.id === photo.id));
+                                                            }}
+                                                            onLongPress={() => handleLongPress('file', photo.id)}
+                                                            style={{
+                                                                ...StyleSheet.absoluteFillObject,
+                                                                zIndex: 5,
+                                                            }}
+                                                        />
+                                                        <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface }}>
+                                                            <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                                                        </View>
+                                                        {isSelected && (
+                                                            <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                                <Feather name="check" size={10} color="#fff" />
+                                                            </View>
+                                                        )}
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{photo.file_name}</Text>
+                                                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(photo.file_size_mb)}</Text>
+                                                        </View>
+                                                        <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
+                                                            {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                                <TouchableOpacity
+                                                                    onPress={() => {
+                                                                        setActiveActionFile(photo);
+                                                                        setActionMenuVisible(true);
+                                                                    }}
+                                                                    style={{ padding: 4 }}
+                                                                >
+                                                                    <Feather
+                                                                        name="more-vertical"
+                                                                        size={16}
+                                                                        color={colors.textMuted}
+                                                                    />
+                                                                </TouchableOpacity>
+                                                            )}
+                                                        </View>
+                                                    </View>
+                                                );
+                                            }
+                                        };
+
+                                        if (sortBy === 'newest' || sortBy === 'oldest') {
+                                            const groups = groupItemsByMonth(sortedPhotos);
+                                            return groups.map((group) => (
+                                                <View key={group.title} style={{ marginBottom: 20 }}>
+                                                    <View style={{
+                                                        paddingVertical: 12,
+                                                        backgroundColor: 'transparent',
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between'
+                                                    }}>
+                                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
+                                                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
+                                                    </View>
+                                                    <View style={{
+                                                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                                        gap: viewMode === 'grid' ? 4 : 8
+                                                    }}>
+                                                        {group.data.map((p, i) => renderPhotoItem(p, i))}
+                                                    </View>
+                                                </View>
+                                            ));
+                                        }
+
+                                        return (
+                                            <View style={{
+                                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                                gap: viewMode === 'grid' ? 4 : 4
+                                            }}>
+                                                {sortedPhotos.map((photo, index) => renderPhotoItem(photo, index))}
+                                            </View>
+                                        );
+                                    })()}
+                                </View>
+                            </>
+                        )}
                     </View>
                 )}
+
+                {/* {sortedFolders.length === 0 && (
+                    <View style={{ marginTop: 30, alignItems: 'center' }}>
+                        <Feather name="camera" size={32} color={colors.border} />
+                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders yet</Text>
+                    </View>
+                )} */}
             </ScrollView>
 
             {/* New Folder Modal */}

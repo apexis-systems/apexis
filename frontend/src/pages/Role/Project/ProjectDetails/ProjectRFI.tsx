@@ -8,7 +8,7 @@ import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2,
-    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera
+    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,10 +21,12 @@ import { getApiErrorMessage } from '@/helpers/apiError';
 import {
     RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse,
     deleteRFI,
-    updateRFI
+    updateRFI,
+    getRFIById
 } from '@/services/rfiService';
 import { getAssignees, Assignee } from '@/services/snagService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
+import FolderPickerDialog from './FolderPickerDialog';
 
 interface ProjectRFIProps {
     project: Project;
@@ -69,6 +71,10 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
     const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+
+    const [showFolderPicker, setShowFolderPicker] = useState(false);
+    const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -122,15 +128,28 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     useEffect(() => { load(); }, [project?.id]);
 
     useEffect(() => {
-        if (initialRfiId && rfis.length > 0) {
-            const target = rfis.find(r => String(r.id) === String(initialRfiId));
-            if (target) {
+        if (initialRfiId) {
+            const openRFI = (target: RFI) => {
                 setSelectedRFI(target);
                 // Clear the ID from URL to prevent loop on back navigation
                 const params = new URLSearchParams(window.location.search);
                 params.delete('rfiId');
                 const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
                 window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
+            };
+
+            const existing = rfis.find(r => String(r.id) === String(initialRfiId));
+            if (existing) {
+                openRFI(existing);
+            } else {
+                // Fetch specific RFI for faster redirection
+                getRFIById(Number(initialRfiId)).then(openRFI).catch(() => {
+                    // Fallback: clear param if fetch fails
+                    const params = new URLSearchParams(window.location.search);
+                    params.delete('rfiId');
+                    const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+                    window.history.replaceState({}, '', newUrl);
+                });
             }
         }
     }, [initialRfiId, rfis]);
@@ -189,6 +208,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             form.append('assigned_to', newAssignee);
             if (newExpiryDate) form.append('expiry_date', newExpiryDate);
             newPhotos.forEach(photo => form.append('photos', photo));
+            if (selectedFolderIds.length > 0) {
+                form.append('folder_ids', selectedFolderIds.join(','));
+            }
 
             await createRFI(form);
             toast.success('RFI created successfully');
@@ -198,6 +220,25 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             if (onUpdate) onUpdate();
         } catch (error) {
             toast.error(getApiErrorMessage(error, 'Failed to create RFI'));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleUpdateLinks = async (ids: (string | number)[]) => {
+        if (!selectedRFI) return;
+        setSubmitting(true);
+        try {
+            const numericIds = ids.map(Number);
+            const form = new FormData();
+            form.append('folder_ids', numericIds.join(','));
+            const updated = await updateRFI(selectedRFI.id, form);
+            setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, folder_ids: numericIds, linked_folders: updated.linked_folders } : r));
+            setSelectedRFI(prev => prev ? { ...prev, folder_ids: numericIds, linked_folders: updated.linked_folders } : null);
+            toast.success('Links updated successfully');
+            setShowFolderPicker(false);
+        } catch (error) {
+            toast.error('Failed to update links');
         } finally {
             setSubmitting(false);
         }
@@ -214,6 +255,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             form.append('assigned_to', newAssignee);
             if (newExpiryDate) form.append('expiry_date', newExpiryDate);
             newPhotos.forEach(photo => form.append('photos', photo));
+            form.append('folder_ids', selectedFolderIds.join(','));
 
             const updated = await updateRFI(selectedRFI.id, form);
             toast.success('RFI updated successfully');
@@ -248,6 +290,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         setNewExpiryDate('');
         setNewPhotos([]);
         setPhotoPreviews([]);
+        setSelectedFolderIds([]);
     };
 
     const handleUpdateResponse = async () => {
@@ -481,12 +524,29 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         </div>
                                     </div>
                                 ))}
-                                <label className="w-20 h-20 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
-                                    <ImagePlus className="h-6 w-6 text-muted-foreground" />
-                                    <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
-                                </label>
+                                {photoPreviews.length < 3 && (
+                                    <label className="w-20 h-20 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
+                                        <ImagePlus className="h-6 w-6 text-muted-foreground" />
+                                        <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+                                    </label>
+                                )}
                             </div>
                         </div>
+
+                        {/* <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Link to Folders</label>
+                            <div className="flex flex-wrap gap-2">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 text-[10px]" 
+                                    onClick={() => setShowFolderPicker(true)}
+                                >
+                                    <Folder className="h-3 w-3 mr-1.5" />
+                                    {selectedFolderIds.length > 0 ? `Manage Folders (${selectedFolderIds.length})` : 'Select Folders'}
+                                </Button>
+                            </div>
+                        </div> */}
                     </div>
                     <DialogFooter>
                         <Button variant="ghost" onClick={() => { setShowAdd(false); setIsEditing(false); resetForm(); }} disabled={submitting}>Cancel</Button>
@@ -500,44 +560,69 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
             {/* Detail Dialog */}
             <Dialog open={!!selectedRFI} onOpenChange={(open) => !open && setSelectedRFI(null)}>
-                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto no-scrollbar">
                     {selectedRFI && (
                         <>
                             <DialogHeader>
-                                <div className="flex items-center justify-between gap-3 mb-2">
+                                <div className="flex items-center justify-between gap-3 mb-2 pr-8">
                                     <div className="flex items-center gap-3">
                                         <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", STATUS_CONFIG[selectedRFI.status].bg, STATUS_CONFIG[selectedRFI.status].color)}>
                                             {STATUS_CONFIG[selectedRFI.status].label}
                                         </span>
                                         <span className="text-[10px] text-muted-foreground">RFI #{selectedRFI.id}</span>
                                     </div>
-                                    {String(selectedRFI.created_by) === String(user?.id) && !selectedRFI.response && (
-                                        <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2">
+                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && (
                                             <Button 
                                                 variant="outline" 
                                                 size="sm" 
                                                 className="h-7 text-[10px]"
                                                 onClick={() => {
-                                                    setNewTitle(selectedRFI.title);
-                                                    setNewDescription(selectedRFI.description || '');
-                                                    setNewAssignee(String(selectedRFI.assigned_to));
-                                                    setNewExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date).toISOString().slice(0, 16) : '');
-                                                    setPhotoPreviews(selectedRFI.photoDownloadUrls || []);
-                                                    setIsEditing(true);
+                                                    setSelectedFolderIds(selectedRFI.linked_folders?.map(f => f.id) || []);
+                                                    setShowFolderPicker(true);
                                                 }}
                                             >
-                                                Edit
+                                                <Folder className="h-3 w-3 mr-1.5" />
+                                                Link
                                             </Button>
-                                            <Button 
-                                                variant="destructive" 
-                                                size="sm" 
-                                                className="h-7 text-[10px]"
-                                                onClick={() => handleDeleteRFI(selectedRFI.id)}
-                                            >
-                                                Delete
-                                            </Button>
-                                        </div>
-                                    )}
+                                        )}
+                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && !selectedRFI.response && (
+                                            <>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px]"
+                                                    onClick={() => {
+                                                        setNewTitle(selectedRFI.title);
+                                                        setNewDescription(selectedRFI.description || '');
+                                                        setNewAssignee(String(selectedRFI.assigned_to));
+                                                        setNewExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date).toISOString().slice(0, 16) : '');
+                                                        setPhotoPreviews(selectedRFI.photoDownloadUrls || []);
+                                                        setSelectedFolderIds(selectedRFI.linked_folders?.map(f => f.id) || []);
+                                                        setIsEditing(true);
+                                                    }}
+                                                >
+                                                    Edit
+                                                </Button>
+                                                <Button 
+                                                    variant="destructive" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px]"
+                                                    onClick={() => {
+                                                        if (confirm('Are you sure you want to delete this RFI?')) {
+                                                            deleteRFI(selectedRFI.id).then(() => {
+                                                                setRfis(prev => prev.filter(r => r.id !== selectedRFI.id));
+                                                                setSelectedRFI(null);
+                                                                toast.success('RFI deleted successfully');
+                                                            }).catch(() => toast.error('Failed to delete RFI'));
+                                                        }
+                                                    }}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                                 <DialogTitle className="text-xl leading-tight">{selectedRFI.title}</DialogTitle>
                             </DialogHeader>
@@ -568,6 +653,46 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     )}
                                 </div>
 
+                                {selectedRFI.linked_folders && selectedRFI.linked_folders.length > 0 && (
+                                    <div>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Linked Folders</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedRFI.linked_folders.map((f: any) => (
+                                                <button 
+                                                    key={f.id} 
+                                                    onClick={() => {
+                                                        setSelectedRFI(null);
+                                                        const params = new URLSearchParams(window.location.search);
+                                                        params.set('tab', f.folder_type === 'photo' ? 'photos' : 'documents');
+                                                        params.set('folder', String(f.id));
+                                                        router.push(`?${params.toString()}`);
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
+                                                >
+                                                    <Folder className="h-2.5 w-2.5" />
+                                                    {f.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
+                                    <div>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Attachments</p>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {selectedRFI.photoDownloadUrls.map((url, idx) => (
+                                                <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group cursor-pointer">
+                                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <ZoomIn className="h-5 w-5 text-white" />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {selectedRFI.response && (
                                     <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
                                         <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">Response</p>
@@ -575,12 +700,12 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
                                             <div className="grid grid-cols-3 gap-2">
                                                 {selectedRFI.responsePhotoUrls.map((url, idx) => (
-                                                    <a key={idx} href={url} target="_blank" rel="noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                                                    <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border group cursor-pointer">
                                                         <img src={url} alt="Response photo" className="w-full h-full object-cover" />
                                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                             <ZoomIn className="h-4 w-4 text-white" />
                                                         </div>
-                                                    </a>
+                                                    </div>
                                                 ))}
                                             </div>
                                         )}
@@ -643,21 +768,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 )}
 
-                                {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
-                                    <div>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Attachments</p>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            {selectedRFI.photoDownloadUrls.map((url, idx) => (
-                                                <a key={idx} href={url} target="_blank" rel="noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group">
-                                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" />
-                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <ZoomIn className="h-5 w-5 text-white" />
-                                                    </div>
-                                                </a>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+
 
                                 {String(selectedRFI.assigned_to) === String(user?.id) && (
                                     <div className="pt-4 border-t border-border space-y-3">
@@ -690,6 +801,31 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                     onCancel={() => setAnnotatingIdx(null)} 
                 />
             )}
-        </div>
+
+        {/* Photo Viewer */}
+        <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
+            <DialogContent className="max-w-2xl p-2 no-scrollbar">
+                {viewPhoto && (
+                    <img src={viewPhoto} alt="Preview" className="w-full h-auto rounded-lg" />
+                )}
+            </DialogContent>
+        </Dialog>
+
+        <FolderPickerDialog 
+            open={showFolderPicker}
+            onOpenChange={setShowFolderPicker}
+            project={project}
+            selectedFolderIds={selectedFolderIds}
+            submitting={submitting}
+            onSelect={async (ids) => {
+                setSelectedFolderIds(ids);
+                if (selectedRFI && !isEditing) {
+                    await handleUpdateLinks(ids);
+                } else {
+                    setShowFolderPicker(false);
+                }
+            }}
+        />
+    </div>
     );
 }

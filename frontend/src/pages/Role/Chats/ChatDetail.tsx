@@ -2,12 +2,14 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck, X, FileText, Download, CornerUpLeft } from 'lucide-react';
+import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck, X, FileText, Download, CornerUpLeft, ZoomIn } from 'lucide-react';
 import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile } from '@/services/chatService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { PrivateAxios } from '@/helpers/PrivateAxios';
 
 export default function ChatDetail() {
     const router = useRouter();
@@ -42,6 +44,29 @@ export default function ChatDetail() {
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [replyTo, setReplyTo] = useState<any>(null);
+    const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+    const [viewPhotoName, setViewPhotoName] = useState<string>('');
+    const [viewPhotoId, setViewPhotoId] = useState<number>(0);
+
+    const handleDownload = async (messageId: number, fileName: string) => {
+        if (!messageId) return;
+        try {
+            const response = await PrivateAxios.get(`/chats/download/${messageId}`, {
+                responseType: 'blob'
+            });
+            
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.setAttribute('download', fileName || 'download');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error("Download failed", err);
+        }
+    };
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -349,19 +374,21 @@ export default function ChatDetail() {
                                     )}
 
                                     {msg.type === 'image' && msg.downloadUrl && (
-                                        <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20 relative group">
+                                        <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20 relative group cursor-pointer" onClick={() => { setViewPhoto(msg.downloadUrl); setViewPhotoName(msg.file_name || 'image.jpg'); setViewPhotoId(msg.id); }}>
                                             <img
                                                 src={msg.downloadUrl}
                                                 alt={msg.file_name}
-                                                className="max-w-full h-auto cursor-pointer block"
-                                                onClick={() => window.open(msg.downloadUrl, '_blank')}
+                                                className="max-w-full h-auto block"
                                             />
+                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <ZoomIn className="h-6 w-6 text-white" />
+                                            </div>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    window.open(msg.downloadUrl, '_blank');
+                                                    handleDownload(msg.id, msg.file_name || 'image.jpg');
                                                 }}
-                                                className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
                                             >
                                                 <Download className="h-4 w-4" />
                                             </button>
@@ -376,7 +403,7 @@ export default function ChatDetail() {
                                                 <p className="text-[10px] opacity-70">{msg.file_size || '0 KB'}</p>
                                             </div>
                                             <button
-                                                onClick={() => window.open(msg.downloadUrl, '_blank')}
+                                                onClick={() => handleDownload(msg.id, msg.file_name || 'file')}
                                                 className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
                                             >
                                                 <Download className="h-4 w-4" />
@@ -561,6 +588,17 @@ export default function ChatDetail() {
                     onCancel={() => setAnnotatingFile(false)}
                 />
             )}
+
+            {/* Photo Viewer */}
+            <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
+                <DialogContent className="max-w-4xl p-2 no-scrollbar">
+                    {viewPhoto && (
+                        <div className="relative flex flex-col items-center">
+                            <img src={viewPhoto} alt="Preview" className="max-w-full max-h-[85vh] rounded-lg" />
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

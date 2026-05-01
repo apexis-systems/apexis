@@ -181,7 +181,7 @@ export default function Project({ id }: ProjectProps) {
 
     return (
         <div className="flex flex-1 min-h-[calc(100vh-3.5rem)]">
-            <div className="w-56 shrink-0 border-r border-border bg-card p-4 flex flex-col">
+            <div className="w-56 shrink-0 border-r border-border bg-card p-4 flex flex-col no-scrollbar">
                 <button onClick={() => router.push(`/${user.role}/dashboard`)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
                     <ArrowLeft className="h-4 w-4" /> {t('back_to_projects')}
                 </button>
@@ -209,7 +209,7 @@ export default function Project({ id }: ProjectProps) {
                     })}
                 </nav>
             </div>
-            <div className="flex-1 p-8 overflow-y-auto max-w-5xl relative">
+            <div className="flex-1 p-8 overflow-y-auto max-w-5xl relative no-scrollbar">
                 {isDeleting && (
                     <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-[100] flex items-center justify-center">
                         <div className="flex flex-col items-center gap-4 bg-card p-8 rounded-xl border border-border shadow-2xl">

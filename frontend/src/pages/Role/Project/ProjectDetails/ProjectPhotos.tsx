@@ -18,10 +18,13 @@ import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNo
 
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
+import LinkedRFITab from './LinkedRFITab';
+import { getFolderRFIs } from '@/services/rfiService';
 
 import { Checkbox } from '@/components/ui/Checkbox';
 import FileViewer from '@/components/shared/FileViewer';
 import { formatFileSize } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 interface ProjectPhotosProps {
   project: Project;
@@ -55,6 +58,8 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   // View state
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
+  const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfi'>('files');
+  const [linkedRFICount, setLinkedRFICount] = useState(0);
 
   if (!project) return null;
 
@@ -103,8 +108,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   useEffect(() => {
     if (selectedFolder) {
       setSortBy('date');
+      setLinkedRFICount(0); // Reset immediately
     } else {
       setSortBy('name');
+      setActiveFolderTab('files');
+      setLinkedRFICount(0);
     }
   }, [selectedFolder]);
 
@@ -127,6 +135,26 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       }
     } catch (e) {
       console.error("Failed to fetch folders/files", e);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedFolder) {
+      importRFIsForFolder();
+    } else {
+      setLinkedRFICount(0);
+      setActiveFolderTab('files');
+    }
+  }, [selectedFolder]);
+
+  const importRFIsForFolder = async () => {
+    if (!selectedFolder) return;
+    try {
+      const res = await getFolderRFIs(selectedFolder);
+      setLinkedRFICount(res.length);
+      if (res.length === 0) setActiveFolderTab('files');
+    } catch (error) {
+      console.error("Failed to fetch linked RFIs count:", error);
     }
   };
 
@@ -463,7 +491,36 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      {selectedFolder && linkedRFICount > 0 && (
+        <div className="flex border-b border-border mb-3">
+          <button
+            onClick={() => setActiveFolderTab('files')}
+            className={cn(
+              "px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all relative",
+              activeFolderTab === 'files' ? "text-accent" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Photos & Folders
+            {activeFolderTab === 'files' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+          </button>
+          <button
+            onClick={() => setActiveFolderTab('rfi')}
+            className={cn(
+              "px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all relative",
+              activeFolderTab === 'rfi' ? "text-accent" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Linked RFIs
+            {activeFolderTab === 'rfi' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+          </button>
+        </div>
+      )}
+
+      {activeFolderTab === 'rfi' && selectedFolder && linkedRFICount > 0 ? (
+        <LinkedRFITab folderId={selectedFolder} projectId={project.id} />
+      ) : (
+        <>
+          <div className="grid grid-cols-4 gap-2">
         {sortedFolders.map((folder) => {
           const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
@@ -711,6 +768,8 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           </div>
         )
       }
+        </>
+      )}
 
       {
         shareItem && (

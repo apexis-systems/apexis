@@ -57,6 +57,11 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.JSON,
                 allowNull: true,
             },
+            folder_ids: {
+                type: DataTypes.JSON,
+                allowNull: true,
+                defaultValue: [],
+            },
         },
         {
             tableName: "rfis",
