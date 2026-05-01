@@ -18,16 +18,16 @@ interface FolderPickerDialogProps {
 }
 
 const FolderPickerDialog = ({
-    open,
-    onOpenChange,
-    project,
-    selectedFolderIds,
-    onSelect,
+    open = false,
+    onOpenChange = () => {},
+    project = null,
+    selectedFolderIds = [],
+    onSelect = () => {},
     submitting = false
 }: FolderPickerDialogProps) => {
     const [folders, setFolders] = useState<any[]>([]);
     const [type, setType] = useState<'document' | 'photo'>('document');
-    const [currentSelected, setCurrentSelected] = useState<(string | number)[]>(selectedFolderIds);
+    const [currentSelected, setCurrentSelected] = useState<(string | number)[]>(selectedFolderIds || []);
 
     useEffect(() => {
         if (open && project?.id) {
@@ -114,7 +114,7 @@ const FolderPickerDialog = ({
                 </div>
 
                 <div className="max-h-[350px] overflow-y-auto pr-2 no-scrollbar">
-                    {folders.length === 0 ? (
+                    {folders?.length === 0 ? (
                         <div className="py-12 text-center text-muted-foreground text-xs italic">
                             No {type} folders found
                         </div>
@@ -125,7 +125,7 @@ const FolderPickerDialog = ({
 
                 <div className="pt-4 border-t border-border">
                     <p className="text-[10px] text-muted-foreground font-medium mb-2">
-                        {currentSelected.length} folder(s) selected
+                        {currentSelected?.length || 0} folder(s) selected
                     </p>
                 </div>
 
