@@ -1178,7 +1178,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </View>
 
                     {/* Link Folders */}
-                    <View style={{ marginBottom: 20 }}>
+                    {/* <View style={{ marginBottom: 20 }}>
                       <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 10 }}>Link to Folders</Text>
                       <TouchableOpacity
                         onPress={() => setShowFolderPicker(true)}
@@ -1199,7 +1199,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         </Text>
                         <Feather name="chevron-right" size={18} color={colors.textMuted} />
                       </TouchableOpacity>
-                    </View>
+                    </View> */}
 
                     <View>
                       <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
@@ -1617,6 +1617,22 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           onClose={() => setPreviewImage(null)}
           uri={previewImage}
           onEdit={(u) => { if (u) setAnnotatingRemoteUri(u); }}
+        />
+
+        {/* Folder Picker nested for iOS support while inside Detail Modal */}
+        <MobileFolderPickerDialog
+          visible={showFolderPicker}
+          onClose={() => setShowFolderPicker(false)}
+          project={project}
+          selectedFolderIds={selectedFolderIds}
+          submitting={submitting}
+          onConfirm={async (ids) => {
+            setSelectedFolderIds(ids);
+            if (selectedRFI && detailModalVisible && !createModalVisible) {
+              await handleUpdateLinks(ids);
+            }
+            setShowFolderPicker(false);
+          }}
         />
 
       </Modal>
@@ -2207,22 +2223,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
       {/* Removed old redundant Assignee Picker location as it is now nested for iOS support */}
 
-      <MobileFolderPickerDialog
-        visible={showFolderPicker}
-        onClose={() => setShowFolderPicker(false)}
-        project={project}
-        selectedFolderIds={selectedFolderIds}
-        submitting={submitting}
-        onConfirm={async (ids) => {
-          setSelectedFolderIds(ids);
-          // If we are currently viewing an RFI in detail mode (not just creating a new one)
-          // immediately update the links in the backend
-          if (selectedRFI && detailModalVisible && !createModalVisible) {
-            await handleUpdateLinks(ids);
-          }
-          setShowFolderPicker(false);
-        }}
-      />
+      {/* Removed old root-level Folder Picker as it is now nested for iOS support */}
     </View>
   );
 }
