@@ -897,12 +897,33 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         gap: 12
                                     }}
                                 >
-                                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="message-square" size={16} color={colors.primary} />
-                                    </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{rfi.title}</Text>
-                                        <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.description}</Text>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{rfi.title}</Text>
+                                            <View style={{ 
+                                                paddingHorizontal: 8, 
+                                                paddingVertical: 2, 
+                                                borderRadius: 6, 
+                                                backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)' 
+                                            }}>
+                                                <Text style={{ 
+                                                    fontSize: 9, 
+                                                    fontWeight: '800', 
+                                                    textTransform: 'uppercase',
+                                                    color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444' 
+                                                }}>{rfi.status}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                <Feather name="calendar" size={10} color={colors.textMuted} />
+                                                <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(rfi.createdAt).toLocaleDateString()}</Text>
+                                            </View>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                <Feather name="user" size={10} color={colors.textMuted} />
+                                                <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || 'Unassigned'}</Text>
+                                            </View>
+                                        </View>
                                     </View>
                                     <Feather name="chevron-right" size={16} color={colors.textMuted} />
                                 </TouchableOpacity>

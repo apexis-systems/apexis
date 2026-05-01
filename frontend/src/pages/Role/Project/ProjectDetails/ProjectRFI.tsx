@@ -662,7 +662,10 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                     key={f.id} 
                                                     onClick={() => {
                                                         setSelectedRFI(null);
-                                                        router.push(`/Role/Project/ProjectDetails?id=${project.id}&tab=${f.folder_type === 'photo' ? 'photos' : 'documents'}&folder=${f.id}`);
+                                                        const params = new URLSearchParams(window.location.search);
+                                                        params.set('tab', f.folder_type === 'photo' ? 'photos' : 'documents');
+                                                        params.set('folder', String(f.id));
+                                                        router.push(`?${params.toString()}`);
                                                     }}
                                                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
                                                 >
