@@ -21,7 +21,8 @@ import { getApiErrorMessage } from '@/helpers/apiError';
 import {
     RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse,
     deleteRFI,
-    updateRFI
+    updateRFI,
+    getRFIById
 } from '@/services/rfiService';
 import { getAssignees, Assignee } from '@/services/snagService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
@@ -127,15 +128,28 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     useEffect(() => { load(); }, [project?.id]);
 
     useEffect(() => {
-        if (initialRfiId && rfis.length > 0) {
-            const target = rfis.find(r => String(r.id) === String(initialRfiId));
-            if (target) {
+        if (initialRfiId) {
+            const openRFI = (target: RFI) => {
                 setSelectedRFI(target);
                 // Clear the ID from URL to prevent loop on back navigation
                 const params = new URLSearchParams(window.location.search);
                 params.delete('rfiId');
                 const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
                 window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
+            };
+
+            const existing = rfis.find(r => String(r.id) === String(initialRfiId));
+            if (existing) {
+                openRFI(existing);
+            } else {
+                // Fetch specific RFI for faster redirection
+                getRFIById(Number(initialRfiId)).then(openRFI).catch(() => {
+                    // Fallback: clear param if fetch fails
+                    const params = new URLSearchParams(window.location.search);
+                    params.delete('rfiId');
+                    const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+                    window.history.replaceState({}, '', newUrl);
+                });
             }
         }
     }, [initialRfiId, rfis]);

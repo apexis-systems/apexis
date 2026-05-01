@@ -108,9 +108,11 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   useEffect(() => {
     if (selectedFolder) {
       setSortBy('date');
+      setLinkedRFICount(0); // Reset immediately to prevent glitch
     } else {
       setSortBy('name');
       setActiveFolderTab('files'); // Reset tab when going to root
+      setLinkedRFICount(0);
     }
   }, [selectedFolder]);
 

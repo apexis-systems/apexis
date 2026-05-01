@@ -145,10 +145,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     useEffect(() => {
         if (selectedFolder) {
             setSortBy('newest');
+            setLinkedRFIs([]); // Reset immediately
             fetchLinkedRFIs();
         } else {
             setSortBy('name');
             setActiveFolderTab('files');
+            setLinkedRFIs([]);
         }
     }, [selectedFolder]);
 

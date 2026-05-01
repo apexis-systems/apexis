@@ -140,10 +140,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     useEffect(() => {
         if (selectedFolder) {
             setSortBy('newest');
+            setLinkedRFIs([]); // Reset immediately to prevent toggle glitch
             fetchLinkedRFIs();
         } else {
             setSortBy('name');
             setActiveFolderTab('files');
+            setLinkedRFIs([]);
         }
     }, [selectedFolder]);
 

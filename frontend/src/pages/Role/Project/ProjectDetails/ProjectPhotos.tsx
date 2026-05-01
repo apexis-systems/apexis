@@ -108,9 +108,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   useEffect(() => {
     if (selectedFolder) {
       setSortBy('date');
+      setLinkedRFICount(0); // Reset immediately
     } else {
       setSortBy('name');
       setActiveFolderTab('files');
+      setLinkedRFICount(0);
     }
   }, [selectedFolder]);
 

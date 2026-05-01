@@ -16,7 +16,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Accelerometer } from 'expo-sensors';
 import { Project, User } from '@/types';
 import {
-  getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI
+  getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI,
+  getRFIById
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
@@ -141,15 +142,26 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   };
 
   useEffect(() => {
-    if (initialRfiId && rfis.length > 0) {
-      const target = rfis.find(r => String(r.id) === String(initialRfiId));
-      if (target) {
+    if (initialRfiId && !detailModalVisible) {
+      const openRFI = (target: RFI) => {
+        if (detailModalVisible) return;
         setResponseBody('');
         setResponseImages([]);
         setSelectedRFI(target);
         setDetailModalVisible(true);
-        // Clear param to prevent loop
         router.setParams({ rfiId: undefined });
+      };
+
+      // If already in list, open it
+      const existing = rfis.find(r => String(r.id) === String(initialRfiId));
+      if (existing) {
+        openRFI(existing);
+      } else {
+        // Fetch it specifically for faster redirection
+        getRFIById(Number(initialRfiId)).then(openRFI).catch(err => {
+          console.error("Failed to fetch initial RFI", err);
+          router.setParams({ rfiId: undefined });
+        });
       }
     }
   }, [initialRfiId, rfis, router]);
@@ -865,11 +877,21 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             <TouchableOpacity 
                               key={f.id}
                               onPress={() => {
+                                // 1. Close the modal first
                                 setDetailModalVisible(false);
-                                router.setParams({ 
-                                  tab: f.folder_type === 'photo' ? 'photos' : 'documents', 
-                                  folderId: String(f.id) 
-                                });
+                                
+                                // 2. Clear any other active overlays just in case
+                                setShowFolderPicker(false);
+                                setSelectedRFI(null);
+
+                                // 3. Small delay to allow modal backdrop to clear before navigation
+                                setTimeout(() => {
+                                  router.setParams({ 
+                                    tab: f.folder_type === 'photo' ? 'photos' : 'documents', 
+                                    folderId: String(f.id),
+                                    rfiId: undefined // Explicitly clear any RFI trigger
+                                  });
+                                }, 100);
                               }}
                               style={{ 
                                 flexDirection: 'row', 
