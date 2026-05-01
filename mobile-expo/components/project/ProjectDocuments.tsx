@@ -15,6 +15,7 @@ import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { WebView } from 'react-native-webview';
+import { getFolderRFIs } from '@/services/rfiService';
 
 // Detect if we are running in Expo Go
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -87,6 +88,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [renamingFileId, setRenamingFileId] = useState<number | null>(null);
     const [renamingFileName, setRenamingFileName] = useState('');
     const [isUnarchiving, setIsUnarchiving] = useState(false);
+    const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfis'>('files');
+    const [linkedRFIs, setLinkedRFIs] = useState<any[]>([]);
+    const [loadingRFIs, setLoadingRFIs] = useState(false);
 
     const fetchFolders = async (isRefetch = false) => {
         if (!project?.id) return;
@@ -136,10 +140,25 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     useEffect(() => {
         if (selectedFolder) {
             setSortBy('newest');
+            fetchLinkedRFIs();
         } else {
             setSortBy('name');
+            setActiveFolderTab('files');
         }
     }, [selectedFolder]);
+
+    const fetchLinkedRFIs = async () => {
+        if (!selectedFolder) return;
+        setLoadingRFIs(true);
+        try {
+            const data = await getFolderRFIs(selectedFolder);
+            setLinkedRFIs(data);
+        } catch (e) {
+            console.error("fetchLinkedRFIs error", e);
+        } finally {
+            setLoadingRFIs(false);
+        }
+    };
 
     useEffect(() => {
         if (initialFileId && docs.length > 0) {
@@ -825,7 +844,77 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     </TouchableOpacity>
                 </View>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                {selectedFolder && linkedRFIs.length > 0 && (
+                    <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#f1f5f9', borderRadius: 10, padding: 3, marginBottom: 12 }}>
+                        <TouchableOpacity
+                            onPress={() => setActiveFolderTab('files')}
+                            style={{
+                                flex: 1,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                                alignItems: 'center',
+                                backgroundColor: activeFolderTab === 'files' ? colors.surface : 'transparent',
+                                ...(activeFolderTab === 'files' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
+                            }}
+                        >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'files' ? colors.primary : colors.textMuted }}>Files ({sortedFolders.length + sortedDocs.length})</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => setActiveFolderTab('rfis')}
+                            style={{
+                                flex: 1,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                                alignItems: 'center',
+                                backgroundColor: activeFolderTab === 'rfis' ? colors.surface : 'transparent',
+                                ...(activeFolderTab === 'rfis' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
+                            }}
+                        >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>Linked RFIs ({linkedRFIs.length})</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {activeFolderTab === 'rfis' ? (
+                    <View style={{ gap: 10 }}>
+                        {loadingRFIs ? (
+                            <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 20 }} />
+                        ) : linkedRFIs.length > 0 ? (
+                            linkedRFIs.map((rfi) => (
+                                <TouchableOpacity
+                                    key={rfi.id}
+                                    onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                    style={{
+                                        backgroundColor: colors.surface,
+                                        borderRadius: 12,
+                                        padding: 12,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 12
+                                    }}
+                                >
+                                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name="message-square" size={16} color={colors.primary} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{rfi.title}</Text>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.description}</Text>
+                                    </View>
+                                    <Feather name="chevron-right" size={16} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            ))
+                        ) : (
+                            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                                <Feather name="link-2" size={32} color={colors.border} />
+                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>No RFIs linked to this folder</Text>
+                            </View>
+                        )}
+                    </View>
+                ) : (
+                    <>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                     {sortedFolders.map((folder) => {
                         const count = docs.filter((d) => d.folder_id === folder.id).length;
                         const subcount = folders.filter((f) => f.parent_id === folder.id).length;
@@ -1108,6 +1197,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         );
                     })()}
                 </View>
+                </>
+                )}
 
                 {/* {sortedFolders.length === 0 && (
                     <View style={{ marginTop: 30, alignItems: 'center' }}>

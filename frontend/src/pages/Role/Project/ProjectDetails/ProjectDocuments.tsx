@@ -16,11 +16,14 @@ import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, up
 import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile } from '@/services/fileService';
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
+import LinkedRFITab from './LinkedRFITab';
 import RenameFileDialog from './RenameFileDialog';
 
 import { Checkbox } from '@/components/ui/Checkbox';
 import FileViewer from '@/components/shared/FileViewer';
 import { formatFileSize } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import { getFolderRFIs } from '@/services/rfiService';
 
 interface ProjectDocumentsProps {
   project: Project;
@@ -36,6 +39,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   );
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfi'>('files');
+  const [linkedRFICount, setLinkedRFICount] = useState(0);
   const [shareItem, setShareItem] = useState<any | null>(null);
   const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
   const [initialFileId, setInitialFileId] = useState<string | null>(searchParams?.get('fileId') || searchParams?.get('documentId') || null);
@@ -105,6 +110,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       setSortBy('date');
     } else {
       setSortBy('name');
+      setActiveFolderTab('files'); // Reset tab when going to root
     }
   }, [selectedFolder]);
 
@@ -115,6 +121,26 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       setRawSelectedFolder(folderId);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (selectedFolder) {
+      importRFIsForFolder();
+    } else {
+      setLinkedRFICount(0);
+      setActiveFolderTab('files');
+    }
+  }, [selectedFolder]);
+
+  const importRFIsForFolder = async () => {
+    if (!selectedFolder) return;
+    try {
+      const res = await getFolderRFIs(selectedFolder);
+      setLinkedRFICount(res.length);
+      if (res.length === 0) setActiveFolderTab('files');
+    } catch (error) {
+      console.error("Failed to fetch linked RFIs count:", error);
+    }
+  };
 
   const importFolders = async () => {
     try {
@@ -497,7 +523,36 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      {selectedFolder && linkedRFICount > 0 && (
+        <div className="flex border-b border-border mb-3">
+          <button
+            onClick={() => setActiveFolderTab('files')}
+            className={cn(
+              "px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all relative",
+              activeFolderTab === 'files' ? "text-accent" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Files & Folders
+            {activeFolderTab === 'files' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+          </button>
+          <button
+            onClick={() => setActiveFolderTab('rfi')}
+            className={cn(
+              "px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all relative",
+              activeFolderTab === 'rfi' ? "text-accent" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Linked RFIs
+            {activeFolderTab === 'rfi' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+          </button>
+        </div>
+      )}
+
+      {activeFolderTab === 'rfi' && selectedFolder && linkedRFICount > 0 ? (
+        <LinkedRFITab folderId={selectedFolder} projectId={project.id} />
+      ) : (
+        <>
+          <div className="grid grid-cols-4 gap-2">
         {sortedFolders.map((folder) => {
           const folderDocs = docs.filter((d) => d.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
@@ -756,6 +811,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           </div>
         )
       }
+        </>
+      )}
 
       {
         shareItem && (
