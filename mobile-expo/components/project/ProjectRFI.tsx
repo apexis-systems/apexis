@@ -25,7 +25,18 @@ import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 import { parseApiError } from '@/helpers/apiError';
 import MobileFolderPickerDialog from './MobileFolderPickerDialog';
+import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
+import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
 
+const isAudio = (url: string) => {
+    if (!url) return false;
+    try {
+        const urlWithoutQuery = url.split('?')[0];
+        return !!urlWithoutQuery.match(/\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i);
+    } catch {
+        return false;
+    }
+};
 interface Props {
   project: Project;
   user: User;
@@ -49,6 +60,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const insets = useSafeAreaInsets();
   const MAX_RFI_IMAGES = 4;
   const [rfis, setRfis] = useState<RFI[]>([]);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'overdue'>('all');
   const [creatorFilter, setCreatorFilter] = useState<string>('all');
@@ -99,6 +111,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   }, []);
   const [isEditing, setIsEditing] = useState(false);
   const [responseImages, setResponseImages] = useState<string[]>([]);
+  const [removedResponsePhotos, setRemovedResponsePhotos] = useState<string[]>([]);
   const [annotatingImageIndex, setAnnotatingImageIndex] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [annotatingRemoteUri, setAnnotatingRemoteUri] = useState<string | null>(null);
@@ -528,11 +541,19 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       const formData = new FormData();
       formData.append('response', responseBody.trim());
       responseImages.forEach((uri, index) => {
-        const filename = uri.split('/').pop() || `resp_${index}.jpg`;
+        let filename = uri.split('/').pop() || `resp_${index}.jpg`;
+        if (isAudio(uri) && !filename.includes('.')) filename += '.m4a';
         const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image/jpeg`;
+        let type = `image/jpeg`;
+        if (match) {
+            type = isAudio(filename) ? `audio/${match[1]}` : `image/${match[1]}`;
+        }
         formData.append('photos', { uri, name: filename, type } as any);
       });
+
+      if (removedResponsePhotos.length > 0) {
+        formData.append('removedPhotos', JSON.stringify(removedResponsePhotos));
+      }
 
 
       const updated = await updateRFIResponse(selectedRFI.id, formData);
@@ -846,14 +867,36 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                           {(selectedRFI?.photoDownloadUrls || []).map((url, idx) => (
                             <View key={idx} style={{ position: 'relative' }}>
-                              <TouchableOpacity onPress={() => setPreviewImage(url)}>
-                                <Image
-                                  source={url}
-                                  style={{ width: 120, height: 120, borderRadius: 12 }}
-                                  contentFit="cover"
-                                  transition={200}
-                                />
-                              </TouchableOpacity>
+                              {isAudio(url) ? (
+                                  <View style={{
+                                    padding: 12,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    width: SCREEN_W - 80,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 1 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 2,
+                                    elevation: 2
+                                  }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
+                                      <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>VOICE ATTACHMENT</Text>
+                                    </View>
+                                    <VoiceNotePlayer uri={url} isMe={false} colors={colors} />
+                                  </View>
+                              ) : (
+                                <TouchableOpacity onPress={() => setPreviewImage(url)}>
+                                  <Image
+                                    source={url}
+                                    style={{ width: 120, height: 120, borderRadius: 12 }}
+                                    contentFit="cover"
+                                    transition={200}
+                                  />
+                                </TouchableOpacity>
+                              )}
                             </View>
                           ))}
                         </ScrollView>
@@ -922,9 +965,67 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
                             {selectedRFI.responsePhotoUrls.map((uri, idx) => (
                               <View key={idx} style={{ position: 'relative' }}>
-                                <TouchableOpacity onPress={() => setPreviewImage(uri)}>
-                                  <Image source={{ uri }} style={{ width: 100, height: 100, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
-                                </TouchableOpacity>
+                                {isAudio(uri) ? (
+                                  <View style={{
+                                    padding: 12,
+                                    borderWidth: 1,
+                                    borderColor: colors.primary + '20',
+                                    borderRadius: 16,
+                                    backgroundColor: colors.background,
+                                    width: SCREEN_W - 100, // Slightly smaller inside the response box
+                                    shadowColor: colors.primary,
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 4,
+                                    elevation: 3
+                                  }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                      <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
+                                    </View>
+                                    <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                    {String(selectedRFI.assigned_to) === String(user.id) && (
+                                      <TouchableOpacity
+                                        onPress={() => {
+                                          const key = selectedRFI.response_photos?.[idx];
+                                          if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                          // Optimistic UI update
+                                          const newUrls = [...(selectedRFI.responsePhotoUrls || [])];
+                                          newUrls.splice(idx, 1);
+                                          const newPhotos = [...(selectedRFI.response_photos || [])];
+                                          newPhotos.splice(idx, 1);
+                                          setSelectedRFI({ ...selectedRFI, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                        }}
+                                        style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
+                                      >
+                                        <Feather name="x" size={14} color="#fff" />
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                ) : (
+                                  <View style={{ position: 'relative' }}>
+                                    <TouchableOpacity onPress={() => setPreviewImage(uri)}>
+                                      <Image source={{ uri }} style={{ width: 100, height: 100, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
+                                    </TouchableOpacity>
+                                    {String(selectedRFI.assigned_to) === String(user.id) && (
+                                      <TouchableOpacity
+                                        onPress={() => {
+                                          const key = selectedRFI.response_photos?.[idx];
+                                          if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                          // Optimistic UI update
+                                          const newUrls = [...(selectedRFI.responsePhotoUrls || [])];
+                                          newUrls.splice(idx, 1);
+                                          const newPhotos = [...(selectedRFI.response_photos || [])];
+                                          newPhotos.splice(idx, 1);
+                                          setSelectedRFI({ ...selectedRFI, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                        }}
+                                        style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
+                                      >
+                                        <Feather name="x" size={14} color="#fff" />
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                )}
                               </View>
                             ))}
                           </View>
@@ -958,19 +1059,46 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                               {responseImages.map((uri, idx) => (
                                 <View key={idx} style={{ position: 'relative' }}>
-                                  <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
+                                    {isAudio(uri) ? (
+                                      <View style={{
+                                        padding: 12,
+                                        paddingRight: 32,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        borderRadius: 16,
+                                        backgroundColor: colors.surface,
+                                        width: SCREEN_W - 64,
+                                        minHeight: 64,
+                                        justifyContent: 'center',
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.05,
+                                        shadowRadius: 3,
+                                        elevation: 2
+                                      }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                          <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
+                                        </View>
+                                        <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                      </View>
+                                    ) : (
+                                    <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
+                                  )}
                                   <TouchableOpacity
                                     onPress={() => setResponseImages(prev => prev.filter((_, i) => i !== idx))}
-                                    style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                                    style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
                                   >
                                     <Feather name="x" size={14} color="#fff" />
                                   </TouchableOpacity>
-                                  <TouchableOpacity
-                                    onPress={() => { setCameraMode('response'); setAnnotatingImageIndex(idx); }}
-                                    style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
-                                  >
-                                    <Feather name="edit-2" size={12} color="#fff" />
-                                  </TouchableOpacity>
+                                  {!isAudio(uri) && (
+                                    <TouchableOpacity
+                                      onPress={() => { setCameraMode('response'); setAnnotatingImageIndex(idx); }}
+                                      style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
+                                    >
+                                      <Feather name="edit-2" size={12} color="#fff" />
+                                    </TouchableOpacity>
+                                  )}
                                 </View>
                               ))}
                               <TouchableOpacity
@@ -982,6 +1110,23 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               >
                                 <Feather name="camera" size={24} color={colors.textMuted} />
                               </TouchableOpacity>
+
+                              <View style={{ 
+                                  flexDirection: 'row', 
+                                  alignItems: 'center', 
+                                  flex: isRecordingVoice ? 1 : 0 
+                              }}>
+                                <VoiceNoteRecorder
+                                  colors={colors}
+                                  onRecordingStateChange={setIsRecordingVoice}
+                                  onSend={(uri) => {
+                                      setResponseImages(prev => [...prev, uri]);
+                                  }}
+                                />
+                                {!isRecordingVoice && (
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>VOICE</Text>
+                                )}
+                              </View>
                             </View>
                             <TouchableOpacity
                               onPress={handleUpdateResponse}
