@@ -221,7 +221,10 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
                 { updatedAt: { [Op.between]: [periodStart, periodEnd] } },
             ],
         },
-        include: [{ model: users, as: 'creator', attributes: ['name'] }]
+        include: [
+            { model: users, as: 'creator', attributes: ['name'] },
+            { model: users, as: 'assignee', attributes: ['name'] }
+        ]
     });
 
     // --- Snags in the period ---
@@ -233,7 +236,10 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
                 { updatedAt: { [Op.between]: [periodStart, periodEnd] } },
             ],
         },
-        include: [{ model: users, as: 'creator', attributes: ['name'] }]
+        include: [
+            { model: users, as: 'creator', attributes: ['name'] },
+            { model: users, as: 'assignee', attributes: ['name'] }
+        ]
     });
 
     // --- Build summary breakdown ---
@@ -292,12 +298,14 @@ export const generateReport = async (projectId: number, type: 'daily' | 'weekly'
         rfis: periodRfis.map((r: any) => ({
             title: r.title,
             status: r.status,
-            user: r.creator?.name || 'Unknown'
+            user: r.creator?.name || 'Unknown',
+            assigned_to: r.assignee?.name || ' '
         })),
         snags: periodSnags.map((s: any) => ({
             title: s.title,
             status: s.status,
-            user: s.creator?.name || 'Unknown'
+            user: s.creator?.name || 'Unknown',
+            assigned_to: s.assignee?.name || ' '
         })),
     };
 
