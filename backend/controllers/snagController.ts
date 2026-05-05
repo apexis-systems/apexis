@@ -64,6 +64,11 @@ export const getSnags = async (req: Request, res: Response) => {
 
     const data = await snags.findAll({
       where: { project_id: Number(project_id) },
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", 
+        "assigned_to", "status", "response", "response_photos", 
+        "created_by", "createdAt", "updatedAt"
+      ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name", "email"] },
         { model: users, as: "creator", attributes: ["id", "name"] },
@@ -188,6 +193,11 @@ export const createSnag = async (req: Request, res: Response) => {
     }
 
     const full = await snags.findByPk((snag as any).id, {
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", 
+        "assigned_to", "status", "response", "response_photos", 
+        "created_by", "createdAt", "updatedAt"
+      ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name"] },
         { model: users, as: "creator", attributes: ["id", "name"] },
@@ -469,6 +479,11 @@ export const updateSnag = async (req: Request | any, res: Response) => {
     });
 
     const full = await snags.findByPk(id, {
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", 
+        "assigned_to", "status", "response", "response_photos", 
+        "created_by", "createdAt", "updatedAt"
+      ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name"] },
         { model: users, as: "creator", attributes: ["id", "name"] },

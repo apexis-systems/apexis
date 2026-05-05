@@ -19,6 +19,7 @@ export interface RFI {
     photoDownloadUrls?: string[];
     expiry_date?: string;
     response?: string;
+    response_photos?: string[];
     responsePhotoUrls?: string[];
     linked_folders?: { id: number; name: string; folder_type: string }[];
 }

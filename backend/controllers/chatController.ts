@@ -178,11 +178,13 @@ export const getRoomMessages = async (req: Request, res: Response) => {
  */
 export const sendChatMessage = async (req: Request, res: Response) => {
     try {
-        const { roomId, text, recipientId, type, file_url, file_name, file_type, file_size } = req.body;
+        const { roomId, text, recipientId, type, file_url, file_name, file_type, file_size, parent_id } = req.body;
         const authUser = (req as any).user;
 
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
         if (!roomId || (!text && !file_url)) return res.status(400).json({ error: 'Missing required fields' });
+
+        console.log(`[CHAT] Creating message in room ${roomId}, parent_id: ${parent_id}`);
 
         // 1. Save message to DB
         const newMessage = await chat_messages.create({
@@ -195,14 +197,16 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             file_type: file_type || null,
             file_size: file_size || null,
             seen: false,
-            parent_id: req.body.parent_id || null
+            parent_id: parent_id ? Number(parent_id) : null
         });
 
         // Update room updatedAt for sorting
         await rooms.update({ updatedAt: new Date() }, { where: { id: roomId } });
 
+        console.log(`[CHAT] Message saved. Re-fetching with associations...`);
+
         // Re-fetch message with sender info and parent info for broadcast
-        const messageWithSender = await chat_messages.findByPk(newMessage.id, {
+        let messageWithSender = await chat_messages.findByPk(newMessage.id, {
             include: [
                 { model: users, as: 'sender', attributes: ['id', 'name', 'profile_pic'] },
                 {
@@ -212,6 +216,34 @@ export const sendChatMessage = async (req: Request, res: Response) => {
                 }
             ]
         });
+
+        if (!messageWithSender) {
+            console.error(`[CHAT] FAILED to re-fetch message with findByPk for ID: ${newMessage.id}`);
+            messageWithSender = newMessage;
+        }
+
+        const messageJson = messageWithSender.toJSON() as any;
+        
+        // CRITICAL: Ensure parent_id is in the JSON even if re-fetch failed
+        if (!messageJson.parent_id && newMessage.parent_id) {
+            messageJson.parent_id = newMessage.parent_id;
+        }
+
+        console.log(`[CHAT] Initial re-fetch result - parent_id: ${messageJson.parent_id}, has parent object: ${!!messageJson.parent}`);
+
+        // Double check: if parent_id is present but parent object is missing, manually fetch and attach
+        if (messageJson.parent_id && !messageJson.parent) {
+            console.log(`[CHAT] Manual fallback fetch for parent message ID: ${messageJson.parent_id}`);
+            const parentMsg = await chat_messages.findByPk(Number(messageJson.parent_id), {
+                include: [{ model: users, as: 'sender', attributes: ['id', 'name'] }]
+            });
+            if (parentMsg) {
+                messageJson.parent = parentMsg.toJSON();
+                console.log(`[CHAT] Manually attached parent message context for sender: ${messageJson.parent.sender?.name}`);
+            } else {
+                console.error(`[CHAT] FAILED to find parent message with ID: ${messageJson.parent_id}`);
+            }
+        }
 
         // 2. Trigger Notifications
         const otherMembers = await room_members.findAll({
@@ -227,7 +259,7 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             include: [{ model: users, attributes: ['id', 'fcm_token'] }]
         });
 
-        const notificationBody = text || (type === 'image' ? 'Sent an image' : type === 'file' ? 'Sent a file' : 'New message');
+        const notificationBody = text || (type === 'audio' ? 'Sent a voice note' : type === 'image' ? 'Sent an image' : type === 'file' ? 'Sent a file' : 'New message');
 
         for (const member of otherMembers) {
             await sendNotification({
@@ -243,7 +275,6 @@ export const sendChatMessage = async (req: Request, res: Response) => {
         }
 
         const BUCKET_NAME = process.env.S3_BUCKET_NAME || "apexis-bucket";
-        const messageJson = messageWithSender?.toJSON() as any;
         if (messageJson.file_url) {
             const s3Client = new S3Client({
                 region: process.env.AWS_REGION || "ap-south-2",
@@ -353,6 +384,12 @@ export const uploadChatFile = async (req: Request, res: Response) => {
         }
 
         const file = (req as any).file;
+
+        // Approx 10MB limit for 5 minutes of high-quality audio
+        if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+            return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
+        }
+
         const file_name = file.originalname;
         const file_type = file.mimetype;
         const file_size = (file.size / 1024).toFixed(2) + " KB"; // Format size
@@ -549,7 +586,6 @@ export const createRoom = async (req: Request, res: Response) => {
                 ]
             });
 
-            // If found a room where we are a member, check if the other user is also a member of THAT room
             if (existingRoom) {
                 const otherMembership = await room_members.findOne({
                     where: { room_id: existingRoom.id, user_id: targetUserId }

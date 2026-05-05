@@ -20,6 +20,7 @@ export const Text = React.forwardRef<RNText, RNTextProps & { className?: string 
     return <RNText ref={ref} className={className} style={customStyle} {...rest} />;
 });
 Text.displayName = 'Text';
+export type Text = RNText;
 
 export const TextInput = React.forwardRef<RNTextInput, RNTextInputProps & { className?: string }>((props, ref) => {
     const { style, className, ...rest } = props;
@@ -35,3 +36,4 @@ export const TextInput = React.forwardRef<RNTextInput, RNTextInputProps & { clas
     return <RNTextInput ref={ref} className={className} style={customStyle} {...rest} />;
 });
 TextInput.displayName = 'TextInput';
+export type TextInput = RNTextInput;

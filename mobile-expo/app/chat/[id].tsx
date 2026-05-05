@@ -20,6 +20,8 @@ import * as Haptics from 'expo-haptics';
 import ChatCameraModal from '@/components/chat/ChatCameraModal';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
+import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
+import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
 
 export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams();
@@ -53,8 +55,10 @@ export default function ChatDetailScreen() {
     const [isCameraVisible, setIsCameraVisible] = useState(false);
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [replyTo, setReplyTo] = useState<any>(null);
+    const inputRef = useRef<TextInput>(null);
     const [isDownloading, setIsDownloading] = useState<string | null>(null);
     const [isSending, setIsSending] = useState(false);
+    const [isRecordingVoice, setIsRecordingVoice] = useState(false);
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
@@ -99,8 +103,10 @@ export default function ChatDetailScreen() {
                 if (String(payload.room_id || payload.roomId) === String(id)) {
 
                     setMessages(prev => {
-                        // Better deduplication using string IDs
-                        if (prev.find(m => String(m.id) === String(payload.id))) return prev;
+                        const exists = prev.some(m => String(m.id) === String(payload.id));
+                        if (exists) {
+                            return prev.map(m => String(m.id) === String(payload.id) ? payload : m);
+                        }
                         return [...prev, payload];
                     });
                     // Auto mark as seen if we are in the room and app is active and know user
@@ -219,16 +225,21 @@ export default function ChatDetailScreen() {
         };
     }, []);
 
-    const handleSend = async () => {
+    const handleSend = async (overrideFile?: any) => {
         setIsSending(true);
-        if (!message.trim() && !attachment) return;
+        const fileToUpload = overrideFile || attachment;
+        if (!message.trim() && !fileToUpload) {
+            setIsSending(false);
+            return;
+        }
 
         const textToSubmit = message.trim();
-        const fileToUpload = attachment;
 
-        setMessage('');
-        setAttachment(null);
-        setShowEmojis(false);
+        if (!overrideFile) {
+            setMessage('');
+            setAttachment(null);
+            setShowEmojis(false);
+        }
 
 
         try {
@@ -248,22 +259,30 @@ export default function ChatDetailScreen() {
 
             const payload: any = {
                 roomId: id as string,
-                type: fileData ? (fileData.file_type?.startsWith('image/') ? 'image' : 'file') : 'text',
+                type: fileData ? (
+                    fileData.file_type?.startsWith('image/') ? 'image' :
+                        fileData.file_type?.startsWith('audio/') ? 'audio' : 'file'
+                ) : 'text',
                 file_url: fileData?.file_url,
                 file_name: fileData?.file_name,
                 file_type: fileData?.file_type,
                 file_size: fileData?.file_size,
-                parent_id: replyTo?.id || null
+                parent_id: replyTo?.id ? Number(replyTo.id) : null
             };
             if (textToSubmit) payload.text = textToSubmit;
 
+            console.log("[CHAT] Sending payload:", payload);
             setReplyTo(null);
 
             const res = await sendChatMessage(payload);
+            console.log("[CHAT] Response from server:", res);
 
             if (res.success && res.message) {
                 setMessages(prev => {
-                    if (prev.find(m => String(m.id) === String(res.message.id))) return prev;
+                    const exists = prev.some(m => String(m.id) === String(res.message.id));
+                    if (exists) {
+                        return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                    }
                     return [...prev, res.message];
                 });
             }
@@ -342,7 +361,7 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const scrollToMessage = (messageId: number) => {
+    const scrollToMessage = React.useCallback((messageId: number) => {
         const index = messages.findIndex(m => m.id === messageId);
         if (index !== -1) {
             flatListRef.current?.scrollToIndex({
@@ -351,9 +370,9 @@ export default function ChatDetailScreen() {
                 viewPosition: 0.5 // Center the message
             });
         }
-    };
+    }, [messages]);
 
-    const handleDownload = async (msg: any) => {
+    const handleDownload = React.useCallback(async (msg: any) => {
         if (!msg.downloadUrl) return;
         setIsDownloading(String(msg.id));
         try {
@@ -372,9 +391,9 @@ export default function ChatDetailScreen() {
         } finally {
             setIsDownloading(null);
         }
-    };
+    }, []);
 
-    const MessageItem = React.memo(({ item, isMe, time, setReplyTo, scrollToMessage, setFullScreenImage, handleDownload, isDownloading, colors, isDark }: any) => {
+    const MessageItem = React.memo(({ item, isMe, time, setReplyTo, focusInput, scrollToMessage, setFullScreenImage, handleDownload, isDownloading, colors, isDark }: any) => {
         const swipeableRef = useRef<any>(null);
 
         const renderLeftActions = () => {
@@ -392,6 +411,7 @@ export default function ChatDetailScreen() {
                 onSwipeableWillOpen={() => {
                     setReplyTo(item);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    focusInput?.();
                     setTimeout(() => {
                         swipeableRef.current?.close();
                     }, 0);
@@ -421,9 +441,9 @@ export default function ChatDetailScreen() {
                             <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
                         )}
 
-                        {item.parent && (
+                        {(item.parent || item.parent_id) && (
                             <TouchableOpacity
-                                onPress={() => scrollToMessage(item.parent_id)}
+                                onPress={() => scrollToMessage(item.parent_id || item.parent?.id)}
                                 style={{
                                     backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
                                     padding: 8,
@@ -433,9 +453,13 @@ export default function ChatDetailScreen() {
                                     marginBottom: 8
                                 }}
                             >
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>{item.parent.sender?.name}</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>
+                                    {item.parent?.sender?.name || 'User'}
+                                </Text>
                                 <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : colors.textMuted }}>
-                                    {item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text}
+                                    {item.parent ? (
+                                        (item.parent.type === 'audio' || item.parent.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text
+                                    ) : 'Replied to message'}
                                 </Text>
                             </TouchableOpacity>
                         )}
@@ -466,7 +490,13 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
 
-                        {item.type === 'file' && item.downloadUrl && (
+                        {(item.type === 'audio' || item.file_type?.startsWith('audio/')) && item.downloadUrl && (
+                            <View style={{ minWidth: 220 }}>
+                                <VoiceNotePlayer uri={item.downloadUrl} isMe={isMe} colors={colors} />
+                            </View>
+                        )}
+
+                        {item.type === 'file' && !item.file_type?.startsWith('audio/') && item.downloadUrl && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                                 <TouchableOpacity
                                     onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
@@ -523,6 +553,7 @@ export default function ChatDetailScreen() {
                                 <TouchableOpacity onPress={() => {
                                     setReplyTo(item);
                                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    focusInput?.();
                                 }}>
                                     <Feather name="corner-up-left" size={14} color={isMe ? "rgba(255,255,255,0.7)" : colors.primary} />
                                 </TouchableOpacity>
@@ -534,7 +565,7 @@ export default function ChatDetailScreen() {
         );
     });
 
-    const renderMessage = ({ item }: { item: any }) => {
+    const renderMessage = React.useCallback(({ item }: { item: any }) => {
         if (item.type === 'system') {
             return (
                 <View style={{ alignItems: 'center', marginVertical: 12 }}>
@@ -556,6 +587,7 @@ export default function ChatDetailScreen() {
                 isMe={isMe}
                 time={time}
                 setReplyTo={setReplyTo}
+                focusInput={() => inputRef.current?.focus()}
                 scrollToMessage={scrollToMessage}
                 setFullScreenImage={setFullScreenImage}
                 handleDownload={handleDownload}
@@ -564,7 +596,7 @@ export default function ChatDetailScreen() {
                 isDark={isDark}
             />
         );
-    };
+    }, [user?.id, colors, isDark, isDownloading, scrollToMessage, handleDownload]);
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -621,7 +653,7 @@ export default function ChatDetailScreen() {
             </SafeAreaView>
 
             {/* Chat Area */}
-            <KeyboardAvoidingView 
+            <KeyboardAvoidingView
                 style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#efeae2' }}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : isKeyboardVisible ? 0 : -insets.bottom - 27.5} // Adjust for Android status bar when keyboard is hidden
@@ -711,7 +743,7 @@ export default function ChatDetailScreen() {
                                 <View style={{ flex: 1 }}>
                                     <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>{replyTo.sender?.name}</Text>
                                     <Text numberOfLines={1} style={{ fontSize: 13, color: colors.textMuted }}>
-                                        {replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text}
+                                        {(replyTo.type === 'audio' || replyTo.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text}
                                     </Text>
                                 </View>
                                 <TouchableOpacity onPress={() => setReplyTo(null)} style={{ padding: 4 }}>
@@ -720,66 +752,86 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
 
-                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: isKeyboardVisible ? 8 : Math.max(8, insets.bottom) +2, flexDirection: 'row', alignItems: 'flex-end' }}>
-                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 4, minHeight: 44 }}>
-                                <TextInput
-                                    value={message}
-                                    onChangeText={(text) => {
-                                        setMessage(text);
-                                        if (socket && id && user?.name) {
-                                            socket.emit('typing', { roomId: id, userName: user.name });
-                                        }
-                                    }}
-                                    placeholder="Message..."
-                                    placeholderTextColor={colors.textMuted}
-                                    multiline
-                                    textAlignVertical="center"
-                                    style={{
-                                        flex: 1,
-                                        color: colors.text,
-                                        fontSize: 16,
-                                        marginHorizontal: 8,
-                                        maxHeight: 120,
-                                        paddingVertical: Platform.OS === 'ios' ? 8 : 4,
-                                        minHeight: 36,
-                                        lineHeight: 20
-                                    }}
-                                />
+                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: isKeyboardVisible ? 8 : Math.max(8, insets.bottom) + 2, flexDirection: 'row', alignItems: 'flex-end' }}>
+                            {!isRecordingVoice && (
+                                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 4, minHeight: 44 }}>
+                                    <TextInput
+                                        ref={inputRef}
+                                        value={message}
+                                        onChangeText={(text) => {
+                                            setMessage(text);
+                                            if (socket && id && user?.name) {
+                                                socket.emit('typing', { roomId: id, userName: user.name });
+                                            }
+                                        }}
+                                        placeholder="Message..."
+                                        placeholderTextColor={colors.textMuted}
+                                        multiline
+                                        textAlignVertical="center"
+                                        style={{
+                                            flex: 1,
+                                            color: colors.text,
+                                            fontSize: 16,
+                                            marginHorizontal: 8,
+                                            maxHeight: 120,
+                                            paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+                                            minHeight: 36,
+                                            lineHeight: 20
+                                        }}
+                                    />
 
-                                <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', paddingBottom: 4 }}>
-                                    <TouchableOpacity onPress={pickDocument} style={{ padding: 4 }}>
-                                        <Feather name="paperclip" size={22} color={colors.textMuted} style={{ transform: [{ rotate: '-45deg' }] }} />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={pickImage} style={{ padding: 4, marginLeft: 2 }}>
-                                        <Feather name="image" size={22} color={colors.textMuted} />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => takePhoto()} style={{ padding: 4, marginLeft: 2 }}>
-                                        <Feather name="camera" size={22} color={colors.textMuted} />
-                                    </TouchableOpacity>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', paddingBottom: 4 }}>
+                                        <TouchableOpacity onPress={pickDocument} style={{ padding: 4 }}>
+                                            <Feather name="paperclip" size={22} color={colors.textMuted} style={{ transform: [{ rotate: '-45deg' }] }} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={pickImage} style={{ padding: 4, marginLeft: 2 }}>
+                                            <Feather name="image" size={22} color={colors.textMuted} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => takePhoto()} style={{ padding: 4, marginLeft: 2 }}>
+                                            <Feather name="camera" size={22} color={colors.textMuted} />
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
-                            </View>
+                            )}
 
-                            <TouchableOpacity
-                                onPress={handleSend}
-                                disabled={isSending || isUploading}
-                                style={{
-                                    width: 44,
-                                    height: 44,
-                                    borderRadius: 22,
-                                    backgroundColor: colors.primary,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginLeft: 8,
-                                    opacity: (isSending || isUploading) ? 0.6 : 1,
-                                    alignSelf: 'flex-end'
-                                }}
-                            >
-                                {isSending || isUploading ? (
-                                    <ActivityIndicator size="small" color="#fff" />
-                                ) : (
-                                    <Feather name="send" size={20} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
-                                )}
-                            </TouchableOpacity>
+                            {(!message.trim() && !attachment) || isRecordingVoice ? (
+                                <View style={{ flex: isRecordingVoice ? 1 : 0 }}>
+                                    <VoiceNoteRecorder
+                                        colors={colors}
+                                        onRecordingStateChange={setIsRecordingVoice}
+                                        onSend={(uri, duration) => {
+                                            handleSend({
+                                                uri,
+                                                name: `VoiceNote_${Date.now()}.m4a`,
+                                                type: 'audio/m4a',
+                                                size: 1024
+                                            });
+                                        }}
+                                    />
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    onPress={() => handleSend()}
+                                    disabled={isSending || isUploading}
+                                    style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        backgroundColor: colors.primary,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginLeft: 8,
+                                        opacity: (isSending || isUploading) ? 0.6 : 1,
+                                        alignSelf: 'flex-end'
+                                    }}
+                                >
+                                    {isSending || isUploading ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Feather name="send" size={20} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
+                                    )}
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
                 </View>
