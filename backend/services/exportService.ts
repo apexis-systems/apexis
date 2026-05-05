@@ -627,19 +627,23 @@ const drawDashboardKPIs = (doc: any, kpis: { label: string, value: string | numb
     const r = doc.page.width - doc.page.margins.right;
     const w = r - left;
     const gap = 12;
-    const n = kpis.length;
-    const boxW = (w - gap * (n - 1)) / n;
     const y0 = doc.y;
     const boxH = 68;
+    const boxW = (w - gap) / 2;
 
     kpis.forEach((k, i) => {
-        const x = left + i * (boxW + gap);
-        doc.save().roundedRect(x, y0, boxW, boxH, 8).fill(BRAND.tableRowAlt).restore();
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const x = left + col * (boxW + gap);
+        const y = y0 + row * (boxH + 8);
 
-        doc.font('Helvetica-Bold').fontSize(24).fillColor(BRAND.orange).text(String(k.value || '0'), x, y0 + 16, { width: boxW, align: 'center' });
-        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(BRAND.muted).text(k.label.toUpperCase(), x, y0 + 44, { width: boxW, align: 'center' });
+        doc.save().roundedRect(x, y, boxW, boxH, 8).fill(BRAND.tableRowAlt).restore();
+
+        doc.font('Helvetica-Bold').fontSize(24).fillColor(BRAND.orange).text(String(k.value || '0'), x, y + 16, { width: boxW, align: 'center' });
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(BRAND.muted).text(k.label.toUpperCase(), x, y + 44, { width: boxW, align: 'center' });
     });
-    doc.y = y0 + boxH + 25; // More breathing room below the dashboard
+    const numRows = Math.ceil(kpis.length / 2);
+    doc.y = y0 + numRows * (boxH + 8) + 17; // Breathing room below the grid
 };
 
 const drawMonthlyDashboard = (doc: any, kpis: { label: string, value: string | number }[]) => {
@@ -911,21 +915,27 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
         ], photoRows);
 
         // 3. RFIs
-        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.status || ' ', rfi.user || ' ']);
+        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.status || ' ', rfi.user || ' ', rfi.assigned_to || ' ']);
         const rfiW = r - left;
         drawStyledTable(doc, 'SECTION 3 - RFIs RAISED TODAY', [
-            { text: 'Title', w: rfiW * 0.45 },
-            { text: 'Status', w: rfiW * 0.2 },
-            { text: 'Raised By', w: rfiW * 0.2 }
+            { text: 'Title', w: rfiW * 0.3 },
+            { text: 'Status', w: rfiW * 0.15 },
+            { text: 'Raised By', w: rfiW * 0.2 },
+            { text: 'Assigned To', w: rfiW * 0.2 }
         ], rfiRows);
 
         // 4. Snags
-        const snagRows = (summary.snags || []).map((snag: any) => [snag.title || ' ', snag.status || ' ', snag.user || ' ']);
+        const snagRows = (summary.snags || []).map((snag: any) => {
+            const s = String(snag.status || ' ').toLowerCase().trim();
+            const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
+            return [snag.title || ' ', displayStatus, snag.user || ' ', snag.assigned_to || ' '];
+        });
         const snagW = r - left;
         drawStyledTable(doc, 'SECTION 4 - SNAGS CREATED TODAY', [
-            { text: 'Title', w: snagW * 0.45 },
-            { text: 'Status', w: snagW * 0.2 },
-            { text: 'Raised By', w: snagW * 0.2 }
+            { text: 'Title', w: snagW * 0.3 },
+            { text: 'Status', w: snagW * 0.15 },
+            { text: 'Raised By', w: snagW * 0.2 },
+            { text: 'Assigned To', w: snagW * 0.2 }
         ], snagRows);
 
         // 5. Uploaded Photos
@@ -938,13 +948,13 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 5 - UPLOADED PHOTOS', left, doc.y).restore();
             doc.moveDown(1);
 
-            const gridCols = 2;
-            const gridRows = 3;
+            const gridCols = 4;
+            const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
-            const gapX = 25;
-            const gapY = 35; // Space for image + caption + margin
-            
-            const imgW = (r - left - gapX) / gridCols;
+            const gapX = 15;
+            const gapY = 25; // Space for image + caption + margin
+
+            const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
             const imgH = imgW * 0.75; // 4:3 aspect ratio
 
             let currentX = left;
@@ -964,7 +974,7 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
                 try {
                     const imgBuffer = await fetchS3Buffer(photo.key);
                     doc.image(imgBuffer, currentX, startY, { width: imgW, height: imgH });
-                    
+
                     // Draw path below image
                     doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(
                         photo.path,
@@ -1065,9 +1075,10 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
         doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND.orange).text('SECTION 1 - WEEKLY PROJECT DASHBOARD', left);
         doc.moveDown(0.6);
         drawDashboardKPIs(doc, [
-            { label: 'Files Uploaded', value: report.docs_count || 0 },
-            { label: 'Pending Approvals', value: report.releases_count || 0 },
-            { label: 'Active Consultants', value: 5 } // Sample from image
+            { label: 'Total Files Uploaded', value: report.docs_count || 0 },
+            { label: 'Total Photos Uploaded', value: report.photos_count || 0 },
+            { label: 'Total RFIs', value: report?.summary?.rfis?.length || 0 },
+            { label: 'Total Snags', value: report?.summary?.snags?.length || 0 }
         ]);
 
         // Section 2 - Files
@@ -1097,20 +1108,26 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
         ], photoRows);
 
         // Section 4 — Snags
-        const snagRows = (summary.snags || []).map((snag: any) => [snag.title || ' ', snag.user || ' ', snag.status || ' ']);
+        const snagRows = (summary.snags || []).map((snag: any) => {
+            const s = String(snag.status || ' ').toLowerCase().trim();
+            const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
+            return [snag.title || ' ', snag.user || ' ', displayStatus, snag.assigned_to || ' '];
+        });
         drawStyledTable(doc, 'SECTION 4 - SNAGS CREATED THIS WEEK', [
-            { text: 'Title', w: fileW * 0.45 },
+            { text: 'Title', w: fileW * 0.3 },
             { text: 'Raised By', w: fileW * 0.2 },
-            { text: 'Status', w: fileW * 0.2 }
+            { text: 'Status', w: fileW * 0.15 },
+            { text: 'Assigned To', w: fileW * 0.2 }
         ], snagRows);
 
         // 3. RFIs
-        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ']);
+        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ', rfi.assigned_to || ' ']);
         const rfiW = r - left;
         drawStyledTable(doc, 'SECTION 5 - RFIs RAISED THIS WEEK', [
-            { text: 'Title', w: rfiW * 0.45 },
-            { text: 'Status', w: rfiW * 0.2 },
-            { text: 'Raised By', w: rfiW * 0.2 }
+            { text: 'Title', w: rfiW * 0.3 },
+            { text: 'Raised By', w: rfiW * 0.2 },
+            { text: 'Status', w: rfiW * 0.15 },
+            { text: 'Assigned To', w: fileW * 0.2 }
         ], rfiRows);
 
         // 6. Uploaded Photos
@@ -1120,12 +1137,12 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
             doc.y = 85;
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 6 - UPLOADED PHOTOS', left, doc.y).restore();
             doc.moveDown(1);
-            const gridCols = 2;
-            const gridRows = 3;
+            const gridCols = 4;
+            const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
-            const gapX = 25;
-            const gapY = 35;
-            const imgW = (r - left - gapX) / gridCols;
+            const gapX = 15;
+            const gapY = 25;
+            const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
             const imgH = imgW * 0.75;
             let currentX = left;
             let startY = doc.y;
@@ -1238,7 +1255,7 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         doc.addPage();
         drawBrandedHeader(doc, 'Monthly Project Report', '', orgNameBrand, orgLogoBuffer);
 
-        
+
         const colW = (r - left - 10) / 2;
         const gridY = doc.y + 10;
 
@@ -1260,8 +1277,8 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
         drawMonthlyDashboard(doc, [
             { label: 'Total Files Uploaded', value: report.docs_count || 0 },
             { label: 'Total Photos Uploaded', value: report.photos_count || 0 },
-            { label: 'RFIs Raised', value: 18 }, // Sample
-            { label: 'RFIs Closed', value: 14 } // Sample
+            { label: 'Total RFIs', value: report?.summary?.rfis?.length || 0 }, // Sample
+            { label: 'Total Snags', value: report?.summary?.snags?.length || 0 } // Sample
         ]);
 
 
@@ -1293,19 +1310,25 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
 
 
         // Section 4 - RFIs
-        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ']);
+        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ', rfi.assigned_to || ' ']);
         drawStyledTable(doc, 'SECTION 4 — RFI SUMMARY THIS MONTH', [
-            { text: 'Description', w: tblW * 0.45 },
+            { text: 'Description', w: tblW * 0.3 },
             { text: 'Raised By', w: tblW * 0.2 },
-            { text: 'Status', w: tblW * 0.2 }
+            { text: 'Status', w: tblW * 0.15 },
+            { text: 'Assigned To', w: tblW * 0.2 }
         ], rfiRows);
 
         // Section 5 - Snags
-        const snagRows = (summary.snags || []).map((snag: any) => [snag.title || ' ', snag.user || ' ', snag.status || ' ']);
+        const snagRows = (summary.snags || []).map((snag: any) => {
+            const s = String(snag.status || ' ').toLowerCase().trim();
+            const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
+            return [snag.title || ' ', snag.user || ' ', displayStatus, snag.assigned_to || ' '];
+        });
         drawStyledTable(doc, 'SECTION 5 — SNAG SUMMARY THIS MONTH', [
-            { text: 'Description', w: tblW * 0.45 },
+            { text: 'Description', w: tblW * 0.3 },
             { text: 'Raised By', w: tblW * 0.2 },
-            { text: 'Status', w: tblW * 0.2 }
+            { text: 'Status', w: tblW * 0.15 },
+            { text: 'Assigned To', w: tblW * 0.2 }
         ], snagRows);
 
         // 6. Uploaded Photos
@@ -1315,12 +1338,12 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
             doc.y = 85;
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 6 - UPLOADED PHOTOS', left, doc.y).restore();
             doc.moveDown(1);
-            const gridCols = 2;
-            const gridRows = 3;
+            const gridCols = 4;
+            const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
-            const gapX = 25;
-            const gapY = 35;
-            const imgW = (r - left - gapX) / gridCols;
+            const gapX = 15;
+            const gapY = 25;
+            const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
             const imgH = imgW * 0.75;
             let currentX = left;
             let startY = doc.y;
