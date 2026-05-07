@@ -174,6 +174,19 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         setRefreshing(false);
     };
 
+    useEffect(() => {
+        if (initialSnagId && snags.length > 0) {
+            const match = snags.find(s => String(s.id) === String(initialSnagId));
+            if (match) {
+                setResponseComment("");
+                setResponsePhotos([]);
+                setSelectedSnag(match);
+                // Clear the param from router to prevent re-opening on focus
+                router.setParams({ snagId: '' });
+            }
+        }
+    }, [initialSnagId, snags, router]);
+
     // ── Status cycle ───────────────────────────────────────────────────────────
 
     const handleUpdateStatus = async (snag: Snag, nextStatus?: SnagStatus, comment?: string, files?: string[]) => {

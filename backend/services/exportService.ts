@@ -952,10 +952,10 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
             const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
             const gapX = 15;
-            const gapY = 25; // Space for image + caption + margin
+            const gapY = 30; // Increased gap for text
 
             const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.75; // 4:3 aspect ratio
+            const imgH = imgW * 0.85; // Slightly taller slot for better fit
 
             let currentX = left;
             let startY = doc.y;
@@ -963,7 +963,6 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
             for (let i = 0; i < uploadedPhotos.length; i++) {
                 const photo = uploadedPhotos[i];
 
-                // Page break logic: if we've filled the current page (6 photos)
                 if (i > 0 && i % photosPerPage === 0) {
                     doc.addPage();
                     doc.y = 85;
@@ -973,7 +972,12 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
 
                 try {
                     const imgBuffer = await fetchS3Buffer(photo.key);
-                    doc.image(imgBuffer, currentX, startY, { width: imgW, height: imgH });
+                    // Use 'fit' to prevent stretching and maintain aspect ratio
+                    doc.image(imgBuffer, currentX, startY, { 
+                        fit: [imgW, imgH],
+                        align: 'center',
+                        valign: 'center'
+                    });
 
                     // Draw path below image
                     doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(
@@ -1141,9 +1145,9 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
             const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
             const gapX = 15;
-            const gapY = 25;
+            const gapY = 30; // Increased gap for text
             const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.75;
+            const imgH = imgW * 0.85; // Slightly taller slot for better fit
             let currentX = left;
             let startY = doc.y;
             for (let i = 0; i < uploadedPhotos.length; i++) {
@@ -1156,7 +1160,12 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
                 }
                 try {
                     const imgBuffer = await fetchS3Buffer(photo.key);
-                    doc.image(imgBuffer, currentX, startY, { width: imgW, height: imgH });
+                    // Use 'fit' to prevent stretching and maintain aspect ratio
+                    doc.image(imgBuffer, currentX, startY, { 
+                        fit: [imgW, imgH],
+                        align: 'center',
+                        valign: 'center'
+                    });
                     doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
                 } catch (e) {
                     doc.rect(currentX, startY, imgW, imgH).stroke();
@@ -1342,9 +1351,9 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
             const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
             const gapX = 15;
-            const gapY = 25;
+            const gapY = 30; // Increased gap for text
             const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.75;
+            const imgH = imgW * 0.85; // Slightly taller slot for better fit
             let currentX = left;
             let startY = doc.y;
             for (let i = 0; i < uploadedPhotos.length; i++) {
@@ -1357,7 +1366,12 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
                 }
                 try {
                     const imgBuffer = await fetchS3Buffer(photo.key);
-                    doc.image(imgBuffer, currentX, startY, { width: imgW, height: imgH });
+                    // Use 'fit' to prevent stretching and maintain aspect ratio
+                    doc.image(imgBuffer, currentX, startY, { 
+                        fit: [imgW, imgH],
+                        align: 'center',
+                        valign: 'center'
+                    });
                     doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
                 } catch (e) {
                     doc.rect(currentX, startY, imgW, imgH).stroke();
