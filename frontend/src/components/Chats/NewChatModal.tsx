@@ -5,7 +5,7 @@ import { Search, Users, User, X, Check, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getOrgUsers } from "@/services/userService";
+import { getChatUsers } from "@/services/userService";
 import { createRoom } from "@/services/chatService";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -30,7 +30,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
             const fetchUsers = async () => {
                 setLoading(true);
                 try {
-                    const data = await getOrgUsers();
+                    const data = await getChatUsers();
                     // Filter out current user
                     setUsers(data.filter((u: any) => u.id !== authUser?.id && u.role !== 'superadmin'));
                 } catch (err) {
@@ -167,7 +167,29 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                        {u.project_members && u.project_members.length > 0 ? (
+                                            u.project_members.slice(0, 2).map((pm: any, idx: number) => (
+                                                <div key={idx} className="flex items-center gap-1.5 min-w-0">
+                                                    <span className="text-[7px] font-extrabold uppercase text-accent bg-accent/5 px-1 py-0.5 rounded border border-accent/10 shrink-0">
+                                                        {pm.role}
+                                                    </span>
+                                                    <span className="text-[8px] text-muted-foreground truncate font-medium">
+                                                        {pm.project?.name}
+                                                    </span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <span className="text-[8px] font-extrabold uppercase text-accent bg-accent/5 px-1.5 py-0.5 rounded border border-accent/10 shrink-0">
+                                                {u.role}
+                                            </span>
+                                        )}
+                                        {u.project_members && u.project_members.length > 2 && (
+                                            <span className="text-[7px] text-muted-foreground font-bold mt-0.5">
+                                                +{u.project_members.length - 2} more
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 {selectedUsers.includes(u.id) && (
                                     <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">

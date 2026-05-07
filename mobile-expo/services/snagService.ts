@@ -18,6 +18,7 @@ export interface Snag {
     created_by?: number;
     responsePhotoUrls?: string[];
     response_photos?: string[] | null;
+    seen_at?: string | null;
 }
 
 export interface Assignee {
@@ -88,6 +89,16 @@ export const deleteSnagApi = async (id: number): Promise<void> => {
         await PrivateAxios.delete(`/snags/${id}`);
     } catch (error) {
         console.error("deleteSnagApi Error", error);
+        throw error;
+    }
+};
+
+export const markSnagSeen = async (id: number): Promise<{ seen_at: string }> => {
+    try {
+        const res = await PrivateAxios.patch(`/snags/${id}/seen`);
+        return res.data;
+    } catch (error) {
+        console.error("markSnagSeen Error", error);
         throw error;
     }
 };

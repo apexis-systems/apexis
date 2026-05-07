@@ -15,10 +15,11 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { Text } from "@/components/ui/AppText";
-import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -33,11 +34,24 @@ import {
     updateSnag,
     getAssignees,
     Assignee,
+    markSnagSeen
 } from "@/services/snagService";
 import * as ImagePicker from 'expo-image-picker';
 import FullScreenImageModal from "@/components/shared/FullScreenImageModal";
 import ImageAnnotator from "../common/ImageAnnotator";
 import { KeyboardAvoidingView } from "react-native";
+import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
+import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
+
+const isAudio = (url: string) => {
+    if (!url) return false;
+    try {
+        const urlWithoutQuery = url.split('?')[0];
+        return !!urlWithoutQuery.match(/\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i);
+    } catch {
+        return false;
+    }
+};
 
 interface Props {
     project: Project;
@@ -80,10 +94,12 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
     const [responseComment, setResponseComment] = useState("");
     const [responsePhotos, setResponsePhotos] = useState<string[]>([]);
+    const [removedResponsePhotos, setRemovedResponsePhotos] = useState<string[]>([]);
     const [submitting, setSubmitting] = useState(false);
 
     const [cameraVisible, setCameraVisible] = useState(false);
     const [cameraMode, setCameraMode] = useState<'edit' | 'response'>('response');
+    const [isRecordingVoice, setIsRecordingVoice] = useState(false);
     const [annotatingImageIndex, setAnnotatingImageIndex] = useState<number | null>(null);
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraSessionKey, setCameraSessionKey] = useState(0);
@@ -127,6 +143,14 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         return () => clearTimeout(timer);
     }, [cameraVisible]);
 
+    useEffect(() => {
+        if (selectedSnag) {
+            setResponseComment(selectedSnag.response || "");
+            setRemovedResponsePhotos([]);
+            setResponsePhotos([]);
+        }
+    }, [selectedSnag?.id]);
+
     // ── Fetch data ─────────────────────────────────────────────────────────────
 
     const [refreshing, setRefreshing] = useState(false);
@@ -147,6 +171,49 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             if (!isRefetch) setLoading(false);
         }
     };
+
+    const { socket } = useSocket();
+
+    useEffect(() => {
+        if (!socket || !projectId) return;
+
+        socket.emit('join-project', projectId);
+
+        const onSnagSeen = (data: { snagId: number, seen_at: string }) => {
+            setSnags(prev => prev.map(s => s.id === data.snagId ? { ...s, seen_at: data.seen_at } : s));
+            setSelectedSnag(prev => (prev && prev.id === data.snagId) ? { ...prev, seen_at: data.seen_at } : prev);
+        };
+
+        const onSnagUpdated = (data: { snag: Snag }) => {
+            setSnags(prev => {
+                const idx = prev.findIndex(s => s.id === data.snag.id);
+                if (idx !== -1) {
+                    const copy = [...prev];
+                    copy[idx] = data.snag;
+                    return copy;
+                }
+                return [data.snag, ...prev];
+            });
+            setSelectedSnag(prev => (prev && prev.id === data.snag.id) ? data.snag : prev);
+        };
+
+        socket.on('snag-seen', onSnagSeen);
+        socket.on('snag-updated', onSnagUpdated);
+
+        return () => {
+            socket.off('snag-seen', onSnagSeen);
+            socket.off('snag-updated', onSnagUpdated);
+        };
+    }, [socket, projectId]);
+
+    useEffect(() => {
+        if (selectedSnag && String(selectedSnag.assigned_to) === String(user?.id) && !selectedSnag.seen_at) {
+            markSnagSeen(selectedSnag.id).then(data => {
+                setSelectedSnag(prev => prev ? { ...prev, seen_at: data.seen_at } : null);
+                setSnags(prev => prev.map(s => s.id === selectedSnag.id ? { ...s, seen_at: data.seen_at } : s));
+            }).catch(err => console.error("Failed to mark snag as seen:", err));
+        }
+    }, [selectedSnag?.id, user?.id]);
 
     useFocusEffect(
         useCallback(() => {
@@ -174,9 +241,22 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         setRefreshing(false);
     };
 
+    useEffect(() => {
+        if (initialSnagId && snags.length > 0) {
+            const match = snags.find(s => String(s.id) === String(initialSnagId));
+            if (match) {
+                setResponseComment("");
+                setResponsePhotos([]);
+                setSelectedSnag(match);
+                // Clear the param from router to prevent re-opening on focus
+                router.setParams({ snagId: '' });
+            }
+        }
+    }, [initialSnagId, snags, router]);
+
     // ── Status cycle ───────────────────────────────────────────────────────────
 
-    const handleUpdateStatus = async (snag: Snag, nextStatus?: SnagStatus, comment?: string, files?: string[]) => {
+    const handleUpdateStatus = async (snag: Snag, nextStatus?: SnagStatus, comment?: string, files?: string[], removedPhotos?: string[]) => {
         const idx = STATUS_CYCLE.indexOf(snag.status);
         const next = nextStatus || STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
 
@@ -187,14 +267,20 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             formData.append('response', comment || "");
             if (files) {
                 files.forEach((uri, i) => {
-                    const filename = uri.split('/').pop() || `resp_${i}.jpg`;
+                    let filename = uri.split('/').pop() || `resp_${i}.jpg`;
+                    if (isAudio(uri) && !filename.includes('.')) filename += '.m4a';
                     const match = /\.(\w+)$/.exec(filename);
-                    const type = match ? `image/${match[1]}` : `image/jpeg`;
+                    let type = `image/jpeg`;
+                    if (match) {
+                        type = isAudio(filename) ? `audio/${match[1]}` : `image/${match[1]}`;
+                    }
                     formData.append('photos', { uri, name: filename, type } as any);
                 });
             }
 
-            
+            if (removedPhotos && removedPhotos.length > 0) {
+                formData.append('removedPhotos', JSON.stringify(removedPhotos));
+            }
 
             const updated = await updateSnagStatus(snag.id, formData);
             setSnags(prev => prev.map(s => s.id === snag.id ? updated : s));
@@ -202,6 +288,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
             setResponseComment("");
             setResponsePhotos([]);
+            setRemovedResponsePhotos([]);
 
             if (next === snag.status) {
                 Alert.alert("Success", "Response updated successfully");
@@ -314,7 +401,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 setEditPhoto(uri);
                 setAnnotatingImageIndex(-1);
             } else {
-                setResponsePhotos([uri]);
+                setResponsePhotos(prev => {
+                    const filtered = prev.filter(p => isAudio(p));
+                    return [...filtered, uri];
+                });
                 setAnnotatingImageIndex(0);
             }
         } catch (error) {
@@ -363,8 +453,11 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 setEditPhoto(manipulated.uri);
                 setAnnotatingImageIndex(-1);
             } else {
-                // Single photo for response: replace existing
-                setResponsePhotos([manipulated.uri]);
+                // Single photo for response: replace existing image but keep audio
+                setResponsePhotos(prev => {
+                    const filtered = prev.filter(p => isAudio(p));
+                    return [...filtered, manipulated.uri];
+                });
                 setAnnotatingImageIndex(0);
             }
         } catch (e) {
@@ -426,8 +519,6 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                             <TouchableOpacity
                                 key={snag.id}
                                 onPress={() => {
-                                    setResponseComment("");
-                                    setResponsePhotos([]);
                                     setSelectedSnag(snag);
                                 }}
                                 style={{
@@ -490,10 +581,13 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             {snag.description}
                                         </Text>
                                     ) : null}
-                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
                                         <Text style={{ fontSize: 10, color: colors.textMuted }}>
                                             To: <Text style={{ color: colors.text, fontWeight: '600' }}>{snag.assignee?.name || "Unassigned"}</Text>
                                         </Text>
+                                        {snag.seen_at && (
+                                            <Ionicons name="checkmark-done" size={14} color="#f97316" />
+                                        )}
                                     </View>
                                     {snag.response ? (
                                         <View
@@ -685,7 +779,12 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             )}
                                         </View>
 
-                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{selectedSnag.title}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, flex: 1 }}>{selectedSnag.title}</Text>
+                                            {selectedSnag.seen_at && (
+                                                <Ionicons name="checkmark-done" size={18} color="#f97316" />
+                                            )}
+                                        </View>
                                         <Text style={{ fontSize: 13, color: colors.textMuted }}>{selectedSnag.description}</Text>
 
                                         {(selectedSnag.photoDownloadUrl || selectedSnag.photo_url) && (
@@ -713,15 +812,69 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, marginBottom: 4, textTransform: 'uppercase' }}>Response</Text>
                                                 {selectedSnag.response ? <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text> : null}
                                                 {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
-                                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-                                                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                                                            {selectedSnag.responsePhotoUrls.map((url, i) => (
-                                                                <TouchableOpacity key={i} onPress={() => setViewPhoto(url)}>
-                                                                    <Image source={url} style={{ width: 80, height: 80, borderRadius: 8 }} />
-                                                                </TouchableOpacity>
-                                                            ))}
-                                                        </View>
-                                                    </ScrollView>
+                                                    <View style={{ marginTop: 10, gap: 10 }}>
+                                                        {/* Images Row */}
+                                                        {selectedSnag.responsePhotoUrls.filter(url => !isAudio(url)).length > 0 && (
+                                                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                                    {selectedSnag.responsePhotoUrls.filter(url => !isAudio(url)).map((url, i) => (
+                                                                        <TouchableOpacity key={i} onPress={() => setViewPhoto(url)} style={{ position: 'relative' }}>
+                                                                            <Image source={{ uri: url }} style={{ width: 80, height: 80, borderRadius: 8 }} />
+                                                                            {String(selectedSnag.assigned_to) === String(user?.id) && (
+                                                                                <TouchableOpacity
+                                                                                    onPress={() => {
+                                                                                        const absoluteIdx = selectedSnag.responsePhotoUrls!.indexOf(url);
+                                                                                        const key = selectedSnag.response_photos?.[absoluteIdx];
+                                                                                        if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                                                                        const newUrls = [...selectedSnag.responsePhotoUrls!];
+                                                                                        const newPhotos = [...(selectedSnag.response_photos || [])];
+                                                                                        newUrls.splice(absoluteIdx, 1);
+                                                                                        newPhotos.splice(absoluteIdx, 1);
+                                                                                        setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                                                                    }}
+                                                                                    style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
+                                                                                >
+                                                                                    <Feather name="x" size={10} color="#fff" />
+                                                                                </TouchableOpacity>
+                                                                            )}
+                                                                        </TouchableOpacity>
+                                                                    ))}
+                                                                </View>
+                                                            </ScrollView>
+                                                        )}
+                                                        
+                                                        {/* Audios Column */}
+                                                        {selectedSnag.responsePhotoUrls.filter(url => isAudio(url)).map((url, i) => (
+                                                            <View key={i} style={{
+                                                                padding: 10, borderWidth: 1, borderColor: colors.primary + '20', borderRadius: 12,
+                                                                backgroundColor: colors.background, width: '100%', position: 'relative'
+                                                            }}>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
+                                                                </View>
+                                                                <VoiceNotePlayer uri={url} isMe={false} colors={colors} />
+                                                                {String(selectedSnag.assigned_to) === String(user?.id) && (
+                                                                    <TouchableOpacity
+                                                                        onPress={() => {
+                                                                            const audioUrls = selectedSnag.responsePhotoUrls!.filter(url => isAudio(url));
+                                                                            const indexInAll = selectedSnag.responsePhotoUrls!.indexOf(url);
+                                                                            const key = selectedSnag.response_photos?.[indexInAll];
+                                                                            if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                                                            const newUrls = [...selectedSnag.responsePhotoUrls!];
+                                                                            newUrls.splice(indexInAll, 1);
+                                                                            const newPhotos = [...(selectedSnag.response_photos || [])];
+                                                                            newPhotos.splice(indexInAll, 1);
+                                                                            setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                                                        }}
+                                                                        style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
+                                                                    >
+                                                                        <Feather name="x" size={10} color="#fff" />
+                                                                    </TouchableOpacity>
+                                                                )}
+                                                            </View>
+                                                        ))}
+                                                    </View>
                                                 )}
                                             </View>
                                         )}
@@ -754,19 +907,34 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                                                             {responsePhotos.map((uri, i) => (
                                                                 <View key={i} style={{ position: 'relative' }}>
-                                                                    <Image source={{ uri }} style={{ width: 70, height: 70, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} />
+                                                                    {isAudio(uri) ? (
+                                                                        <View style={{
+                                                                            padding: 10, paddingRight: 32, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
+                                                                            backgroundColor: colors.surface, width: SCREEN_W - 80, minHeight: 64, justifyContent: 'center'
+                                                                        }}>
+                                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                                                                <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
+                                                                            </View>
+                                                                            <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                                                        </View>
+                                                                    ) : (
+                                                                        <Image source={{ uri }} style={{ width: 70, height: 70, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} />
+                                                                    )}
                                                                     <TouchableOpacity
                                                                         onPress={() => setResponsePhotos(prev => prev.filter((_, idx) => idx !== i))}
-                                                                        style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', borderRadius: 10, padding: 2 }}
+                                                                        style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', borderRadius: 10, padding: 2, zIndex: 10 }}
                                                                     >
                                                                         <Feather name="x" size={12} color="#fff" />
                                                                     </TouchableOpacity>
-                                                                    <TouchableOpacity
-                                                                        onPress={() => setAnnotatingImageIndex(i)}
-                                                                        style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 5, borderRadius: 8 }}
-                                                                    >
-                                                                        <Feather name="edit-2" size={10} color="#fff" />
-                                                                    </TouchableOpacity>
+                                                                    {!isAudio(uri) && (
+                                                                        <TouchableOpacity
+                                                                            onPress={() => setAnnotatingImageIndex(i)}
+                                                                            style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 5, borderRadius: 8 }}
+                                                                        >
+                                                                            <Feather name="edit-2" size={10} color="#fff" />
+                                                                        </TouchableOpacity>
+                                                                    )}
                                                                 </View>
                                                             ))}
                                                             <TouchableOpacity 
@@ -779,17 +947,30 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                                 <Feather name="camera" size={20} color={colors.textMuted} />
                                                             </TouchableOpacity>
                                                         </View>
+                                                        
+                                                        <View style={{ marginTop: 12, marginBottom: 8 }}>
+                                                            <VoiceNoteRecorder
+                                                                colors={colors}
+                                                                onRecordingStateChange={setIsRecordingVoice}
+                                                                onSend={(uri) => {
+                                                                    setResponsePhotos(prev => {
+                                                                        const filtered = prev.filter(p => !isAudio(p));
+                                                                        return [...filtered, uri];
+                                                                    });
+                                                                }}
+                                                            />
+                                                        </View>
 
                                                         <TouchableOpacity
-                                                            onPress={() => handleUpdateStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos)}
-                                                            disabled={submitting || (!responseComment.trim() && responsePhotos.length === 0)}
+                                                            onPress={() => handleUpdateStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos, removedResponsePhotos)}
+                                                            disabled={submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
                                                             style={{
                                                                 backgroundColor: colors.primary,
                                                                 height: 42,
                                                                 borderRadius: 10,
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
-                                                                opacity: (submitting || (!responseComment.trim() && responsePhotos.length === 0)) ? 0.6 : 1
+                                                                opacity: (submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)) ? 0.6 : 1
                                                             }}
                                                         >
                                                             {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Submit Response</Text>}
@@ -807,7 +988,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                         {STATUS_CYCLE.map(s => (
                                                             <TouchableOpacity
                                                                 key={s}
-                                                                onPress={() => handleUpdateStatus(selectedSnag, s)}
+                                                                onPress={() => handleUpdateStatus(selectedSnag, s, responseComment, responsePhotos, removedResponsePhotos)}
                                                                 style={{
                                                                     flex: 1, height: 34, borderRadius: 8,
                                                                     backgroundColor: selectedSnag.status === s ? STATUS_CONFIG[s].bg : colors.surface,

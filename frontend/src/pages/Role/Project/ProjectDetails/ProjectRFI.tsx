@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2,
-    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder
+    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,11 +23,24 @@ import {
     RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse,
     deleteRFI,
     updateRFI,
-    getRFIById
+    getRFIById,
+    markRFISeen
 } from '@/services/rfiService';
 import { getAssignees, Assignee } from '@/services/snagService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import FolderPickerDialog from './FolderPickerDialog';
+import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
+import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
+
+const isAudio = (url: string) => {
+    if (!url) return false;
+    try {
+        const urlWithoutQuery = url.split('?')[0];
+        return !!urlWithoutQuery.match(/\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i);
+    } catch {
+        return false;
+    }
+};
 
 interface ProjectRFIProps {
     project: Project;
@@ -71,6 +85,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
     const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [removedResponsePhotos, setRemovedResponsePhotos] = useState<string[]>([]);
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
     const [showFolderPicker, setShowFolderPicker] = useState(false);
@@ -108,9 +123,27 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         setAnnotatingIdx(null);
     };
 
-    const load = async () => {
+    useEffect(() => {
+        if (selectedRFI) {
+            setResponseBody(selectedRFI.response || '');
+            setRemovedResponsePhotos([]);
+            setResponsePhotos([]);
+            setResponsePhotoPreviews([]);
+        }
+    }, [selectedRFI?.id]);
+
+    useEffect(() => {
+        if (selectedRFI && String(selectedRFI.assigned_to) === String(user?.id) && !selectedRFI.seen_at) {
+            markRFISeen(selectedRFI.id).then(data => {
+                setSelectedRFI(prev => prev ? { ...prev, seen_at: data.seen_at } : null);
+                setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, seen_at: data.seen_at } : r));
+            }).catch(err => console.error("Failed to mark RFI as seen:", err));
+        }
+    }, [selectedRFI?.id, user?.id]);
+
+    const load = async (silent = false) => {
         if (!project?.id) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         try {
             const [rfiData, assigneeData] = await Promise.all([
                 getRFIs(project.id as any),
@@ -121,11 +154,45 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         } catch (e) {
             toast.error('Failed to load RFIs');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
     useEffect(() => { load(); }, [project?.id]);
+
+    const { socket } = useSocket();
+
+    useEffect(() => {
+        if (!socket || !project?.id) return;
+
+        socket.emit('join-project', project.id);
+
+        const onRFSeen = (data: { rfiId: number, seen_at: string }) => {
+            setRfis(prev => prev.map(r => r.id === data.rfiId ? { ...r, seen_at: data.seen_at } : r));
+            setSelectedRFI(prev => (prev && prev.id === data.rfiId) ? { ...prev, seen_at: data.seen_at } : prev);
+        };
+
+        const onRFIUpdated = (data: { rfi: RFI }) => {
+            setRfis(prev => {
+                const idx = prev.findIndex(r => r.id === data.rfi.id);
+                if (idx !== -1) {
+                    const copy = [...prev];
+                    copy[idx] = data.rfi;
+                    return copy;
+                }
+                return [data.rfi, ...prev];
+            });
+            setSelectedRFI(prev => (prev && prev.id === data.rfi.id) ? data.rfi : prev);
+        };
+
+        socket.on('rfi-seen', onRFSeen);
+        socket.on('rfi-updated', onRFIUpdated);
+
+        return () => {
+            socket.off('rfi-seen', onRFSeen);
+            socket.off('rfi-updated', onRFIUpdated);
+        };
+    }, [socket, project?.id]);
 
     useEffect(() => {
         if (initialRfiId) {
@@ -216,7 +283,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             toast.success('RFI created successfully');
             setShowAdd(false);
             resetForm();
-            load();
+            load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
             toast.error(getApiErrorMessage(error, 'Failed to create RFI'));
@@ -260,8 +327,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             const updated = await updateRFI(selectedRFI.id, form);
             toast.success('RFI updated successfully');
             setIsEditing(false);
+            setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
             setSelectedRFI(updated);
-            load();
+            load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
             toast.error(getApiErrorMessage(error, 'Failed to update RFI'));
@@ -275,8 +343,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         try {
             await deleteRFI(id);
             toast.success('RFI deleted');
+            setRfis(prev => prev.filter(r => r.id !== id));
             setSelectedRFI(null);
-            load();
+            load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
             toast.error(getApiErrorMessage(error, 'Failed to delete RFI'));
@@ -298,19 +367,26 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         setSubmitting(true);
         try {
             const form = new FormData();
-            form.append('response', responseBody);
+            // Only append text response if non-empty; otherwise backend treats undefined
+            // and won't overwrite an existing response with an empty string
+            if (responseBody.trim()) {
+                form.append('response', responseBody.trim());
+            }
             responsePhotos.forEach(p => form.append('photos', p));
+            if (removedResponsePhotos.length > 0) {
+                form.append('removedPhotos', JSON.stringify(removedResponsePhotos));
+            }
             
             const updated = await updateRFIResponse(selectedRFI.id, form);
             toast.success('Response updated');
+            setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
             setSelectedRFI(updated);
-            setResponseBody('');
+            setResponseBody(updated.response || '');
             setResponsePhotos([]);
             setResponsePhotoPreviews([]);
-            load();
             if (onUpdate) onUpdate();
-        } catch {
-            toast.error('Failed to update response');
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, 'Failed to update response'));
         } finally {
             setSubmitting(false);
         }
@@ -320,8 +396,13 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         try {
             await updateRFIStatus(id, status);
             toast.success(`Status updated to ${status}`);
-            load();
+            
+            // Update the list locally by only changing the status field
+            setRfis(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+            
             if (onUpdate) onUpdate();
+            
+            // Update the selected RFI view if it's the one being modified
             if (selectedRFI?.id === id) {
                 setSelectedRFI({ ...selectedRFI, status });
             }
@@ -439,9 +520,17 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 </div>
                                 <div className="text-right shrink-0">
-                                    <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-1">
-                                        <Clock className="h-3 w-3" /> {new Date(rfi.createdAt).toLocaleDateString()}
-                                    </p>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-1">
+                                            <Clock className="h-3 w-3" /> {new Date(rfi.createdAt).toLocaleDateString()}
+                                        </p>
+                                        {rfi.seen_at && (
+                                            <div className="flex items-center gap-0.5 text-orange-500" title={`Seen at ${new Date(rfi.seen_at).toLocaleString()}`}>
+                                                <CheckCheck className="h-3 w-3" />
+                                                <span className="text-[8px] font-bold uppercase tracking-tighter">Seen</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -682,30 +771,84 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Attachments</p>
                                         <div className="grid grid-cols-3 gap-3">
                                             {selectedRFI.photoDownloadUrls.map((url, idx) => (
-                                                <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group cursor-pointer">
-                                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" />
-                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <ZoomIn className="h-5 w-5 text-white" />
+                                                isAudio(url) ? (
+                                                    <div key={idx} className="col-span-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+                                                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Voice Attachment</span>
+                                                        </div>
+                                                        <VoiceNotePlayer url={url} isMe={false} />
                                                     </div>
-                                                </div>
+                                                ) : (
+                                                    <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group cursor-pointer">
+                                                        <img src={url} alt="Attachment" className="w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <ZoomIn className="h-5 w-5 text-white" />
+                                                        </div>
+                                                    </div>
+                                                )
                                             ))}
                                         </div>
                                     </div>
                                 )}
 
-                                {selectedRFI.response && (
+                                {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
                                     <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
                                         <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">Response</p>
-                                        <p className="text-sm text-foreground whitespace-pre-wrap mb-3">{selectedRFI.response}</p>
+                                        {selectedRFI.response && <p className="text-sm text-foreground whitespace-pre-wrap mb-3">{selectedRFI.response}</p>}
                                         {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
                                             <div className="grid grid-cols-3 gap-2">
                                                 {selectedRFI.responsePhotoUrls.map((url, idx) => (
-                                                    <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border group cursor-pointer">
-                                                        <img src={url} alt="Response photo" className="w-full h-full object-cover" />
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <ZoomIn className="h-4 w-4 text-white" />
+                                                    isAudio(url) ? (
+                                                        <div key={idx} className="col-span-3 rounded-xl border border-accent/20 bg-card p-4 shadow-sm relative group">
+                                                            <div className="flex items-center gap-2 mb-3">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                                                                <span className="text-[9px] font-bold text-accent uppercase tracking-widest">Voice Response</span>
+                                                            </div>
+                                                            <VoiceNotePlayer url={url} isMe={false} />
+                                                            {String(selectedRFI.assigned_to) === String(user?.id) && (
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        const key = selectedRFI.response_photos?.[idx];
+                                                                        if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                                                        // Optimistic UI update
+                                                                        const newUrls = [...(selectedRFI.responsePhotoUrls || [])];
+                                                                        newUrls.splice(idx, 1);
+                                                                        const newPhotos = [...(selectedRFI.response_photos || [])];
+                                                                        newPhotos.splice(idx, 1);
+                                                                        setSelectedRFI({ ...selectedRFI, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                                                    }}
+                                                                    className="absolute top-2 right-2 bg-destructive/90 hover:bg-destructive p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                >
+                                                                    <X className="h-3 w-3 text-white" />
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                    </div>
+                                                    ) : (
+                                                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                                                            <img src={url} alt="Response photo" className="w-full h-full object-cover cursor-pointer" onClick={() => setViewPhoto(url)} />
+                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                                                <ZoomIn className="h-4 w-4 text-white" />
+                                                            </div>
+                                                            {String(selectedRFI.assigned_to) === String(user?.id) && (
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        const key = selectedRFI.response_photos?.[idx];
+                                                                        if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                                                        // Optimistic UI update
+                                                                        const newUrls = [...(selectedRFI.responsePhotoUrls || [])];
+                                                                        newUrls.splice(idx, 1);
+                                                                        const newPhotos = [...(selectedRFI.response_photos || [])];
+                                                                        newPhotos.splice(idx, 1);
+                                                                        setSelectedRFI({ ...selectedRFI, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                                                    }}
+                                                                    className="absolute top-1 right-1 bg-destructive/90 hover:bg-destructive p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                >
+                                                                    <X className="h-2 w-2 text-white" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )
                                                 ))}
                                             </div>
                                         )}
@@ -715,7 +858,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                 {String(selectedRFI.assigned_to) === String(user?.id) && selectedRFI.status !== 'closed' && (
                                     <div className="space-y-3 pt-4 border-t border-border">
                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                            {selectedRFI.response ? 'Update Response' : 'Provide Response'}
+                                        {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) ? 'Update Response' : 'Provide Response'}
                                         </p>
                                         <Textarea 
                                             placeholder="Type your response here..." 
@@ -726,40 +869,78 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Response Attachments</label>
                                             <div className="flex flex-wrap gap-2">
-                                                {responsePhotoPreviews.map((src, idx) => (
-                                                    <div key={idx} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border group">
-                                                        <img src={src} alt="Preview" className="w-full h-full object-cover" />
-                                                        <button 
-                                                            onClick={() => removePhoto(idx, true)} 
-                                                            className="absolute top-1 right-1 bg-destructive p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        >
-                                                            <X className="h-2 w-2 text-white" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <label className="w-16 h-16 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
-                                                    <ImagePlus className="h-4 w-4 text-muted-foreground" />
-                                                    <input 
-                                                        type="file" 
-                                                        multiple 
-                                                        accept="image/*" 
-                                                        className="hidden" 
-                                                        onChange={(e) => {
-                                                            const files = Array.from(e.target.files || []);
-                                                            setResponsePhotos(prev => [...prev, ...files]);
-                                                            files.forEach(f => {
+                                                {responsePhotoPreviews.map((src, idx) => {
+                                                    const isAudioFile = responsePhotos[idx]?.type.startsWith('audio/');
+                                                    return (
+                                                        <div key={idx} className={`relative ${isAudioFile ? 'w-full max-w-md' : 'w-20 h-20'} rounded-xl overflow-hidden border border-border group bg-card shadow-sm hover:shadow-md transition-all`}>
+                                                            {isAudioFile ? (
+                                                                <div className="p-4 pr-10 flex flex-col gap-2">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                                                                        <span className="text-[9px] font-bold text-accent uppercase tracking-tighter">Voice Response</span>
+                                                                    </div>
+                                                                    <VoiceNotePlayer url={src} isMe={false} />
+                                                                </div>
+                                                            ) : (
+                                                                <img src={src} alt="Preview" className="w-full h-full object-cover" />
+                                                            )}
+                                                            <button 
+                                                                onClick={() => removePhoto(idx, true)} 
+                                                                className={`absolute top-2 right-2 bg-destructive/90 hover:bg-destructive p-1.5 rounded-full shadow-sm ${isAudioFile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity z-10`}
+                                                            >
+                                                                <X className="h-3 w-3 text-white" />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                                <div className="flex items-center gap-2">
+                                                    <label className="w-16 h-16 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
+                                                        <ImagePlus className="h-4 w-4 text-muted-foreground" />
+                                                        <input 
+                                                            type="file" 
+                                                            multiple 
+                                                            accept="image/*" 
+                                                            className="hidden" 
+                                                            onChange={(e) => {
+                                                                const files = Array.from(e.target.files || []);
+                                                                if (files.length === 0) return;
+                                                                const file = files[0];
+                                                                setResponsePhotos(prev => {
+                                                                    const filtered = prev.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.m4a') || f.name.endsWith('.webm'));
+                                                                    return [...filtered, file];
+                                                                });
                                                                 const r = new FileReader();
-                                                                r.onload = () => setResponsePhotoPreviews(prev => [...prev, r.result as string]);
-                                                                r.readAsDataURL(f);
-                                                            });
-                                                        }} 
-                                                    />
-                                                </label>
+                                                                r.onload = () => {
+                                                                    setResponsePhotoPreviews(prev => {
+                                                                        const filtered = prev.filter(p => p.startsWith('blob:'));
+                                                                        return [...filtered, r.result as string];
+                                                                    });
+                                                                };
+                                                                r.readAsDataURL(file);
+                                                            }} 
+                                                        />
+                                                    </label>
+                                                    <div className="flex items-center justify-center px-2">
+                                                        <VoiceNoteRecorder 
+                                                            onSend={(file) => {
+                                                                 const url = URL.createObjectURL(file);
+                                                                 setResponsePhotos(prev => {
+                                                                     const filtered = prev.filter(f => !f.type.startsWith('audio/') && !f.name.endsWith('.m4a') && !f.name.endsWith('.webm'));
+                                                                     return [...filtered, file];
+                                                                 });
+                                                                 setResponsePhotoPreviews(prev => {
+                                                                     const filtered = prev.filter(p => !p.startsWith('blob:'));
+                                                                     return [...filtered, url];
+                                                                 });
+                                                             }}
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                         <Button 
                                             onClick={handleUpdateResponse} 
-                                            disabled={submitting || (!responseBody.trim() && responsePhotos.length === 0)}
+                                            disabled={submitting || (responseBody === (selectedRFI.response || '') && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
                                             className="w-full bg-accent text-accent-foreground"
                                         >
                                             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}

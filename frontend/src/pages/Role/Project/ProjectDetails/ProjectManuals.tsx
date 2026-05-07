@@ -14,7 +14,7 @@ interface Props { project: Project; }
 
 const TYPE_OPTIONS: { label: string; value: ManualType }[] = [
   { label: 'Manual', value: 'manual' },
-  { label: 'SOP', value: 'sop' },
+  { label: 'Checklist', value: 'sop' },
 ];
 
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
@@ -94,7 +94,7 @@ const ProjectManuals = ({ project }: Props) => {
             className="flex-1 h-9 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 text-xs font-semibold"
           >
             <Upload className="h-3.5 w-3.5 mr-1.5" />
-            Upload Manual / SOP
+            Upload Manual / Checklist
           </Button>
         </div>
       )}
@@ -106,7 +106,7 @@ const ProjectManuals = ({ project }: Props) => {
       }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Upload Manual / SOP</DialogTitle>
+            <DialogTitle className="text-sm">Upload Manual / Checklist</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
@@ -197,7 +197,7 @@ const ProjectManuals = ({ project }: Props) => {
       {!loading && items.length === 0 && (
         <div className="mt-6 text-center">
           <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No manuals or SOPs yet</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">No manuals or Checklists yet</p>
         </div>
       )}
     </div>

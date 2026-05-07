@@ -64,6 +64,11 @@ export const getSnags = async (req: Request, res: Response) => {
 
     const data = await snags.findAll({
       where: { project_id: Number(project_id) },
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", 
+        "assigned_to", "status", "response", "response_photos", 
+        "created_by", "createdAt", "updatedAt", "seen_at"
+      ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name", "email"] },
         { model: users, as: "creator", attributes: ["id", "name"] },
@@ -188,6 +193,11 @@ export const createSnag = async (req: Request, res: Response) => {
     }
 
     const full = await snags.findByPk((snag as any).id, {
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", 
+        "assigned_to", "status", "response", "response_photos", 
+        "created_by", "createdAt", "updatedAt"
+      ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name"] },
         { model: users, as: "creator", attributes: ["id", "name"] },
@@ -223,11 +233,50 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
     const { response } = req.body;
     if (response !== undefined) (snag as any).response = response;
 
-    // Handle response photos: Replace existing if new ones uploaded
-    let uploadedResponsePhotos: string[] = [];
+    const { removedPhotos } = req.body;
+    let currentResponsePhotos: string[] = snag.response_photos || [];
+
+    // 1. Handle explicit removals
+    if (removedPhotos) {
+      let toRemove: string[] = [];
+      if (Array.isArray(removedPhotos)) toRemove = removedPhotos;
+      else if (typeof removedPhotos === 'string') {
+        if (removedPhotos.startsWith('[') && removedPhotos.endsWith(']')) {
+          try { toRemove = JSON.parse(removedPhotos); } catch (e) { toRemove = [removedPhotos]; }
+        } else {
+          toRemove = removedPhotos.split(',').map(s => s.trim());
+        }
+      }
+      currentResponsePhotos = currentResponsePhotos.filter(p => !toRemove.includes(p));
+    }
+
+    // 2. Handle new uploads with Smart Replace
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      const hasNewAudio = req.files.some((f:any) => f.mimetype.startsWith('audio/'));
+      const hasNewImage = req.files.some((f:any) => f.mimetype.startsWith('image/'));
+
+      // If new audio is being uploaded, remove existing audio from the response
+      if (hasNewAudio) {
+        currentResponsePhotos = currentResponsePhotos.filter((p:any) => {
+          const isAudio = p.match(/\.(m4a|webm|mp3|wav|aac|ogg|3gp|caf)(\?.*)?$/i);
+          return !isAudio;
+        });
+      }
+
+      // If new image is being uploaded, remove existing images from the response
+      if (hasNewImage) {
+        currentResponsePhotos = currentResponsePhotos.filter((p:any) => {
+          const isImage = p.match(/\.(jpg|jpeg|png|gif|webp|heic)(\?.*)?$/i);
+          return !isImage;
+        });
+      }
+
       const project = await projects.findByPk(snag.project_id);
       for (const file of req.files) {
+        if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+          return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
+        }
+
         let fileBuffer = file.buffer;
         if (file.mimetype.startsWith('image/')) {
           try {
@@ -246,12 +295,11 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
           ContentType: file.mimetype,
           Body: fileBuffer,
         }));
-        uploadedResponsePhotos.push(key);
+        currentResponsePhotos.push(key);
       }
-    } else {
-      uploadedResponsePhotos = snag.response_photos || [];
     }
-    (snag as any).response_photos = uploadedResponsePhotos;
+    
+    (snag as any).response_photos = currentResponsePhotos;
 
     await snag.save();
 
@@ -304,6 +352,45 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
   } catch (err) {
     console.error("updateSnagStatus error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// PATCH /snags/:id/seen — mark snag as seen by the assignee
+export const markSnagSeen = async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    const { id } = req.params;
+
+    const snag = await snags.findByPk(id);
+    if (!snag) return res.status(404).json({ error: 'Snag not found' });
+
+    // Only the assignee can mark as seen
+    if (Number(snag.assigned_to) !== Number(authUser.user_id)) {
+      return res.status(403).json({ error: 'Only the assignee can mark as seen' });
+    }
+
+    // Only mark seen once (first open)
+    if (!(snag as any).seen_at) {
+      (snag as any).seen_at = new Date();
+      await snag.save();
+
+      // Emit real-time event to the project room
+      try {
+        const { getIO } = await import('../socket.ts');
+        getIO().to(`project-${(snag as any).project_id}`).emit('snag-seen', {
+          snagId: Number(id),
+          seen_at: (snag as any).seen_at,
+          project_id: (snag as any).project_id,
+        });
+      } catch (e) {
+        console.error('Socket emit error (markSnagSeen):', e);
+      }
+    }
+
+    res.json({ seen_at: (snag as any).seen_at });
+  } catch (err) {
+    console.error('markSnagSeen error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -469,6 +556,11 @@ export const updateSnag = async (req: Request | any, res: Response) => {
     });
 
     const full = await snags.findByPk(id, {
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", 
+        "assigned_to", "status", "response", "response_photos", 
+        "created_by", "createdAt", "updatedAt"
+      ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name"] },
         { model: users, as: "creator", attributes: ["id", "name"] },

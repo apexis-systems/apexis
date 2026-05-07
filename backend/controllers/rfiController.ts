@@ -126,6 +126,11 @@ export const createRFI = async (req: Request | any, res: Response) => {
         const uploadedPhotos: string[] = [];
         if (req.files && Array.isArray(req.files)) {
             for (const file of req.files) {
+                // Approx 10MB limit for 5 minutes of high-quality audio
+                if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+                    return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
+                }
+
                 let fileBuffer = file.buffer;
                 if (file.mimetype.startsWith('image/')) {
                     try {
@@ -351,6 +356,44 @@ export const getRFIById = async (req: Request, res: Response) => {
     }
 };
 
+// PATCH /rfis/:id/seen — mark RFI as seen by the assignee
+export const markRFISeen = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { id } = req.params;
+
+        const rfi = await rfis.findByPk(id);
+        if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+
+        // Only the assignee can mark as seen
+        if (Number(rfi.assigned_to) !== Number(authUser.user_id)) {
+            return res.status(403).json({ error: 'Only the assignee can mark as seen' });
+        }
+
+        // Only mark seen once (first open)
+        if (!(rfi as any).seen_at) {
+            (rfi as any).seen_at = new Date();
+            await rfi.save();
+
+            // Emit real-time event to the project room
+            try {
+                getIO().to(`project-${(rfi as any).project_id}`).emit('rfi-seen', {
+                    rfiId: Number(id),
+                    seen_at: (rfi as any).seen_at,
+                    project_id: (rfi as any).project_id,
+                });
+            } catch (e) {
+                console.error('Socket emit error (markRFISeen):', e);
+            }
+        }
+
+        res.json({ seen_at: (rfi as any).seen_at });
+    } catch (err) {
+        console.error('markRFISeen error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 // GET /rfis/assignees?project_id=X  — project members plus project admins
 export const getRFIAssignees = async (req: Request, res: Response) => {
     try {
@@ -407,11 +450,51 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
             return res.status(403).json({ error: 'Only the assignee can update the response' });
         }
 
-        // Handle response photo uploads: Replace existing if new ones provided
-        let uploadedResponsePhotos: string[] = [];
+        // Handle response photo uploads: Smart Replace (one image, one audio)
+        const { removedPhotos } = req.body;
+        let currentResponsePhotos: string[] = rfi.response_photos || [];
+
+        // 1. Handle explicit removals
+        if (removedPhotos) {
+            let toRemove: string[] = [];
+            if (Array.isArray(removedPhotos)) toRemove = removedPhotos;
+            else if (typeof removedPhotos === 'string') {
+                if (removedPhotos.startsWith('[') && removedPhotos.endsWith(']')) {
+                    try { toRemove = JSON.parse(removedPhotos); } catch (e) { toRemove = [removedPhotos]; }
+                } else {
+                    toRemove = removedPhotos.split(',').map(s => s.trim());
+                }
+            }
+            currentResponsePhotos = currentResponsePhotos.filter(p => !toRemove.includes(p));
+        }
+
+        // 2. Handle new uploads with Smart Replace
         if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+            const hasNewAudio = req.files.some((f:any) => f.mimetype.startsWith('audio/'));
+            const hasNewImage = req.files.some((f:any) => f.mimetype.startsWith('image/'));
+
+            // If new audio is being uploaded, remove existing audio from the response (maintaining "one audio" rule)
+            if (hasNewAudio) {
+                currentResponsePhotos = currentResponsePhotos.filter((p:any) => {
+                    const isAudio = p.match(/\.(m4a|webm|mp3|wav|aac|ogg)(\?.*)?$/i);
+                    return !isAudio;
+                });
+            }
+
+            // If new image is being uploaded, remove existing images from the response (maintaining "one image" rule)
+            if (hasNewImage) {
+                currentResponsePhotos = currentResponsePhotos.filter(p => {
+                    const isImage = p.match(/\.(jpg|jpeg|png|gif|webp|heic)(\?.*)?$/i);
+                    return !isImage;
+                });
+            }
+
             const project = await projects.findByPk(rfi.project_id);
             for (const file of req.files) {
+                if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+                    return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
+                }
+
                 let fileBuffer = file.buffer;
                 if (file.mimetype.startsWith('image/')) {
                     try {
@@ -430,17 +513,15 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
                     ContentType: file.mimetype,
                     Body: fileBuffer,
                 }));
-                uploadedResponsePhotos.push(key);
+                currentResponsePhotos.push(key);
             }
-        } else {
-            uploadedResponsePhotos = rfi.response_photos || [];
         }
 
         if (response !== undefined) (rfi as any).response = response;
         if (status && ['open', 'closed', 'overdue'].includes(status)) (rfi as any).status = status;
-        (rfi as any).response_photos = uploadedResponsePhotos;
+        
+        rfi.response_photos = currentResponsePhotos;
         rfi.changed('response_photos', true);
-
         await rfi.save();
 
         await logActivity({
@@ -493,8 +574,8 @@ export const deleteRFI = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Only the creator can delete this RFI' });
         }
 
-        // Cannot delete if there is a response
-        if (rfi.response) {
+        // Cannot delete if there is a response (text or attachments)
+        if (rfi.response || (rfi.response_photos && rfi.response_photos.length > 0)) {
             return res.status(400).json({ error: 'Cannot delete RFI because a response has already been generated' });
         }
 
@@ -534,7 +615,8 @@ export const updateRFI = async (req: Request | any, res: Response) => {
 
         // Cannot edit core fields if there is a response, but folder linking is always allowed
         const isCoreUpdate = title || (description !== undefined) || assigned_to || expiry_date || (req.files && req.files.length > 0) || removedPhotos;
-        if (rfi.response && isCoreUpdate) {
+        const hasResponse = rfi.response || (rfi.response_photos && rfi.response_photos.length > 0);
+        if (hasResponse && isCoreUpdate) {
             return res.status(400).json({ error: 'Cannot edit RFI details because a response has already been generated. However, folder links can still be updated.' });
         }
 
@@ -561,6 +643,13 @@ export const updateRFI = async (req: Request | any, res: Response) => {
             currentPhotos = currentPhotos.filter(p => !toRemove.includes(p));
         }
         if (req.files && Array.isArray(req.files)) {
+            for (const file of req.files) {
+                // Approx 10MB limit for 5 minutes of high-quality audio
+                if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+                    return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
+                }
+            }
+
             const project = await projects.findByPk(rfi.project_id);
             for (const file of req.files) {
                 let fileBuffer = file.buffer;

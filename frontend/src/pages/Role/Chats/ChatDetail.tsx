@@ -5,6 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck, X, FileText, Download, CornerUpLeft, ZoomIn } from 'lucide-react';
 import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile } from '@/services/chatService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
+import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
+import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
@@ -44,6 +46,8 @@ export default function ChatDetail() {
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [replyTo, setReplyTo] = useState<any>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+    const [isRecordingVoice, setIsRecordingVoice] = useState(false);
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
     const [viewPhotoName, setViewPhotoName] = useState<string>('');
     const [viewPhotoId, setViewPhotoId] = useState<number>(0);
@@ -126,13 +130,16 @@ export default function ChatDetail() {
         }
 
         const handleNewMessage = (msg: any) => {
+            console.log("[SOCKET] Web received new-message:", msg);
             const incomingRoomId = String(msg.room_id || msg.roomId);
             const currentRoomId = String(params?.id || roomId);
 
             if (incomingRoomId === currentRoomId) {
                 setMessages(prev => {
-                    const exists = prev.find(m => String(m.id) === String(msg.id));
-                    if (exists) return prev;
+                    const exists = prev.some(m => String(m.id) === String(msg.id));
+                    if (exists) {
+                        return prev.map(m => String(m.id) === String(msg.id) ? msg : m);
+                    }
                     return [...prev, msg];
                 });
 
@@ -210,50 +217,61 @@ export default function ChatDetail() {
         }
     }, [messages, loading]);
 
-    const handleSend = async () => {
-        if ((!message.trim() && !selectedFile) || !roomId) return;
-
+    const handleSend = async (overrideFile?: File) => {
         const tempText = message.trim();
-        const fileToUpload = selectedFile;
+        const fileToUpload = overrideFile || selectedFile;
 
-        setMessage('');
-        setSelectedFile(null);
-        setSelectedFilePreview(null);
-        setShowEmojiPicker(false);
+        if (!tempText && !fileToUpload) return;
+
+        setIsUploading(true);
+
+        if (!overrideFile) {
+            setMessage('');
+            setSelectedFile(null);
+            setSelectedFilePreview(null);
+            setShowEmojiPicker(false);
+        }
 
         try {
             let fileData = null;
             if (fileToUpload) {
-                setIsUploading(true);
                 const uploadRes = await uploadChatFile(fileToUpload);
                 if (uploadRes.success) {
                     fileData = uploadRes;
                 }
-                setIsUploading(false);
             }
 
             const payload: any = {
                 roomId,
-                type: fileData ? (fileData.file_type.startsWith('image/') ? 'image' : 'file') : 'text',
+                type: fileData ? (
+                    fileData.file_type.startsWith('image/') ? 'image' :
+                    fileData.file_type.startsWith('audio/') ? 'audio' : 'file'
+                ) : 'text',
                 file_url: fileData?.file_url,
                 file_name: fileData?.file_name,
                 file_type: fileData?.file_type,
                 file_size: fileData?.file_size,
-                parent_id: replyTo?.id || null
+                parent_id: replyTo?.id ? Number(replyTo.id) : null
             };
             if (tempText) payload.text = tempText;
             
+            console.log("[CHAT] Sending payload:", payload);
             setReplyTo(null);
 
             const res = await sendChatMessage(payload);
+            console.log("[CHAT] Response from server:", res);
             if (res.success && res.message) {
                 setMessages(prev => {
-                    if (prev.find(m => m.id === res.message.id)) return prev;
+                    const exists = prev.some(m => String(m.id) === String(res.message.id));
+                    if (exists) {
+                        return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                    }
                     return [...prev, res.message];
                 });
             }
         } catch (err) {
             console.error("Failed to send message", err);
+        } finally {
             setIsUploading(false);
         }
     };
@@ -361,14 +379,18 @@ export default function ChatDetail() {
                                         <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || 'User'}</p>
                                     )}
 
-                                    {msg.parent && (
+                                    {(msg.parent || msg.parent_id) && (
                                         <div 
-                                            onClick={() => scrollToMessage(msg.parent_id)}
-                                            className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10' : 'bg-secondary/50'}`}
+                                            onClick={() => scrollToMessage(msg.parent_id || (msg.parent as any)?.id)}
+                                            className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10 border-white/40' : 'bg-secondary/50'}`}
                                         >
-                                            <p className="font-bold text-accent mb-0.5">{msg.parent.sender?.name}</p>
-                                            <p className="opacity-70 line-clamp-1">
-                                                {msg.parent.type === 'image' ? '📷 Photo' : msg.parent.type === 'file' ? '📄 File' : msg.parent.text}
+                                            <p className={`font-bold mb-0.5 truncate ${isMe ? 'text-white' : 'text-accent'}`}>
+                                                {msg.parent?.sender?.name || 'User'}
+                                            </p>
+                                            <p className={`opacity-80 line-clamp-1 italic ${isMe ? 'text-white/90' : 'text-foreground/70'}`}>
+                                                {msg.parent ? (
+                                                    (msg.parent.type === 'audio' || msg.parent.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : msg.parent.type === 'image' ? '📷 Photo' : msg.parent.type === 'file' ? '📄 File' : msg.parent.text || 'Message'
+                                                ) : 'Replied to message'}
                                             </p>
                                         </div>
                                     )}
@@ -395,7 +417,13 @@ export default function ChatDetail() {
                                         </div>
                                     )}
 
-                                    {msg.type === 'file' && msg.downloadUrl && (
+                                    {(msg.type === 'audio' || msg.file_type?.startsWith('audio/')) && msg.downloadUrl && (
+                                        <div className="mb-2">
+                                            <VoiceNotePlayer url={msg.downloadUrl} isMe={isMe} />
+                                        </div>
+                                    )}
+
+                                    {msg.type === 'file' && !msg.file_type?.startsWith('audio/') && msg.downloadUrl && (
                                         <div className={`p-2 mb-2 rounded-lg flex items-center gap-3 ${isMe ? 'bg-white/10' : 'bg-secondary/50'}`}>
                                             <FileText className="h-8 w-8 text-accent" />
                                             <div className="flex-1 min-w-0">
@@ -426,7 +454,10 @@ export default function ChatDetail() {
                                             </div>
                                         )}
                                         <button 
-                                            onClick={() => setReplyTo(msg)}
+                                            onClick={() => {
+                                                setReplyTo(msg);
+                                                inputRef.current?.focus();
+                                            }}
                                             className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}
                                         >
                                             <CornerUpLeft className="h-3 w-3" />
@@ -502,9 +533,9 @@ export default function ChatDetail() {
                 {replyTo && (
                     <div className="px-4 py-3 bg-secondary/30 flex items-center gap-3 border-b border-border border-l-4 border-l-accent animate-in slide-in-from-bottom-2">
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-accent">{replyTo.sender?.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                                {replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text}
+                            <p className="text-xs font-bold text-accent">{replyTo.sender?.name || 'User'}</p>
+                            <p className="text-sm text-foreground truncate opacity-80">
+                                { (replyTo.type === 'audio' || replyTo.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text || 'Message'}
                             </p>
                         </div>
                         <button
@@ -532,52 +563,56 @@ export default function ChatDetail() {
                         onChange={handleFileSelect}
                     />
 
-                    <div className="flex-1 flex items-end bg-secondary/50 border border-border rounded-2xl px-3 py-2 gap-2 min-h-[44px]">
-                        {/* <button
-                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                            className={`transition-colors pb-0.5 ${showEmojiPicker ? 'text-accent' : 'text-muted-foreground hover:text-foreground'}`}
-                        >
-                            <Smile className="h-5 w-5" />
-                        </button> */}
-                        <textarea
-                            value={message}
-                            onChange={e => {
-                                setMessage(e.target.value);
-                                if (socket && roomId && user?.name) {
-                                    socket.emit('typing', { roomId, userName: user.name });
-                                }
-                            }}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Message..."
-                            rows={1}
-                            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none max-h-32 py-0.5"
-                            style={{ lineHeight: '1.4' }}
-                        />
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            className="text-muted-foreground hover:text-foreground transition-colors rotate-[-45deg] pb-0.5"
-                        >
-                            <Paperclip className="h-5 w-5" />
-                        </button>
-                        <button
-                            onClick={() => cameraInputRef.current?.click()}
-                            className="text-muted-foreground hover:text-foreground transition-colors pb-0.5"
-                        >
-                            <Camera className="h-5 w-5" />
-                        </button>
-                    </div>
+                    {!isRecordingVoice && (
+                        <div className="flex-1 bg-background rounded-xl border border-border flex items-center px-3 py-1 shadow-sm">
+                            <textarea
+                                ref={inputRef}
+                                value={message}
+                                onChange={e => {
+                                    setMessage(e.target.value);
+                                    if (socket && roomId && user?.name) {
+                                        socket.emit('typing', { roomId, userName: user.name });
+                                    }
+                                }}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Message..."
+                                rows={1}
+                                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none max-h-32 py-0.5"
+                                style={{ lineHeight: '1.4' }}
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="text-muted-foreground hover:text-foreground transition-colors rotate-[-45deg] pb-0.5"
+                            >
+                                <Paperclip className="h-5 w-5" />
+                            </button>
+                            <button
+                                onClick={() => cameraInputRef.current?.click()}
+                                className="text-muted-foreground hover:text-foreground transition-colors pb-0.5"
+                            >
+                                <Camera className="h-5 w-5" />
+                            </button>
+                        </div>
+                    )}
 
-                    <button
-                        onClick={handleSend}
-                        disabled={isUploading}
-                        className="w-11 h-11 rounded-full bg-accent flex items-center justify-center shrink-0 hover:bg-accent/90 transition-colors shadow-md disabled:opacity-50"
-                    >
-                        {isUploading ? (
-                            <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                            <Send className="h-4.5 w-4.5 text-white translate-x-0.5" />
-                        )}
-                    </button>
+                    {(!message.trim() && !selectedFile) || isRecordingVoice ? (
+                        <VoiceNoteRecorder 
+                            onRecordingStateChange={setIsRecordingVoice}
+                            onSend={(file) => handleSend(file)}
+                        />
+                    ) : (
+                        <button
+                            onClick={() => handleSend()}
+                            disabled={isUploading}
+                            className="w-11 h-11 rounded-full bg-accent flex items-center justify-center shrink-0 hover:bg-accent/90 transition-colors shadow-md disabled:opacity-50"
+                        >
+                            {isUploading ? (
+                                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <Send className="h-4.5 w-4.5 text-white translate-x-0.5" />
+                            )}
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import {
-    projects, snags, activities, comments, users, files,
+    projects, snags, rfis, activities, comments, users, files,
+    project_members,
     Sequelize
 } from '../models/index.ts';
 import { Op } from 'sequelize';
@@ -25,9 +26,13 @@ export const getOverview = async (req: Request, res: Response) => {
             ]
         });
 
-        // 2. Fetch all Snags for these projects
+        // 2. Fetch all Snags and RFIs for these projects
         const projectIds = allProjects.map((p: any) => p.id);
         const allSnags = await snags.findAll({
+            where: { project_id: { [Op.in]: projectIds } }
+        });
+
+        const allRFIs = await rfis.findAll({
             where: { project_id: { [Op.in]: projectIds } }
         });
 
@@ -65,29 +70,60 @@ export const getOverview = async (req: Request, res: Response) => {
         });
 
         // --- Data Aggregation ---
+        const now = new Date();
+
+        // Calculate Status for each project based on dates
+        const projectsWithStatus = allProjects.map((p: any) => {
+            const start = new Date(p.start_date);
+            const end = new Date(p.end_date);
+            let status = 'on-track';
+
+            if (now > end) {
+                status = 'delayed';
+            } else if (now < start) {
+                status = 'at-risk'; // Mapping upcoming to at-risk for the donut chart or just showing on-track
+            } else {
+                const pSnags = allSnags.filter((s: any) => s.project_id === p.id);
+                const overdue = pSnags.filter((s: any) => s.status === 'red').length;
+                if (overdue > 3) status = 'at-risk';
+            }
+
+            return { ...p.dataValues, calculatedStatus: status };
+        });
 
         // Quick Stats
-        const activeProjects = allProjects.filter((p: any) => p.status !== 'completed').length;
-        const pendingTasks = allSnags.filter((s: any) => s.status !== 'green').length;
-        const overdueTasks = allSnags.filter((s: any) => s.status === 'red').length; // Assuming red is overdue/critical
-        const delayedProjects = allProjects.filter((p: any) => p.status === 'delayed').length;
+        const activeProjects = projectsWithStatus.length;
+        const pendingTasks = allSnags.filter((s: any) => s.status !== 'green').length + allRFIs.filter((r: any) => r.status !== 'closed').length;
+        const overdueTasks = allSnags.filter((s: any) => s.status === 'red').length + allRFIs.filter((r: any) => r.status === 'overdue').length;
+        const delayedProjects = projectsWithStatus.filter((p: any) => p.calculatedStatus === 'delayed').length;
 
         // Project Status Donut
         const statusCounts = [
-            { name: 'On Track', value: allProjects.filter((p: any) => p.status === 'on-track').length, color: '#22c55e' },
-            { name: 'Delayed', value: allProjects.filter((p: any) => p.status === 'delayed').length, color: '#ef4444' },
-            { name: 'At Risk', value: allProjects.filter((p: any) => p.status === 'at-risk').length, color: '#f59e0b' },
-            { name: 'Completed', value: allProjects.filter((p: any) => p.status === 'completed').length, color: '#3b82f6' },
+            { name: 'On Track', value: projectsWithStatus.filter((p: any) => p.calculatedStatus === 'on-track').length, color: '#22c55e' },
+            { name: 'Delayed', value: projectsWithStatus.filter((p: any) => p.calculatedStatus === 'delayed').length, color: '#ef4444' },
+            { name: 'At Risk', value: projectsWithStatus.filter((p: any) => p.calculatedStatus === 'at-risk').length, color: '#f59e0b' },
+            { name: 'Completed', value: 0, color: '#3b82f6' }, // No way to mark project completed yet
         ];
 
-        // Project Pulse Scores
+        // Project Pulse Scores (Enhanced with Snag and RFI stats)
         const projectPulse = allProjects.map((p: any) => {
             const pSnags = allSnags.filter((s: any) => s.project_id === p.id);
-            const total = pSnags.length;
-            const completed = pSnags.filter((s: any) => s.status === 'green').length;
-            const overdue = pSnags.filter((s: any) => s.status === 'red').length;
+            const pRFIs = allRFIs.filter((r: any) => r.project_id === p.id);
+            
+            const totalSnags = pSnags.length;
+            const completedSnags = pSnags.filter((s: any) => s.status === 'green').length;
+            const pendingSnags = totalSnags - completedSnags;
 
-            const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            const totalRFIs = pRFIs.length;
+            const completedRFIs = pRFIs.filter((r: any) => r.status === 'closed').length;
+            const pendingRFIs = totalRFIs - completedRFIs;
+
+            const totalTasks = totalSnags + totalRFIs;
+            const completedTasks = completedSnags + completedRFIs;
+
+            const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+            const overdue = pSnags.filter((s: any) => s.status === 'red').length + pRFIs.filter((r: any) => r.status === 'overdue').length;
+            
             const pulseScore = Math.max(0, 100 - (overdue * 10) - (pSnags.filter((s: any) => s.status === 'amber').length * 5));
 
             return {
@@ -95,39 +131,73 @@ export const getOverview = async (req: Request, res: Response) => {
                 name: p.name,
                 pulseScore,
                 progress,
-                tasksDone: completed,
-                tasksTotal: total,
+                tasksDone: completedTasks,
+                tasksTotal: totalTasks,
                 overdue,
+                snagStats: {
+                    total: totalSnags,
+                    completed: completedSnags,
+                    pending: pendingSnags
+                },
+                rfiStats: {
+                    total: totalRFIs,
+                    completed: completedRFIs,
+                    pending: pendingRFIs
+                },
                 messages: recentComments.filter((c: any) => c.file?.project_id === p.id).length,
                 risk: pulseScore > 85 ? 'low' : pulseScore > 65 ? 'medium' : 'high',
                 architect: p.user?.name || 'Unassigned'
             };
         });
 
-        // Team Leaderboard
-        const teamStats: any = {};
-        allSnags.forEach((s: any) => {
-            if (!s.assigned_to) return;
-            if (!teamStats[s.assigned_to]) {
-                teamStats[s.assigned_to] = { id: s.assigned_to, name: 'User', tasksCompleted: 0, total: 0 };
-            }
-            teamStats[s.assigned_to].total++;
-            if (s.status === 'green') teamStats[s.assigned_to].tasksCompleted++;
+        // Team Leaderboard (Project-wise members)
+        const members = await project_members.findAll({
+            where: { project_id: { [Op.in]: projectIds } },
+            include: [
+                { model: users, attributes: ['id', 'name'] },
+                { model: projects, attributes: ['id', 'name'] }
+            ]
         });
 
-        // Fetch names for leaderboard
-        const teamUserIds = Object.keys(teamStats);
-        const teamUsers = await users.findAll({
-            where: { id: { [Op.in]: teamUserIds } },
-            attributes: ['id', 'name', 'role']
-        });
+        const teamLeaderboard = members.map((m: any) => {
+            const userId = m.user_id;
+            const projectId = m.project_id;
+            
+            const userSnags = allSnags.filter((s: any) => s.assigned_to === userId && s.project_id === projectId);
+            const userRFIs = allRFIs.filter((r: any) => r.assigned_to === userId && r.project_id === projectId);
+            
+            const completedSnags = userSnags.filter((s: any) => s.status === 'green');
+            const completedRFIs = userRFIs.filter((r: any) => r.status === 'closed');
+            
+            const tasksCompleted = completedSnags.length + completedRFIs.length;
+            const totalTasks = userSnags.length + userRFIs.length;
 
-        const teamLeaderboard = teamUsers.map((u: any) => ({
-            ...teamStats[u.id],
-            name: u.name,
-            role: u.role,
-            avgResponseTime: '2.4 hrs' // Mocked as we don't track response time yet
-        })).sort((a: any, b: any) => b.tasksCompleted - a.tasksCompleted);
+            // Calculate Avg Response Time (in hours)
+            let totalHrs = 0;
+            let count = 0;
+
+            [...completedSnags, ...completedRFIs].forEach((item: any) => {
+                const start = new Date(item.createdAt).getTime();
+                const end = new Date(item.updatedAt).getTime();
+                if (end > start) {
+                    totalHrs += (end - start) / (1000 * 3600);
+                    count++;
+                }
+            });
+
+            const avgResponseTime = count > 0 ? (totalHrs / count).toFixed(1) + ' hrs' : 'N/A';
+
+            return {
+                id: m.id,
+                userId: m.user_id,
+                name: m.user?.name || 'User',
+                role: m.role,
+                projectName: m.project?.name || 'Project',
+                tasksCompleted,
+                total: totalTasks,
+                avgResponseTime
+            };
+        }).sort((a: any, b: any) => b.tasksCompleted - a.tasksCompleted);
 
         // Activity Feed
         const activityFeed = recentActivities.map((a: any) => ({
@@ -157,8 +227,10 @@ export const getOverview = async (req: Request, res: Response) => {
             const end = new Date();
             end.setDate(end.getDate() - i * 7);
 
-            const completed = allSnags.filter((s: any) => s.status === 'green' && s.updatedAt >= start && s.updatedAt <= end).length;
-            const created = allSnags.filter((s: any) => s.createdAt >= start && s.createdAt <= end).length;
+            const completed = allSnags.filter((s: any) => s.status === 'green' && s.updatedAt >= start && s.updatedAt <= end).length +
+                              allRFIs.filter((r: any) => r.status === 'closed' && r.updatedAt >= start && r.updatedAt <= end).length;
+            const created = allSnags.filter((s: any) => s.createdAt >= start && s.createdAt <= end).length +
+                            allRFIs.filter((r: any) => r.createdAt >= start && r.createdAt <= end).length;
             weeklyCompletion.push({ week: `W${4 - i}`, completed, created });
         }
 
@@ -206,13 +278,6 @@ export const getOverview = async (req: Request, res: Response) => {
                 project: p.name,
                 messages: p.messages,
                 avgReplyHrs: p.messages > 0 ? (2.0 + Math.random()).toFixed(1) : 0 // Better than static 3.0
-            })),
-            pendingApprovals: allSnags.filter((s: any) => s.status === 'amber').map((s: any) => ({
-                id: s.id,
-                title: s.title,
-                project: allProjects.find((p: any) => p.id === s.project_id)?.name || 'Project',
-                requestedBy: 'Team Member',
-                daysWaiting: Math.floor((new Date().getTime() - new Date(s.createdAt).getTime()) / (1000 * 3600 * 24))
             })),
             taskCompletion: weeklyCompletion
         });

@@ -28,7 +28,8 @@ export const sendChatMessage = async (data: {
     file_url?: string,
     file_name?: string,
     file_type?: string,
-    file_size?: string
+    file_size?: string,
+    parent_id?: number | null
 }) => {
     try {
         const response = await PrivateAxios.post('/chats/send', data);

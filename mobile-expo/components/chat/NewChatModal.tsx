@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getOrgUsers } from '@/services/userService';
+import { getChatUsers, getOrgUsers } from '@/services/userService';
 import { createRoom } from '@/services/chatService';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
@@ -35,7 +35,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             const fetchUsers = async () => {
                 setLoading(true);
                 try {
-                    const data = await getOrgUsers();
+                    const data = await getChatUsers();
                     setUsers(data.filter((u: any) => u.id !== authUser?.id && u.role !== 'superadmin'));
                 } catch (err) {
                     console.error("Failed to fetch users", err);
@@ -139,18 +139,30 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                 <View style={{ flex: 1, marginLeft: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <Text style={[styles.userName, { color: colors.text }]}>{item.name}</Text>
-                        {item.role && item.role !== 'superadmin' && (
-                            <View style={{ backgroundColor: colors.primary + '22', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                <Text style={{ fontSize: 9, color: colors.primary, fontWeight: '700', textTransform: 'capitalize' }}>{item.role}</Text>
-                            </View>
-                        )}
                         {item.organization?.name && (
                             <View style={{ backgroundColor: colors.border, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                <Text style={{ fontSize: 9, color: colors.textMuted, fontWeight: '700' }}>{item.organization.name}</Text>
+                                <Text style={{ fontSize: 7, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase' }}>{item.organization.name}</Text>
                             </View>
                         )}
                     </View>
-                    <Text style={[styles.userEmail, { color: colors.textMuted }]}>{item.email}</Text>
+
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                        {item.project_members && item.project_members.length > 0 ? (
+                            item.project_members.slice(0, 2).map((pm: any, idx: number) => (
+                                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.primary + '08', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 7, color: colors.primary, fontWeight: '800', textTransform: 'uppercase' }}>{pm.role}</Text>
+                                    <Text style={{ fontSize: 8, color: colors.textMuted, maxWidth: 80 }} numberOfLines={1}>{pm.project?.name}</Text>
+                                </View>
+                            ))
+                        ) : (
+                            <View style={{ backgroundColor: colors.primary + '15', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 0.5, borderColor: colors.primary + '33' }}>
+                                <Text style={{ fontSize: 8, color: colors.primary, fontWeight: '800', textTransform: 'uppercase' }}>{item.role}</Text>
+                            </View>
+                        )}
+                        {item.project_members && item.project_members.length > 2 && (
+                            <Text style={{ fontSize: 7, color: colors.textMuted, marginTop: 2 }}>+{item.project_members.length - 2} more</Text>
+                        )}
+                    </View>
                 </View>
                 {isLoadingThisRow ? (
                     <ActivityIndicator size="small" color={colors.primary} />
@@ -170,42 +182,42 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             transparent={false}
             onRequestClose={onClose}
         >
-                <KeyboardAvoidingView
-                    style={{ flex: 1, backgroundColor: colors.background }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                >
-                    {/* Header */}
-                    <View style={{ 
-                        backgroundColor: colors.surface, 
-                        borderBottomColor: colors.border,
-                        borderBottomWidth: 1,
-                        paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
-                    }}>
-                        <View style={[styles.header, { borderBottomWidth: 0 }]}>
-                            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                                <Feather name="x" size={24} color={colors.text} />
+            <KeyboardAvoidingView
+                style={{ flex: 1, backgroundColor: colors.background }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
+                {/* Header */}
+                <View style={{
+                    backgroundColor: colors.surface,
+                    borderBottomColor: colors.border,
+                    borderBottomWidth: 1,
+                    paddingTop: Platform.OS === 'ios' ? insets.top : StatusBar.currentHeight || 0,
+                }}>
+                    <View style={[styles.header, { borderBottomWidth: 0 }]}>
+                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                            <Feather name="x" size={24} color={colors.text} />
+                        </TouchableOpacity>
+                        <Text style={[styles.headerTitle, { color: colors.text }]}>{type === 'group' ? 'New Group' : 'New Direct Chat'}</Text>
+
+                        {type === 'group' ? (
+                            <TouchableOpacity
+                                onPress={handleCreate}
+                                disabled={submitting || selectedUsers.length === 0}
+                                style={{
+                                    opacity: (submitting || selectedUsers.length === 0) ? 0.4 : 1,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
+                            >
+                                {submitting && <ActivityIndicator size="small" color={colors.primary} />}
+                                <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
                             </TouchableOpacity>
-                            <Text style={[styles.headerTitle, { color: colors.text }]}>{type === 'group' ? 'New Group' : 'New Direct Chat'}</Text>
-                            
-                            {type === 'group' ? (
-                                <TouchableOpacity
-                                    onPress={handleCreate}
-                                    disabled={submitting || selectedUsers.length === 0}
-                                    style={{
-                                        opacity: (submitting || selectedUsers.length === 0) ? 0.4 : 1,
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        gap: 6
-                                    }}
-                                >
-                                    {submitting && <ActivityIndicator size="small" color={colors.primary} />}
-                                    <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
-                                </TouchableOpacity>
-                            ) : (
-                                <View style={{ width: 40 }} />
-                            )}
-                        </View>
+                        ) : (
+                            <View style={{ width: 40 }} />
+                        )}
                     </View>
+                </View>
 
                 {/* Type Selector */}
                 <View style={[styles.typeSelector, { borderBottomColor: colors.border }]}>
@@ -289,7 +301,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                         }
                     />
                 )}
-                </KeyboardAvoidingView>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }

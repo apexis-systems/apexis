@@ -49,7 +49,7 @@ export const uploadManual = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
         if (!['admin', 'superadmin'].includes(authUser.role))
-            return res.status(403).json({ error: 'Only admins can upload manuals/SOPs' });
+            return res.status(403).json({ error: 'Only admins can upload manuals/Checklists' });
 
         const { project_id, type } = req.body;
         if (!project_id || !req.file) return res.status(400).json({ error: 'project_id and file required' });

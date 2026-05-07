@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
@@ -10,12 +10,15 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { WebView } from 'react-native-webview';
 import { getFolderRFIs } from '@/services/rfiService';
+import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
+import { getMemberForTag } from '@/services/projectService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Detect if we are running in Expo Go
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -47,7 +50,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // subsequent navigations while the component stays mounted in the FlatList.
     useEffect(() => {
         setSelectedFolder(initialFolderId || null);
-    }, [initialFolderId]);
+    }, [initialFolderId, initialFileId, searchQuery]);
     const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -91,6 +94,19 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfis'>('files');
     const [linkedRFIs, setLinkedRFIs] = useState<any[]>([]);
     const [loadingRFIs, setLoadingRFIs] = useState(false);
+    const insets = useSafeAreaInsets();
+
+    // Comment state
+    const [docComments, setDocComments] = useState<CommentThread[]>([]);
+    const [commentText, setCommentText] = useState('');
+    const [replyTo, setReplyTo] = useState<number | null>(null);
+    const [commentLoading, setCommentLoading] = useState(false);
+    const [addingComment, setAddingComment] = useState(false);
+    const [projectMembers, setProjectMembers] = useState<any[]>([]);
+    const [mentionQuery, setMentionQuery] = useState('');
+    const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+    const [showMentions, setShowMentions] = useState(false);
+    const [showComments, setShowComments] = useState(false);
 
     const fetchFolders = async (isRefetch = false) => {
         if (!project?.id) return;
@@ -159,6 +175,106 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             console.error("fetchLinkedRFIs error", e);
         } finally {
             setLoadingRFIs(false);
+        }
+    };
+
+    const loadComments = async (fileId: number) => {
+        setCommentLoading(true);
+        try {
+            const data = await getComments(fileId);
+            setDocComments(data);
+        } catch (e) {
+            console.error('loadComments error:', e);
+        } finally {
+            setCommentLoading(false);
+        }
+    };
+
+    const loadMembers = async () => {
+        if (!project?.id) return;
+        try {
+            const data = await getMemberForTag(project.id);
+            if (data.members) {
+                const uniqueUsers = data.members
+                    .map((m: any) => m.user)
+                    .filter((u: any, index: number, self: any[]) =>
+                        u &&
+                        String(u.id) !== String(user?.id) &&
+                        self.findIndex(t => String(t.id) === String(u.id)) === index
+                    );
+                setProjectMembers(uniqueUsers);
+            }
+        } catch (e) {
+            console.error('loadMembers error:', e);
+        }
+    };
+
+    const handleInputChange = (text: string) => {
+        setCommentText(text);
+
+        // Find the last "@" at the start of a word
+        const lastAtIndex = text.lastIndexOf('@');
+        if (lastAtIndex !== -1 && (lastAtIndex === 0 || text[lastAtIndex - 1] === ' ')) {
+            const query = text.substring(lastAtIndex + 1);
+            // Only trigger if no space after @
+            if (!query.includes(' ')) {
+                setMentionQuery(query);
+                setShowMentions(true);
+                setMentionStartIndex(lastAtIndex);
+                return;
+            }
+        }
+        setShowMentions(false);
+        setMentionStartIndex(-1);
+    };
+
+    const handleSelectMention = (member: any) => {
+        if (mentionStartIndex === -1) return;
+        const before = commentText.substring(0, mentionStartIndex);
+        const newText = `${before}@[${member.id}:${member.name}] `;
+        setCommentText(newText);
+        setShowMentions(false);
+        setMentionStartIndex(-1);
+    };
+
+    const renderCommentText = (text: string) => {
+        if (!text) return null;
+        const mentionRegex = /(@\[(\d+):([^\]]+)\])/g;
+        const parts = text.split(mentionRegex);
+        const result: any[] = [];
+
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (i % 4 === 1) continue; // Skip whole match
+            if (i % 4 === 2) continue; // Skip ID
+            if (i % 4 === 3) {
+                result.push(
+                    <Text key={i} style={{ fontWeight: '800' }}>
+                        @{part}
+                    </Text>
+                );
+                continue;
+            }
+
+            if (part) {
+                result.push(part);
+            }
+        }
+        return result;
+    };
+
+    const handleAddComment = async () => {
+        if (!currentDoc?.id || !commentText.trim()) return;
+        setAddingComment(true);
+        try {
+            await addCommentApi(currentDoc.id, commentText.trim(), replyTo ?? undefined);
+            setCommentText('');
+            setReplyTo(null);
+            await loadComments(currentDoc.id);
+        } catch (e) {
+            console.error('addComment error:', e);
+        } finally {
+            setAddingComment(false);
         }
     };
 
@@ -429,6 +545,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     uriToOpen = downloadResult.uri;
                 }
 
+                // Load comments and members
+                loadComments(doc.id);
+                loadMembers();
+                setShowComments(false);
+                setCommentText('');
+                setReplyTo(null);
+
                 // 3. Selection of Viewer
                 if (Platform.OS === 'ios') {
                     // EXTREMELY FAST: iOS Webview renders local PDFs natively
@@ -467,7 +590,26 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const ext = doc.file_name?.split('.').pop() || 'tmp';
             const localUri = `${(FileSystem as any).cacheDirectory}${doc.file_name || `file_${Date.now()}.${ext}`}`;
 
-            const { uri } = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+            // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
+            let urlToDownload = doc.downloadUrl;
+            let uri = '';
+
+            if (doc.do_not_follow && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
+                const data = await downloadFile(doc.id);
+                // Convert arraybuffer to base64 for FileSystem
+                const base64 = btoa(
+                    new Uint8Array(data).reduce(
+                        (data, byte) => data + String.fromCharCode(byte),
+                        '',
+                    ),
+                );
+                await FileSystem.writeAsStringAsync(localUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+                uri = localUri;
+                urlToDownload = localUri; // For share fallback
+            } else {
+                const downloadResult = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+                uri = downloadResult.uri;
+            }
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
@@ -479,8 +621,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 // Fallback to link sharing if system sharing is unavailable
                 await Share.share({
                     title: doc.file_name,
-                    message: `${doc.file_name}\n${doc.downloadUrl}`,
-                    url: doc.downloadUrl,
+                    message: `${doc.file_name}\n${urlToDownload}`,
+                    url: urlToDownload,
                 });
             }
         } catch (e) {
@@ -736,7 +878,25 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const ext = doc.file_name?.split('.').pop() || 'pdf';
             const localUri = `${(FileSystem as any).cacheDirectory}${doc.file_name || `doc_${Date.now()}.${ext}`}`;
 
-            const { uri } = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+            // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
+            let urlToDownload = doc.downloadUrl;
+            let uri = '';
+
+            if (doc.do_not_follow && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
+                const data = await downloadFile(doc.id);
+                const base64 = btoa(
+                    new Uint8Array(data).reduce(
+                        (data, byte) => data + String.fromCharCode(byte),
+                        '',
+                    ),
+                );
+                await FileSystem.writeAsStringAsync(localUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+                uri = localUri;
+                urlToDownload = localUri;
+            } else {
+                const downloadResult = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+                uri = downloadResult.uri;
+            }
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
@@ -746,10 +906,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             } else {
                 await Share.share({
                     title: doc.file_name,
-                    url: doc.downloadUrl,
+                    url: urlToDownload,
                 });
             }
         } catch (e) {
+            console.error('Share error:', e);
             Alert.alert("Error", "Failed to share document");
         } finally {
             setProcessing(null);
@@ -900,17 +1061,17 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     <View style={{ flex: 1 }}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                                             <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{rfi.title}</Text>
-                                            <View style={{ 
-                                                paddingHorizontal: 8, 
-                                                paddingVertical: 2, 
-                                                borderRadius: 6, 
-                                                backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)' 
+                                            <View style={{
+                                                paddingHorizontal: 8,
+                                                paddingVertical: 2,
+                                                borderRadius: 6,
+                                                backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
                                             }}>
-                                                <Text style={{ 
-                                                    fontSize: 9, 
-                                                    fontWeight: '800', 
+                                                <Text style={{
+                                                    fontSize: 9,
+                                                    fontWeight: '800',
                                                     textTransform: 'uppercase',
-                                                    color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444' 
+                                                    color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444'
                                                 }}>{rfi.status}</Text>
                                             </View>
                                         </View>
@@ -938,289 +1099,289 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 ) : (
                     <>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
-                    {sortedFolders.map((folder) => {
-                        const count = docs.filter((d) => d.folder_id === folder.id).length;
-                        const subcount = folders.filter((f) => f.parent_id === folder.id).length;
-                        const isSelected = selectedFolders.has(folder.id);
-                        const isArchiveFolder = folder.name.toLowerCase() === 'archive';
-                        return (
-                            <View
-                                key={folder.id}
-                                style={{
-                                    width: '24%',
-                                    aspectRatio: 1,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderRadius: 16,
-                                    backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: isSelected ? colors.primary : colors.border,
-                                    padding: 8, // Standardized to match Photos
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 0, height: 2 },
-                                    shadowOpacity: 0.05,
-                                    shadowRadius: 4,
-                                    elevation: 1,
-                                    position: 'relative',
-                                }}
-                            >
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        if (isSelectionMode) toggleSelection('folder', folder.id);
-                                        else setSelectedFolder(folder.id);
-                                    }}
-                                    onLongPress={() => handleLongPress('folder', folder.id)}
-                                    style={{
-                                        ...StyleSheet.absoluteFillObject,
-                                        zIndex: 5,
-                                    }}
-                                />
-                                <View style={{ marginBottom: 8 }}>
-                                    <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
-                                </View>
-                                {isSelected && (
-                                    <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                        <Feather name="check" size={10} color="#fff" />
-                                    </View>
-                                )}
-                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
-                                <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>{count} files{subcount > 0 ? ` · ${subcount} folders` : ''}</Text>
-                                {/* Folder Action Menu - Hidden for Clients */}
-                                {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                    <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                setActiveActionFolder(folder);
-                                                setFolderMenuVisible(true);
-                                            }}
-                                        >
-                                            <Feather
-                                                name="more-vertical"
-                                                size={14}
-                                                color={colors.textMuted}
-                                            />
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-                            </View>
-                        );
-                    })}
-                </View>
-
-                {!loading && currentFolders.length === 0 && visibleDocs.length === 0 && (
-                    <View style={{ marginTop: 20, marginBottom: 10, alignItems: 'center' }}>
-                        <Feather name="folder" size={32} color={colors.border} />
-                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or documents yet</Text>
-                    </View>
-                )}
-
-                <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
-                    {(() => {
-                        const renderDocItem = (doc: any) => {
-                            const isSelected = selectedFiles.has(doc.id);
-                            if (viewMode === 'grid') {
+                            {sortedFolders.map((folder) => {
+                                const count = docs.filter((d) => d.folder_id === folder.id).length;
+                                const subcount = folders.filter((f) => f.parent_id === folder.id).length;
+                                const isSelected = selectedFolders.has(folder.id);
+                                const isArchiveFolder = folder.name.toLowerCase() === 'archive';
                                 return (
                                     <View
-                                        key={doc.id}
+                                        key={folder.id}
                                         style={{
-                                            width: '23.8%',
+                                            width: '24%',
                                             aspectRatio: 1,
-                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                            borderRadius: 10,
-                                            overflow: 'hidden',
-                                            borderWidth: 1,
-                                            borderColor: isSelected ? colors.primary : colors.border,
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            padding: 8,
-                                            position: 'relative'
+                                            borderRadius: 16,
+                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: isSelected ? colors.primary : colors.border,
+                                            padding: 8, // Standardized to match Photos
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.05,
+                                            shadowRadius: 4,
+                                            elevation: 1,
+                                            position: 'relative',
                                         }}
                                     >
                                         <TouchableOpacity
                                             onPress={() => {
-                                                if (isSelectionMode) toggleSelection('file', doc.id);
-                                                else openDoc(doc);
+                                                if (isSelectionMode) toggleSelection('folder', folder.id);
+                                                else setSelectedFolder(folder.id);
                                             }}
-                                            onLongPress={() => handleLongPress('file', doc.id)}
+                                            onLongPress={() => handleLongPress('folder', folder.id)}
                                             style={{
                                                 ...StyleSheet.absoluteFillObject,
                                                 zIndex: 5,
                                             }}
                                         />
-                                        <Feather name="file-text" size={32} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
+                                        <View style={{ marginBottom: 8 }}>
+                                            <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
+                                        </View>
                                         {isSelected && (
-                                            <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
+                                            <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center', paddingHorizontal: 2 }}>{doc.file_name}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
+                                        <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>{count} files{subcount > 0 ? ` · ${subcount} folders` : ''}</Text>
+                                        {/* Folder Action Menu - Hidden for Clients */}
                                         {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                            <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 30 }}>
+                                            <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
                                                 <TouchableOpacity
                                                     onPress={() => {
-                                                        setActiveActionFile(doc);
-                                                        setActionMenuVisible(true);
-                                                    }}
-                                                    style={{
-                                                        width: 24,
-                                                        height: 24,
-                                                        borderRadius: 12,
-                                                        backgroundColor: colors.surface,
-                                                        borderWidth: 1,
-                                                        borderColor: colors.border,
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        shadowColor: '#000',
-                                                        shadowOffset: { width: 0, height: 1 },
-                                                        shadowOpacity: isDark ? 0.3 : 0.1,
-                                                        shadowRadius: 1,
-                                                        elevation: 2
+                                                        setActiveActionFolder(folder);
+                                                        setFolderMenuVisible(true);
                                                     }}
                                                 >
                                                     <Feather
                                                         name="more-vertical"
                                                         size={14}
-                                                        color={colors.text}
-                                                    />
-                                                </TouchableOpacity>
-                                            </View>
-                                        )}
-                                        {doc.do_not_follow && (
-                                            <View style={{
-                                                position: 'absolute',
-                                                top: '30%',
-                                                left: '20%',
-                                                right: '20%',
-                                                backgroundColor: 'rgba(239, 68, 68, 0.9)',
-                                                borderRadius: 4,
-                                                paddingHorizontal: 4,
-                                                paddingVertical: 2,
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                zIndex: 20,
-                                                transform: [{ rotate: '-10deg' }]
-                                            }}>
-                                                <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                );
-                            } else {
-                                return (
-                                    <View
-                                        key={doc.id}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 8,
-                                            borderRadius: 10,
-                                            backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
-                                            borderWidth: 1,
-                                            borderColor: isSelected ? colors.primary : colors.border,
-                                            padding: 10,
-                                            position: 'relative',
-                                            marginVertical: 4,
-                                        }}
-                                    >
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                if (isSelectionMode) toggleSelection('file', doc.id);
-                                                else openDoc(doc);
-                                            }}
-                                            onLongPress={() => handleLongPress('file', doc.id)}
-                                            style={{
-                                                ...StyleSheet.absoluteFillObject,
-                                                zIndex: 5,
-                                            }}
-                                        />
-                                        <View
-                                            style={{
-                                                width: 34,
-                                                height: 34,
-                                                borderRadius: 8,
-                                                backgroundColor: doc.file_type?.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                            }}
-                                        >
-                                            <Feather name="file-text" size={16} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} />
-                                        </View>
-                                        {isSelected && (
-                                            <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                                <Feather name="check" size={10} color="#fff" />
-                                            </View>
-                                        )}
-                                        <View style={{ flex: 1, marginRight: 4 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text, flexShrink: 1 }}>{doc.file_name}</Text>
-                                                {doc.do_not_follow && (
-                                                    <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                                        <Feather name="shield" size={8} color="#ef4444" />
-                                                        <Text style={{ fontSize: 7, fontWeight: '800', color: '#ef4444' }}>DNF</Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
-                                        </View>
-                                        <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
-                                            {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        setActiveActionFile(doc);
-                                                        setActionMenuVisible(true);
-                                                    }}
-                                                    style={{ padding: 4 }}
-                                                >
-                                                    <Feather
-                                                        name="more-vertical"
-                                                        size={16}
                                                         color={colors.textMuted}
                                                     />
                                                 </TouchableOpacity>
-                                            )}
-                                        </View>
+                                            </View>
+                                        )}
                                     </View>
                                 );
-                            }
-                        };
+                            })}
+                        </View>
 
-                        if (sortBy === 'newest' || sortBy === 'oldest') {
-                            const groups = groupItemsByMonth(sortedDocs);
-                            return groups.map((group) => (
-                                <View key={group.title} style={{ marginBottom: 20 }}>
-                                    <View style={{
-                                        paddingVertical: 12,
-                                        backgroundColor: colors.background,
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between'
-                                    }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{group.title}</Text>
-                                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.5 }} />
-                                    </View>
+                        {!loading && currentFolders.length === 0 && visibleDocs.length === 0 && (
+                            <View style={{ marginTop: 20, marginBottom: 10, alignItems: 'center' }}>
+                                <Feather name="folder" size={32} color={colors.border} />
+                                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or documents yet</Text>
+                            </View>
+                        )}
+
+                        <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
+                            {(() => {
+                                const renderDocItem = (doc: any) => {
+                                    const isSelected = selectedFiles.has(doc.id);
+                                    if (viewMode === 'grid') {
+                                        return (
+                                            <View
+                                                key={doc.id}
+                                                style={{
+                                                    width: '23.8%',
+                                                    aspectRatio: 1,
+                                                    backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
+                                                    borderRadius: 10,
+                                                    overflow: 'hidden',
+                                                    borderWidth: 1,
+                                                    borderColor: isSelected ? colors.primary : colors.border,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    padding: 8,
+                                                    position: 'relative'
+                                                }}
+                                            >
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        if (isSelectionMode) toggleSelection('file', doc.id);
+                                                        else openDoc(doc);
+                                                    }}
+                                                    onLongPress={() => handleLongPress('file', doc.id)}
+                                                    style={{
+                                                        ...StyleSheet.absoluteFillObject,
+                                                        zIndex: 5,
+                                                    }}
+                                                />
+                                                <Feather name="file-text" size={32} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
+                                                {isSelected && (
+                                                    <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
+                                                        <Feather name="check" size={10} color="#fff" />
+                                                    </View>
+                                                )}
+                                                <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center', paddingHorizontal: 2 }}>{doc.file_name}</Text>
+                                                {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                    <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 30 }}>
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                setActiveActionFile(doc);
+                                                                setActionMenuVisible(true);
+                                                            }}
+                                                            style={{
+                                                                width: 24,
+                                                                height: 24,
+                                                                borderRadius: 12,
+                                                                backgroundColor: colors.surface,
+                                                                borderWidth: 1,
+                                                                borderColor: colors.border,
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                shadowColor: '#000',
+                                                                shadowOffset: { width: 0, height: 1 },
+                                                                shadowOpacity: isDark ? 0.3 : 0.1,
+                                                                shadowRadius: 1,
+                                                                elevation: 2
+                                                            }}
+                                                        >
+                                                            <Feather
+                                                                name="more-vertical"
+                                                                size={14}
+                                                                color={colors.text}
+                                                            />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                )}
+                                                {doc.do_not_follow && (
+                                                    <View style={{
+                                                        position: 'absolute',
+                                                        top: '30%',
+                                                        left: '20%',
+                                                        right: '20%',
+                                                        backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                                                        borderRadius: 4,
+                                                        paddingHorizontal: 4,
+                                                        paddingVertical: 2,
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        zIndex: 20,
+                                                        transform: [{ rotate: '-10deg' }]
+                                                    }}>
+                                                        <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        );
+                                    } else {
+                                        return (
+                                            <View
+                                                key={doc.id}
+                                                style={{
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 8,
+                                                    borderRadius: 10,
+                                                    backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
+                                                    borderWidth: 1,
+                                                    borderColor: isSelected ? colors.primary : colors.border,
+                                                    padding: 10,
+                                                    position: 'relative',
+                                                    marginVertical: 4,
+                                                }}
+                                            >
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        if (isSelectionMode) toggleSelection('file', doc.id);
+                                                        else openDoc(doc);
+                                                    }}
+                                                    onLongPress={() => handleLongPress('file', doc.id)}
+                                                    style={{
+                                                        ...StyleSheet.absoluteFillObject,
+                                                        zIndex: 5,
+                                                    }}
+                                                />
+                                                <View
+                                                    style={{
+                                                        width: 34,
+                                                        height: 34,
+                                                        borderRadius: 8,
+                                                        backgroundColor: doc.file_type?.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                    }}
+                                                >
+                                                    <Feather name="file-text" size={16} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} />
+                                                </View>
+                                                {isSelected && (
+                                                    <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                                        <Feather name="check" size={10} color="#fff" />
+                                                    </View>
+                                                )}
+                                                <View style={{ flex: 1, marginRight: 4 }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                        <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text, flexShrink: 1 }}>{doc.file_name}</Text>
+                                                        {doc.do_not_follow && (
+                                                            <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                                                <Feather name="shield" size={8} color="#ef4444" />
+                                                                <Text style={{ fontSize: 7, fontWeight: '800', color: '#ef4444' }}>DNF</Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
+                                                    {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                setActiveActionFile(doc);
+                                                                setActionMenuVisible(true);
+                                                            }}
+                                                            style={{ padding: 4 }}
+                                                        >
+                                                            <Feather
+                                                                name="more-vertical"
+                                                                size={16}
+                                                                color={colors.textMuted}
+                                                            />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                            </View>
+                                        );
+                                    }
+                                };
+
+                                if (sortBy === 'newest' || sortBy === 'oldest') {
+                                    const groups = groupItemsByMonth(sortedDocs);
+                                    return groups.map((group) => (
+                                        <View key={group.title} style={{ marginBottom: 20 }}>
+                                            <View style={{
+                                                paddingVertical: 12,
+                                                backgroundColor: colors.background,
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between'
+                                            }}>
+                                                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{group.title}</Text>
+                                                <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.5 }} />
+                                            </View>
+                                            <View style={{
+                                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                                gap: viewMode === 'grid' ? 4 : 4
+                                            }}>
+                                                {group.data.map(renderDocItem)}
+                                            </View>
+                                        </View>
+                                    ));
+                                }
+
+                                return (
                                     <View style={{
                                         flexDirection: viewMode === 'grid' ? 'row' : 'column',
                                         flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
                                         gap: viewMode === 'grid' ? 4 : 4
                                     }}>
-                                        {group.data.map(renderDocItem)}
+                                        {sortedDocs.map(renderDocItem)}
                                     </View>
-                                </View>
-                            ));
-                        }
-
-                        return (
-                            <View style={{
-                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
-                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
-                                gap: viewMode === 'grid' ? 4 : 4
-                            }}>
-                                {sortedDocs.map(renderDocItem)}
-                            </View>
-                        );
-                    })()}
-                </View>
-                </>
+                                );
+                            })()}
+                        </View>
+                    </>
                 )}
 
                 {/* {sortedFolders.length === 0 && (
@@ -1240,6 +1401,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onRequestClose={() => {
                     setPdfViewerUrl(null);
                     setCurrentDoc(null);
+                    setShowComments(false);
+                    setDocComments([]);
                 }}
             >
                 <StatusBar hidden />
@@ -1260,6 +1423,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             onPress={() => {
                                 setPdfViewerUrl(null);
                                 setCurrentDoc(null);
+                                setShowComments(false);
+                                setDocComments([]);
                             }}
                             style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
                         >
@@ -1269,6 +1434,19 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             {pdfViewerName}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity
+                                onPress={() => setShowComments(!showComments)}
+                                style={{ padding: 8, borderRadius: 20, backgroundColor: showComments ? colors.primary : 'rgba(255,255,255,0.1)' }}
+                            >
+                                <View style={{ position: 'relative' }}>
+                                    <Feather name="message-square" size={18} color="#fff" />
+                                    {docComments.length > 0 && (
+                                        <View style={{ position: 'absolute', top: -4, right: -6, backgroundColor: '#ef4444', borderRadius: 8, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
+                                            <Text style={{ color: '#fff', fontSize: 7, fontWeight: '900' }}>{docComments.length}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => {
                                     if (currentDoc) handleShareDoc(currentDoc);
@@ -1284,17 +1462,17 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     {(currentDoc?.location || currentDoc?.tags) && (
                         <View style={{ backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                                {currentDoc.location && (
+                                {currentDoc?.location && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Feather name="map-pin" size={12} color="#f97316" />
-                                        <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{currentDoc.location}</Text>
+                                        <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{currentDoc?.location}</Text>
                                     </View>
                                 )}
-                                {currentDoc.tags && (
+                                {currentDoc?.tags && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Feather name="tag" size={12} color="#aaa" />
                                         <View style={{ flexDirection: 'row', gap: 4 }}>
-                                            {currentDoc.tags.split(',').map((tag: string, tidx: number) => (
+                                            {currentDoc?.tags?.split(',').map((tag: string, tidx: number) => (
                                                 <View key={tidx} style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
                                                     <Text style={{ color: '#fff', fontSize: 9 }}>{tag.trim()}</Text>
                                                 </View>
@@ -1306,86 +1484,209 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         </View>
                     )}
 
-                    {/* WebView PDF Rendering Layer */}
-                    {pdfViewerUrl && (
-                        (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
-                            <WebView
-                                key={pdfViewerUrl}
-                                source={{ uri: pdfViewerUrl }}
-                                style={{ flex: 1, backgroundColor: '#111' }}
-                                startInLoadingState
-                                scalesPageToFit
-                                allowsInlineMediaPlayback
-                                javaScriptEnabled
-                                domStorageEnabled
-                                originWhitelist={['*']}
-                                onLoadStart={() => setPdfLoading(true)}
-                                onLoadEnd={() => setPdfLoading(false)}
-                                renderLoading={() => (
-                                    <View style={{
-                                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                                        justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
-                                    }}>
-                                        <ActivityIndicator size="large" color={colors.primary} />
-                                        <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
-                                            {isExpoGo ? 'Optimizing View…' : 'Optimizing View…'}
-                                        </Text>
-                                    </View>
-                                )}
-                            />
-                        ) : (
-                            Pdf ? (
-                                <Pdf
-                                    source={{ uri: pdfViewerUrl, cache: true }}
+                    <View style={{ flex: 1, position: 'relative' }}>
+                        {/* WebView PDF Rendering Layer */}
+                        {pdfViewerUrl && (
+                            (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
+                                <WebView
+                                    key={pdfViewerUrl}
+                                    source={{ uri: pdfViewerUrl }}
                                     style={{ flex: 1, backgroundColor: '#111' }}
-                                    trustAllCerts={false}
-                                    onLoadComplete={() => setPdfLoading(false)}
-                                    onError={(error: any) => {
-                                        console.error("PDF Load Error:", error);
-                                        setPdfLoading(false);
-                                    }}
+                                    startInLoadingState
+                                    scalesPageToFit
+                                    allowsInlineMediaPlayback
+                                    javaScriptEnabled
+                                    domStorageEnabled
+                                    originWhitelist={['*']}
+                                    onLoadStart={() => setPdfLoading(true)}
+                                    onLoadEnd={() => setPdfLoading(false)}
+                                    renderLoading={() => (
+                                        <View style={{
+                                            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                            justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
+                                        }}>
+                                            <ActivityIndicator size="large" color={colors.primary} />
+                                            <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
+                                                {isExpoGo ? 'Optimizing View…' : 'Optimizing View…'}
+                                            </Text>
+                                        </View>
+                                    )}
                                 />
                             ) : (
-                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                    <Text style={{ color: '#fff' }}>Viewer not available in this environment</Text>
-                                </View>
+                                Pdf ? (
+                                    <Pdf
+                                        source={{ uri: pdfViewerUrl, cache: true }}
+                                        style={{ flex: 1, backgroundColor: '#111' }}
+                                        trustAllCerts={false}
+                                        onLoadComplete={() => setPdfLoading(false)}
+                                        onError={(error: any) => {
+                                            console.error("PDF Load Error:", error);
+                                            setPdfLoading(false);
+                                        }}
+                                    />
+                                ) : (
+                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                        <Text style={{ color: '#fff' }}>Viewer not available in this environment</Text>
+                                    </View>
+                                )
                             )
-                        )
-                    )}
+                        )}
 
-                    {/* Do Not Follow Watermark Overlay */}
-                    {currentDoc?.do_not_follow && (
-                        <View
-                            pointerEvents="none"
+                        {/* Do Not Follow Watermark Overlay */}
+                        {currentDoc?.do_not_follow && (
+                            <View
+                                pointerEvents="none"
+                                style={{
+                                    ...StyleSheet.absoluteFillObject,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    zIndex: 100, // Very high zIndex to ensure it's above native components
+                                }}
+                            >
+                                <View style={{
+                                    transform: [{ rotate: '-30deg' }],
+                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                    paddingHorizontal: 30,
+                                    paddingVertical: 15,
+                                    borderRadius: 8,
+                                    borderWidth: 3,
+                                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                                    borderStyle: 'dashed'
+                                }}>
+                                    <Text style={{
+                                        color: 'rgba(239, 68, 68, 0.4)',
+                                        fontSize: 48,
+                                        fontWeight: '900',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: 2,
+                                        textAlign: 'center'
+                                    }}>
+                                        Do Not Follow
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Comments Overlay Panel */}
+                    {showComments && (
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                             style={{
-                                ...StyleSheet.absoluteFillObject,
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                zIndex: 100, // Very high zIndex to ensure it's above native components
+                                position: 'absolute',
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                backgroundColor: 'rgba(15,15,15,0.98)',
+                                borderTopLeftRadius: 25,
+                                borderTopRightRadius: 25,
+                                borderTopWidth: 1,
+                                borderTopColor: 'rgba(255,255,255,0.15)',
+                                overflow: 'hidden',
+                                zIndex: 2000,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: -10 },
+                                shadowOpacity: 0.5,
+                                shadowRadius: 15,
+                                elevation: 24
                             }}
                         >
-                            <View style={{
-                                transform: [{ rotate: '-30deg' }],
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                paddingHorizontal: 30,
-                                paddingVertical: 15,
-                                borderRadius: 8,
-                                borderWidth: 3,
-                                borderColor: 'rgba(239, 68, 68, 0.3)',
-                                borderStyle: 'dashed'
-                            }}>
-                                <Text style={{
-                                    color: 'rgba(239, 68, 68, 0.4)',
-                                    fontSize: 48,
-                                    fontWeight: '900',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: 2,
-                                    textAlign: 'center'
-                                }}>
-                                    Do Not Follow
-                                </Text>
+                            <View style={{ padding: 16 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>💬 DISCUSSION ({docComments.length})</Text>
+                                    <TouchableOpacity onPress={() => setShowComments(false)} style={{ padding: 4 }}>
+                                        <Feather name="chevron-down" size={18} color="#aaa" />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {commentLoading ? (
+                                    <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
+                                ) : (
+                                    <ScrollView
+                                        style={{ maxHeight: SCREEN_H * 0.35 }}
+                                        contentContainerStyle={{ paddingBottom: 10 }}
+                                        showsVerticalScrollIndicator={true}
+                                        keyboardShouldPersistTaps="handled"
+                                    >
+                                        {docComments.length === 0 && (
+                                            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>No comments yet. Start the conversation!</Text>
+                                        )}
+                                        {docComments.map((c: any) => (
+                                            <View key={c.id} style={{ marginBottom: 12 }}>
+                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
+                                                        <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                                                            <Text style={{ color: '#888', fontSize: 10 }}>↩ Reply</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                    <Text style={{ color: '#eee', fontSize: 12, lineHeight: 18 }}>
+                                                        {renderCommentText(c.text)}
+                                                    </Text>
+                                                </View>
+                                                {c.replies?.map((r: any) => (
+                                                    <View key={r.id} style={{ marginLeft: 16, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderLeftWidth: 2, borderLeftColor: colors.primary }}>
+                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700', marginBottom: 2 }}>{r.user?.name || 'User'}</Text>
+                                                        <Text style={{ color: '#ccc', fontSize: 11, lineHeight: 16 }}>
+                                                            {renderCommentText(r.text)}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        ))}
+                                    </ScrollView>
+                                )}
+
+                                {replyTo && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
+                                        <Text style={{ color: colors.primary, fontSize: 10 }}>Replying to comment</Text>
+                                        <TouchableOpacity onPress={() => setReplyTo(null)}>
+                                            <Feather name="x-circle" size={12} color="#888" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+
+                                {showMentions && (
+                                    <View style={{ position: 'absolute', bottom: 65, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 }}>
+                                        <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
+                                            {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
+                                                <TouchableOpacity
+                                                    key={m.id}
+                                                    onPress={() => handleSelectMention(m)}
+                                                    style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                                                >
+                                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                    </View>
+                                                    <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                )}
+
+                                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
+                                    <TextInput
+                                        value={commentText}
+                                        onChangeText={handleInputChange}
+                                        placeholder="Add a comment…"
+                                        placeholderTextColor="#666"
+                                        style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
+                                    />
+                                    <TouchableOpacity
+                                        onPress={handleAddComment}
+                                        disabled={addingComment || !commentText.trim()}
+                                        style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: (!commentText.trim() || addingComment) ? 0.5 : 1 }}
+                                    >
+                                        {addingComment
+                                            ? <ActivityIndicator size="small" color="#fff" />
+                                            : <Feather name="send" size={16} color="#fff" />
+                                        }
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={{ height: Math.max(insets.bottom, 10) }} />
                             </View>
-                        </View>
+                        </KeyboardAvoidingView>
                     )}
                 </View>
 

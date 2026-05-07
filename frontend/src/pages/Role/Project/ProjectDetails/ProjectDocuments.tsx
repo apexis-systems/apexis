@@ -803,6 +803,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         open={viewerState.open}
         onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
         user={user}
+        targetType="document"
+        projectId={project.id}
       />
 
       {

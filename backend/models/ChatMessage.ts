@@ -24,7 +24,7 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
             },
             type: {
-                type: DataTypes.ENUM('text', 'image', 'file', 'system'),
+                type: DataTypes.ENUM('text', 'image', 'file', 'system', 'audio'),
                 defaultValue: 'text',
             },
             file_url: {

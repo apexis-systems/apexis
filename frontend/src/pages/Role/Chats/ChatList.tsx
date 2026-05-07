@@ -230,15 +230,37 @@ export default function ChatList() {
                                 {/* Info */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between mb-0.5">
-                                        <div className="flex items-center gap-2 truncate">
-                                            <span className="font-semibold text-foreground text-sm truncate">{displayName}</span>
-                                            {!isGroup && otherMember?.user?.organization?.name && (
-                                                <span className="px-1.5 py-0.5 bg-muted rounded text-[8px] font-bold text-muted-foreground uppercase">
-                                                    {otherMember.user.organization.name}
-                                                </span>
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-foreground text-sm truncate">{displayName}</span>
+                                                {!isGroup && otherMember?.user?.organization?.name && (
+                                                    <span className="px-1.5 py-0.5 bg-muted rounded text-[8px] font-bold text-muted-foreground uppercase shrink-0">
+                                                        {otherMember.user.organization.name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
+                                            {!isGroup && otherMember?.user?.project_members?.length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                                    {otherMember.user.project_members.slice(0, 1).map((pm: any, pidx: number) => (
+                                                        <div key={pidx} className="flex items-center gap-1.5 min-w-0">
+                                                            <span className="px-1.5 py-0.5 bg-accent/10 rounded text-[9px] font-extrabold text-accent uppercase tracking-tighter shrink-0">
+                                                                {pm.role}
+                                                            </span>
+                                                            <span className="text-[9px] text-muted-foreground truncate font-medium">
+                                                                {pm.project?.name}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                    {otherMember.user.project_members.length > 1 && (
+                                                        <span className="text-[8px] text-muted-foreground font-bold">
+                                                            +{otherMember.user.project_members.length - 1} more
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
-                                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                                        <span className="text-xs text-muted-foreground shrink-0 ml-2 self-start">
                                             {new Date(chat.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     </div>

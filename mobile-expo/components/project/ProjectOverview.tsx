@@ -623,7 +623,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                             : [
                                 { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
                                 { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
-                                { id: 'sops', icon: 'clipboard', label: 'SOPs', color: '#3b82f6', sub: 'View all' },
+                                { id: 'sops', icon: 'clipboard', label: 'Checklists', color: '#3b82f6', sub: 'View all' },
                             ]
                     ).map((action) => (
                         <TouchableOpacity

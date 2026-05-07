@@ -90,3 +90,15 @@ export const archiveFile = async (fileId: string | number) => {
         throw error;
     }
 };
+
+export const downloadFile = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/files/download/${fileId}`, {
+            responseType: 'blob'
+        });
+        return response.data;
+    } catch (error) {
+        console.error("downloadFile Error", error);
+        throw error;
+    }
+};
