@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useUsage } from '@/contexts/UsageContext';
-import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X, Copy, Check, ChevronDown, ListFilter } from 'lucide-react';
+import { FileText, Camera, MapPin, CalendarDays, ArrowRight, Plus, Loader2, X, Copy, Check, ChevronDown, ListFilter, Users, LayoutGrid, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
@@ -240,67 +240,90 @@ export default function Dashboard() {
             {/* Hidden Log Input */}
             <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
 
-            {/* Greeting with Logo */}
-            <div className="mb-8 flex items-center gap-4">
-                <div
-                    className="h-12 w-12 rounded-xl bg-muted border border-border flex items-center justify-center overflow-hidden shrink-0 relative cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => setIsPreviewOpen(true)}
-                >
-                    {isUploadingLogo ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    ) : logoUrl || (user.role === 'superadmin' ? '/app-icon.png' : null) ? (
-                        <img src={logoUrl || '/app-icon.png'} alt="Org Logo" className="h-full w-full object-cover" />
-                    ) : (
-                        <span className="text-[10px] text-muted-foreground font-medium">Logo</span>
-                    )}
-                    {user.role === 'admin' && !isUploadingLogo && (
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                            <Camera className="h-4 w-4 text-white" />
-                        </div>
-                    )}
+            {/* Header & Stats Section */}
+            <div className="mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                {/* Greeting with Logo */}
+                <div className="flex items-center gap-3 shrink-0">
+                    <div
+                        className="h-10 w-10 rounded-lg bg-muted border border-border flex items-center justify-center overflow-hidden shrink-0 relative cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => setIsPreviewOpen(true)}
+                    >
+                        {isUploadingLogo ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : logoUrl || (user.role === 'superadmin' ? '/app-icon.png' : null) ? (
+                            <img src={logoUrl || '/app-icon.png'} alt="Org Logo" className="h-full w-full object-cover" />
+                        ) : (
+                            <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-tighter">Logo</span>
+                        )}
+                        {user.role === 'admin' && !isUploadingLogo && (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                <Camera className="h-3.5 w-3.5 text-white" />
+                            </div>
+                        )}
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold text-foreground leading-tight">
+                            {t('welcome_back')}, {user.name?.split(' ')[0]} 
+                        </h1>
+                        <p className="text-[11px] text-muted-foreground font-medium">
+                            {(user.role === 'admin' || user.role === 'superadmin') && t('manage_projects')}
+                            {user.role === 'contributor' && t('assigned_projects')}
+                            {user.role === 'client' && t('shared_projects')}
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">
-                        {t('welcome_back')}, {user.name?.split(' ')[0]} 
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {(user.role === 'admin' || user.role === 'superadmin') && t('manage_projects')}
-                        {user.role === 'contributor' && t('assigned_projects')}
-                        {user.role === 'client' && t('shared_projects')}
-                    </p>
-                </div>
-            </div>
 
-            {(user.role === 'admin' || user.role === 'superadmin') && (
-                <div className="grid grid-cols-2 gap-4 mb-8">
+                {/* Compact Stats Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-center gap-3 w-full lg:w-auto">
                     {user.role === 'superadmin' && orgData && (
                         <>
-                            <div className="rounded-xl bg-card border border-border p-5">
-                                <div className="text-sm text-muted-foreground">{t('org_users')}</div>
-                                <div className="mt-1 text-3xl font-bold text-foreground">{orgData.users?.length || 0}</div>
+                            <div className="rounded-xl bg-card/50 border border-border p-2.5 px-4 flex items-center gap-3 lg:min-w-[120px]">
+                                <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
+                                    <Users className="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <div className="text-[9px] font-black uppercase tracking-wider text-muted-foreground leading-none mb-1">{t('org_users')}</div>
+                                    <div className="text-base font-bold text-foreground leading-none">{orgData.users?.length || 0}</div>
+                                </div>
                             </div>
-                            <div className="rounded-xl bg-card border border-border p-5">
-                                <div className="text-sm text-muted-foreground">{t('all_projects')}</div>
-                                <div className="mt-1 text-3xl font-bold text-foreground">{orgData.projects?.length || 0}</div>
+                            <div className="rounded-xl bg-card/50 border border-border p-2.5 px-4 flex items-center gap-3 lg:min-w-[120px]">
+                                <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0">
+                                    <LayoutGrid className="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <div className="text-[9px] font-black uppercase tracking-wider text-muted-foreground leading-none mb-1">{t('all_projects')}</div>
+                                    <div className="text-base font-bold text-foreground leading-none">{orgData.projects?.length || 0}</div>
+                                </div>
                             </div>
                         </>
                     )}
-                </div>
-            )}
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
-                <div className="rounded-xl bg-card border border-border p-5">
-                    <div className="text-sm text-muted-foreground">{t('total_projects')}</div>
-                    <div className="mt-1 text-3xl font-bold text-foreground">{projects.length}</div>
-                </div>
-                <div className="rounded-xl bg-card border border-border p-5">
-                    <div className="text-sm text-muted-foreground">{t('documents')}</div>
-                    <div className="mt-1 text-3xl font-bold text-foreground">{totalDocs}</div>
-                </div>
-                <div className="rounded-xl bg-card border border-border p-5">
-                    <div className="text-sm text-muted-foreground">{t('photos')}</div>
-                    <div className="mt-1 text-3xl font-bold text-foreground">{totalPhotos}</div>
+                    <div className="rounded-xl bg-card/50 border border-border p-2.5 px-4 flex items-center gap-3 lg:min-w-[120px]">
+                        <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0">
+                            <LayoutGrid className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <div className="text-[9px] font-black uppercase tracking-wider text-muted-foreground leading-none mb-1">{t('total_projects')}</div>
+                            <div className="text-base font-bold text-foreground leading-none">{projects.length}</div>
+                        </div>
+                    </div>
+                    <div className="rounded-xl bg-card/50 border border-border p-2.5 px-4 flex items-center gap-3 lg:min-w-[120px]">
+                        <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+                            <FileText className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <div className="text-[9px] font-black uppercase tracking-wider text-muted-foreground leading-none mb-1">{t('documents')}</div>
+                            <div className="text-base font-bold text-foreground leading-none">{totalDocs}</div>
+                        </div>
+                    </div>
+                    <div className="rounded-xl bg-card/50 border border-border p-2.5 px-4 flex items-center gap-3 lg:min-w-[120px]">
+                        <div className="h-8 w-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 shrink-0">
+                            <Image className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <div className="text-[9px] font-black uppercase tracking-wider text-muted-foreground leading-none mb-1">{t('photos')}</div>
+                            <div className="text-base font-bold text-foreground leading-none">{totalPhotos}</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -421,7 +444,7 @@ export default function Dashboard() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {projects.map((project) => (
                     <button
                         key={project.id}

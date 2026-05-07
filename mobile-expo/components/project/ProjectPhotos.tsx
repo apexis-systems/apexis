@@ -45,7 +45,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     // subsequent navigations while the component stays mounted in the FlatList.
     useEffect(() => {
         setSelectedFolder(initialFolderId || null);
-    }, [initialFolderId]);
+    }, [initialFileId, initialFileId, searchQuery]);
     const [folders, setFolders] = useState<any[]>([]);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -73,7 +73,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [isViewerZoomed, setIsViewerZoomed] = useState(false);
-    const [showViewerUI, setShowViewerUI] = useState(false);
+    const [showViewerUI, setShowViewerUI] = useState(true);
     const [downloading, setDownloading] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
@@ -367,7 +367,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setReplyTo(null);
         setCommentText('');
         setIsViewerZoomed(false);
-        setShowViewerUI(false);
+        setShowViewerUI(true);
         setViewerOpen(true);
         loadMembers();
     };
@@ -937,17 +937,17 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             <View style={{ flex: 1 }}>
                                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                                                     <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{rfi.title}</Text>
-                                                    <View style={{ 
-                                                        paddingHorizontal: 8, 
-                                                        paddingVertical: 2, 
-                                                        borderRadius: 6, 
-                                                        backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)' 
+                                                    <View style={{
+                                                        paddingHorizontal: 8,
+                                                        paddingVertical: 2,
+                                                        borderRadius: 6,
+                                                        backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
                                                     }}>
-                                                        <Text style={{ 
-                                                            fontSize: 9, 
-                                                            fontWeight: '800', 
+                                                        <Text style={{
+                                                            fontSize: 9,
+                                                            fontWeight: '800',
                                                             textTransform: 'uppercase',
-                                                            color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444' 
+                                                            color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444'
                                                         }}>{rfi.status}</Text>
                                                     </View>
                                                 </View>

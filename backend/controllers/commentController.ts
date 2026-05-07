@@ -81,7 +81,7 @@ export const addComment = async (req: Request, res: Response) => {
                     userId: authUser.user_id,
                     type: isImage ? 'photo_comment' : 'comment',
                     description: `commented on ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
-                    metadata: { folderId: f.folder_id, type: activityCategory },
+                    metadata: { folderId: f.folder_id, type: activityCategory, fileId: f.id },
                     skipNotifications: hasMentions
                 });
 

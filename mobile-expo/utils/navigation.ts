@@ -89,9 +89,15 @@ export const handleNotificationNavigation = (type: string | undefined | null, da
             case 'photo_upload':
             case 'photo_comment':
             case 'upload_photo':        // alternate upload activity type
-            case 'comment':             // comment on a photo
-            case 'mention':             // user mentioned in a photo comment
-                tab = 'photos';
+            case 'comment':             // comment on a photo or document
+            case 'mention':             // user mentioned in a comment
+                // Determine tab based on metadata type if generic 'comment' or 'mention'
+                if ((type === 'comment' || type === 'mention') && data?.type === 'documents') {
+                    tab = 'documents';
+                } else {
+                    tab = 'photos';
+                }
+
                 if (folderId !== undefined && folderId !== null && folderId !== '') {
                     extraParams += `&initialFolderId=${folderId}`;
                 }
