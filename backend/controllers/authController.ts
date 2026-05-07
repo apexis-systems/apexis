@@ -134,7 +134,7 @@ export const projectLogin = async (req: Request, res: Response) => {
             // Auto-create user because they have valid project code and no signup is required
             user = await users.create({
                 organization_id: project.organization_id, // Default to this project's org
-                name: "Pending",
+                name: "New User",
                 email: normalizedEmail,
                 phone_number: normalizedPhone,
                 role: roleForCode,
@@ -182,7 +182,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                         attributes: ['id']
                     }]
                 });
-                const joinerName = user.name && user.name !== 'Pending' ? user.name : (email || phone || 'Someone');
+                const joinerName = user.name && user.name !== 'New User' ? user.name : (email || phone || 'Someone');
                 const roleLabel = roleForCode === 'contributor' ? 'Contributor' : 'Client';
                 for (const member of existingMembers) {
                     await sendNotification({
@@ -243,7 +243,7 @@ export const projectLogin = async (req: Request, res: Response) => {
         res.status(200).json({ 
             token, 
             user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: roleForCode },
-            isPendingName: user.name === "Pending" || !user.name || user.name.trim() === ""
+            isPendingName: user.name === "New User" || !user.name || user.name.trim() === ""
         });
     } catch (error: any) {
         console.error("Project Login Error:", error);
@@ -436,7 +436,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
             // Create user only if they don't exist globally
             user = await users.create({
                 organization_id: decoded.organization_id,
-                name,
+                name: name ? name.trim() : "New User",
                 email: normalizedEmail,
                 phone_number: normalizedPhone,
                 role: decoded.role,
@@ -444,6 +444,11 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                 phone_verified: !!phone,
                 is_primary: false
             });
+        } else {
+            // If user exists and has a placeholder name, update it with the provided name
+            if (name && (user.name === "New User" || !user.name || user.name.trim() === "")) {
+                await user.update({ name: name.trim() });
+            }
         }
 
         if (user && user.role === 'admin' && user.organization_id === project.organization_id) {
@@ -481,7 +486,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                     }]
                 });
                 const roleLabel = decoded.role === 'contributor' ? 'Contributor' : 'Client';
-                const joinerName = user.name && user.name !== 'Pending' ? user.name : (name || email || phone || 'Someone');
+                const joinerName = user.name && user.name !== 'New User' ? user.name : (name || email || phone || 'Someone');
                 for (const member of existingMembers) {
                     await sendNotification({
                         userId: member.user_id,

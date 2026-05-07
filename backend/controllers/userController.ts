@@ -43,7 +43,7 @@ export const inviteUser = async (req: Request, res: Response) => {
         if (!user) {
             user = await users.create({
                 organization_id: authUser.organization_id,
-                name: "Pending",
+                name: "New User",
                 email,
                 role,
                 is_primary: false,
