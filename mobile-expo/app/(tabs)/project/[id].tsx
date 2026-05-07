@@ -541,7 +541,7 @@ export default function ProjectWorkspaceScreen() {
                                             <TouchableOpacity onPress={() => setActiveTab('overview')}>
                                                 <Feather name="arrow-left" size={20} color={colors.text} />
                                             </TouchableOpacity>
-                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>SOPs & Manuals</Text>
+                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Checklists & Manuals</Text>
                                         </View>
                                         <ProjectManuals project={project} />
                                     </View>

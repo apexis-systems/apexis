@@ -90,10 +90,10 @@ export const createProject = async (req: Request, res: Response) => {
             }));
         });
 
-        // Extra SOPs folder for Documents only
+        // Extra Checklists folder for Documents only
         folderCreationTasks.push(folders.create({
             project_id: newProject.id,
-            name: "SOPs",
+            name: "Checklists",
             created_by: authUser.user_id,
             client_visible: true,
             folder_type: "document",
