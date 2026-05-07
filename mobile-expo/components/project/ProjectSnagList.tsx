@@ -880,26 +880,19 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                             >
                                                                 <Feather name="camera" size={20} color={colors.textMuted} />
                                                             </TouchableOpacity>
-                                                            <View style={{ 
-                                                                flexDirection: 'row', 
-                                                                alignItems: 'center', 
-                                                                flex: isRecordingVoice ? 1 : 0,
-                                                                marginRight: isRecordingVoice ? 2 : 0
-                                                             }}>
-                                                                <VoiceNoteRecorder
-                                                                    colors={colors}
-                                                                    onRecordingStateChange={setIsRecordingVoice}
-                                                                    onSend={(uri) => {
-                                                                        setResponsePhotos(prev => {
-                                                                            const filtered = prev.filter(p => !isAudio(p));
-                                                                            return [...filtered, uri];
-                                                                        });
-                                                                    }}
-                                                                />
-                                                                {!isRecordingVoice && (
-                                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>VOICE</Text>
-                                                                )}
-                                                            </View>
+                                                        </View>
+                                                        
+                                                        <View style={{ marginTop: 12, marginBottom: 8 }}>
+                                                            <VoiceNoteRecorder
+                                                                colors={colors}
+                                                                onRecordingStateChange={setIsRecordingVoice}
+                                                                onSend={(uri) => {
+                                                                    setResponsePhotos(prev => {
+                                                                        const filtered = prev.filter(p => !isAudio(p));
+                                                                        return [...filtered, uri];
+                                                                    });
+                                                                }}
+                                                            />
                                                         </View>
 
                                                         <TouchableOpacity

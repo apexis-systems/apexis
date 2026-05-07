@@ -1134,26 +1134,25 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 <Feather name="camera" size={24} color={colors.textMuted} />
                               </TouchableOpacity>
 
-                              <View style={{ 
-                                  flexDirection: 'row', 
-                                  alignItems: 'center', 
-                                  flex: isRecordingVoice ? 1 : 0,
-                                  marginRight: isRecordingVoice ? 4 : 0
-                              }}>
-                                <VoiceNoteRecorder
-                                  colors={colors}
-                                  onRecordingStateChange={setIsRecordingVoice}
-                                  onSend={(uri) => {
-                                      setResponseImages(prev => {
-                                          const filtered = prev.filter(p => !isAudio(p));
-                                          return [...filtered, uri];
-                                      });
-                                  }}
-                                />
-                                {!isRecordingVoice && (
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>VOICE</Text>
-                                )}
-                              </View>
+                            </View>
+                            
+                            {/* Voice Recording Section */}
+                            <View style={{ 
+                                marginTop: 12,
+                                marginBottom: 8,
+                                minHeight: 44,
+                                justifyContent: 'center'
+                            }}>
+                              <VoiceNoteRecorder
+                                colors={colors}
+                                onRecordingStateChange={setIsRecordingVoice}
+                                onSend={(uri) => {
+                                    setResponseImages(prev => {
+                                        const filtered = prev.filter(p => !isAudio(p));
+                                        return [...filtered, uri];
+                                    });
+                                }}
+                              />
                             </View>
                             <TouchableOpacity
                               onPress={() => handleUpdateResponse()}

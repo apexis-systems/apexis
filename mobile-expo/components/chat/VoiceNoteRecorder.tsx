@@ -140,7 +140,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
     };
 
     return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', paddingRight: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 4 }}>
             {isRecording ? (
                 <View style={{ 
                     flexDirection: 'row', 
@@ -177,7 +177,26 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                         </TouchableOpacity>
                     </View>
                 </View>
-            ) : null}
+            ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <View style={{ 
+                        flex: 1, 
+                        height: 44, 
+                        backgroundColor: colors.surface, 
+                        borderRadius: 22, 
+                        borderWidth: 1, 
+                        borderColor: colors.border,
+                        borderStyle: 'dashed',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 16,
+                        gap: 10
+                    }}>
+                        <Feather name="mic" size={16} color={colors.textMuted} />
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted }}>Tap mic to record voice response</Text>
+                    </View>
+                </View>
+            )}
 
             <TouchableOpacity
                 onPress={isRecording ? () => stopRecording(false) : startRecording}
@@ -188,7 +207,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                     backgroundColor: isRecording ? '#22c55e' : colors.primary,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    marginLeft: 8,
+                    marginLeft: 12,
                     shadowColor: isRecording ? '#22c55e' : colors.primary,
                     shadowOffset: { width: 0, height: 2 },
                     shadowOpacity: 0.3,
