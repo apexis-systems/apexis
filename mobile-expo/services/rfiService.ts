@@ -21,6 +21,7 @@ export interface RFI {
     response_photos?: string[] | null;
     folder_ids?: number[];
     linked_folders?: { id: number; name: string; folder_type: string }[];
+    seen_at?: string | null;
 }
 
 export const getFolderRFIs = async (folderId: string | number): Promise<RFI[]> => {
@@ -114,6 +115,16 @@ export const updateRFI = async (id: number, formData: FormData): Promise<RFI> =>
         return res.data.rfi;
     } catch (error) {
         console.error("updateRFI Error", error);
+        throw error;
+    }
+};
+
+export const markRFISeen = async (id: number): Promise<{ seen_at: string }> => {
+    try {
+        const res = await PrivateAxios.patch(`/rfis/${id}/seen`);
+        return res.data;
+    } catch (error) {
+        console.error("markRFISeen Error", error);
         throw error;
     }
 };

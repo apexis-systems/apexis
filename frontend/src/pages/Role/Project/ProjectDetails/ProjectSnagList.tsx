@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2 } from 'lucide-react';
+import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,7 +18,7 @@ import { getApiErrorMessage } from '@/helpers/apiError';
 import {
   Snag, SnagStatus, Assignee,
   getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees,
-  updateSnag,
+  updateSnag, markSnagSeen
 } from '@/services/snagService';
 import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
@@ -105,6 +106,49 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       setResponsePhotoPreviews([]);
     }
   }, [selectedSnag?.id]);
+
+  useEffect(() => {
+    if (selectedSnag && String(selectedSnag.assigned_to) === String(user?.id) && !selectedSnag.seen_at) {
+      markSnagSeen(selectedSnag.id).then(data => {
+        setSelectedSnag(prev => prev ? { ...prev, seen_at: data.seen_at } : null);
+        setSnags(prev => prev.map(s => s.id === selectedSnag.id ? { ...s, seen_at: data.seen_at } : s));
+      }).catch(err => console.error("Failed to mark snag as seen:", err));
+    }
+  }, [selectedSnag?.id, user?.id]);
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !project?.id) return;
+
+    socket.emit('join-project', project.id);
+
+    const onSnagSeen = (data: { snagId: number, seen_at: string }) => {
+      setSnags(prev => prev.map(s => s.id === data.snagId ? { ...s, seen_at: data.seen_at } : s));
+      setSelectedSnag(prev => (prev && prev.id === data.snagId) ? { ...prev, seen_at: data.seen_at } : prev);
+    };
+
+    const onSnagUpdated = (data: { snag: Snag }) => {
+      setSnags(prev => {
+        const idx = prev.findIndex(s => s.id === data.snag.id);
+        if (idx !== -1) {
+          const copy = [...prev];
+          copy[idx] = data.snag;
+          return copy;
+        }
+        return [data.snag, ...prev];
+      });
+      setSelectedSnag(prev => (prev && prev.id === data.snag.id) ? data.snag : prev);
+    };
+
+    socket.on('snag-seen', onSnagSeen);
+    socket.on('snag-updated', onSnagUpdated);
+
+    return () => {
+      socket.off('snag-seen', onSnagSeen);
+      socket.off('snag-updated', onSnagUpdated);
+    };
+  }, [socket, project?.id]);
 
   // ── Status cycle ────────────────────────────────────────────────────────────
 
@@ -281,6 +325,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <span>To: <span className="text-foreground font-medium">{snag.assignee?.name || '—'}</span></span>
                   <span>By: <span className="text-foreground font-medium">{snag.creator?.name || '—'}</span></span>
                   <span>· {cfg.label}</span>
+                  {snag.seen_at && (
+                    <span className="flex items-center gap-0.5 text-orange-500 font-bold uppercase tracking-tighter ml-1">
+                      <CheckCheck className="h-2.5 w-2.5" /> Seen
+                    </span>
+                  )}
                 </div>
                 {snag.response && (
                   <div className="flex items-center gap-1 mt-1 text-[9px] text-muted-foreground bg-accent/5 p-1 rounded">

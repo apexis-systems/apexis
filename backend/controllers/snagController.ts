@@ -67,7 +67,7 @@ export const getSnags = async (req: Request, res: Response) => {
       attributes: [
         "id", "project_id", "title", "description", "photo_url", 
         "assigned_to", "status", "response", "response_photos", 
-        "created_by", "createdAt", "updatedAt"
+        "created_by", "createdAt", "updatedAt", "seen_at"
       ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name", "email"] },
@@ -352,6 +352,45 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
   } catch (err) {
     console.error("updateSnagStatus error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// PATCH /snags/:id/seen — mark snag as seen by the assignee
+export const markSnagSeen = async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user;
+    const { id } = req.params;
+
+    const snag = await snags.findByPk(id);
+    if (!snag) return res.status(404).json({ error: 'Snag not found' });
+
+    // Only the assignee can mark as seen
+    if (Number(snag.assigned_to) !== Number(authUser.user_id)) {
+      return res.status(403).json({ error: 'Only the assignee can mark as seen' });
+    }
+
+    // Only mark seen once (first open)
+    if (!(snag as any).seen_at) {
+      (snag as any).seen_at = new Date();
+      await snag.save();
+
+      // Emit real-time event to the project room
+      try {
+        const { getIO } = await import('../socket.ts');
+        getIO().to(`project-${(snag as any).project_id}`).emit('snag-seen', {
+          snagId: Number(id),
+          seen_at: (snag as any).seen_at,
+          project_id: (snag as any).project_id,
+        });
+      } catch (e) {
+        console.error('Socket emit error (markSnagSeen):', e);
+      }
+    }
+
+    res.json({ seen_at: (snag as any).seen_at });
+  } catch (err) {
+    console.error('markSnagSeen error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 

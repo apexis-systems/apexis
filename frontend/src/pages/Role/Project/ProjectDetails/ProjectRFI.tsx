@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2,
-    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder
+    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +23,8 @@ import {
     RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse,
     deleteRFI,
     updateRFI,
-    getRFIById
+    getRFIById,
+    markRFISeen
 } from '@/services/rfiService';
 import { getAssignees, Assignee } from '@/services/snagService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
@@ -130,6 +132,15 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         }
     }, [selectedRFI?.id]);
 
+    useEffect(() => {
+        if (selectedRFI && String(selectedRFI.assigned_to) === String(user?.id) && !selectedRFI.seen_at) {
+            markRFISeen(selectedRFI.id).then(data => {
+                setSelectedRFI(prev => prev ? { ...prev, seen_at: data.seen_at } : null);
+                setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, seen_at: data.seen_at } : r));
+            }).catch(err => console.error("Failed to mark RFI as seen:", err));
+        }
+    }, [selectedRFI?.id, user?.id]);
+
     const load = async (silent = false) => {
         if (!project?.id) return;
         if (!silent) setLoading(true);
@@ -148,6 +159,40 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     };
 
     useEffect(() => { load(); }, [project?.id]);
+
+    const { socket } = useSocket();
+
+    useEffect(() => {
+        if (!socket || !project?.id) return;
+
+        socket.emit('join-project', project.id);
+
+        const onRFSeen = (data: { rfiId: number, seen_at: string }) => {
+            setRfis(prev => prev.map(r => r.id === data.rfiId ? { ...r, seen_at: data.seen_at } : r));
+            setSelectedRFI(prev => (prev && prev.id === data.rfiId) ? { ...prev, seen_at: data.seen_at } : prev);
+        };
+
+        const onRFIUpdated = (data: { rfi: RFI }) => {
+            setRfis(prev => {
+                const idx = prev.findIndex(r => r.id === data.rfi.id);
+                if (idx !== -1) {
+                    const copy = [...prev];
+                    copy[idx] = data.rfi;
+                    return copy;
+                }
+                return [data.rfi, ...prev];
+            });
+            setSelectedRFI(prev => (prev && prev.id === data.rfi.id) ? data.rfi : prev);
+        };
+
+        socket.on('rfi-seen', onRFSeen);
+        socket.on('rfi-updated', onRFIUpdated);
+
+        return () => {
+            socket.off('rfi-seen', onRFSeen);
+            socket.off('rfi-updated', onRFIUpdated);
+        };
+    }, [socket, project?.id]);
 
     useEffect(() => {
         if (initialRfiId) {
@@ -475,9 +520,17 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 </div>
                                 <div className="text-right shrink-0">
-                                    <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-1">
-                                        <Clock className="h-3 w-3" /> {new Date(rfi.createdAt).toLocaleDateString()}
-                                    </p>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-1">
+                                            <Clock className="h-3 w-3" /> {new Date(rfi.createdAt).toLocaleDateString()}
+                                        </p>
+                                        {rfi.seen_at && (
+                                            <div className="flex items-center gap-0.5 text-orange-500" title={`Seen at ${new Date(rfi.seen_at).toLocaleString()}`}>
+                                                <CheckCheck className="h-3 w-3" />
+                                                <span className="text-[8px] font-bold uppercase tracking-tighter">Seen</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

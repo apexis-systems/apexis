@@ -356,6 +356,44 @@ export const getRFIById = async (req: Request, res: Response) => {
     }
 };
 
+// PATCH /rfis/:id/seen — mark RFI as seen by the assignee
+export const markRFISeen = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { id } = req.params;
+
+        const rfi = await rfis.findByPk(id);
+        if (!rfi) return res.status(404).json({ error: 'RFI not found' });
+
+        // Only the assignee can mark as seen
+        if (Number(rfi.assigned_to) !== Number(authUser.user_id)) {
+            return res.status(403).json({ error: 'Only the assignee can mark as seen' });
+        }
+
+        // Only mark seen once (first open)
+        if (!(rfi as any).seen_at) {
+            (rfi as any).seen_at = new Date();
+            await rfi.save();
+
+            // Emit real-time event to the project room
+            try {
+                getIO().to(`project-${(rfi as any).project_id}`).emit('rfi-seen', {
+                    rfiId: Number(id),
+                    seen_at: (rfi as any).seen_at,
+                    project_id: (rfi as any).project_id,
+                });
+            } catch (e) {
+                console.error('Socket emit error (markRFISeen):', e);
+            }
+        }
+
+        res.json({ seen_at: (rfi as any).seen_at });
+    } catch (err) {
+        console.error('markRFISeen error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 // GET /rfis/assignees?project_id=X  — project members plus project admins
 export const getRFIAssignees = async (req: Request, res: Response) => {
     try {

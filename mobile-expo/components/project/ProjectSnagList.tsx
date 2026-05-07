@@ -15,10 +15,11 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { Text } from "@/components/ui/AppText";
-import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -33,6 +34,7 @@ import {
     updateSnag,
     getAssignees,
     Assignee,
+    markSnagSeen
 } from "@/services/snagService";
 import * as ImagePicker from 'expo-image-picker';
 import FullScreenImageModal from "@/components/shared/FullScreenImageModal";
@@ -169,6 +171,49 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             if (!isRefetch) setLoading(false);
         }
     };
+
+    const { socket } = useSocket();
+
+    useEffect(() => {
+        if (!socket || !projectId) return;
+
+        socket.emit('join-project', projectId);
+
+        const onSnagSeen = (data: { snagId: number, seen_at: string }) => {
+            setSnags(prev => prev.map(s => s.id === data.snagId ? { ...s, seen_at: data.seen_at } : s));
+            setSelectedSnag(prev => (prev && prev.id === data.snagId) ? { ...prev, seen_at: data.seen_at } : prev);
+        };
+
+        const onSnagUpdated = (data: { snag: Snag }) => {
+            setSnags(prev => {
+                const idx = prev.findIndex(s => s.id === data.snag.id);
+                if (idx !== -1) {
+                    const copy = [...prev];
+                    copy[idx] = data.snag;
+                    return copy;
+                }
+                return [data.snag, ...prev];
+            });
+            setSelectedSnag(prev => (prev && prev.id === data.snag.id) ? data.snag : prev);
+        };
+
+        socket.on('snag-seen', onSnagSeen);
+        socket.on('snag-updated', onSnagUpdated);
+
+        return () => {
+            socket.off('snag-seen', onSnagSeen);
+            socket.off('snag-updated', onSnagUpdated);
+        };
+    }, [socket, projectId]);
+
+    useEffect(() => {
+        if (selectedSnag && String(selectedSnag.assigned_to) === String(user?.id) && !selectedSnag.seen_at) {
+            markSnagSeen(selectedSnag.id).then(data => {
+                setSelectedSnag(prev => prev ? { ...prev, seen_at: data.seen_at } : null);
+                setSnags(prev => prev.map(s => s.id === selectedSnag.id ? { ...s, seen_at: data.seen_at } : s));
+            }).catch(err => console.error("Failed to mark snag as seen:", err));
+        }
+    }, [selectedSnag?.id, user?.id]);
 
     useFocusEffect(
         useCallback(() => {
@@ -523,10 +568,13 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             {snag.description}
                                         </Text>
                                     ) : null}
-                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
                                         <Text style={{ fontSize: 10, color: colors.textMuted }}>
                                             To: <Text style={{ color: colors.text, fontWeight: '600' }}>{snag.assignee?.name || "Unassigned"}</Text>
                                         </Text>
+                                        {snag.seen_at && (
+                                            <Ionicons name="checkmark-done" size={14} color="#f97316" />
+                                        )}
                                     </View>
                                     {snag.response ? (
                                         <View
@@ -718,7 +766,12 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             )}
                                         </View>
 
-                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{selectedSnag.title}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, flex: 1 }}>{selectedSnag.title}</Text>
+                                            {selectedSnag.seen_at && (
+                                                <Ionicons name="checkmark-done" size={18} color="#f97316" />
+                                            )}
+                                        </View>
                                         <Text style={{ fontSize: 13, color: colors.textMuted }}>{selectedSnag.description}</Text>
 
                                         {(selectedSnag.photoDownloadUrl || selectedSnag.photo_url) && (

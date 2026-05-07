@@ -7,8 +7,9 @@ import {
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,7 +18,7 @@ import { Accelerometer } from 'expo-sensors';
 import { Project, User } from '@/types';
 import {
   getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI,
-  getRFIById
+  getRFIById, markRFISeen
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
@@ -235,6 +236,49 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (!silent) setLoading(false);
     }
   }, [projectId]);
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !projectId) return;
+
+    socket.emit('join-project', projectId);
+
+    const onRFISeen = (data: { rfiId: number, seen_at: string }) => {
+      setRfis(prev => prev.map(r => r.id === data.rfiId ? { ...r, seen_at: data.seen_at } : r));
+      setSelectedRFI(prev => (prev && prev.id === data.rfiId) ? { ...prev, seen_at: data.seen_at } : prev);
+    };
+
+    const onRFIUpdated = (data: { rfi: RFI }) => {
+      setRfis(prev => {
+        const idx = prev.findIndex(r => r.id === data.rfi.id);
+        if (idx !== -1) {
+          const copy = [...prev];
+          copy[idx] = data.rfi;
+          return copy;
+        }
+        return [data.rfi, ...prev];
+      });
+      setSelectedRFI(prev => (prev && prev.id === data.rfi.id) ? data.rfi : prev);
+    };
+
+    socket.on('rfi-seen', onRFISeen);
+    socket.on('rfi-updated', onRFIUpdated);
+
+    return () => {
+      socket.off('rfi-seen', onRFISeen);
+      socket.off('rfi-updated', onRFIUpdated);
+    };
+  }, [socket, projectId]);
+
+  useEffect(() => {
+    if (selectedRFI && String(selectedRFI.assigned_to) === String(user?.id) && !selectedRFI.seen_at) {
+      markRFISeen(selectedRFI.id).then(data => {
+        setSelectedRFI(prev => prev ? { ...prev, seen_at: data.seen_at } : null);
+        setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, seen_at: data.seen_at } : r));
+      }).catch(err => console.error("Failed to mark RFI as seen:", err));
+    }
+  }, [selectedRFI?.id, user?.id]);
 
   const fetchAssignees = useCallback(async () => {
     try {
@@ -680,10 +724,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Feather name="calendar" size={10} color={colors.textMuted} />
-                <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-              </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Feather name="calendar" size={10} color={colors.textMuted} />
+                  <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                  {item.seen_at && (
+                    <Ionicons name="checkmark-done" size={12} color="#f97316" style={{ marginLeft: 4 }} />
+                  )}
+                </View>
               {item.expiry_date && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Feather name="clock" size={10} color={item.status === 'overdue' ? '#ef4444' : colors.textMuted} />
