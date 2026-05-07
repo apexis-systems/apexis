@@ -560,6 +560,7 @@ export default function UploadScreen() {
 
 
         try {
+            let fileId = null;
             if (isDocMode) {
                 // Document Upload Path (Scans or Docs)
                 const formData = new FormData();
@@ -595,7 +596,7 @@ export default function UploadScreen() {
                         project_id: selectedProject!,
                         type: 'upload',
                         description: `Uploaded ${itemsToUpload.length} documents`,
-                        metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'documents' }) : undefined
+                        metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'documents', fileId:res.file.id }) : undefined
                     });
                 }
             } else {
@@ -618,7 +619,7 @@ export default function UploadScreen() {
                         type: item.asset.type || 'image/jpeg',
                     } as any);
 
-                    await uploadFileWithProgress(
+                    const response = await uploadFileWithProgress(
                         formData,
                         (p) => {
                             setFileQueue(prev => {
@@ -632,6 +633,9 @@ export default function UploadScreen() {
                             });
                         }
                     );
+                    if (fileId === null) {
+                        fileId = response.file.id;
+                    }
 
                     // Final explicit status update to ensure UI consistency after completion
                     setFileQueue(prev => {
@@ -646,12 +650,15 @@ export default function UploadScreen() {
                 }
                 setMode('done');
 
+
+
+
                 const folderParam = selectedFolder === 'root' ? null : selectedFolder;
                 await createActivity({
                     project_id: selectedProject!,
                     type: 'upload_photo',
                     description: `Uploaded ${itemsToUpload.length} photos`,
-                    metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'photos' }) : undefined
+                    metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'photos', fileId: fileId }) : undefined
                 });
             }
 

@@ -16,7 +16,7 @@ export const handleActivityNavigation = (act: any, router: Router) => {
         }
     }
 
-// 1. Unified Deep Redirection Helpers
+    // 1. Unified Deep Redirection Helpers
     const finalProjectId = projectId || act.project_id;
     if (!finalProjectId && !metadata?.roomId) return; // Cannot navigate without project context unless it's chat
 
@@ -42,7 +42,7 @@ export const handleActivityNavigation = (act: any, router: Router) => {
 
         // Add file/folder context if it exists
         if (metadata.fileId) query += `&fileId=${metadata.fileId}`;
-        
+
         // Handle folderId (can be null for root, so we check for presence, not just truthiness)
         if (Object.prototype.hasOwnProperty.call(metadata, 'folderId')) {
             const folderVal = metadata.folderId === null ? '' : metadata.folderId;

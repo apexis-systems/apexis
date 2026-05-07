@@ -29,13 +29,13 @@ import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
 
 const isAudio = (url: string) => {
-    if (!url) return false;
-    try {
-        const urlWithoutQuery = url.split('?')[0];
-        return !!urlWithoutQuery.match(/\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i);
-    } catch {
-        return false;
-    }
+  if (!url) return false;
+  try {
+    const urlWithoutQuery = url.split('?')[0];
+    return !!urlWithoutQuery.match(/\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i);
+  } catch {
+    return false;
+  }
 };
 interface Props {
   project: Project;
@@ -50,7 +50,7 @@ const statusConfig = {
   overdue: { icon: 'alert-triangle', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', label: 'Overdue' },
 };
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
 
 export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
@@ -369,7 +369,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
       const { width, height } = photo;
       const manipActions: any[] = [];
-      
+
       // Orientation Correction
       const isLandscapePhysically = physicalOrientation === 90 || physicalOrientation === 270;
       const isPhotoPortrait = height > width;
@@ -477,7 +477,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
       if (removedPhotos.length > 0) {
         removedPhotos.forEach(key => {
-          
+
           formData.append('removedPhotos', key);
         });
       }
@@ -546,7 +546,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         const match = /\.(\w+)$/.exec(filename);
         let type = `image/jpeg`;
         if (match) {
-            type = isAudio(filename) ? `audio/${match[1]}` : `image/${match[1]}`;
+          type = isAudio(filename) ? `audio/${match[1]}` : `image/${match[1]}`;
         }
         formData.append('photos', { uri, name: filename, type } as any);
       });
@@ -783,7 +783,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
               backgroundColor: colors.background,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              height: '80%',
+              height: SCREEN_H * 0.80,
               padding: 20
             }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -825,7 +825,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
               </View>
 
               {selectedRFI && (
-                <ScrollView showsVerticalScrollIndicator={false}>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="always"
+                  keyboardDismissMode="none"
+                >
 
                   <View style={{ marginBottom: 20 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -868,25 +872,25 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           {(selectedRFI?.photoDownloadUrls || []).map((url, idx) => (
                             <View key={idx} style={{ position: 'relative' }}>
                               {isAudio(url) ? (
-                                  <View style={{
-                                    padding: 12,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    borderRadius: 16,
-                                    backgroundColor: colors.surface,
-                                    width: SCREEN_W - 80,
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 0, height: 1 },
-                                    shadowOpacity: 0.05,
-                                    shadowRadius: 2,
-                                    elevation: 2
-                                  }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
-                                      <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>VOICE ATTACHMENT</Text>
-                                    </View>
-                                    <VoiceNotePlayer uri={url} isMe={false} colors={colors} />
+                                <View style={{
+                                  padding: 12,
+                                  borderWidth: 1,
+                                  borderColor: colors.border,
+                                  borderRadius: 16,
+                                  backgroundColor: colors.surface,
+                                  width: SCREEN_W - 80,
+                                  shadowColor: '#000',
+                                  shadowOffset: { width: 0, height: 1 },
+                                  shadowOpacity: 0.05,
+                                  shadowRadius: 2,
+                                  elevation: 2
+                                }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
+                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>VOICE ATTACHMENT</Text>
                                   </View>
+                                  <VoiceNotePlayer uri={url} isMe={false} colors={colors} />
+                                </View>
                               ) : (
                                 <TouchableOpacity onPress={() => setPreviewImage(url)}>
                                   <Image
@@ -917,32 +921,32 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Linked Folders</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                           {selectedRFI.linked_folders.map((f: any) => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               key={f.id}
                               onPress={() => {
                                 // 1. Close the modal first
                                 setDetailModalVisible(false);
-                                
+
                                 // 2. Clear any other active overlays just in case
                                 setShowFolderPicker(false);
                                 setSelectedRFI(null);
 
                                 // 3. Small delay to allow modal backdrop to clear before navigation
                                 setTimeout(() => {
-                                  router.setParams({ 
-                                    tab: f.folder_type === 'photo' ? 'photos' : 'documents', 
+                                  router.setParams({
+                                    tab: f.folder_type === 'photo' ? 'photos' : 'documents',
                                     folderId: String(f.id),
                                     rfiId: undefined // Explicitly clear any RFI trigger
                                   });
                                 }, 100);
                               }}
-                              style={{ 
-                                flexDirection: 'row', 
-                                alignItems: 'center', 
-                                gap: 6, 
-                                paddingHorizontal: 10, 
-                                paddingVertical: 6, 
-                                backgroundColor: colors.primary + '10', 
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                backgroundColor: colors.primary + '10',
                                 borderRadius: 8,
                                 borderWidth: 1,
                                 borderColor: colors.primary + '20'
@@ -1059,30 +1063,30 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                               {responseImages.map((uri, idx) => (
                                 <View key={idx} style={{ position: 'relative' }}>
-                                    {isAudio(uri) ? (
-                                      <View style={{
-                                        padding: 12,
-                                        paddingRight: 32,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        borderRadius: 16,
-                                        backgroundColor: colors.surface,
-                                        width: SCREEN_W - 64,
-                                        minHeight: 64,
-                                        justifyContent: 'center',
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 2 },
-                                        shadowOpacity: 0.05,
-                                        shadowRadius: 3,
-                                        elevation: 2
-                                      }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                          <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
-                                        </View>
-                                        <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                  {isAudio(uri) ? (
+                                    <View style={{
+                                      padding: 12,
+                                      paddingRight: 32,
+                                      borderWidth: 1,
+                                      borderColor: colors.border,
+                                      borderRadius: 16,
+                                      backgroundColor: colors.surface,
+                                      width: SCREEN_W - 64,
+                                      minHeight: 64,
+                                      justifyContent: 'center',
+                                      shadowColor: '#000',
+                                      shadowOffset: { width: 0, height: 2 },
+                                      shadowOpacity: 0.05,
+                                      shadowRadius: 3,
+                                      elevation: 2
+                                    }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
                                       </View>
-                                    ) : (
+                                      <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                    </View>
+                                  ) : (
                                     <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
                                   )}
                                   <TouchableOpacity
@@ -1111,20 +1115,20 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 <Feather name="camera" size={24} color={colors.textMuted} />
                               </TouchableOpacity>
 
-                              <View style={{ 
-                                  flexDirection: 'row', 
-                                  alignItems: 'center', 
-                                  flex: isRecordingVoice ? 1 : 0 
+                              <View style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                flex: isRecordingVoice ? 1 : 0
                               }}>
                                 <VoiceNoteRecorder
                                   colors={colors}
                                   onRecordingStateChange={setIsRecordingVoice}
                                   onSend={(uri) => {
-                                      setResponseImages(prev => [...prev, uri]);
+                                    setResponseImages(prev => [...prev, uri]);
                                   }}
                                 />
                                 {!isRecordingVoice && (
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>VOICE</Text>
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>VOICE</Text>
                                 )}
                               </View>
                             </View>
@@ -1366,7 +1370,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                     const baseUrl = url.split('?')[0];
                                     return baseUrl === baseUri;
                                   });
-                                  
+
                                   console.log('Matching (NESTED) against original photos. Base URI:', baseUri);
                                   console.log('Match found at index:', originalIdx);
 
@@ -2009,7 +2013,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               />
                               <TouchableOpacity
                                 onPress={() => {
-                                 
+
                                   // If this was an original photo, we need to track its key for deletion
                                   if (isEditing && selectedRFI && uri.startsWith('http')) {
                                     // Strip query params for more robust matching
@@ -2018,16 +2022,16 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                       const baseUrl = url.split('?')[0];
                                       return baseUrl === baseUri;
                                     });
-                                    
-                                   
+
+
 
                                     if (originalIdx !== undefined && originalIdx !== -1) {
                                       const keyToRemove = selectedRFI.photos[originalIdx];
-                                      
+
                                       if (keyToRemove) {
                                         setRemovedPhotos(prev => {
                                           const next = [...prev, keyToRemove];
-                                          
+
                                           return next;
                                         });
                                       }
