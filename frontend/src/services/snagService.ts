@@ -16,6 +16,7 @@ export interface Snag {
     creator?: { id: number; name: string };
     photoDownloadUrl?: string;
     responsePhotoUrls?: string[];
+    response_photos?: string[];
     createdAt: string;
 }
 

@@ -19,6 +19,18 @@ import {
   getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees,
   updateSnag,
 } from '@/services/snagService';
+import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
+import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
+
+const isAudio = (url: string) => {
+    if (!url) return false;
+    try {
+        const urlWithoutQuery = url.split('?')[0];
+        return !!urlWithoutQuery.match(/\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i);
+    } catch {
+        return false;
+    }
+};
 
 interface ProjectSnagListProps {
   project: Project;
@@ -59,6 +71,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [responseComment, setResponseComment] = useState('');
   const [responsePhotos, setResponsePhotos] = useState<File[]>([]);
   const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
+  const [removedResponsePhotos, setRemovedResponsePhotos] = useState<string[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const responseFileInputRef = useRef<HTMLInputElement>(null);
@@ -84,9 +97,18 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
   useEffect(() => { load(); }, [project?.id]);
 
+  useEffect(() => {
+    if (selectedSnag) {
+      setResponseComment(selectedSnag.response || '');
+      setRemovedResponsePhotos([]);
+      setResponsePhotos([]);
+      setResponsePhotoPreviews([]);
+    }
+  }, [selectedSnag?.id]);
+
   // ── Status cycle ────────────────────────────────────────────────────────────
 
-  const cycleStatus = async (snag: Snag, nextStatus?: SnagStatus, comment?: string, files?: File[]) => {
+  const cycleStatus = async (snag: Snag, nextStatus?: SnagStatus, comment?: string, files?: File[], removedPhotos?: string[]) => {
     const idx = STATUS_CYCLE.indexOf(snag.status);
     const next = nextStatus || STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
     const prevStatus = snag.status;
@@ -97,15 +119,19 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       form.append('status', next);
       if (comment) form.append('response', comment);
       if (files) files.forEach(f => form.append('photos', f));
+      if (removedPhotos && removedPhotos.length > 0) {
+        form.append('removedPhotos', JSON.stringify(removedPhotos));
+      }
 
       const updated = await updateSnagStatus(snag.id, form);
       setSnags(prev => prev.map(s => s.id === snag.id ? updated : s));
-      if (selectedSnag?.id === snag.id) setSelectedSnag(updated);
+      setSelectedSnag(updated);
       
       toast.success(`Status updated to ${STATUS_CONFIG[next].label}`);
-      setResponseComment('');
+      setResponseComment(updated.response || '');
       setResponsePhotos([]);
       setResponsePhotoPreviews([]);
+      setRemovedResponsePhotos([]);
     } catch (error) {
       toast.error('Failed to update status');
     } finally {
@@ -229,6 +255,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
               <button
                 onClick={() => {
                   if (String(snag.assigned_to) === String(user?.id)) {
+                    // Pre-fill response when clicking status circle if needed? 
+                    // Actually cycleStatus clears it anyway, so we just call it.
                     cycleStatus(snag);
                   } else {
                     toast.error('Only the assigned person can update the status');
@@ -430,16 +458,59 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   </div>
                 </div>
 
-                {selectedSnag.response && (
+                {(selectedSnag.response || (selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
                   <div className="p-3 bg-accent/5 rounded-lg border border-accent/10">
                     <p className="text-[10px] font-bold text-accent uppercase mb-1">Last Response</p>
-                    <p className="text-xs">{selectedSnag.response}</p>
+                    {selectedSnag.response && <p className="text-xs">{selectedSnag.response}</p>}
                     {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
                       <div className="grid grid-cols-3 gap-2 mt-2">
                         {selectedSnag.responsePhotoUrls.map((url, i) => (
-                          <div key={i} className="aspect-square rounded border border-border overflow-hidden cursor-pointer" onClick={() => setViewPhoto(url)}>
-                            <img src={url} alt="Response" className="w-full h-full object-cover" />
-                          </div>
+                          isAudio(url) ? (
+                            <div key={i} className="col-span-3 p-3 rounded-lg border border-border bg-card relative group">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                                <span className="text-[9px] font-bold text-accent uppercase tracking-widest">Voice Response</span>
+                              </div>
+                              <VoiceNotePlayer url={url} isMe={false} />
+                              {String(selectedSnag.assigned_to) === String(user?.id) && (
+                                <button 
+                                  onClick={() => {
+                                    const key = selectedSnag.response_photos?.[i];
+                                    if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                    const newUrls = [...(selectedSnag.responsePhotoUrls || [])];
+                                    newUrls.splice(i, 1);
+                                    const newPhotos = [...(selectedSnag.response_photos || [])];
+                                    newPhotos.splice(i, 1);
+                                    setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                  }}
+                                  className="absolute top-2 right-2 bg-destructive/90 hover:bg-destructive p-1.5 rounded-full shadow-sm opacity-100 transition-opacity z-10"
+                                >
+                                  <X className="h-3 w-3 text-white" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div key={i} className="relative aspect-square rounded border border-border overflow-hidden group">
+                              <img src={url} alt="Response" className="w-full h-full object-cover cursor-pointer" onClick={() => setViewPhoto(url)} />
+                              {String(selectedSnag.assigned_to) === String(user?.id) && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const key = selectedSnag.response_photos?.[i];
+                                    if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                    const newUrls = [...(selectedSnag.responsePhotoUrls || [])];
+                                    newUrls.splice(i, 1);
+                                    const newPhotos = [...(selectedSnag.response_photos || [])];
+                                    newPhotos.splice(i, 1);
+                                    setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                  }}
+                                  className="absolute top-1 right-1 bg-destructive/90 hover:bg-destructive p-1 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                >
+                                  <X className="h-3 w-3 text-white" />
+                                </button>
+                              )}
+                            </div>
+                          )
                         ))}
                       </div>
                     )}
@@ -457,7 +528,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                           size="sm" 
                           variant={selectedSnag.status === s ? 'default' : 'outline'}
                           className={cn("flex-1 text-[10px] h-8", selectedSnag.status === s && STATUS_CONFIG[s].bg && STATUS_CONFIG[s].text)}
-                          onClick={() => cycleStatus(selectedSnag, s, responseComment, responsePhotos)}
+                          onClick={() => cycleStatus(selectedSnag, s, responseComment, responsePhotos, removedResponsePhotos)}
                         >
                           {STATUS_CONFIG[s].label.split(' ')[0]}
                         </Button>
@@ -471,26 +542,61 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     />
                     <div className="space-y-2">
                       <div className="flex flex-wrap gap-2">
-                        {responsePhotoPreviews.map((src, i) => (
-                          <div key={i} className="relative w-12 h-12 rounded border border-border overflow-hidden group">
-                            <img src={src} className="w-full h-full object-cover" />
-                            <button 
-                              onClick={() => {
-                                setResponsePhotos(prev => prev.filter((_, idx) => idx !== i));
-                                setResponsePhotoPreviews(prev => prev.filter((_, idx) => idx !== i));
+                        {responsePhotoPreviews.map((src, i) => {
+                          const isAudioFile = responsePhotos[i]?.type.startsWith('audio/');
+                          return (
+                            <div key={i} className={`relative ${isAudioFile ? 'w-full max-w-sm' : 'w-12 h-12'} rounded border border-border overflow-hidden group bg-card`}>
+                              {isAudioFile ? (
+                                <div className="p-2 pr-8 flex flex-col gap-1">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                                    <span className="text-[8px] font-bold text-accent uppercase tracking-tighter">Voice Response</span>
+                                  </div>
+                                  <VoiceNotePlayer url={src} isMe={false} />
+                                </div>
+                              ) : (
+                                <img src={src} className="w-full h-full object-cover" />
+                              )}
+                              <button 
+                                onClick={() => {
+                                  setResponsePhotos(prev => prev.filter((_, idx) => idx !== i));
+                                  setResponsePhotoPreviews(prev => prev.filter((_, idx) => idx !== i));
+                                }}
+                                className={`absolute top-1 right-1 bg-destructive/90 hover:bg-destructive p-1 rounded-full shadow-sm ${isAudioFile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity z-10`}
+                              >
+                                <X className="h-3 w-3 text-white" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                        <div className="flex items-center gap-2">
+                          <button 
+                            className="w-12 h-12 border-2 border-dashed border-border rounded flex items-center justify-center hover:border-accent/50 transition-colors"
+                            onClick={() => responseFileInputRef.current?.click()}
+                          >
+                            <Plus className="h-4 w-4 text-muted-foreground" />
+                          </button>
+                          <div className="flex items-center justify-center">
+                            <VoiceNoteRecorder 
+                              onSend={(file) => {
+                                const url = URL.createObjectURL(file);
+                                // Replace existing audio if any
+                                setResponsePhotos(prev => {
+                                  const filtered = prev.filter(f => !f.type.startsWith('audio/') && !f.name.endsWith('.m4a') && !f.name.endsWith('.webm'));
+                                  return [...filtered, file];
+                                });
+                                setResponsePhotoPreviews(prev => {
+                                  // We need to find the index of the audio file in the original list to replace it properly
+                                  // but since we want to replace ANY audio, we filter first.
+                                  // However, setResponsePhotoPreviews usually maps 1:1 with setResponsePhotos.
+                                  // A safer way is to rebuild the previews list or filter it.
+                                  const filtered = prev.filter(p => !p.startsWith('blob:audio') && !p.includes('audio'));
+                                  return [...filtered, url];
+                                });
                               }}
-                              className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="h-3 w-3 text-white" />
-                            </button>
+                            />
                           </div>
-                        ))}
-                        <button 
-                          className="w-12 h-12 border-2 border-dashed border-border rounded flex items-center justify-center hover:border-accent/50 transition-colors"
-                          onClick={() => responseFileInputRef.current?.click()}
-                        >
-                          <Plus className="h-4 w-4 text-muted-foreground" />
-                        </button>
+                        </div>
                       </div>
                       <input 
                         ref={responseFileInputRef} 
@@ -500,19 +606,29 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                         className="hidden" 
                         onChange={(e) => {
                           const files = Array.from(e.target.files || []);
-                          setResponsePhotos(prev => [...prev, ...files]);
-                          files.forEach(f => {
-                            const r = new FileReader();
-                            r.onload = () => setResponsePhotoPreviews(prev => [...prev, r.result as string]);
-                            r.readAsDataURL(f);
+                          if (files.length === 0) return;
+                          const file = files[0];
+                          
+                          setResponsePhotos(prev => {
+                            const filtered = prev.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.m4a') || f.name.endsWith('.webm'));
+                            return [...filtered, file];
                           });
+
+                          const r = new FileReader();
+                          r.onload = () => {
+                            setResponsePhotoPreviews(prev => {
+                              const filtered = prev.filter(p => p.startsWith('blob:'));
+                              return [...filtered, r.result as string];
+                            });
+                          };
+                          r.readAsDataURL(file);
                         }}
                       />
                     </div>
                     <Button 
                       className="w-full text-xs h-9 bg-accent hover:bg-accent/90" 
-                      onClick={() => cycleStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos)}
-                      disabled={submitting || (!responseComment.trim() && responsePhotos.length === 0)}
+                      onClick={() => cycleStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos, removedResponsePhotos)}
+                      disabled={submitting || (responseComment === (selectedSnag.response || '') && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
                     >
                       {submitting ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <MessageSquare className="h-3 w-3 mr-2" />}
                       Post Response

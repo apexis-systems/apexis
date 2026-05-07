@@ -233,11 +233,50 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
     const { response } = req.body;
     if (response !== undefined) (snag as any).response = response;
 
-    // Handle response photos: Replace existing if new ones uploaded
-    let uploadedResponsePhotos: string[] = [];
+    const { removedPhotos } = req.body;
+    let currentResponsePhotos: string[] = snag.response_photos || [];
+
+    // 1. Handle explicit removals
+    if (removedPhotos) {
+      let toRemove: string[] = [];
+      if (Array.isArray(removedPhotos)) toRemove = removedPhotos;
+      else if (typeof removedPhotos === 'string') {
+        if (removedPhotos.startsWith('[') && removedPhotos.endsWith(']')) {
+          try { toRemove = JSON.parse(removedPhotos); } catch (e) { toRemove = [removedPhotos]; }
+        } else {
+          toRemove = removedPhotos.split(',').map(s => s.trim());
+        }
+      }
+      currentResponsePhotos = currentResponsePhotos.filter(p => !toRemove.includes(p));
+    }
+
+    // 2. Handle new uploads with Smart Replace
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      const hasNewAudio = req.files.some((f:any) => f.mimetype.startsWith('audio/'));
+      const hasNewImage = req.files.some((f:any) => f.mimetype.startsWith('image/'));
+
+      // If new audio is being uploaded, remove existing audio from the response
+      if (hasNewAudio) {
+        currentResponsePhotos = currentResponsePhotos.filter((p:any) => {
+          const isAudio = p.match(/\.(m4a|webm|mp3|wav|aac|ogg|3gp|caf)(\?.*)?$/i);
+          return !isAudio;
+        });
+      }
+
+      // If new image is being uploaded, remove existing images from the response
+      if (hasNewImage) {
+        currentResponsePhotos = currentResponsePhotos.filter((p:any) => {
+          const isImage = p.match(/\.(jpg|jpeg|png|gif|webp|heic)(\?.*)?$/i);
+          return !isImage;
+        });
+      }
+
       const project = await projects.findByPk(snag.project_id);
       for (const file of req.files) {
+        if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+          return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
+        }
+
         let fileBuffer = file.buffer;
         if (file.mimetype.startsWith('image/')) {
           try {
@@ -256,12 +295,11 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
           ContentType: file.mimetype,
           Body: fileBuffer,
         }));
-        uploadedResponsePhotos.push(key);
+        currentResponsePhotos.push(key);
       }
-    } else {
-      uploadedResponsePhotos = snag.response_photos || [];
     }
-    (snag as any).response_photos = uploadedResponsePhotos;
+    
+    (snag as any).response_photos = currentResponsePhotos;
 
     await snag.save();
 

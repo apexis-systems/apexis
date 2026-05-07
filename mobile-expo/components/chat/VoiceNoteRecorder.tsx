@@ -140,7 +140,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
     };
 
     return (
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', paddingRight: 4 }}>
             {isRecording ? (
                 <View style={{ 
                     flexDirection: 'row', 
@@ -197,7 +197,12 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                     transform: isRecording ? [{ scale: 1.1 }] : [{ scale: 1 }]
                 }}
             >
-                <Feather name={isRecording ? "send" : "mic"} size={20} color="#fff" />
+                <Ionicons 
+                    name={isRecording ? "send" : "mic"} 
+                    size={isRecording ? 18 : 22} 
+                    color="#fff" 
+                    style={isRecording ? { marginLeft: 3 } : {}} 
+                />
             </TouchableOpacity>
         </View>
     );

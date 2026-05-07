@@ -121,9 +121,18 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         setAnnotatingIdx(null);
     };
 
-    const load = async () => {
+    useEffect(() => {
+        if (selectedRFI) {
+            setResponseBody(selectedRFI.response || '');
+            setRemovedResponsePhotos([]);
+            setResponsePhotos([]);
+            setResponsePhotoPreviews([]);
+        }
+    }, [selectedRFI?.id]);
+
+    const load = async (silent = false) => {
         if (!project?.id) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         try {
             const [rfiData, assigneeData] = await Promise.all([
                 getRFIs(project.id as any),
@@ -134,7 +143,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         } catch (e) {
             toast.error('Failed to load RFIs');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -229,7 +238,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             toast.success('RFI created successfully');
             setShowAdd(false);
             resetForm();
-            load();
+            load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
             toast.error(getApiErrorMessage(error, 'Failed to create RFI'));
@@ -273,8 +282,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             const updated = await updateRFI(selectedRFI.id, form);
             toast.success('RFI updated successfully');
             setIsEditing(false);
+            setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
             setSelectedRFI(updated);
-            load();
+            load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
             toast.error(getApiErrorMessage(error, 'Failed to update RFI'));
@@ -288,8 +298,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         try {
             await deleteRFI(id);
             toast.success('RFI deleted');
+            setRfis(prev => prev.filter(r => r.id !== id));
             setSelectedRFI(null);
-            load();
+            load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
             toast.error(getApiErrorMessage(error, 'Failed to delete RFI'));
@@ -323,11 +334,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             
             const updated = await updateRFIResponse(selectedRFI.id, form);
             toast.success('Response updated');
+            setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
             setSelectedRFI(updated);
-            setResponseBody('');
+            setResponseBody(updated.response || '');
             setResponsePhotos([]);
             setResponsePhotoPreviews([]);
-            load();
             if (onUpdate) onUpdate();
         } catch (error) {
             toast.error(getApiErrorMessage(error, 'Failed to update response'));
@@ -340,8 +351,13 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         try {
             await updateRFIStatus(id, status);
             toast.success(`Status updated to ${status}`);
-            load();
+            
+            // Update the list locally by only changing the status field
+            setRfis(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+            
             if (onUpdate) onUpdate();
+            
+            // Update the selected RFI view if it's the one being modified
             if (selectedRFI?.id === id) {
                 setSelectedRFI({ ...selectedRFI, status });
             }
@@ -726,7 +742,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                 {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
                                     <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
                                         <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">Response</p>
-                                        <p className="text-sm text-foreground whitespace-pre-wrap mb-3">{selectedRFI.response}</p>
+                                        {selectedRFI.response && <p className="text-sm text-foreground whitespace-pre-wrap mb-3">{selectedRFI.response}</p>}
                                         {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
                                             <div className="grid grid-cols-3 gap-2">
                                                 {selectedRFI.responsePhotoUrls.map((url, idx) => (
@@ -834,22 +850,36 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                             className="hidden" 
                                                             onChange={(e) => {
                                                                 const files = Array.from(e.target.files || []);
-                                                                setResponsePhotos(prev => [...prev, ...files]);
-                                                                files.forEach(f => {
-                                                                    const r = new FileReader();
-                                                                    r.onload = () => setResponsePhotoPreviews(prev => [...prev, r.result as string]);
-                                                                    r.readAsDataURL(f);
+                                                                if (files.length === 0) return;
+                                                                const file = files[0];
+                                                                setResponsePhotos(prev => {
+                                                                    const filtered = prev.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.m4a') || f.name.endsWith('.webm'));
+                                                                    return [...filtered, file];
                                                                 });
+                                                                const r = new FileReader();
+                                                                r.onload = () => {
+                                                                    setResponsePhotoPreviews(prev => {
+                                                                        const filtered = prev.filter(p => p.startsWith('blob:'));
+                                                                        return [...filtered, r.result as string];
+                                                                    });
+                                                                };
+                                                                r.readAsDataURL(file);
                                                             }} 
                                                         />
                                                     </label>
                                                     <div className="flex items-center justify-center px-2">
                                                         <VoiceNoteRecorder 
                                                             onSend={(file) => {
-                                                                const url = URL.createObjectURL(file);
-                                                                setResponsePhotos(prev => [...prev, file]);
-                                                                setResponsePhotoPreviews(prev => [...prev, url]);
-                                                            }}
+                                                                 const url = URL.createObjectURL(file);
+                                                                 setResponsePhotos(prev => {
+                                                                     const filtered = prev.filter(f => !f.type.startsWith('audio/') && !f.name.endsWith('.m4a') && !f.name.endsWith('.webm'));
+                                                                     return [...filtered, file];
+                                                                 });
+                                                                 setResponsePhotoPreviews(prev => {
+                                                                     const filtered = prev.filter(p => !p.startsWith('blob:'));
+                                                                     return [...filtered, url];
+                                                                 });
+                                                             }}
                                                         />
                                                     </div>
                                                 </div>
@@ -857,7 +887,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         </div>
                                         <Button 
                                             onClick={handleUpdateResponse} 
-                                            disabled={submitting || (!responseBody.trim() && responsePhotos.length === 0)}
+                                            disabled={submitting || (responseBody === (selectedRFI.response || '') && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
                                             className="w-full bg-accent text-accent-foreground"
                                         >
                                             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
