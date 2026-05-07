@@ -7,7 +7,7 @@ import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalL
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
-import { updateFile } from '@/services/fileService';
+import { updateFile, downloadFile } from '@/services/fileService';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
@@ -75,8 +75,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate }:
     if (!currentFile?.downloadUrl || downloading) return;
     setDownloading(true);
     try {
-      const response = await fetch(currentFile.downloadUrl);
-      const blob = await response.blob();
+      let blob;
+      // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
+      if (currentFile.do_not_follow && currentFile.file_type === 'application/pdf') {
+        blob = await downloadFile(currentFile.id);
+      } else {
+        const response = await fetch(currentFile.downloadUrl);
+        blob = await response.blob();
+      }
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
