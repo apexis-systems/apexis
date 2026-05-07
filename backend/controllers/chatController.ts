@@ -56,7 +56,28 @@ export const listRooms = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        // Find all rooms where the user is a member
+        // 1. Calculate all accessible projects for the requester
+        const baseRole = authUser.role;
+        const primaryOrgId = authUser.organization_id;
+
+        const myExplicitMemberships = await project_members.findAll({
+            where: { user_id: authUser.user_id },
+            attributes: ['project_id']
+        });
+        const explicitProjectIds = myExplicitMemberships.map((pm: any) => pm.project_id);
+
+        let adminOwnedProjectIds: number[] = [];
+        if (baseRole === 'admin' && primaryOrgId) {
+            const ownedProjects = await projects.findAll({
+                where: { organization_id: primaryOrgId },
+                attributes: ['id']
+            });
+            adminOwnedProjectIds = ownedProjects.map((p: any) => p.id);
+        }
+
+        const allAccessibleProjectIds = [...new Set([...explicitProjectIds, ...adminOwnedProjectIds])];
+
+        // 2. Find all rooms where the user is a member
         const userRooms = await rooms.findAll({
             where: {
                 id: {
@@ -85,7 +106,16 @@ export const listRooms = async (req: Request, res: Response) => {
                     include: [{
                         model: users,
                         attributes: ['id', 'name', 'role', 'profile_pic', 'organization_id'],
-                        include: [{ model: organizations, attributes: ['name'] }]
+                        include: [
+                            { model: organizations, attributes: ['name'] },
+                            { 
+                                model: project_members, 
+                                attributes: ['role', 'project_id'],
+                                where: allAccessibleProjectIds.length > 0 ? { project_id: { [Op.in]: allAccessibleProjectIds } } : undefined,
+                                required: false,
+                                include: [{ model: projects, attributes: ['name'] }]
+                            }
+                        ]
                     }]
                 },
                 {
@@ -98,7 +128,38 @@ export const listRooms = async (req: Request, res: Response) => {
             order: [['updatedAt', 'DESC']]
         });
 
-        res.status(200).json({ rooms: userRooms });
+        // 3. Post-process to add "Project Admin" roles for creators
+        const serializedRooms = await Promise.all(userRooms.map(async (room: any) => {
+            const roomJson = room.toJSON();
+            
+            for (const member of roomJson.room_members) {
+                if (member.user) {
+                    // Find projects created by this user that are also accessible to the requester
+                    const createdProjects = await projects.findAll({
+                        where: { 
+                            created_by: member.user.id,
+                            id: { [Op.in]: allAccessibleProjectIds }
+                        },
+                        attributes: ['id', 'name']
+                    });
+
+                    createdProjects.forEach((p: any) => {
+                        const exists = member.user.project_members.some((pm: any) => pm.project_id === p.id);
+                        if (!exists) {
+                            member.user.project_members.push({
+                                role: 'admin',
+                                project_id: p.id,
+                                project: { name: p.name }
+                            });
+                        }
+                    });
+                }
+            }
+            
+            return roomJson;
+        }));
+
+        res.status(200).json({ rooms: serializedRooms });
     } catch (error) {
         console.error('List Rooms Error:', error);
         res.status(500).json({ error: 'Internal server error' });

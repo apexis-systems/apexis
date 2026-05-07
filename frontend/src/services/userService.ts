@@ -1,14 +1,17 @@
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 
-export const getOrgUsers = async () => {
+export const getOrgUsers = async (purpose?: 'chat' | 'management') => {
     try {
-        const response = await PrivateAxios.get('/users');
+        const url = purpose ? `/users?purpose=${purpose}` : '/users';
+        const response = await PrivateAxios.get(url);
         return response.data.users;
     } catch (error) {
         console.error("getOrgUsers Error", error);
         throw error;
     }
 };
+
+export const getChatUsers = () => getOrgUsers('chat');
 
 export const inviteUser = async (data: { email: string, role: string, project_id?: string | number }) => {
     try {

@@ -205,11 +205,11 @@ export default function AdminAnalytics() {
                         <thead>
                             <tr className="border-b border-border text-muted-foreground">
                                 <th className="text-left py-2 font-medium">Project</th>
-                                <th className="text-center py-2 font-medium">Pulse Score</th>
+                                <th className="text-center py-2 font-medium">Pulse</th>
                                 <th className="text-center py-2 font-medium">Progress</th>
-                                <th className="text-center py-2 font-medium">Tasks Done</th>
+                                <th className="text-center py-2 font-medium">Snags (P/T)</th>
+                                <th className="text-center py-2 font-medium">RFIs (P/T)</th>
                                 <th className="text-center py-2 font-medium">Overdue</th>
-                                <th className="text-center py-2 font-medium">Messages/wk</th>
                                 <th className="text-center py-2 font-medium">Risk</th>
                             </tr>
                         </thead>
@@ -222,7 +222,6 @@ export default function AdminAnalytics() {
                                     </td>
                                     <td className="text-center">
                                         <span className={`font-bold text-sm ${pulseColor(p.pulseScore)}`}>{p.pulseScore}</span>
-                                        <span className="block text-[9px] text-muted-foreground">{pulseLabel(p.pulseScore)}</span>
                                     </td>
                                     <td className="text-center">
                                         <div className="mx-auto w-16 h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -233,13 +232,21 @@ export default function AdminAnalytics() {
                                         </div>
                                         <span className="text-[9px] text-muted-foreground">{p.progress}%</span>
                                     </td>
-                                    <td className="text-center text-foreground">{p.tasksDone}/{p.tasksTotal}</td>
+                                    <td className="text-center text-foreground font-medium">
+                                        <span className="text-orange-500">{p.snagStats?.pending || 0}</span>
+                                        <span className="text-muted-foreground mx-1">/</span>
+                                        <span>{p.snagStats?.total || 0}</span>
+                                    </td>
+                                    <td className="text-center text-foreground font-medium">
+                                        <span className="text-blue-500">{p.rfiStats?.pending || 0}</span>
+                                        <span className="text-muted-foreground mx-1">/</span>
+                                        <span>{p.rfiStats?.total || 0}</span>
+                                    </td>
                                     <td className="text-center">
-                                        <span className={p.overdue > 10 ? 'text-red-500 font-semibold' : 'text-foreground'}>
+                                        <span className={p.overdue > 0 ? 'text-red-500 font-semibold' : 'text-foreground'}>
                                             {p.overdue}
                                         </span>
                                     </td>
-                                    <td className="text-center text-foreground">{p.messages}</td>
                                     <td className="text-center">{riskBadge(p.risk)}</td>
                                 </tr>
                             ))}
@@ -264,7 +271,7 @@ export default function AdminAnalytics() {
                                 </span>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-xs font-medium text-foreground truncate">{m.name}</p>
-                                    <p className="text-[10px] text-muted-foreground">{m.role}</p>
+                                    <p className="text-[10px] text-muted-foreground">{m.role} • {m.projectName}</p>
                                 </div>
                                 <div className="text-right shrink-0">
                                     <p className="text-xs font-semibold text-foreground">{m.tasksCompleted} tasks</p>
@@ -296,27 +303,35 @@ export default function AdminAnalytics() {
                     </div>
                 </div>
 
-                {/* Pending Approvals */}
+                {/* Project Issue Stats */}
                 <div className="rounded-xl bg-card border border-border p-4">
                     <h3 className="text-xs font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <Clock className="h-3.5 w-3.5 text-accent" /> Pending Approvals
-                        <span className="ml-auto bg-accent/15 text-accent text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                            {pendingApprovals.length}
-                        </span>
+                        <AlertTriangle className="h-3.5 w-3.5 text-accent" /> Critical Issue Summary
                     </h3>
-                    <div className="space-y-1">
-                        {pendingApprovals.map((ap: any) => (
-                            <div key={ap.id} className="flex items-start gap-2.5 py-1.5 border-b border-border/40 last:border-0">
-                                <FileText className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] text-foreground font-medium truncate">{ap.title}</p>
-                                    <p className="text-[9px] text-muted-foreground">{ap.project} · {ap.requestedBy}</p>
-                                </div>
-                                <span className={`text-[10px] font-semibold whitespace-nowrap ${ap.daysWaiting >= 5 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                                    {ap.daysWaiting}d
-                                </span>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-orange-500/5 border border-orange-500/10">
+                            <div>
+                                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">Open Snags</p>
+                                <p className="text-xl font-bold text-orange-700">{quickStats.pendingTasks}</p>
                             </div>
-                        ))}
+                            <Activity className="h-8 w-8 text-orange-500/20" />
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/5 border border-red-500/10">
+                            <div>
+                                <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Overdue Items</p>
+                                <p className="text-xl font-bold text-red-700">{quickStats.overdueTasks}</p>
+                            </div>
+                            <AlertCircle className="h-8 w-8 text-red-500/20" />
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                            <div>
+                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Active RFIs</p>
+                                <p className="text-xl font-bold text-blue-700">
+                                    {projectPulse.reduce((acc: number, p: any) => acc + (p.rfiStats?.pending || 0), 0)}
+                                </p>
+                            </div>
+                            <FileText className="h-8 w-8 text-blue-500/20" />
+                        </div>
                     </div>
                 </div>
             </div>

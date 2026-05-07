@@ -403,28 +403,34 @@ export default function AdminAnalyticsScreen() {
                             ))}
                         </Card>
 
-                        {/* Pending Approvals */}
+                        {/* Critical Issue Summary */}
                         <Card>
-                            <SectionTitle icon="clock" title="Pending Approvals" badge={pendingApprovals.length} />
-                            {pendingApprovals.map((ap: any, i: number) => (
-                                <View key={ap.id} style={{
-                                    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-                                    paddingVertical: 10, borderBottomWidth: i < pendingApprovals.length - 1 ? 1 : 0,
-                                    borderBottomColor: colors.border,
-                                }}>
-                                    <Feather name="file-text" size={14} color={colors.textMuted} style={{ marginTop: 2 }} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }} numberOfLines={1}>{ap.title}</Text>
-                                        <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>{ap.project} · {ap.requestedBy}</Text>
+                            <SectionTitle icon="alert-triangle" title="Critical Issue Summary" />
+                            <View style={{ gap: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, backgroundColor: 'rgba(249,116,22,0.08)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(249,116,22,0.15)' }}>
+                                    <View>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#ea580c', textTransform: 'uppercase' }}>Open Snags</Text>
+                                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#c2410c' }}>{quickStats.pendingTasks}</Text>
                                     </View>
-                                    <View style={{
-                                        backgroundColor: ap.daysWaiting >= 5 ? 'rgba(239,68,68,0.12)' : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-                                        borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2,
-                                    }}>
-                                        <Text style={{ fontSize: 11, fontWeight: '700', color: ap.daysWaiting >= 5 ? '#ef4444' : colors.textMuted }}>{ap.daysWaiting}d</Text>
-                                    </View>
+                                    <Feather name="activity" size={24} color="rgba(249,116,22,0.3)" />
                                 </View>
-                            ))}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239,68,68,0.15)' }}>
+                                    <View>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#dc2626', textTransform: 'uppercase' }}>Overdue Items</Text>
+                                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#b91c1c' }}>{quickStats.overdueTasks}</Text>
+                                    </View>
+                                    <Feather name="alert-circle" size={24} color="rgba(239,68,68,0.3)" />
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, backgroundColor: 'rgba(59,130,246,0.08)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(59,130,246,0.15)' }}>
+                                    <View>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#2563eb', textTransform: 'uppercase' }}>Active RFIs</Text>
+                                        <Text style={{ fontSize: 20, fontWeight: '800', color: '#1d4ed8' }}>
+                                            {projectPulse.reduce((acc: number, p: any) => acc + (p.rfiStats?.pending || 0), 0)}
+                                        </Text>
+                                    </View>
+                                    <Feather name="file-text" size={24} color="rgba(59,130,246,0.3)" />
+                                </View>
+                            </View>
                         </Card>
                     </>
                 )}
@@ -460,22 +466,21 @@ export default function AdminAnalyticsScreen() {
                                     <View style={{ flex: 1, alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
                                         <Text style={{ fontSize: 18, fontWeight: '800', color: pulseColor(p.pulseScore) }}>{p.pulseScore}</Text>
                                         <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1, textAlign: 'center' }}>Pulse</Text>
-                                        <Text style={{ fontSize: 7, color: pulseColor(p.pulseScore), fontWeight: '600', marginTop: 1 }}>{pulseLabel(p.pulseScore)}</Text>
                                     </View>
-                                    {/* Tasks */}
+                                    {/* Snags */}
                                     <View style={{ flex: 1, alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
-                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{p.tasksDone}<Text style={{ fontSize: 12, color: colors.textMuted }}>/{p.tasksTotal}</Text></Text>
-                                        <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1 }}>Tasks Done</Text>
+                                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#f97316' }}>{p.snagStats?.pending || 0}<Text style={{ fontSize: 12, color: colors.textMuted }}>/{p.snagStats?.total || 0}</Text></Text>
+                                        <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1 }}>Snags</Text>
+                                    </View>
+                                    {/* RFIs */}
+                                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
+                                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#3b82f6' }}>{p.rfiStats?.pending || 0}<Text style={{ fontSize: 12, color: colors.textMuted }}>/{p.rfiStats?.total || 0}</Text></Text>
+                                        <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1 }}>RFIs</Text>
                                     </View>
                                     {/* Overdue */}
-                                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: p.overdue > 10 ? 'rgba(239,68,68,0.08)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
-                                        <Text style={{ fontSize: 18, fontWeight: '800', color: p.overdue > 10 ? '#ef4444' : colors.text }}>{p.overdue}</Text>
+                                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: p.overdue > 0 ? 'rgba(239,68,68,0.08)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
+                                        <Text style={{ fontSize: 18, fontWeight: '800', color: p.overdue > 0 ? '#ef4444' : colors.text }}>{p.overdue}</Text>
                                         <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1 }}>Overdue</Text>
-                                    </View>
-                                    {/* Messages */}
-                                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 8 }}>
-                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{p.messages}</Text>
-                                        <Text style={{ fontSize: 8, color: colors.textMuted, marginTop: 1, textAlign: 'center' }}>Msgs/wk</Text>
                                     </View>
                                 </View>
                             </Card>
@@ -505,7 +510,7 @@ export default function AdminAnalyticsScreen() {
                                     {/* Info */}
                                     <View style={{ flex: 1 }}>
                                         <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{m.name}</Text>
-                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{m.role}</Text>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{m.role} • {m.projectName}</Text>
                                         <View style={{ marginTop: 6 }}>
                                             <HBar value={m.tasksCompleted} max={50} color={i < 3 ? colors.primary : CHART_COLORS.onTrack} />
                                         </View>
