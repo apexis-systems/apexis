@@ -16,7 +16,9 @@ export interface Snag {
     creator?: { id: number; name: string };
     photoDownloadUrl?: string;
     responsePhotoUrls?: string[];
+    response_photos?: string[];
     createdAt: string;
+    seen_at?: string | null;
 }
 
 export interface Assignee {
@@ -59,4 +61,9 @@ export const deleteSnag = async (id: number): Promise<void> => {
 export const getAssignees = async (projectId: number | string): Promise<Assignee[]> => {
     const res = await PrivateAxios.get('/snags/assignees', { params: { project_id: projectId } });
     return res.data.assignees;
+};
+
+export const markSnagSeen = async (id: number): Promise<{ seen_at: string }> => {
+    const res = await PrivateAxios.patch(`/snags/${id}/seen`);
+    return res.data;
 };

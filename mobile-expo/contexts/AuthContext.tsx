@@ -37,7 +37,7 @@ export const useAuth = () => useContext(AuthContext);
  * but isPendingName is still the stale false value from the previous render.
  */
 const isNamePending = (u: User | null): boolean =>
-    !!u && (!u.name || u.name === 'Pending' || u.name.trim() === '');
+    !!u && (!u.name || u.name === 'New User' || u.name.trim() === '');
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);

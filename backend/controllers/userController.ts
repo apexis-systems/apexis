@@ -15,7 +15,7 @@ import { sendEmail } from "../utils/email.ts";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import sharp from 'sharp';
-import { Op } from "sequelize";
+import { Op, Sequelize } from "sequelize";
 import { getIO } from "../socket.ts";
 
 export const inviteUser = async (req: Request, res: Response) => {
@@ -43,7 +43,7 @@ export const inviteUser = async (req: Request, res: Response) => {
         if (!user) {
             user = await users.create({
                 organization_id: authUser.organization_id,
-                name: "Pending",
+                name: "New User",
                 email,
                 role,
                 is_primary: false,
@@ -160,18 +160,19 @@ export const getOrgUsers = async (req: Request, res: Response) => {
 
         let whereCondition: any = {};
 
+        const purpose = req.query.purpose as string;
+        let allAccessibleProjectIds: number[] = [];
+
         if (baseRole === 'superadmin') {
             whereCondition = {};
         } else {
-            // 1. Find all projects associated with the user
-            // a) Explicitly joined projects (Contributor/Client)
+            // 1. Get projects where user is involved
             const myExplicitMemberships = await project_members.findAll({
                 where: { user_id: authUser.user_id },
                 attributes: ['project_id']
             });
             const explicitProjectIds = myExplicitMemberships.map((pm: any) => pm.project_id);
 
-            // b) Implicitly owned projects (if Admin)
             let adminOwnedProjectIds: number[] = [];
             if (baseRole === 'admin' && primaryOrgId) {
                 const ownedProjects = await projects.findAll({
@@ -181,60 +182,86 @@ export const getOrgUsers = async (req: Request, res: Response) => {
                 adminOwnedProjectIds = ownedProjects.map((p: any) => p.id);
             }
 
-            const allProjectIds = [...new Set([...explicitProjectIds, ...adminOwnedProjectIds])];
+            allAccessibleProjectIds = [...new Set([...explicitProjectIds, ...adminOwnedProjectIds])];
 
             // 2. Identify all peers in these projects
             let peerUserIds: number[] = [];
-            let sharedProjectOrgs: number[] = [];
-
-            if (allProjectIds.length > 0) {
+            if (allAccessibleProjectIds.length > 0) {
                 const projectPeers = await project_members.findAll({
-                    where: { project_id: { [Op.in]: allProjectIds } },
+                    where: { project_id: { [Op.in]: allAccessibleProjectIds } },
                     attributes: ['user_id']
                 });
                 peerUserIds = projectPeers.map((pm: any) => pm.user_id);
-
-                const projectsInScope = await projects.findAll({
-                    where: { id: { [Op.in]: allProjectIds } },
-                    attributes: ['organization_id']
-                });
-                sharedProjectOrgs = projectsInScope.map((p: any) => p.organization_id);
             }
 
-            // 3. Find all admins of all associated organizations plus primary org
-            const accessibleOrgs = [...new Set([primaryOrgId, ...sharedProjectOrgs].filter(Boolean))];
-            const adminUsers = await users.findAll({
-                where: {
-                    organization_id: { [Op.in]: accessibleOrgs },
-                    role: 'admin'
-                },
-                attributes: ['id']
+            // 3. Admins also see their project creators (if they are contributors elsewhere)
+            const projectCreators = await projects.findAll({
+                where: { id: { [Op.in]: allAccessibleProjectIds } },
+                attributes: ['created_by']
             });
-            const adminUserIds = adminUsers.map((a: any) => a.id);
+            const creatorIds = projectCreators.map((p: any) => p.created_by);
 
-            const allowedUserIds = new Set([...peerUserIds, ...adminUserIds, authUser.user_id]);
+            const allowedUserIds = new Set([...peerUserIds, ...creatorIds, authUser.user_id]);
 
-            // 4. Set where condition
             if (baseRole === 'admin' && primaryOrgId) {
-                // Admins see everyone in their primary organization 
-                // PLUS project peers/admins from other orgs where they might be a contributor/client
-                whereCondition = {
-                    [Op.or]: [
-                        { organization_id: primaryOrgId },
-                        { id: { [Op.in]: [...allowedUserIds] } }
-                    ]
-                };
+                // If for management, strictly staff. If for chat/assignment, broader.
+                if (purpose === 'management') {
+                    whereCondition = { organization_id: primaryOrgId };
+                } else {
+                    whereCondition = {
+                        [Op.or]: [
+                            { organization_id: primaryOrgId },
+                            { id: { [Op.in]: [...allowedUserIds] } }
+                        ]
+                    };
+                }
             } else {
-                // Others (Contributors/Clients) strictly see relevant project peers and org admins
                 whereCondition = { id: { [Op.in]: [...allowedUserIds] } };
             }
         }
 
-        const orgUsers = await users.findAll({
+        const rawUsers = await users.findAll({
             where: whereCondition,
             attributes: ['id', 'name', 'email', 'phone_number', 'role', 'profile_pic', 'is_primary', 'email_verified', 'phone_verified', 'createdAt', 'organization_id'],
-            include: [{ model: organizations, attributes: ['name'] }]
+            include: [
+                { model: organizations, attributes: ['name'] },
+                { 
+                    model: project_members, 
+                    attributes: ['role', 'project_id'],
+                    where: allAccessibleProjectIds.length > 0 ? { project_id: { [Op.in]: allAccessibleProjectIds } } : undefined,
+                    required: false,
+                    include: [{ model: projects, attributes: ['name'] }]
+                }
+            ]
         });
+
+        // 4. Post-process to add "Project Admin" roles for creators who aren't in project_members
+        const orgUsers = await Promise.all(rawUsers.map(async (u: any) => {
+            const userJson = u.toJSON();
+            
+            // Find projects created by this user that are also accessible to the requester
+            const createdProjects = await projects.findAll({
+                where: { 
+                    created_by: u.id,
+                    id: { [Op.in]: allAccessibleProjectIds }
+                },
+                attributes: ['id', 'name']
+            });
+
+            createdProjects.forEach((p: any) => {
+                // Check if already in project_members
+                const exists = userJson.project_members.some((pm: any) => pm.project_id === p.id);
+                if (!exists) {
+                    userJson.project_members.push({
+                        role: 'admin',
+                        project_id: p.id,
+                        project: { name: p.name }
+                    });
+                }
+            });
+
+            return userJson;
+        }));
 
         res.status(200).json({ users: orgUsers });
     } catch (error) {
@@ -254,20 +281,13 @@ export const deleteUser = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Forbidden: Only admins can delete users" });
         }
 
-        const userToDelete = await users.findOne({
-            where: {
-                id,
-                organization_id: authUser.organization_id
-            },
-            transaction: t
-        });
-
+        const userToDelete = await users.findByPk(id, { transaction: t });
         if (!userToDelete) {
             await t.rollback();
-            return res.status(404).json({ error: "User not found in your organization" });
+            return res.status(404).json({ error: "User not found" });
         }
 
-        if (userToDelete.is_primary) {
+        if (userToDelete.is_primary && userToDelete.organization_id === authUser.organization_id) {
             await t.rollback();
             return res.status(400).json({ error: "Cannot delete the primary organization administrator" });
         }
@@ -277,27 +297,69 @@ export const deleteUser = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "You cannot remove yourself" });
         }
 
-        if (["admin", "superadmin"].includes(userToDelete.role)) {
-            await t.rollback();
-            return res.status(400).json({ error: "Admins cannot be removed from projects" });
-        }
+        // 1. Identify projects owned by the Admin's organization
+        const ownedProjects = await projects.findAll({
+            where: { organization_id: authUser.organization_id },
+            attributes: ['id'],
+            transaction: t
+        });
+        const ownedProjectIds = ownedProjects.map((p: any) => p.id);
 
+        // 2. Find memberships for this user in THESE projects
         const memberships = await project_members.findAll({
-            where: { user_id: id },
+            where: { 
+                user_id: id,
+                project_id: { [Op.in]: ownedProjectIds }
+            },
             attributes: ['project_id'],
             transaction: t,
         });
         const affectedProjectIds = memberships.map((m: any) => m.project_id);
 
-        // Remove the user from all projects they currently belong to.
-        await project_members.destroy({ where: { user_id: id }, transaction: t });
-        await room_members.destroy({ where: { user_id: id }, transaction: t });
-        await notifications.destroy({ where: { user_id: id }, transaction: t });
+        // 3. Remove memberships and associated data ONLY for these projects
+        await project_members.destroy({ 
+            where: { 
+                user_id: id, 
+                project_id: { [Op.in]: ownedProjectIds }
+            }, 
+            transaction: t 
+        });
+        
+        if (ownedProjectIds.length > 0) {
+            await room_members.destroy({ 
+                where: { 
+                    user_id: id,
+                    room_id: {
+                        [Op.in]: Sequelize.literal(`(SELECT id FROM rooms WHERE project_id IN (${ownedProjectIds.join(',')}))`)
+                    }
+                }, 
+                transaction: t 
+            });
 
-        // 2. Nullify assignees (Safe to nullify)
-        await snags.update({ assigned_to: null }, { where: { assigned_to: id }, transaction: t });
-        await rfis.update({ assigned_to: null }, { where: { assigned_to: id }, transaction: t });
+            // 4. Nullify assignees for tasks in these projects
+            await snags.update({ assigned_to: null }, { 
+                where: { 
+                    assigned_to: id,
+                    project_id: { [Op.in]: ownedProjectIds }
+                }, 
+                transaction: t 
+            });
+            
+            await rfis.update({ assigned_to: null }, { 
+                where: { 
+                    assigned_to: id,
+                    project_id: { [Op.in]: ownedProjectIds }
+                }, 
+                transaction: t 
+            });
+        }
 
+        // 5. Remove from organization (un-link)
+        if (userToDelete.organization_id === authUser.organization_id) {
+            await userToDelete.update({ organization_id: null }, { transaction: t });
+        }
+
+        // 6. Notify affected projects
         for (const projectId of affectedProjectIds) {
             try {
                 getIO().to(`project-${projectId}`).emit('project-stats-updated', { projectId: String(projectId) });
@@ -307,24 +369,15 @@ export const deleteUser = async (req: Request, res: Response) => {
         }
 
         await t.commit();
-        res.status(200).json({ message: "Project access removed successfully" });
+        res.status(200).json({ message: "User removed from organization successfully" });
     } catch (error: any) {
         await t.rollback();
         console.error("Delete User Error:", error);
 
         if (error.name === 'SequelizeForeignKeyConstraintError') {
-            const table = error.table || '';
-            let details = "This user is referenced by other project data.";
-
-            if (table === 'files' || table === 'folders') {
-                details = `User cannot be removed because they have created ${table}. Please deactivate the user instead or reassign their data.`;
-            } else if (table === 'rfis' || table === 'projects') {
-                details = `User cannot be removed because they are the creator of ${table}.`;
-            }
-
             return res.status(400).json({
                 error: "Conflict: User has critical project data",
-                details
+                details: "This user is referenced by other project records. Try deactivating them instead."
             });
         }
 

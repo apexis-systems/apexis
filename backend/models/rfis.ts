@@ -62,6 +62,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
                 defaultValue: [],
             },
+            seen_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+                defaultValue: null,
+            },
         },
         {
             tableName: "rfis",

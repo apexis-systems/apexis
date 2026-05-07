@@ -64,7 +64,7 @@ export const createProject = async (req: Request, res: Response) => {
 
         // Create default folders (Photo & Doc types)
         const folderNames = [
-            "3D files", "3D images", "Architectural", "Automation",
+            "3D images", "Architectural", "Automation",
             "Brick marking", "Carpentry", "Electrical", "Fabrication",
             "Flooring", "HVAC", "Interiors", "Landscape",
             "Permit", "Plumbing", "Structural"
@@ -89,6 +89,15 @@ export const createProject = async (req: Request, res: Response) => {
                 folder_type: "document",
             }));
         });
+
+        // Extra Checklists folder for Documents only
+        folderCreationTasks.push(folders.create({
+            project_id: newProject.id,
+            name: "Checklists",
+            created_by: authUser.user_id,
+            client_visible: true,
+            folder_type: "document",
+        }));
 
         await Promise.all(folderCreationTasks);
 
@@ -128,7 +137,7 @@ export const getProjects = async (req: Request, res: Response) => {
                 // Global Admin view: Fetch projects from primary org
                 const dbUser = await users.findByPk(authUser.user_id);
                 const adminProjectIds: number[] = []; // Admin role doesn't exist in project_members table enum
-                
+
                 whereCondition[Op.or] = [
                     dbUser?.organization_id ? { organization_id: dbUser.organization_id } : null,
                     adminProjectIds.length > 0 ? { id: { [Op.in]: adminProjectIds } } : null
@@ -141,7 +150,7 @@ export const getProjects = async (req: Request, res: Response) => {
                 attributes: ['project_id']
             });
             const projectIds = userMemberships.map((pm: any) => pm.project_id);
-            
+
             if (queryOrgId) {
                 whereCondition.organization_id = queryOrgId;
                 whereCondition.id = { [Op.in]: projectIds };
@@ -226,11 +235,11 @@ export const getProjects = async (req: Request, res: Response) => {
                 const deletedDate = new Date(json.deletedAt);
                 const expiryDate = new Date(deletedDate);
                 expiryDate.setDate(deletedDate.getDate() + 30);
-                
+
                 const now = new Date();
                 const diffTime = expiryDate.getTime() - now.getTime();
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
+
                 json.daysRemaining = Math.max(0, diffDays);
             }
 
@@ -254,7 +263,7 @@ export const getProjectById = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const project = await projects.findOne({ 
+        const project = await projects.findOne({
             where: { id },
             attributes: {
                 include: [
@@ -400,10 +409,10 @@ export const getLatestExport = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "No export found for this project" });
         }
 
-        res.status(200).json({ 
-            downloadUrl, 
+        res.status(200).json({
+            downloadUrl,
             last_export_date: project.last_export_date,
-            activeExport 
+            activeExport
         });
     } catch (error) {
         console.error("Get Latest Export Error:", error);
@@ -453,7 +462,7 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
                 return res.status(403).json({ error: "Not authorized to view share links for this project" });
             }
 
-            const shareUrl = requestedRoleForNonAdmin === "client" 
+            const shareUrl = requestedRoleForNonAdmin === "client"
                 ? `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`
                 : `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
             const shareCode = requestedRoleForNonAdmin === "client" ? project.client_code : project.contributor_code;
@@ -475,12 +484,12 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
         }
 
         const response: any = {};
-        
+
         if (!requestedRole || requestedRole === 'contributor') {
             response.contributorLink = `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
             response.contributorCode = project.contributor_code;
         }
-        
+
         if (!requestedRole || requestedRole === 'client') {
             response.clientLink = `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`;
             response.clientCode = project.client_code;
@@ -550,7 +559,7 @@ export const getMemberForTag = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const project = await projects.findOne({ 
+        const project = await projects.findOne({
             where: { id },
             include: [{
                 model: users,
@@ -674,7 +683,7 @@ export const deleteProject = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Only admins can delete projects" });
         }
 
-        const project = await projects.findOne({ 
+        const project = await projects.findOne({
             where: { id, organization_id: authUser.organization_id },
             transaction: t,
             paranoid: false // Find even if already soft-deleted
@@ -711,9 +720,9 @@ export const restoreProject = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Only admins can restore projects" });
         }
 
-        const project = await projects.findOne({ 
+        const project = await projects.findOne({
             where: { id, organization_id: authUser.organization_id },
-            paranoid: false 
+            paranoid: false
         });
 
         if (!project) {

@@ -15,6 +15,7 @@ import { PDFDocument } from 'pdf-lib';
 import { getIO } from '../socket.ts';
 import { logActivity } from "../utils/activityUtils.ts";
 import { checkStorageLimit, checkSubscriptionStatus } from "../utils/subscriptionAccess.ts";
+import { addDoNotFollowWatermarkToPDF } from "../utils/pdfWatermark.ts";
 
 interface MulterFile {
     buffer: Buffer;
@@ -432,6 +433,54 @@ export const viewFile = async (req: Request, res: Response) => {
     }
 };
 
+export const downloadFile = async (req: Request, res: Response) => {
+    try {
+        const { fileId } = req.params;
+        const file = await files.findByPk(fileId);
+
+        if (!file) {
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        const command = new GetObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: file.file_url,
+        });
+
+        const s3Item = await s3Client.send(command);
+
+        if (!s3Item.Body) {
+            return res.status(404).json({ error: "File content not found" });
+        }
+
+        // Convert S3 body to buffer
+        const chunks: any[] = [];
+        if (typeof (s3Item.Body as any).pipe === "function") {
+            for await (const chunk of s3Item.Body as any) {
+                chunks.push(chunk);
+            }
+        } else if (typeof (s3Item.Body as any).transformToByteArray === "function") {
+            const bytes = await (s3Item.Body as any).transformToByteArray();
+            chunks.push(Buffer.from(bytes));
+        }
+
+        let fileBuffer = Buffer.concat(chunks);
+
+        // Apply watermark if needed
+        if (file.do_not_follow && file.file_type === 'application/pdf') {
+            fileBuffer = await addDoNotFollowWatermarkToPDF(fileBuffer) as any;
+        }
+
+        res.setHeader("Content-Type", file.file_type || "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="${file.file_name}"`);
+        res.send(fileBuffer);
+
+    } catch (error) {
+        console.error("Download File Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const bulkUpdateFiles = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
@@ -656,10 +705,10 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                         const image = await pdfDoc.embedJpg(imageBuffer);
                         const page = pdfDoc.addPage([image.width, image.height]);
                         page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
-                        
+
                         const pdfBytes = await pdfDoc.save();
                         uploadBuffer = Buffer.from(pdfBytes);
-                        
+
                         // Use requested naming convention
                         finalFileName = (file_name || `Scan_${Date.now()}`) + ".pdf";
                         finalMimeType = 'application/pdf';
@@ -671,7 +720,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                         finalFileName = originalName;
                         extension = extMatch ? extMatch[0] : '.jpg';
                     }
-                } 
+                }
                 // CASE 2: It's already a PDF -> JUST SAVE (Preserve everything)
                 else if (isPdf) {
                     console.log(`[DEBUG] Preserving original PDF: ${originalName}`);
@@ -730,7 +779,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
             for (const file of scanFiles) {
                 const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
-                
+
                 if (isPdf) {
                     try {
                         const srcDoc = await PDFDocument.load(file.buffer);
@@ -765,7 +814,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             if (pagesAdded > 0) {
                 const pdfBytes = await pdfDoc.save();
                 const uploadBuffer = Buffer.from(pdfBytes);
-                
+
                 // Use requested naming convention
                 const finalFileName = (file_name || `Scan_${Date.now()}`) + ".pdf";
                 const s3Key = `projects/${project_id}/folders/${folderPath}/${Date.now()}.pdf`;

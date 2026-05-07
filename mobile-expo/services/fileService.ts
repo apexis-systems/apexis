@@ -156,3 +156,15 @@ export const unarchiveFile = async (fileId: string | number, folder_id?: string 
         throw error;
     }
 };
+
+export const downloadFile = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/files/download/${fileId}`, {
+            responseType: 'arraybuffer'
+        });
+        return response.data;
+    } catch (error) {
+        console.error("downloadFile Error", error);
+        throw error;
+    }
+};

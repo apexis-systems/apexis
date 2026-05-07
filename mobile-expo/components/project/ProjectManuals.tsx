@@ -16,7 +16,7 @@ interface Props { project: any; }
 
 const TYPE_OPTIONS: { label: string; value: ManualType }[] = [
     { label: 'Manual', value: 'manual' },
-    { label: 'SOP', value: 'sop' },
+    { label: 'Checklist', value: 'sop' },
 ];
 
 export default function ProjectManuals({ project }: Props) {
@@ -132,7 +132,7 @@ export default function ProjectManuals({ project }: Props) {
                     style={{ height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, marginBottom: 12 }}
                 >
                     <Feather name="upload" size={13} color="#fff" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Manual / SOP</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Manual / Checklist</Text>
                 </TouchableOpacity>
             )}
 
@@ -187,7 +187,7 @@ export default function ProjectManuals({ project }: Props) {
                     {items.length === 0 && (
                         <View style={{ marginTop: 30, alignItems: 'center' }}>
                             <Feather name="book-open" size={32} color={colors.border} />
-                            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No manuals or SOPs yet</Text>
+                            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No manuals or checklists yet</Text>
                         </View>
                     )}
                 </View>
@@ -199,7 +199,7 @@ export default function ProjectManuals({ project }: Props) {
                     <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === 'ios' ? 36 : 20 }}>
                         {/* Header */}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Upload Manual / SOP</Text>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Upload Manual / Checklist</Text>
                             <TouchableOpacity onPress={() => { setShowUpload(false); setPickedFile(null); }}>
                                 <Feather name="x" size={20} color={colors.textMuted} />
                             </TouchableOpacity>

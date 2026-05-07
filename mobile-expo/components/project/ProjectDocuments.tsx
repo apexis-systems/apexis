@@ -10,7 +10,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -590,7 +590,26 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const ext = doc.file_name?.split('.').pop() || 'tmp';
             const localUri = `${(FileSystem as any).cacheDirectory}${doc.file_name || `file_${Date.now()}.${ext}`}`;
 
-            const { uri } = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+            // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
+            let urlToDownload = doc.downloadUrl;
+            let uri = '';
+
+            if (doc.do_not_follow && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
+                const data = await downloadFile(doc.id);
+                // Convert arraybuffer to base64 for FileSystem
+                const base64 = btoa(
+                    new Uint8Array(data).reduce(
+                        (data, byte) => data + String.fromCharCode(byte),
+                        '',
+                    ),
+                );
+                await FileSystem.writeAsStringAsync(localUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+                uri = localUri;
+                urlToDownload = localUri; // For share fallback
+            } else {
+                const downloadResult = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+                uri = downloadResult.uri;
+            }
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
@@ -602,8 +621,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 // Fallback to link sharing if system sharing is unavailable
                 await Share.share({
                     title: doc.file_name,
-                    message: `${doc.file_name}\n${doc.downloadUrl}`,
-                    url: doc.downloadUrl,
+                    message: `${doc.file_name}\n${urlToDownload}`,
+                    url: urlToDownload,
                 });
             }
         } catch (e) {
@@ -859,7 +878,25 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const ext = doc.file_name?.split('.').pop() || 'pdf';
             const localUri = `${(FileSystem as any).cacheDirectory}${doc.file_name || `doc_${Date.now()}.${ext}`}`;
 
-            const { uri } = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+            // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
+            let urlToDownload = doc.downloadUrl;
+            let uri = '';
+
+            if (doc.do_not_follow && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
+                const data = await downloadFile(doc.id);
+                const base64 = btoa(
+                    new Uint8Array(data).reduce(
+                        (data, byte) => data + String.fromCharCode(byte),
+                        '',
+                    ),
+                );
+                await FileSystem.writeAsStringAsync(localUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+                uri = localUri;
+                urlToDownload = localUri;
+            } else {
+                const downloadResult = await FileSystem.downloadAsync(doc.downloadUrl, localUri);
+                uri = downloadResult.uri;
+            }
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
@@ -869,10 +906,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             } else {
                 await Share.share({
                     title: doc.file_name,
-                    url: doc.downloadUrl,
+                    url: urlToDownload,
                 });
             }
         } catch (e) {
+            console.error('Share error:', e);
             Alert.alert("Error", "Failed to share document");
         } finally {
             setProcessing(null);

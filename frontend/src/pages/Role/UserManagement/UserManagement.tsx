@@ -38,7 +38,7 @@ const UserManagement = () => {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const data = await getOrgUsers();
+            const data = await getOrgUsers('management');
             const sorted = (data || []).sort((a: any, b: any) => {
                 if (a.is_primary && !b.is_primary) return -1;
                 if (!a.is_primary && b.is_primary) return 1;
@@ -349,9 +349,35 @@ const UserManagement = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-foreground">
-                                            {u.is_primary && <Shield className="h-3 w-3 text-accent" />}
-                                            {u.role}
+                                        <div className="flex flex-col gap-1.5">
+                                            {u.role === 'admin' || u.role === 'superadmin' ? (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[9px] font-bold uppercase text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10 flex items-center gap-1">
+                                                        <Shield className="h-2.5 w-2.5" />
+                                                        {u.role}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-muted-foreground">
+                                                        (All Projects)
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {u.project_members && u.project_members.length > 0 ? (
+                                                        u.project_members.map((pm: any, idx: number) => (
+                                                            <div key={idx} className="flex items-center gap-2">
+                                                                <span className="text-[9px] font-bold uppercase text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10">
+                                                                    {pm.role}
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-muted-foreground">
+                                                                    {pm.project?.name || 'Project'}
+                                                                </span>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold uppercase text-muted-foreground italic">No projects assigned</span>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">

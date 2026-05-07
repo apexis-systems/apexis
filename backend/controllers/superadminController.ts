@@ -107,7 +107,7 @@ export const inviteSuperAdmin = async (req: Request, res: Response) => {
         } else {
             // Create pending user
             user = await users.create({
-                name: "Pending", // Placeholder
+                name: "New User", // Placeholder
                 email,
                 password: "", // No password yet
                 role: "superadmin",

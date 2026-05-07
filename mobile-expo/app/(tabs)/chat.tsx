@@ -286,14 +286,32 @@ export default function ChatListScreen() {
 
                 {/* Chat Info */}
                 <View style={{ flex: 1, marginLeft: 12, justifyContent: 'center' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={1}>
-                                {displayLabel}
-                            </Text>
-                            {item.type === 'direct' && otherMember?.user?.organization?.name && (
-                                <View style={{ backgroundColor: colors.border, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                    <Text style={{ fontSize: 8, color: colors.textMuted, fontWeight: '800' }}>{otherMember.user.organization.name}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 }}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={1}>
+                                    {displayLabel}
+                                </Text>
+                                {item.type === 'direct' && otherMember?.user?.organization?.name && (
+                                    <View style={{ backgroundColor: colors.border, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                        <Text style={{ fontSize: 7, color: colors.textMuted, fontWeight: '800', textTransform: 'uppercase' }}>{otherMember.user.organization.name}</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            {item.type === 'direct' && otherMember?.user?.project_members?.length > 0 && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                                    {otherMember.user.project_members.slice(0, 1).map((pm: any, pidx: number) => (
+                                        <View key={pidx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <View style={{ backgroundColor: colors.primary + '11', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 }}>
+                                                <Text style={{ fontSize: 7, color: colors.primary, fontWeight: '800', textTransform: 'uppercase' }}>{pm.role}</Text>
+                                            </View>
+                                            <Text style={{ fontSize: 8, color: colors.textMuted, maxWidth: 100 }} numberOfLines={1}>{pm.project?.name}</Text>
+                                        </View>
+                                    ))}
+                                    {otherMember.user.project_members.length > 1 && (
+                                        <Text style={{ fontSize: 7, color: colors.textMuted, fontWeight: '600' }}>+{otherMember.user.project_members.length - 1} more</Text>
+                                    )}
                                 </View>
                             )}
                         </View>
