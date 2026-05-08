@@ -1,121 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Text, PanResponder, Platform } from 'react-native';
+import { View, TouchableOpacity, Text, Animated, PanResponder } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system/legacy';
 
-export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, isMe: boolean, colors: any }) {
+// Shared across ALL VoiceNotePlayer instances — stops any currently playing audio
+let currentlyPlayingRef: { sound: Audio.Sound; pause: () => void } | null = null;
+
+export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay }: { uri: string, isMe: boolean, colors: any, playingUri: string | null, onPlay?: (uri: string) => void }) {
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
     const soundRef = useRef<Audio.Sound | null>(null);
-    const loadPromiseRef = useRef<Promise<Audio.Sound | null> | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const durationRef = useRef(0);
     const [position, setPosition] = useState(0);
     const [isLoaded, setIsLoaded] = useState(false);
-    const [isPreparing, setIsPreparing] = useState(false);
+    const [barWidth, setBarWidth] = useState(0);
     const barWidthRef = useRef(0);
     const isSeeking = useRef(false);
-
-    const getExtensionFromUri = (value: string) => {
-        const cleanUri = value.split('?')[0].toLowerCase();
-        const match = cleanUri.match(/\.([a-z0-9]+)$/);
-        const ext = match?.[1];
-        const supportedExts = new Set(['m4a', 'mp4', 'aac', 'mp3', 'wav', 'caf', 'aif', 'aiff']);
-        return ext && supportedExts.has(ext) ? ext : 'm4a';
-    };
-
-    const unloadSound = async () => {
-        const currentSound = soundRef.current;
-        soundRef.current = null;
-        loadPromiseRef.current = null;
-        setIsLoaded(false);
-        setIsPreparing(false);
-        setIsPlaying(false);
-        setPosition(0);
-        setDuration(0);
-        durationRef.current = 0;
-
-        if (currentSound) {
-            try {
-                await currentSound.unloadAsync();
-            } catch {
-                // Ignore unload failures during teardown or rapid source switches.
-            }
-        }
-    };
-
-    const resolvePlaybackUri = async (sourceUri: string) => {
-        const isRemote = /^https?:\/\//i.test(sourceUri);
-        if (!isRemote || Platform.OS !== 'ios') {
-            return sourceUri;
-        }
-
-        const fileExtension = getExtensionFromUri(sourceUri);
-        const localUri = `${FileSystem.cacheDirectory}voice-note-${encodeURIComponent(sourceUri)}.${fileExtension}`;
-
-        const fileInfo = await FileSystem.getInfoAsync(localUri);
-        if (!fileInfo.exists) {
-            const result = await FileSystem.downloadAsync(sourceUri, localUri);
-            if (result.status !== 200) {
-                throw new Error(`Failed to cache audio file. HTTP ${result.status}`);
-            }
-        }
-
-        return localUri;
-    };
-
-    const ensureSoundLoaded = async () => {
-        if (soundRef.current && isLoaded) {
-            return soundRef.current;
-        }
-
-        if (loadPromiseRef.current) {
-            return loadPromiseRef.current;
-        }
-
-        setIsPreparing(true);
-
-        loadPromiseRef.current = (async () => {
-            try {
-                await Audio.setAudioModeAsync({
-                    allowsRecordingIOS: false,
-                    playsInSilentModeIOS: true,
-                    staysActiveInBackground: false,
-                    shouldDuckAndroid: true,
-                    playThroughEarpieceAndroid: false,
-                });
-
-                const playbackUri = await resolvePlaybackUri(uri);
-
-                const { sound: audioSound, status } = await Audio.Sound.createAsync(
-                    { uri: playbackUri },
-                    { shouldPlay: false, progressUpdateIntervalMillis: 100 },
-                    onPlaybackStatusUpdate
-                );
-
-                soundRef.current = audioSound;
-
-                if (status.isLoaded) {
-                    const nextDuration = status.durationMillis || 0;
-                    setDuration(nextDuration);
-                    durationRef.current = nextDuration;
-                    setPosition(status.positionMillis || 0);
-                    setIsLoaded(true);
-                }
-
-                return audioSound;
-            } catch (error) {
-                await unloadSound();
-                console.error("Error loading voice note", error);
-                return null;
-            } finally {
-                setIsPreparing(false);
-                loadPromiseRef.current = null;
-            }
-        })();
-
-        return loadPromiseRef.current;
-    };
 
     const onPlaybackStatusUpdate = (status: any) => {
         if (status.isLoaded) {
@@ -127,18 +28,18 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
                 durationRef.current = status.durationMillis;
             }
             setIsPlaying(status.isPlaying);
-            
+
             if (status.didJustFinish) {
                 setIsPlaying(false);
                 setPosition(0);
+                // Use stopAsync() instead of setPositionAsync(0).
+                // On Android, setPositionAsync(0) on a finished sound triggers
+                // the audio engine to restart playback. stopAsync() safely
+                // halts and resets position on both iOS and Android.
                 if (soundRef.current) {
-                    soundRef.current.setPositionAsync(0);
+                    soundRef.current.stopAsync().catch(() => {});
                 }
             }
-        } else if ('error' in status && status.error) {
-            console.error("Error loading voice note", status.error);
-            setIsLoaded(false);
-            setIsPlaying(false);
         }
     };
 
@@ -178,29 +79,78 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
     ).current;
 
     useEffect(() => {
-        void unloadSound();
+        let isMounted = true;
 
-        // Preload metadata so duration is visible before the first tap,
-        // while still using the safer cached/lazy iOS loading path.
-        void ensureSoundLoaded();
+        async function init() {
+            try {
+                // Unload previous sound if any
+                if (soundRef.current) {
+                    await soundRef.current.unloadAsync();
+                }
+
+                const { sound: audioSound, status } = await Audio.Sound.createAsync(
+                    { uri },
+                    { progressUpdateIntervalMillis: 100 },
+                    onPlaybackStatusUpdate
+                );
+
+                if (isMounted) {
+                    setSound(audioSound);
+                    soundRef.current = audioSound;
+                    if (status.isLoaded) {
+                        setDuration(status.durationMillis || 0);
+                        durationRef.current = status.durationMillis || 0;
+                        setIsLoaded(true);
+                    }
+                } else {
+                    audioSound.unloadAsync();
+                }
+            } catch (error) {
+                console.error("Error loading voice note", error);
+            }
+        }
+
+        init();
 
         return () => {
-            void unloadSound();
+            isMounted = false;
+            if (soundRef.current) {
+                soundRef.current.unloadAsync();
+            }
         };
     }, [uri]);
 
-    const togglePlayback = async () => {
-        const activeSound = soundRef.current || await ensureSoundLoaded();
-        if (!activeSound) return;
+   
 
-        if (isPlaying) {
-            await activeSound.pauseAsync();
-        } else {
-            const status = await activeSound.getStatusAsync();
-            if (status.isLoaded && status.positionMillis >= (status.durationMillis || 0) - 100) {
-                await activeSound.setPositionAsync(0);
+    const togglePlayback = async () => {
+        const s = soundRef.current;
+        if (!s) return;
+
+        try {
+            if (isPlaying) {
+                await s.pauseAsync();
+                currentlyPlayingRef = null;
+            } else {
+                // Stop whatever is currently playing (different player instance)
+                if (currentlyPlayingRef && currentlyPlayingRef.sound !== s) {
+                    currentlyPlayingRef.pause();
+                }
+
+                // Register this instance as the currently playing one
+                currentlyPlayingRef = {
+                    sound: s,
+                    pause: () => { s.pauseAsync().catch(() => {}); setIsPlaying(false); }
+                };
+
+                // Safety check: if finished, reset to start
+                const status = await s.getStatusAsync();
+                if (status.isLoaded && status.positionMillis >= (status.durationMillis || 0) - 100) {
+                    await s.setPositionAsync(0);
+                }
+                await s.playAsync();
             }
-            await activeSound.playAsync();
+        } catch (e) {
+            // Sound was likely unloaded during re-render
         }
     };
 
@@ -225,57 +175,58 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
 
     return (
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', minWidth: 220, gap: 10, marginVertical: 4 }}>
-            <TouchableOpacity onPress={togglePlayback} disabled={isPreparing}>
+            <TouchableOpacity onPress={togglePlayback} disabled={!isLoaded}>
                 <View style={{
-                    width: 32, 
-                    height: 32, 
-                    borderRadius: 16, 
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
                     backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : colors.primary + '15',
                     alignItems: 'center',
                     justifyContent: 'center'
                 }}>
-                    <Feather 
-                        name={isPreparing ? "loader" : isPlaying ? "pause" : "play"} 
-                        size={16} 
-                        color={isMe ? '#fff' : colors.primary} 
-                        style={!isPlaying && !isPreparing ? { transform: [{ translateX: 1 }] } : {}}
+                    <Feather
+                        name={isPlaying ? "pause" : "play"}
+                        size={16}
+                        color={isMe ? '#fff' : colors.primary}
+                        style={!isPlaying ? { transform: [{ translateX: 1 }] } : {}}
                     />
                 </View>
             </TouchableOpacity>
 
             <View style={{ flex: 1 }}>
-                <View 
+                <View
                     onLayout={(e) => {
                         const width = e.nativeEvent.layout.width;
+                        setBarWidth(width);
                         barWidthRef.current = width;
                     }}
                     {...panResponder.panHandlers}
-                    style={{ 
-                        height: 30, 
+                    style={{
+                        height: 30,
                         justifyContent: 'center',
                         backgroundColor: 'transparent',
                         zIndex: 10
                     }}
                 >
-                    <View 
+                    <View
                         pointerEvents="none"
                         style={{ height: 3, backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : colors.border, borderRadius: 1.5, overflow: 'hidden' }}
                     >
-                        <View style={{ 
-                            height: '100%', 
-                            width: `${progressPercentage}%`, 
-                            backgroundColor: isMe ? '#fff' : colors.primary 
+                        <View style={{
+                            height: '100%',
+                            width: `${progressPercentage}%`,
+                            backgroundColor: isMe ? '#fff' : colors.primary
                         }} />
                     </View>
                     {/* Handle/Thumb */}
-                    <View 
+                    <View
                         pointerEvents="none"
-                        style={{ 
-                            position: 'absolute', 
-                            left: `${progressPercentage}%`, 
-                            width: 12, 
-                            height: 12, 
-                            borderRadius: 6, 
+                        style={{
+                            position: 'absolute',
+                            left: `${progressPercentage}%`,
+                            width: 12,
+                            height: 12,
+                            borderRadius: 6,
                             backgroundColor: isMe ? '#fff' : colors.primary,
                             marginLeft: -6,
                             shadowColor: '#000',
@@ -283,7 +234,7 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
                             shadowOpacity: 0.2,
                             shadowRadius: 1.5,
                             elevation: 2
-                        }} 
+                        }}
                     />
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: -6 }}>

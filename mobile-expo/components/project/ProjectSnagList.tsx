@@ -83,6 +83,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [loading, setLoading] = useState(true);
     // Photo viewer
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+    const [playingUri, setPlayingUri] = useState<string | null>(null);
 
     const [selectedSnag, setSelectedSnag] = useState<Snag | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -771,7 +772,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                                         <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
                                                     </View>
-                                                    <VoiceNotePlayer uri={editAudio} isMe={false} colors={colors} />
+                                                    <VoiceNotePlayer uri={editAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                                     <TouchableOpacity
                                                         onPress={() => { setEditAudio(null); setRemoveEditAudio(true); }}
                                                         style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
@@ -844,7 +845,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                                     <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
                                                 </View>
-                                                <VoiceNotePlayer uri={selectedSnag.audioDownloadUrl || selectedSnag.audio_url!} isMe={false} colors={colors} />
+                                                <VoiceNotePlayer uri={selectedSnag.audioDownloadUrl || selectedSnag.audio_url!} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                             </View>
                                         )}
 
@@ -905,7 +906,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                                                     <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
                                                                 </View>
-                                                                <VoiceNotePlayer uri={url} isMe={false} colors={colors} />
+                                                                <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                                                 {String(selectedSnag.assigned_to) === String(user?.id) && (
                                                                     <TouchableOpacity
                                                                         onPress={() => {
@@ -968,7 +969,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                                                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                                                                 <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
                                                                             </View>
-                                                                            <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                                                            <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                                                         </View>
                                                                     ) : (
                                                                         <Image source={{ uri }} style={{ width: 70, height: 70, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} />
