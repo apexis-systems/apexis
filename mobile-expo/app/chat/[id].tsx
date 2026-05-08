@@ -803,7 +803,7 @@ export default function ChatDetailScreen() {
                                             handleSend({
                                                 uri,
                                                 name: `VoiceNote_${Date.now()}.m4a`,
-                                                type: 'audio/m4a',
+                                                type: 'audio/mp4',
                                                 size: 1024
                                             });
                                         }}
