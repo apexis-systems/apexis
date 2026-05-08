@@ -752,7 +752,7 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
 
-                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: isKeyboardVisible ? 8 : Math.max(8, insets.bottom) + 2, flexDirection: 'row', alignItems: 'flex-end' }}>
+                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: (isKeyboardVisible ? 8 : Math.max(8, insets.bottom) + 2), flexDirection: 'row', alignItems: 'flex-end' }}>
                             {!isRecordingVoice && (
                                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 4, minHeight: 44 }}>
                                     <TextInput
@@ -795,7 +795,7 @@ export default function ChatDetailScreen() {
                             )}
 
                             {(!message.trim() && !attachment) || isRecordingVoice ? (
-                                <View style={{ flex: isRecordingVoice ? 1 : 0 }}>
+                                <View style={{ flex: isRecordingVoice ? 1 : 0, height: isRecordingVoice ? 50 : 35 }}>
                                     <VoiceNoteRecorder
                                         colors={colors}
                                         onRecordingStateChange={setIsRecordingVoice}
