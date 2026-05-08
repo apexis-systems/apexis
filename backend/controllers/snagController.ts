@@ -32,6 +32,22 @@ const withPresignedUrl = async (snag: any) => {
     }
   }
 
+  if (json.audio_url) {
+    try {
+      const cmd = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: json.audio_url,
+      });
+      json.audioDownloadUrl = await getSignedUrl(s3Client, cmd, {
+        expiresIn: 3600,
+      });
+    } catch {
+      json.audioDownloadUrl = null;
+    }
+  } else {
+    json.audioDownloadUrl = null;
+  }
+
   if (json.response_photos && Array.isArray(json.response_photos)) {
     try {
       json.responsePhotoUrls = await Promise.all(
@@ -65,7 +81,7 @@ export const getSnags = async (req: Request, res: Response) => {
     const data = await snags.findAll({
       where: { project_id: Number(project_id) },
       attributes: [
-        "id", "project_id", "title", "description", "photo_url", 
+        "id", "project_id", "title", "description", "photo_url", "audio_url",
         "assigned_to", "status", "response", "response_photos", 
         "created_by", "createdAt", "updatedAt", "seen_at"
       ],
@@ -97,21 +113,30 @@ export const createSnag = async (req: Request, res: Response) => {
         .json({ error: "project_id and title are required" });
     if (!assigned_to)
       return res.status(400).json({ error: "Assignee is required" });
-    if (!(req as any).file)
+    const files = ((req as any).files || {}) as Record<string, Express.Multer.File[]>;
+    const photoFile = files.photo?.[0];
+    const audioFile = files.audio?.[0];
+
+    if (!photoFile)
       return res.status(400).json({ error: "Photo is required" });
     const project = await projects.findByPk(project_id);
     if (!project) return res.status(404).json({ error: "Project not found" });
 
     let photo_url: string | null = null;
-    if ((req as any).file) {
-      let fileBuffer = (req as any).file.buffer;
-      let ext =
-        (req as any).file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
+    let audio_url: string | null = null;
 
-      if ((req as any).file.mimetype.startsWith("image/")) {
+    if (audioFile && audioFile.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
+    }
+
+    if (photoFile) {
+      let fileBuffer = photoFile.buffer;
+      let ext = photoFile.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
+
+      if (photoFile.mimetype.startsWith("image/")) {
         try {
           const senderName = authUser.name || "Someone";
-          fileBuffer = await addWatermark((req as any).file.buffer, project.name, senderName);
+          fileBuffer = await addWatermark(photoFile.buffer, project.name, senderName);
           ext = ".jpg";
         } catch (e) {
           console.error("Sharp error in snag", e);
@@ -123,11 +148,25 @@ export const createSnag = async (req: Request, res: Response) => {
         new PutObjectCommand({
           Bucket: BUCKET_NAME,
           Key: key,
-          ContentType: (req as any).file.mimetype,
+          ContentType: photoFile.mimetype,
           Body: fileBuffer,
         }),
       );
       photo_url = key;
+    }
+
+    if (audioFile) {
+      const ext = audioFile.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".m4a";
+      const key = `projects/${project_id}/snags/audio/${Date.now()}${ext}`;
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          ContentType: audioFile.mimetype,
+          Body: audioFile.buffer,
+        }),
+      );
+      audio_url = key;
     }
 
     const snag = await snags.create({
@@ -135,6 +174,7 @@ export const createSnag = async (req: Request, res: Response) => {
       title: title.trim(),
       description: description?.trim() || null,
       photo_url,
+      audio_url,
       assigned_to: assigned_to ? Number(assigned_to) : null,
       status: "amber",
       created_by: authUser.user_id,
@@ -195,6 +235,7 @@ export const createSnag = async (req: Request, res: Response) => {
     const full = await snags.findByPk((snag as any).id, {
       attributes: [
         "id", "project_id", "title", "description", "photo_url", 
+        "audio_url",
         "assigned_to", "status", "response", "response_photos", 
         "created_by", "createdAt", "updatedAt"
       ],
@@ -254,6 +295,12 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
       const hasNewAudio = req.files.some((f:any) => f.mimetype.startsWith('audio/'));
       const hasNewImage = req.files.some((f:any) => f.mimetype.startsWith('image/'));
+      const imageCount = req.files.filter((f:any) => f.mimetype.startsWith('image/')).length;
+      const audioCount = req.files.filter((f:any) => f.mimetype.startsWith('audio/')).length;
+
+      if (imageCount > 1 || audioCount > 1) {
+        return res.status(400).json({ error: 'Snag responses support only one image and one voice note.' });
+      }
 
       // If new audio is being uploaded, remove existing audio from the response
       if (hasNewAudio) {
@@ -495,7 +542,7 @@ export const updateSnag = async (req: Request | any, res: Response) => {
   try {
     const authUser = (req as any).user;
     const { id } = req.params;
-    const { title, description, assigned_to } = req.body;
+    const { title, description, assigned_to, remove_audio } = req.body;
 
     const snag = await snags.findByPk(id);
     if (!snag) return res.status(404).json({ error: "Snag not found" });
@@ -509,7 +556,7 @@ export const updateSnag = async (req: Request | any, res: Response) => {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    if (snag.response) {
+    if (snag.response || (snag.response_photos && snag.response_photos.length > 0)) {
       return res.status(400).json({ error: "Cannot edit snag because a response has already been generated" });
     }
 
@@ -517,15 +564,23 @@ export const updateSnag = async (req: Request | any, res: Response) => {
     if (description !== undefined) snag.description = description?.trim() || null;
     if (assigned_to) snag.assigned_to = Number(assigned_to);
 
-    if (req.file) {
-      const project = await projects.findByPk(snag.project_id);
-      let fileBuffer = req.file.buffer;
-      let ext = req.file.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
+    const files = (req.files || {}) as Record<string, Express.Multer.File[]>;
+    const photoFile = files.photo?.[0];
+    const audioFile = files.audio?.[0];
 
-      if (req.file.mimetype.startsWith("image/")) {
+    if (audioFile && audioFile.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
+    }
+
+    if (photoFile) {
+      const project = await projects.findByPk(snag.project_id);
+      let fileBuffer = photoFile.buffer;
+      let ext = photoFile.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
+
+      if (photoFile.mimetype.startsWith("image/")) {
         try {
           const senderName = authUser.name || "Someone";
-          fileBuffer = await addWatermark(req.file.buffer, project?.name || 'Apexis', senderName);
+          fileBuffer = await addWatermark(photoFile.buffer, project?.name || 'Apexis', senderName);
           ext = ".jpg";
         } catch (e) {
           console.error("Sharp error in snag edit", e);
@@ -537,11 +592,29 @@ export const updateSnag = async (req: Request | any, res: Response) => {
         new PutObjectCommand({
           Bucket: BUCKET_NAME,
           Key: key,
-          ContentType: req.file.mimetype,
+          ContentType: photoFile.mimetype,
           Body: fileBuffer,
         }),
       );
       snag.photo_url = key;
+    }
+
+    if (remove_audio === 'true') {
+      snag.audio_url = null;
+    }
+
+    if (audioFile) {
+      const ext = audioFile.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".m4a";
+      const key = `projects/${snag.project_id}/snags/audio/${Date.now()}${ext}`;
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          ContentType: audioFile.mimetype,
+          Body: audioFile.buffer,
+        }),
+      );
+      snag.audio_url = key;
     }
 
     await snag.save();
@@ -558,6 +631,7 @@ export const updateSnag = async (req: Request | any, res: Response) => {
     const full = await snags.findByPk(id, {
       attributes: [
         "id", "project_id", "title", "description", "photo_url", 
+        "audio_url",
         "assigned_to", "status", "response", "response_photos", 
         "created_by", "createdAt", "updatedAt"
       ],

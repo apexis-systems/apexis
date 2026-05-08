@@ -8,7 +8,9 @@ export interface Snag {
     title: string;
     description?: string;
     photo_url?: string;
+    audio_url?: string | null;
     photoDownloadUrl?: string;
+    audioDownloadUrl?: string | null;
     assigned_to?: number;
     assignee?: { id: number; name: string; email: string };
     creator?: { id: number; name: string };
@@ -102,4 +104,3 @@ export const markSnagSeen = async (id: number): Promise<{ seen_at: string }> => 
         throw error;
     }
 };
-

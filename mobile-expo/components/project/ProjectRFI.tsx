@@ -61,9 +61,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const insets = useSafeAreaInsets();
   const MAX_RFI_IMAGES = 4;
   const [rfis, setRfis] = useState<RFI[]>([]);
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'overdue'>('all');
+  const [playingUri, setPlayingUri] = useState<string | null>(null);
   const [creatorFilter, setCreatorFilter] = useState<string>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
 
@@ -78,18 +78,22 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [assignedToId, setAssignedToId] = useState<number | null>(null);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
   const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [expiryDate, setExpiryDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [responseBody, setResponseBody] = useState('');
   const [updatingResponse, setUpdatingResponse] = useState(false);
-  const [isLoadingRFIs, setIsLoadingRFIs] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
 
   // Physical Orientation Tracking
   const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
+
+  useEffect(() => {
+    console.log("Playing URI : ", playingUri)
+  }, [playingUri])
 
   useEffect(() => {
     let subscription: any;
@@ -223,6 +227,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     }
   }, [selectedRFI?.id]);
 
+  const selectedImageCount = selectedImages.filter(uri => !isAudio(uri)).length;
+  const hasSelectedAudio = !!selectedAudio;
+  const responseImageCount = responseImages.filter(uri => !isAudio(uri)).length;
+  const hasPendingResponseAudio = responseImages.some(isAudio);
+  const hasExistingResponseImage = !!selectedRFI?.responsePhotoUrls?.some(uri => !isAudio(uri));
+  const hasExistingResponseAudio = !!selectedRFI?.responsePhotoUrls?.some(isAudio);
+
   const projectId = Number(project.id);
 
   const fetchRFIs = useCallback(async (silent = false) => {
@@ -344,7 +355,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   };
 
   const handleImageSelection = async () => {
-    if (selectedImages.length >= MAX_RFI_IMAGES) {
+    if (selectedImageCount >= MAX_RFI_IMAGES) {
       Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
       return;
     }
@@ -392,11 +403,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
       if (cameraMode === 'create') {
         setSelectedImages(prev => [...prev, uri]);
-        setAnnotatingImageIndex(selectedImages.length);
+        setAnnotatingImageIndex(selectedImageCount);
       } else {
         setResponseImages(prev => {
-            const filtered = prev.filter(p => isAudio(p));
-            return [...filtered, uri];
+          const filtered = prev.filter(p => isAudio(p));
+          return [...filtered, uri];
         });
         setAnnotatingImageIndex(0);
       }
@@ -408,7 +419,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
   const capturePhoto = async () => {
     if (!cameraRef.current || isCapturing) return;
-    if (selectedImages.length >= MAX_RFI_IMAGES) {
+    if (cameraMode === 'create' && selectedImageCount >= MAX_RFI_IMAGES) {
       Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
       return;
     }
@@ -450,12 +461,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (cameraMode === 'create') {
         // Append photo for create
         setSelectedImages(prev => [...prev, manipulated.uri]);
-        setAnnotatingImageIndex(selectedImages.length);
+        setAnnotatingImageIndex(selectedImageCount);
       } else {
         // Replace existing image but keep audio
         setResponseImages(prev => {
-            const filtered = prev.filter(p => isAudio(p));
-            return [...filtered, manipulated.uri];
+          const filtered = prev.filter(p => isAudio(p));
+          return [...filtered, manipulated.uri];
         });
         setAnnotatingImageIndex(0);
       }
@@ -473,6 +484,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     setAssignedToId(null);
     setExpiryDate(null);
     setSelectedImages([]);
+    setSelectedAudio(null);
     setRemovedPhotos([]);
     setSelectedFolderIds([]);
     setIsEditing(false);
@@ -504,6 +516,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         const type = match ? `image/${match[1]}` : `image/jpeg`;
         formData.append('photos', { uri, name: filename, type } as any);
       });
+      if (selectedAudio) {
+        const filename = selectedAudio.split('/').pop() || `voice_${Date.now()}.m4a`;
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `audio/${match[1]}` : `audio/mp4`;
+        formData.append('photos', { uri: selectedAudio, name: filename, type } as any);
+      }
 
       await createRFI(formData);
       Alert.alert('Success', 'RFI created successfully');
@@ -547,6 +565,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         const type = match ? `image/${match[1]}` : `image/jpeg`;
         formData.append('photos', { uri, name: filename, type } as any);
       });
+      if (selectedAudio && !selectedAudio.startsWith('http')) {
+        const filename = selectedAudio.split('/').pop() || `voice_${Date.now()}.m4a`;
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `audio/${match[1]}` : `audio/mp4`;
+        formData.append('photos', { uri: selectedAudio, name: filename, type } as any);
+      }
 
       const updated = await updateRFI(selectedRFI.id, formData);
       Alert.alert('Success', 'RFI updated');
@@ -595,7 +619,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       const formData = new FormData();
       const finalComment = commentOverride !== undefined ? commentOverride : responseBody;
       const finalImages = imagesOverride !== undefined ? imagesOverride : responseImages;
-      
+
       formData.append('response', (finalComment || "").trim());
       finalImages.forEach((uri, index) => {
         let filename = uri.split('/').pop() || `resp_${index}.jpg`;
@@ -614,7 +638,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
       const updated = await updateRFIResponse(selectedRFI.id, formData);
       Alert.alert('Success', 'Response updated successfully');
-      
+
       // Update local state to reflect changes immediately
       setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
       setSelectedRFI(updated);
@@ -724,13 +748,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Feather name="calendar" size={10} color={colors.textMuted} />
-                  <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-                  {item.seen_at && (
-                    <Ionicons name="checkmark-done" size={12} color="#f97316" style={{ marginLeft: 4 }} />
-                  )}
-                </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Feather name="calendar" size={10} color={colors.textMuted} />
+                <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                {item.seen_at && (
+                  <Ionicons name="checkmark-done" size={12} color="#f97316" style={{ marginLeft: 4 }} />
+                )}
+              </View>
               {item.expiry_date && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Feather name="clock" size={10} color={item.status === 'overdue' ? '#ef4444' : colors.textMuted} />
@@ -868,7 +892,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         setAssignedToId(selectedRFI.assigned_to);
                         setExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date) : null);
                         setSelectedFolderIds(selectedRFI.folder_ids || []);
-                        setSelectedImages(selectedRFI.photoDownloadUrls || []);
+                        setSelectedImages((selectedRFI.photoDownloadUrls || []).filter(url => !isAudio(url)));
+                        setSelectedAudio((selectedRFI.photoDownloadUrls || []).find(isAudio) || null);
+                        setRemovedPhotos([]);
                         setIsEditing(true);
                         setCreateModalVisible(true);
                       }}>
@@ -929,42 +955,47 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     {(selectedRFI?.photoDownloadUrls?.length || 0) > 0 && (
                       <View style={{ marginBottom: 20 }}>
                         <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>Attachments</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                          {(selectedRFI?.photoDownloadUrls || []).map((url, idx) => (
-                            <View key={idx} style={{ position: 'relative' }}>
-                              {isAudio(url) ? (
-                                <View style={{
+                        {(selectedRFI.photoDownloadUrls || []).filter(url => !isAudio(url)).length > 0 && (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                            {(selectedRFI.photoDownloadUrls || []).filter(url => !isAudio(url)).map((url, idx) => (
+                              <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
+                                <Image
+                                  source={url}
+                                  style={{ width: 120, height: 120, borderRadius: 12 }}
+                                  contentFit="cover"
+                                  transition={200}
+                                />
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        )}
+                        {(selectedRFI.photoDownloadUrls || []).filter(isAudio).length > 0 && (
+                          <View style={{ marginTop: 12, gap: 10 }}>
+                            {(selectedRFI.photoDownloadUrls || []).filter(isAudio).map((url, idx) => (
+                              <View
+                                key={idx}
+                                style={{
                                   padding: 12,
                                   borderWidth: 1,
                                   borderColor: colors.border,
                                   borderRadius: 16,
                                   backgroundColor: colors.surface,
-                                  width: SCREEN_W - 80,
                                   shadowColor: '#000',
                                   shadowOffset: { width: 0, height: 1 },
                                   shadowOpacity: 0.05,
                                   shadowRadius: 2,
                                   elevation: 2
-                                }}>
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
-                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>VOICE ATTACHMENT</Text>
-                                  </View>
-                                  <VoiceNotePlayer uri={url} isMe={false} colors={colors} />
+                                }}
+                              >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
+                                  <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>VOICE ATTACHMENT</Text>
                                 </View>
-                              ) : (
-                                <TouchableOpacity onPress={() => setPreviewImage(url)}>
-                                  <Image
-                                    source={url}
-                                    style={{ width: 120, height: 120, borderRadius: 12 }}
-                                    contentFit="cover"
-                                    transition={200}
-                                  />
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          ))}
-                        </ScrollView>
+                                <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                              </View>
+                            ))}
+                          </View>
+                        )}
                       </View>
                     )}
 
@@ -1082,7 +1113,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                     <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
                                   </View>
-                                  <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                  <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                   {String(selectedRFI.assigned_to) === String(user.id) && (
                                     <TouchableOpacity
                                       onPress={() => {
@@ -1154,7 +1185,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                         <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
                                       </View>
-                                      <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                      <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                     </View>
                                   ) : (
                                     <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
@@ -1175,35 +1206,39 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                   )}
                                 </View>
                               ))}
-                              <TouchableOpacity
-                                onPress={pickResponsePhotos}
-                                style={{
-                                  width: 80, height: 80, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
-                                  alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
-                                }}
-                              >
-                                <Feather name="camera" size={24} color={colors.textMuted} />
-                              </TouchableOpacity>
+                              {!responseImageCount && !hasExistingResponseImage && (
+                                <TouchableOpacity
+                                  onPress={pickResponsePhotos}
+                                  style={{
+                                    width: 80, height: 80, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
+                                    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
+                                  }}
+                                >
+                                  <Feather name="camera" size={24} color={colors.textMuted} />
+                                </TouchableOpacity>
+                              )}
 
                             </View>
-                            
+
                             {/* Voice Recording Section */}
-                            <View style={{ 
-                                marginTop: 12,
-                                marginBottom: 8,
-                                minHeight: 44,
-                                justifyContent: 'center'
+                            <View style={{
+                              marginTop: 12,
+                              marginBottom: 8,
+                              minHeight: 44,
+                              justifyContent: 'center'
                             }}>
-                              <VoiceNoteRecorder
-                                colors={colors}
-                                onRecordingStateChange={setIsRecordingVoice}
-                                onSend={(uri) => {
+                              {!hasPendingResponseAudio && !hasExistingResponseAudio && (
+                                <VoiceNoteRecorder
+                                  colors={colors}
+                                  onRecordingStateChange={() => { }}
+                                  onSend={(uri) => {
                                     setResponseImages(prev => {
-                                        const filtered = prev.filter(p => !isAudio(p));
-                                        return [...filtered, uri];
+                                      const filtered = prev.filter(p => !isAudio(p));
+                                      return [...filtered, uri];
                                     });
-                                }}
-                              />
+                                  }}
+                                />
+                              )}
                             </View>
                             <TouchableOpacity
                               onPress={() => handleUpdateResponse()}
@@ -1473,22 +1508,57 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             </TouchableOpacity>
                           </View>
                         ))}
-                        <TouchableOpacity
-                          onPress={handleImageSelection}
-                          style={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: 10,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            borderStyle: 'dashed',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: colors.surface
-                          }}
-                        >
-                          <Feather name="camera" size={24} color={colors.textMuted} />
-                        </TouchableOpacity>
+                        {selectedImageCount < MAX_RFI_IMAGES && (
+                          <TouchableOpacity
+                            onPress={handleImageSelection}
+                            style={{
+                              width: 80,
+                              height: 80,
+                              borderRadius: 10,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                              borderStyle: 'dashed',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: colors.surface
+                            }}
+                          >
+                            <Feather name="camera" size={24} color={colors.textMuted} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <View style={{ marginTop: 12 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Voice Note</Text>
+                        {selectedAudio ? (
+                          <View style={{ position: 'relative', padding: 12, paddingRight: 36, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                              <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                            </View>
+                            <VoiceNotePlayer uri={selectedAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                            <TouchableOpacity
+                              onPress={() => {
+                                if (isEditing && selectedRFI && selectedAudio.startsWith('http')) {
+                                  const originalIdx = selectedRFI.photoDownloadUrls?.findIndex(url => url.split('?')[0] === selectedAudio.split('?')[0]);
+                                  if (originalIdx !== undefined && originalIdx !== -1) {
+                                    const keyToRemove = selectedRFI.photos?.[originalIdx];
+                                    if (keyToRemove) setRemovedPhotos(prev => [...prev, keyToRemove]);
+                                  }
+                                }
+                                setSelectedAudio(null);
+                              }}
+                              style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                            >
+                              <Feather name="x" size={14} color="#fff" />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <VoiceNoteRecorder
+                            colors={colors}
+                            onRecordingStateChange={() => { }}
+                            onSend={(uri) => setSelectedAudio(uri)}
+                          />
+                        )}
                       </View>
                     </View>
 
@@ -2124,22 +2194,57 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               </TouchableOpacity>
                             </View>
                           ))}
-                          <TouchableOpacity
-                            onPress={handleImageSelection}
-                            style={{
-                              width: 80,
-                              height: 80,
-                              borderRadius: 10,
-                              borderWidth: 1,
-                              borderColor: colors.border,
-                              borderStyle: 'dashed',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              backgroundColor: colors.surface
-                            }}
-                          >
-                            <Feather name="camera" size={24} color={colors.textMuted} />
-                          </TouchableOpacity>
+                          {selectedImageCount < MAX_RFI_IMAGES && (
+                            <TouchableOpacity
+                              onPress={handleImageSelection}
+                              style={{
+                                width: 80,
+                                height: 80,
+                                borderRadius: 10,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                borderStyle: 'dashed',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: colors.surface
+                              }}
+                            >
+                              <Feather name="camera" size={24} color={colors.textMuted} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        <View style={{ marginTop: 12 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Voice Note</Text>
+                          {selectedAudio ? (
+                            <View style={{ position: 'relative', padding: 12, paddingRight: 36, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                              </View>
+                              <VoiceNotePlayer uri={selectedAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                              <TouchableOpacity
+                                onPress={() => {
+                                  if (isEditing && selectedRFI && selectedAudio.startsWith('http')) {
+                                    const originalIdx = selectedRFI.photoDownloadUrls?.findIndex(url => url.split('?')[0] === selectedAudio.split('?')[0]);
+                                    if (originalIdx !== undefined && originalIdx !== -1) {
+                                      const keyToRemove = selectedRFI.photos?.[originalIdx];
+                                      if (keyToRemove) setRemovedPhotos(prev => [...prev, keyToRemove]);
+                                    }
+                                  }
+                                  setSelectedAudio(null);
+                                }}
+                                style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                              >
+                                <Feather name="x" size={14} color="#fff" />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <VoiceNoteRecorder
+                              colors={colors}
+                              onRecordingStateChange={() => { }}
+                              onSend={(uri) => setSelectedAudio(uri)}
+                            />
+                          )}
                         </View>
                       </View>
 

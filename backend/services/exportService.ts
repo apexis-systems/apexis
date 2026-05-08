@@ -948,14 +948,14 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 5 - UPLOADED PHOTOS', left, doc.y).restore();
             doc.moveDown(1);
 
-            const gridCols = 4;
+            const gridCols = 3;
             const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
-            const gapX = 15;
-            const gapY = 30; // Increased gap for text
+            const gapX = 10;
+            const gapY = 25;
 
             const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.85; // Slightly taller slot for better fit
+            const imgH = imgW * 0.85;
 
             let currentX = left;
             let startY = doc.y;
@@ -973,14 +973,14 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
                 try {
                     const imgBuffer = await fetchS3Buffer(photo.key);
                     // Use 'fit' to prevent stretching and maintain aspect ratio
-                    doc.image(imgBuffer, currentX, startY, { 
+                    doc.image(imgBuffer, currentX, startY, {
                         fit: [imgW, imgH],
                         align: 'center',
                         valign: 'center'
                     });
 
                     // Draw path below image
-                    doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(
+                    doc.font('Helvetica').fontSize(4.5).fillColor(BRAND.muted).text(
                         photo.path,
                         currentX,
                         startY + imgH + 4,
@@ -1141,13 +1141,14 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
             doc.y = 85;
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 6 - UPLOADED PHOTOS', left, doc.y).restore();
             doc.moveDown(1);
-            const gridCols = 4;
+            const gridCols = 3;
             const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
-            const gapX = 15;
-            const gapY = 30; // Increased gap for text
+            const gapX = 10;
+            const gapY = 25;
             const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.85; // Slightly taller slot for better fit
+            const imgH = imgW * 0.85;
+
             let currentX = left;
             let startY = doc.y;
             for (let i = 0; i < uploadedPhotos.length; i++) {
@@ -1161,12 +1162,12 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
                 try {
                     const imgBuffer = await fetchS3Buffer(photo.key);
                     // Use 'fit' to prevent stretching and maintain aspect ratio
-                    doc.image(imgBuffer, currentX, startY, { 
+                    doc.image(imgBuffer, currentX, startY, {
                         fit: [imgW, imgH],
                         align: 'center',
                         valign: 'center'
                     });
-                    doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
+                    doc.font('Helvetica').fontSize(4.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
                 } catch (e) {
                     doc.rect(currentX, startY, imgW, imgH).stroke();
                     doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });
@@ -1347,13 +1348,14 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
             doc.y = 85;
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 6 - UPLOADED PHOTOS', left, doc.y).restore();
             doc.moveDown(1);
-            const gridCols = 4;
+            const gridCols = 3;
             const gridRows = 4;
             const photosPerPage = gridCols * gridRows;
-            const gapX = 15;
-            const gapY = 30; // Increased gap for text
+            const gapX = 10;
+            const gapY = 25;
             const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.85; // Slightly taller slot for better fit
+            const imgH = imgW * 0.85;
+
             let currentX = left;
             let startY = doc.y;
             for (let i = 0; i < uploadedPhotos.length; i++) {
@@ -1367,12 +1369,12 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
                 try {
                     const imgBuffer = await fetchS3Buffer(photo.key);
                     // Use 'fit' to prevent stretching and maintain aspect ratio
-                    doc.image(imgBuffer, currentX, startY, { 
+                    doc.image(imgBuffer, currentX, startY, {
                         fit: [imgW, imgH],
                         align: 'center',
                         valign: 'center'
                     });
-                    doc.font('Helvetica').fontSize(6.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
+                    doc.font('Helvetica').fontSize(4.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
                 } catch (e) {
                     doc.rect(currentX, startY, imgW, imgH).stroke();
                     doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });

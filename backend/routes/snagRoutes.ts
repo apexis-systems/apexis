@@ -11,10 +11,10 @@ router.use(verifyToken);
 
 router.get('/assignees', getAssignees);
 router.get('/', getSnags);
-router.post('/', upload.single('photo'), checkLimit('snag'), createSnag);
-router.patch('/:id/status', upload.array('photos', 3), updateSnagStatus);
+router.post('/', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), checkLimit('snag'), createSnag);
+router.patch('/:id/status', upload.array('photos', 2), updateSnagStatus);
 router.patch('/:id/seen', markSnagSeen);
-router.patch('/:id', upload.single('photo'), updateSnag);
+router.patch('/:id', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), updateSnag);
 router.delete('/:id', deleteSnag);
 
 export default router;

@@ -33,6 +33,8 @@ const isAudio = (url: string) => {
     }
 };
 
+const isAudioFile = (file: File) => file.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(file.name);
+
 interface ProjectSnagListProps {
   project: Project;
   compact?: boolean;
@@ -51,7 +53,6 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialSnagId = searchParams?.get('snagId');
-  if (!project) return null;
 
   const [snags, setSnags] = useState<Snag[]>([]);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
@@ -65,6 +66,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [newAssignee, setNewAssignee] = useState('');
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [newAudio, setNewAudio] = useState<File | null>(null);
+  const [audioPreview, setAudioPreview] = useState<string | null>(null);
+  const [removeExistingAudio, setRemoveExistingAudio] = useState(false);
   const [viewPhoto, setViewPhoto] = useState<string | null>(null);
   
   const [selectedSnag, setSelectedSnag] = useState<Snag | null>(null);
@@ -106,6 +110,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       setResponsePhotoPreviews([]);
     }
   }, [selectedSnag?.id]);
+
+  const hasExistingSnagAudio = isEditing && !!selectedSnag?.audioDownloadUrl && !removeExistingAudio && !audioPreview;
+  const hasPendingResponseImage = responsePhotos.some(file => !isAudioFile(file));
+  const hasPendingResponseAudio = responsePhotos.some(isAudioFile);
+  const hasExistingResponseImage = !!selectedSnag?.responsePhotoUrls?.some(url => !isAudio(url));
+  const hasExistingResponseAudio = !!selectedSnag?.responsePhotoUrls?.some(isAudio);
 
   useEffect(() => {
     if (selectedSnag && String(selectedSnag.assigned_to) === String(user?.id) && !selectedSnag.seen_at) {
@@ -221,11 +231,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       if (newDescription.trim()) form.append('description', newDescription.trim());
       if (newAssignee) form.append('assigned_to', newAssignee);
       if (newPhoto) form.append('photo', newPhoto);
+      if (newAudio) form.append('audio', newAudio);
 
       const snag = await createSnag(form);
       setSnags(prev => [snag, ...prev]);
       setNewTitle(''); setNewDescription(''); setNewAssignee('');
-      setNewPhoto(null); setPhotoPreview(null);
+      setNewPhoto(null); setPhotoPreview(null); setNewAudio(null); setAudioPreview(null);
       setShowAdd(false);
       toast.success('Snag added');
     } catch (error) {
@@ -246,10 +257,15 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       if (newDescription.trim()) form.append('description', newDescription.trim());
       if (newAssignee) form.append('assigned_to', newAssignee);
       if (newPhoto) form.append('photo', newPhoto);
+      if (newAudio) form.append('audio', newAudio);
+      if (removeExistingAudio) form.append('remove_audio', 'true');
 
       const updated = await updateSnag(selectedSnag.id, form);
       setSnags(prev => prev.map(s => s.id === selectedSnag.id ? updated : s));
       setSelectedSnag(updated);
+      setNewAudio(null);
+      setAudioPreview(null);
+      setRemoveExistingAudio(false);
       setIsEditing(false);
       toast.success('Snag updated');
     } catch (error) {
@@ -271,6 +287,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   };
 
   if (loading) return <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-accent" /></div>;
+  if (!project) return null;
 
   return (
     <div className={cn(compact ? '' : 'mt-3')}>
@@ -370,7 +387,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       {/* Add/Edit Snag Dialog */}
       <Dialog open={showAdd || isEditing} onOpenChange={(open) => {
         if (!open) {
-          setNewPhoto(null); setPhotoPreview(null);
+          setNewPhoto(null); setPhotoPreview(null); setNewAudio(null); setAudioPreview(null); setRemoveExistingAudio(false);
           setNewTitle(''); setNewDescription(''); setNewAssignee('');
           setShowAdd(false); setIsEditing(false);
         }
@@ -430,10 +447,51 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                 ))}
               </SelectContent>
             </Select>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Voice Note</p>
+              {audioPreview ? (
+                <div className="relative rounded-xl border border-border bg-card p-3 pr-10">
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-accent" />
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                  </div>
+                  <VoiceNotePlayer url={audioPreview} isMe={false} />
+                  <button
+                    onClick={() => { setNewAudio(null); setAudioPreview(null); }}
+                    className="absolute right-2 top-2 rounded-full bg-destructive/90 p-1"
+                  >
+                    <X className="h-3 w-3 text-white" />
+                  </button>
+                </div>
+              ) : hasExistingSnagAudio ? (
+                <div className="relative rounded-xl border border-border bg-card p-3 pr-10">
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-accent" />
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                  </div>
+                  <VoiceNotePlayer url={selectedSnag!.audioDownloadUrl!} isMe={false} />
+                  <button
+                    onClick={() => setRemoveExistingAudio(true)}
+                    className="absolute right-2 top-2 rounded-full bg-destructive/90 p-1"
+                  >
+                    <X className="h-3 w-3 text-white" />
+                  </button>
+                </div>
+              ) : (
+                <VoiceNoteRecorder
+                  onSend={(file) => {
+                    setNewAudio(file);
+                    setAudioPreview(URL.createObjectURL(file));
+                    setRemoveExistingAudio(false);
+                  }}
+                />
+              )}
+            </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowAdd(false); setIsEditing(false); }} disabled={submitting}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowAdd(false); setIsEditing(false); setNewAudio(null); setAudioPreview(null); setRemoveExistingAudio(false); }} disabled={submitting}>Cancel</Button>
             <Button onClick={isEditing ? handleUpdateSnag : addSnag} disabled={submitting || !newTitle.trim() || (!isEditing && !newPhoto) || !newAssignee} className="bg-accent text-accent-foreground hover:bg-accent/90">
               {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (isEditing ? 'Save Changes' : 'Add Snag')}
             </Button>
@@ -461,7 +519,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                             setNewTitle(selectedSnag.title);
                             setNewDescription(selectedSnag.description || '');
                             setNewAssignee(String(selectedSnag.assigned_to));
+                            setNewPhoto(null);
                             setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
+                            setNewAudio(null);
+                            setAudioPreview(null);
+                            setRemoveExistingAudio(false);
                             setIsEditing(true);
                           }}
                         >
@@ -489,6 +551,16 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                 {selectedSnag.photoDownloadUrl && (
                   <div className="aspect-video rounded-lg overflow-hidden border border-border cursor-pointer" onClick={() => setViewPhoto(selectedSnag.photoDownloadUrl || null)}>
                     <img src={selectedSnag.photoDownloadUrl} alt="Snag" className="w-full h-full object-cover" />
+                  </div>
+                )}
+
+                {(selectedSnag.audioDownloadUrl || selectedSnag.audio_url) && (
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-accent" />
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                    </div>
+                    <VoiceNotePlayer url={selectedSnag.audioDownloadUrl || selectedSnag.audio_url!} isMe={false} />
                   </div>
                 )}
 
@@ -619,32 +691,28 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                           );
                         })}
                         <div className="flex items-center gap-2">
-                          <button 
-                            className="w-12 h-12 border-2 border-dashed border-border rounded flex items-center justify-center hover:border-accent/50 transition-colors"
-                            onClick={() => responseFileInputRef.current?.click()}
-                          >
-                            <Plus className="h-4 w-4 text-muted-foreground" />
-                          </button>
-                          <div className="flex items-center justify-center">
-                            <VoiceNoteRecorder 
-                              onSend={(file) => {
-                                const url = URL.createObjectURL(file);
-                                // Replace existing audio if any
-                                setResponsePhotos(prev => {
-                                  const filtered = prev.filter(f => !f.type.startsWith('audio/') && !f.name.endsWith('.m4a') && !f.name.endsWith('.webm'));
-                                  return [...filtered, file];
-                                });
-                                setResponsePhotoPreviews(prev => {
-                                  // We need to find the index of the audio file in the original list to replace it properly
-                                  // but since we want to replace ANY audio, we filter first.
-                                  // However, setResponsePhotoPreviews usually maps 1:1 with setResponsePhotos.
-                                  // A safer way is to rebuild the previews list or filter it.
-                                  const filtered = prev.filter(p => !p.startsWith('blob:audio') && !p.includes('audio'));
-                                  return [...filtered, url];
-                                });
-                              }}
-                            />
-                          </div>
+                          {!hasPendingResponseImage && !hasExistingResponseImage && (
+                            <button 
+                              className="w-12 h-12 border-2 border-dashed border-border rounded flex items-center justify-center hover:border-accent/50 transition-colors"
+                              onClick={() => responseFileInputRef.current?.click()}
+                            >
+                              <Plus className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          )}
+                          {!hasPendingResponseAudio && !hasExistingResponseAudio && (
+                            <div className="flex items-center justify-center">
+                              <VoiceNoteRecorder 
+                                onSend={(file) => {
+                                  const url = URL.createObjectURL(file);
+                                  setResponsePhotos(prev => [...prev.filter(f => !isAudioFile(f)), file]);
+                                  setResponsePhotoPreviews(prev => [...prev.filter((_, idx) => {
+                                    const existingFile = responsePhotos[idx];
+                                    return existingFile ? !isAudioFile(existingFile) : false;
+                                  }), url]);
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                       <input 
@@ -659,7 +727,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                           const file = files[0];
                           
                           setResponsePhotos(prev => {
-                            const filtered = prev.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.m4a') || f.name.endsWith('.webm'));
+                            const filtered = prev.filter(isAudioFile);
                             return [...filtered, file];
                           });
 

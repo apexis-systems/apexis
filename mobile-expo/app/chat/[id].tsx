@@ -59,6 +59,7 @@ export default function ChatDetailScreen() {
     const [isDownloading, setIsDownloading] = useState<string | null>(null);
     const [isSending, setIsSending] = useState(false);
     const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+    const [playingAudioUri, setPlayingAudioUri] = useState<string | null>(null);
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
@@ -393,7 +394,7 @@ export default function ChatDetailScreen() {
         }
     }, []);
 
-    const MessageItem = React.memo(({ item, isMe, time, setReplyTo, focusInput, scrollToMessage, setFullScreenImage, handleDownload, isDownloading, colors, isDark }: any) => {
+    const MessageItem = React.memo(({ item, isMe, time, setReplyTo, focusInput, scrollToMessage, setFullScreenImage, handleDownload, isDownloading, colors, isDark, playingAudioUri, setPlayingAudioUri }: any) => {
         const swipeableRef = useRef<any>(null);
 
         const renderLeftActions = () => {
@@ -492,7 +493,13 @@ export default function ChatDetailScreen() {
 
                         {(item.type === 'audio' || item.file_type?.startsWith('audio/')) && item.downloadUrl && (
                             <View style={{ minWidth: 220 }}>
-                                <VoiceNotePlayer uri={item.downloadUrl} isMe={isMe} colors={colors} />
+                                <VoiceNotePlayer
+                                    uri={item.downloadUrl}
+                                    isMe={isMe}
+                                    colors={colors}
+                                    playingUri={playingAudioUri}
+                                    onPlay={setPlayingAudioUri}
+                                />
                             </View>
                         )}
 
@@ -594,9 +601,11 @@ export default function ChatDetailScreen() {
                 isDownloading={isDownloading}
                 colors={colors}
                 isDark={isDark}
+                playingAudioUri={playingAudioUri}
+                setPlayingAudioUri={setPlayingAudioUri}
             />
         );
-    }, [user?.id, colors, isDark, isDownloading, scrollToMessage, handleDownload]);
+    }, [user?.id, colors, isDark, isDownloading, scrollToMessage, handleDownload, playingAudioUri]);
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -752,7 +761,7 @@ export default function ChatDetailScreen() {
                             </View>
                         )}
 
-                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: isKeyboardVisible ? 8 : Math.max(8, insets.bottom) + 2, flexDirection: 'row', alignItems: 'flex-end' }}>
+                        <View style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: (isKeyboardVisible ? 8 : Math.max(8, insets.bottom) + 2), flexDirection: 'row', alignItems: 'flex-end' }}>
                             {!isRecordingVoice && (
                                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 4, minHeight: 44 }}>
                                     <TextInput
@@ -795,7 +804,7 @@ export default function ChatDetailScreen() {
                             )}
 
                             {(!message.trim() && !attachment) || isRecordingVoice ? (
-                                <View style={{ flex: isRecordingVoice ? 1 : 0 }}>
+                                <View style={{ flex: isRecordingVoice ? 1 : 0, height: isRecordingVoice ? 50 : 35 }}>
                                     <VoiceNoteRecorder
                                         colors={colors}
                                         onRecordingStateChange={setIsRecordingVoice}
@@ -803,7 +812,7 @@ export default function ChatDetailScreen() {
                                             handleSend({
                                                 uri,
                                                 name: `VoiceNote_${Date.now()}.m4a`,
-                                                type: 'audio/m4a',
+                                                type: 'audio/mp4',
                                                 size: 1024
                                             });
                                         }}
