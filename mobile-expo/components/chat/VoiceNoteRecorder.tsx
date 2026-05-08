@@ -140,7 +140,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
     };
 
     return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 3 ,paddingBottom: 10 }}>
             {isRecording ? (
                 <View style={{ 
                     flexDirection: 'row', 
@@ -157,7 +157,8 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                     shadowOffset: { width: 0, height: 1 },
                     shadowOpacity: 0.1,
                     shadowRadius: 2,
-                    elevation: 2
+                    elevation: 2,
+                    
                 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -179,7 +180,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                 </View>
             ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <View style={{ 
+                    {/* <View style={{ 
                         flex: 1, 
                         height: 44, 
                         backgroundColor: colors.surface, 
@@ -193,8 +194,8 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                         gap: 10
                     }}>
                         <Feather name="mic" size={16} color={colors.textMuted} />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted }}>Tap mic to record voice response</Text>
-                    </View>
+                        {/* <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted }}>Tap mic to record voice response</Text> */}
+                    {/* </View>  */}
                 </View>
             )}
 
@@ -207,7 +208,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                     backgroundColor: isRecording ? '#22c55e' : colors.primary,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    marginLeft: 12,
+                    marginLeft: 10,
                     shadowColor: isRecording ? '#22c55e' : colors.primary,
                     shadowOffset: { width: 0, height: 2 },
                     shadowOpacity: 0.3,
