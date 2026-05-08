@@ -42,6 +42,8 @@ const isAudio = (url: string) => {
     }
 };
 
+const isAudioFile = (file: File) => file.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(file.name);
+
 interface ProjectRFIProps {
     project: Project;
     onUpdate?: () => void;
@@ -80,6 +82,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [newExpiryDate, setNewExpiryDate] = useState('');
     const [newPhotos, setNewPhotos] = useState<File[]>([]);
     const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+    const [newAudio, setNewAudio] = useState<File | null>(null);
+    const [audioPreview, setAudioPreview] = useState<string | null>(null);
+    const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
+    const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null);
+    const [existingAudioKey, setExistingAudioKey] = useState<string | null>(null);
     const [responseBody, setResponseBody] = useState('');
     const [responsePhotos, setResponsePhotos] = useState<File[]>([]);
     const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
@@ -131,6 +138,12 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             setResponsePhotoPreviews([]);
         }
     }, [selectedRFI?.id]);
+
+    const hasExistingFormAudio = !!existingAudioUrl && !audioPreview;
+    const hasPendingResponseImage = responsePhotos.some(file => !isAudioFile(file));
+    const hasPendingResponseAudio = responsePhotos.some(isAudioFile);
+    const hasExistingResponseImage = !!selectedRFI?.responsePhotoUrls?.some(url => !isAudio(url));
+    const hasExistingResponseAudio = !!selectedRFI?.responsePhotoUrls?.some(isAudio);
 
     useEffect(() => {
         if (selectedRFI && String(selectedRFI.assigned_to) === String(user?.id) && !selectedRFI.seen_at) {
@@ -227,8 +240,8 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         if (validFiles.length !== files.length) toast.error('Some files were skipped (not images)');
 
         const total = newPhotos.length + validFiles.length;
-        if (total > 3) {
-            toast.error('Maximum 3 photos allowed');
+        if (total > 4) {
+            toast.error('Maximum 4 photos allowed');
             return;
         }
 
@@ -275,6 +288,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             form.append('assigned_to', newAssignee);
             if (newExpiryDate) form.append('expiry_date', newExpiryDate);
             newPhotos.forEach(photo => form.append('photos', photo));
+            if (newAudio) form.append('photos', newAudio);
             if (selectedFolderIds.length > 0) {
                 form.append('folder_ids', selectedFolderIds.join(','));
             }
@@ -322,6 +336,10 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             form.append('assigned_to', newAssignee);
             if (newExpiryDate) form.append('expiry_date', newExpiryDate);
             newPhotos.forEach(photo => form.append('photos', photo));
+            if (newAudio) form.append('photos', newAudio);
+            if (removedPhotos.length > 0) {
+                form.append('removedPhotos', JSON.stringify(removedPhotos));
+            }
             form.append('folder_ids', selectedFolderIds.join(','));
 
             const updated = await updateRFI(selectedRFI.id, form);
@@ -359,6 +377,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         setNewExpiryDate('');
         setNewPhotos([]);
         setPhotoPreviews([]);
+        setNewAudio(null);
+        setAudioPreview(null);
+        setRemovedPhotos([]);
+        setExistingAudioUrl(null);
+        setExistingAudioKey(null);
         setSelectedFolderIds([]);
     };
 
@@ -613,13 +636,54 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         </div>
                                     </div>
                                 ))}
-                                {photoPreviews.length < 3 && (
+                                {photoPreviews.length < 4 && (
                                     <label className="w-20 h-20 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
                                         <ImagePlus className="h-6 w-6 text-muted-foreground" />
                                         <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
                                     </label>
                                 )}
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Voice Note</label>
+                            {audioPreview ? (
+                                <div className="relative rounded-xl border border-border bg-card p-4 pr-10">
+                                    <div className="mb-2 flex items-center gap-2">
+                                        <div className="h-2 w-2 rounded-full bg-accent" />
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                                    </div>
+                                    <VoiceNotePlayer url={audioPreview} isMe={false} />
+                                    <button onClick={() => { setNewAudio(null); setAudioPreview(null); }} className="absolute top-2 right-2 rounded-full bg-destructive/90 p-1.5">
+                                        <X className="h-3 w-3 text-white" />
+                                    </button>
+                                </div>
+                            ) : hasExistingFormAudio ? (
+                                <div className="relative rounded-xl border border-border bg-card p-4 pr-10">
+                                    <div className="mb-2 flex items-center gap-2">
+                                        <div className="h-2 w-2 rounded-full bg-accent" />
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                                    </div>
+                                    <VoiceNotePlayer url={existingAudioUrl!} isMe={false} />
+                                    <button
+                                        onClick={() => {
+                                            if (existingAudioKey) setRemovedPhotos(prev => [...prev, existingAudioKey]);
+                                            setExistingAudioUrl(null);
+                                            setExistingAudioKey(null);
+                                        }}
+                                        className="absolute top-2 right-2 rounded-full bg-destructive/90 p-1.5"
+                                    >
+                                        <X className="h-3 w-3 text-white" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <VoiceNoteRecorder
+                                    onSend={(file) => {
+                                        setNewAudio(file);
+                                        setAudioPreview(URL.createObjectURL(file));
+                                    }}
+                                />
+                            )}
                         </div>
 
                         {/* <div className="space-y-2">
@@ -686,7 +750,17 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         setNewDescription(selectedRFI.description || '');
                                                         setNewAssignee(String(selectedRFI.assigned_to));
                                                         setNewExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date).toISOString().slice(0, 16) : '');
-                                                        setPhotoPreviews(selectedRFI.photoDownloadUrls || []);
+                                                        const allAttachments = selectedRFI.photoDownloadUrls || [];
+                                                        const imageAttachments = allAttachments.filter(url => !isAudio(url));
+                                                        const audioAttachment = allAttachments.find(isAudio) || null;
+                                                        const audioKeyIndex = allAttachments.findIndex(isAudio);
+                                                        setPhotoPreviews(imageAttachments);
+                                                        setNewPhotos([]);
+                                                        setNewAudio(null);
+                                                        setAudioPreview(null);
+                                                        setRemovedPhotos([]);
+                                                        setExistingAudioUrl(audioAttachment);
+                                                        setExistingAudioKey(audioKeyIndex >= 0 ? (selectedRFI.photos?.[audioKeyIndex] || null) : null);
                                                         setSelectedFolderIds(selectedRFI.linked_folders?.map(f => f.id) || []);
                                                         setIsEditing(true);
                                                     }}
@@ -894,47 +968,51 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                     );
                                                 })}
                                                 <div className="flex items-center gap-2">
-                                                    <label className="w-16 h-16 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
-                                                        <ImagePlus className="h-4 w-4 text-muted-foreground" />
-                                                        <input 
-                                                            type="file" 
-                                                            multiple 
-                                                            accept="image/*" 
-                                                            className="hidden" 
-                                                            onChange={(e) => {
-                                                                const files = Array.from(e.target.files || []);
-                                                                if (files.length === 0) return;
-                                                                const file = files[0];
-                                                                setResponsePhotos(prev => {
-                                                                    const filtered = prev.filter(f => f.type.startsWith('audio/') || f.name.endsWith('.m4a') || f.name.endsWith('.webm'));
-                                                                    return [...filtered, file];
-                                                                });
-                                                                const r = new FileReader();
-                                                                r.onload = () => {
+                                                    {!hasPendingResponseImage && !hasExistingResponseImage && (
+                                                        <label className="w-16 h-16 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
+                                                            <ImagePlus className="h-4 w-4 text-muted-foreground" />
+                                                            <input 
+                                                                type="file" 
+                                                                multiple 
+                                                                accept="image/*" 
+                                                                className="hidden" 
+                                                                onChange={(e) => {
+                                                                    const files = Array.from(e.target.files || []);
+                                                                    if (files.length === 0) return;
+                                                                    const file = files[0];
+                                                                    setResponsePhotos(prev => [...prev.filter(isAudioFile), file]);
+                                                                    const r = new FileReader();
+                                                                    r.onload = () => {
+                                                                        setResponsePhotoPreviews(prev => {
+                                                                            const filtered = prev.filter((_, idx) => {
+                                                                                const file = responsePhotos[idx];
+                                                                                return file ? isAudioFile(file) : false;
+                                                                            });
+                                                                            return [...filtered, r.result as string];
+                                                                        });
+                                                                    };
+                                                                    r.readAsDataURL(file);
+                                                                }} 
+                                                            />
+                                                        </label>
+                                                    )}
+                                                    {!hasPendingResponseAudio && !hasExistingResponseAudio && (
+                                                        <div className="flex items-center justify-center px-2">
+                                                            <VoiceNoteRecorder 
+                                                                onSend={(file) => {
+                                                                    const url = URL.createObjectURL(file);
+                                                                    setResponsePhotos(prev => [...prev.filter(f => !isAudioFile(f)), file]);
                                                                     setResponsePhotoPreviews(prev => {
-                                                                        const filtered = prev.filter(p => p.startsWith('blob:'));
-                                                                        return [...filtered, r.result as string];
+                                                                        const filtered = prev.filter((_, idx) => {
+                                                                            const existingFile = responsePhotos[idx];
+                                                                            return existingFile ? !isAudioFile(existingFile) : false;
+                                                                        });
+                                                                        return [...filtered, url];
                                                                     });
-                                                                };
-                                                                r.readAsDataURL(file);
-                                                            }} 
-                                                        />
-                                                    </label>
-                                                    <div className="flex items-center justify-center px-2">
-                                                        <VoiceNoteRecorder 
-                                                            onSend={(file) => {
-                                                                 const url = URL.createObjectURL(file);
-                                                                 setResponsePhotos(prev => {
-                                                                     const filtered = prev.filter(f => !f.type.startsWith('audio/') && !f.name.endsWith('.m4a') && !f.name.endsWith('.webm'));
-                                                                     return [...filtered, file];
-                                                                 });
-                                                                 setResponsePhotoPreviews(prev => {
-                                                                     const filtered = prev.filter(p => !p.startsWith('blob:'));
-                                                                     return [...filtered, url];
-                                                                 });
-                                                             }}
-                                                        />
-                                                    </div>
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

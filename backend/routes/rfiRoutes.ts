@@ -13,11 +13,11 @@ router.get('/', getRFIs);
 router.get('/assignees', getRFIAssignees);
 router.get('/:id', getRFIById);
 router.get('/folder/:folder_id', getFolderRFIs);
-router.post('/', upload.array('photos', 4), checkLimit('rfi'), createRFI);
+router.post('/', upload.array('photos', 5), checkLimit('rfi'), createRFI);
 router.patch('/:id/status', updateRFIStatus);
-router.patch('/:id/response', upload.array('photos', 4), updateRFIResponse);
+router.patch('/:id/response', upload.array('photos', 2), updateRFIResponse);
 router.patch('/:id/seen', markRFISeen);
-router.patch('/:id', upload.array('photos', 4), updateRFI);
+router.patch('/:id', upload.array('photos', 5), updateRFI);
 router.delete('/:id', deleteRFI);
 
 export default router;

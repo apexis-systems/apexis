@@ -17,6 +17,20 @@ const s3Client = new S3Client({
 });
 const BUCKET = process.env.S3_BUCKET_NAME || 'apexis-bucket';
 
+const isAudioMime = (mime?: string) => !!mime && mime.startsWith('audio/');
+const isImageMime = (mime?: string) => !!mime && mime.startsWith('image/');
+
+const validateRfiAttachmentBatch = (files: any[], imageLimit: number) => {
+    const imageCount = files.filter(file => isImageMime(file.mimetype)).length;
+    const audioCount = files.filter(file => isAudioMime(file.mimetype)).length;
+
+    if (imageCount > imageLimit || audioCount > 1) {
+        return `RFI supports up to ${imageLimit} image${imageLimit === 1 ? '' : 's'} and 1 voice note.`;
+    }
+
+    return null;
+};
+
 // Helper: generate presigned URLs for RFI photos
 const withPresignedUrls = async (rfi: any) => {
     const json = rfi.toJSON ? rfi.toJSON() : { ...rfi };
@@ -125,14 +139,19 @@ export const createRFI = async (req: Request | any, res: Response) => {
         // Photo Upload Logic
         const uploadedPhotos: string[] = [];
         if (req.files && Array.isArray(req.files)) {
+            const validationError = validateRfiAttachmentBatch(req.files, 4);
+            if (validationError) {
+                return res.status(400).json({ error: validationError });
+            }
+
             for (const file of req.files) {
                 // Approx 10MB limit for 5 minutes of high-quality audio
-                if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+                if (isAudioMime(file.mimetype) && file.size > 10 * 1024 * 1024) {
                     return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
                 }
 
                 let fileBuffer = file.buffer;
-                if (file.mimetype.startsWith('image/')) {
+                if (isImageMime(file.mimetype)) {
                     try {
                         const senderName = authUser.name || 'Someone';
                         fileBuffer = await addWatermark(file.buffer, project.name, senderName);
@@ -470,8 +489,13 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
 
         // 2. Handle new uploads with Smart Replace
         if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-            const hasNewAudio = req.files.some((f:any) => f.mimetype.startsWith('audio/'));
-            const hasNewImage = req.files.some((f:any) => f.mimetype.startsWith('image/'));
+            const validationError = validateRfiAttachmentBatch(req.files, 1);
+            if (validationError) {
+                return res.status(400).json({ error: validationError });
+            }
+
+            const hasNewAudio = req.files.some((f:any) => isAudioMime(f.mimetype));
+            const hasNewImage = req.files.some((f:any) => isImageMime(f.mimetype));
 
             // If new audio is being uploaded, remove existing audio from the response (maintaining "one audio" rule)
             if (hasNewAudio) {
@@ -491,12 +515,12 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
 
             const project = await projects.findByPk(rfi.project_id);
             for (const file of req.files) {
-                if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+                if (isAudioMime(file.mimetype) && file.size > 10 * 1024 * 1024) {
                     return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
                 }
 
                 let fileBuffer = file.buffer;
-                if (file.mimetype.startsWith('image/')) {
+                if (isImageMime(file.mimetype)) {
                     try {
                         const senderName = authUser.name || 'Someone';
                         fileBuffer = await addWatermark(file.buffer, project?.name || 'Apexis', senderName);
@@ -643,9 +667,14 @@ export const updateRFI = async (req: Request | any, res: Response) => {
             currentPhotos = currentPhotos.filter(p => !toRemove.includes(p));
         }
         if (req.files && Array.isArray(req.files)) {
+            const validationError = validateRfiAttachmentBatch(req.files, 4);
+            if (validationError) {
+                return res.status(400).json({ error: validationError });
+            }
+
             for (const file of req.files) {
                 // Approx 10MB limit for 5 minutes of high-quality audio
-                if (file.mimetype.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+                if (isAudioMime(file.mimetype) && file.size > 10 * 1024 * 1024) {
                     return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
                 }
             }
@@ -653,7 +682,7 @@ export const updateRFI = async (req: Request | any, res: Response) => {
             const project = await projects.findByPk(rfi.project_id);
             for (const file of req.files) {
                 let fileBuffer = file.buffer;
-                if (file.mimetype.startsWith('image/')) {
+                if (isImageMime(file.mimetype)) {
                     try {
                         const senderName = authUser.name || 'Someone';
                         fileBuffer = await addWatermark(file.buffer, project?.name || 'Apexis', senderName);
