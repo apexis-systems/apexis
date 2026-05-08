@@ -5,12 +5,36 @@ import { Audio } from 'expo-av';
 
 export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, isMe: boolean, colors: any }) {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const soundRef = useRef<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
+    const durationRef = useRef(0);
     const [position, setPosition] = useState(0);
     const [isLoaded, setIsLoaded] = useState(false);
     const [barWidth, setBarWidth] = useState(0);
+    const barWidthRef = useRef(0);
     const isSeeking = useRef(false);
+
+    const onPlaybackStatusUpdate = (status: any) => {
+        if (status.isLoaded) {
+            if (!isSeeking.current) {
+                setPosition(status.positionMillis);
+            }
+            if (status.durationMillis) {
+                setDuration(status.durationMillis);
+                durationRef.current = status.durationMillis;
+            }
+            setIsPlaying(status.isPlaying);
+            
+            if (status.didJustFinish) {
+                setIsPlaying(false);
+                setPosition(0);
+                if (soundRef.current) {
+                    soundRef.current.setPositionAsync(0);
+                }
+            }
+        }
+    };
 
     const panResponder = useRef(
         PanResponder.create({
@@ -24,20 +48,20 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
                 handleSeek(evt);
             },
             onPanResponderMove: (evt) => {
-                if (!duration || barWidth === 0) return;
+                if (!durationRef.current || barWidthRef.current === 0) return;
                 const touchX = evt.nativeEvent.locationX;
-                const percentage = Math.min(Math.max(touchX / barWidth, 0), 1);
-                setPosition(percentage * duration);
+                const percentage = Math.min(Math.max(touchX / barWidthRef.current, 0), 1);
+                setPosition(percentage * durationRef.current);
             },
             onPanResponderRelease: async (evt) => {
-                if (!sound || !duration || barWidth === 0) {
+                if (!soundRef.current || !durationRef.current || barWidthRef.current === 0) {
                     isSeeking.current = false;
                     return;
                 }
                 const touchX = evt.nativeEvent.locationX;
-                const percentage = Math.min(Math.max(touchX / barWidth, 0), 1);
-                const seekPosition = percentage * duration;
-                await sound.setPositionAsync(seekPosition);
+                const percentage = Math.min(Math.max(touchX / barWidthRef.current, 0), 1);
+                const seekPosition = percentage * durationRef.current;
+                await soundRef.current.setPositionAsync(seekPosition);
                 setPosition(seekPosition);
                 isSeeking.current = false;
             },
@@ -52,6 +76,11 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
         
         async function init() {
             try {
+                // Unload previous sound if any
+                if (soundRef.current) {
+                    await soundRef.current.unloadAsync();
+                }
+
                 const { sound: audioSound, status } = await Audio.Sound.createAsync(
                     { uri },
                     { progressUpdateIntervalMillis: 100 },
@@ -60,8 +89,10 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
                 
                 if (isMounted) {
                     setSound(audioSound);
+                    soundRef.current = audioSound;
                     if (status.isLoaded) {
                         setDuration(status.durationMillis || 0);
+                        durationRef.current = status.durationMillis || 0;
                         setIsLoaded(true);
                     }
                 } else {
@@ -76,42 +107,32 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
 
         return () => {
             isMounted = false;
-            if (sound) {
-                sound.unloadAsync();
+            if (soundRef.current) {
+                soundRef.current.unloadAsync();
             }
         };
     }, [uri]);
 
-    const onPlaybackStatusUpdate = (status: any) => {
-        if (status.isLoaded) {
-            if (!isSeeking.current) {
-                setPosition(status.positionMillis);
-            }
-            setDuration(status.durationMillis || 0);
-            setIsPlaying(status.isPlaying);
-            if (status.didJustFinish) {
-                setIsPlaying(false);
-                setPosition(0);
-                if (sound) sound.setPositionAsync(0);
-            }
-        }
-    };
-
     const togglePlayback = async () => {
-        if (!sound) return;
+        if (!soundRef.current) return;
         if (isPlaying) {
-            await sound.pauseAsync();
+            await soundRef.current.pauseAsync();
         } else {
-            await sound.playAsync();
+            // Safety check: if finished, reset to start
+            const status = await soundRef.current.getStatusAsync();
+            if (status.isLoaded && status.positionMillis >= (status.durationMillis || 0) - 100) {
+                await soundRef.current.setPositionAsync(0);
+            }
+            await soundRef.current.playAsync();
         }
     };
 
     const handleSeek = (event: any) => {
-        if (!sound || !duration || barWidth === 0) return;
+        if (!soundRef.current || !durationRef.current || barWidthRef.current === 0) return;
         const touchX = event.nativeEvent.locationX;
-        const percentage = Math.min(Math.max(touchX / barWidth, 0), 1);
-        const seekPosition = percentage * duration;
-        sound.setPositionAsync(seekPosition);
+        const percentage = Math.min(Math.max(touchX / barWidthRef.current, 0), 1);
+        const seekPosition = percentage * durationRef.current;
+        soundRef.current.setPositionAsync(seekPosition);
         setPosition(seekPosition);
     };
 
@@ -147,7 +168,11 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
 
             <View style={{ flex: 1 }}>
                 <View 
-                    onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+                    onLayout={(e) => {
+                        const width = e.nativeEvent.layout.width;
+                        setBarWidth(width);
+                        barWidthRef.current = width;
+                    }}
                     {...panResponder.panHandlers}
                     style={{ 
                         height: 30, 
