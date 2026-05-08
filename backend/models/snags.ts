@@ -27,6 +27,10 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.TEXT,
                 allowNull: true,
             },
+            audio_url: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
             assigned_to: {
                 type: DataTypes.INTEGER,
                 allowNull: true,

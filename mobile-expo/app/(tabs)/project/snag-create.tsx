@@ -20,6 +20,8 @@ import * as MediaLibrary from 'expo-media-library';
 import { parseApiError } from '@/helpers/apiError';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { useAuth } from '@/contexts/AuthContext';
+import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
+import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
 
 type Step = 'camera' | 'details';
 
@@ -41,6 +43,7 @@ export default function SnagCreateScreen() {
     const [step, setStep] = useState<Step>('camera');
     const [isCapturing, setIsCapturing] = useState(false);
     const [capturedPhoto, setCapturedPhoto] = useState<{ uri: string; mime: string; name: string } | null>(null);
+    const [capturedAudio, setCapturedAudio] = useState<string | null>(null);
     const [annotatingUri, setAnnotatingUri] = useState<string | null>(null);
 
     const [title, setTitle] = useState('');
@@ -93,6 +96,7 @@ export default function SnagCreateScreen() {
 
     const resetState = () => {
         setCapturedPhoto(null);
+        setCapturedAudio(null);
         setTitle('');
         setDescription('');
         setAssigneeId(null);
@@ -210,6 +214,12 @@ export default function SnagCreateScreen() {
             if (description.trim()) form.append('description', description.trim());
             if (assigneeId) form.append('assigned_to', String(assigneeId));
             form.append('photo', { uri: capturedPhoto.uri, type: capturedPhoto.mime, name: capturedPhoto.name } as any);
+            if (capturedAudio) {
+                const filename = capturedAudio.split('/').pop() || `voice_${Date.now()}.m4a`;
+                const match = /\.(\w+)$/.exec(filename);
+                const type = match ? `audio/${match[1]}` : 'audio/m4a';
+                form.append('audio', { uri: capturedAudio, type, name: filename } as any);
+            }
             await createSnag(form);
             resetState();
             if (projectId) {
@@ -437,6 +447,31 @@ export default function SnagCreateScreen() {
                     </Text>
                     <Feather name="chevron-down" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
+
+                <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 8 }}>Voice Note</Text>
+                {capturedAudio ? (
+                    <View style={{ marginBottom: 24, position: 'relative', padding: 12, paddingRight: 36, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                            <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                        </View>
+                        <VoiceNotePlayer uri={capturedAudio} isMe={false} colors={colors} />
+                        <TouchableOpacity
+                            onPress={() => setCapturedAudio(null)}
+                            style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                        >
+                            <Feather name="x" size={14} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <View style={{ marginBottom: 24 }}>
+                        <VoiceNoteRecorder
+                            colors={colors}
+                            onRecordingStateChange={() => {}}
+                            onSend={(uri) => setCapturedAudio(uri)}
+                        />
+                    </View>
+                )}
 
                 {/* Submit */}
                 <TouchableOpacity

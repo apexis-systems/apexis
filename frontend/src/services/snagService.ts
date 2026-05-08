@@ -8,6 +8,7 @@ export interface Snag {
     title: string;
     description?: string;
     photo_url?: string;
+    audio_url?: string | null;
     assigned_to?: number;
     status: SnagStatus;
     response?: string;
@@ -15,6 +16,7 @@ export interface Snag {
     assignee?: { id: number; name: string; email: string };
     creator?: { id: number; name: string };
     photoDownloadUrl?: string;
+    audioDownloadUrl?: string | null;
     responsePhotoUrls?: string[];
     response_photos?: string[];
     createdAt: string;

@@ -90,6 +90,8 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [editDesc, setEditDesc] = useState("");
     const [editAssignedTo, setEditAssignedTo] = useState<number | null>(null);
     const [editPhoto, setEditPhoto] = useState<string | null>(null);
+    const [editAudio, setEditAudio] = useState<string | null>(null);
+    const [removeEditAudio, setRemoveEditAudio] = useState(false);
     const [assignees, setAssignees] = useState<Assignee[]>([]);
 
     const [responseComment, setResponseComment] = useState("");
@@ -99,7 +101,6 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
     const [cameraVisible, setCameraVisible] = useState(false);
     const [cameraMode, setCameraMode] = useState<'edit' | 'response'>('response');
-    const [isRecordingVoice, setIsRecordingVoice] = useState(false);
     const [annotatingImageIndex, setAnnotatingImageIndex] = useState<number | null>(null);
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraSessionKey, setCameraSessionKey] = useState(0);
@@ -150,6 +151,11 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             setResponsePhotos([]);
         }
     }, [selectedSnag?.id]);
+
+    const hasPendingResponseImage = responsePhotos.some(uri => !isAudio(uri));
+    const hasPendingResponseAudio = responsePhotos.some(isAudio);
+    const hasExistingResponseImage = !!selectedSnag?.responsePhotoUrls?.some(uri => !isAudio(uri));
+    const hasExistingResponseAudio = !!selectedSnag?.responsePhotoUrls?.some(isAudio);
 
     // ── Fetch data ─────────────────────────────────────────────────────────────
 
@@ -340,6 +346,15 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 const type = match ? `image/${match[1]}` : `image/jpeg`;
                 formData.append('photo', { uri: editPhoto, name: filename, type } as any);
             }
+            if (editAudio && !editAudio.startsWith('http')) {
+                const filename = editAudio.split('/').pop() || `voice_${Date.now()}.m4a`;
+                const match = /\.(\w+)$/.exec(filename);
+                const type = match ? `audio/${match[1]}` : `audio/m4a`;
+                formData.append('audio', { uri: editAudio, name: filename, type } as any);
+            }
+            if (removeEditAudio) {
+                formData.append('remove_audio', 'true');
+            }
 
             const updated = await updateSnag(selectedSnag.id, formData);
             setSnags(prev => prev.map(s => s.id === selectedSnag.id ? updated : s));
@@ -359,6 +374,8 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         setEditDesc(snag.description || "");
         setEditAssignedTo(snag.assigned_to || null);
         setEditPhoto(snag.photoDownloadUrl || snag.photo_url || null);
+        setEditAudio(snag.audioDownloadUrl || snag.audio_url || null);
+        setRemoveEditAudio(false);
         setIsEditing(true);
     };
 
@@ -653,7 +670,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 animationType="slide" 
                 transparent 
                 presentationStyle="overFullScreen"
-                onRequestClose={() => { setSelectedSnag(null); setIsEditing(false); setResponseComment(""); setResponsePhotos([]); }}
+                onRequestClose={() => { setSelectedSnag(null); setIsEditing(false); setEditAudio(null); setRemoveEditAudio(false); setResponseComment(""); setResponsePhotos([]); }}
             >
                 <KeyboardAvoidingView
                           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -663,7 +680,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                     <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '85%', padding: 16 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
                             <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{isEditing ? 'Edit Snag' : 'Snag Details'}</Text>
-                            <TouchableOpacity onPress={() => { setSelectedSnag(null); setIsEditing(false); setResponseComment(""); setResponsePhotos([]); }}>
+                            <TouchableOpacity onPress={() => { setSelectedSnag(null); setIsEditing(false); setEditAudio(null); setRemoveEditAudio(false); setResponseComment(""); setResponsePhotos([]); }}>
                                 <Feather name="x" size={24} color={colors.text} />
                             </TouchableOpacity>
                         </View>
@@ -746,6 +763,31 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             </View>
                                         </View>
 
+                                        <View>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Voice Note</Text>
+                                            {editAudio ? (
+                                                <View style={{ position: 'relative', padding: 12, paddingRight: 32, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                                                    </View>
+                                                    <VoiceNotePlayer uri={editAudio} isMe={false} colors={colors} />
+                                                    <TouchableOpacity
+                                                        onPress={() => { setEditAudio(null); setRemoveEditAudio(true); }}
+                                                        style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                                                    >
+                                                        <Feather name="x" size={14} color="#fff" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ) : (
+                                                <VoiceNoteRecorder
+                                                    colors={colors}
+                                                    onRecordingStateChange={() => {}}
+                                                    onSend={(uri) => { setEditAudio(uri); setRemoveEditAudio(false); }}
+                                                />
+                                            )}
+                                        </View>
+
                                         <TouchableOpacity
                                             onPress={handleUpdateSnag}
                                             disabled={submitting}
@@ -794,6 +836,16 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                     style={{ width: '100%', height: 200, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
                                                 />
                                             </TouchableOpacity>
+                                        )}
+
+                                        {(selectedSnag.audioDownloadUrl || selectedSnag.audio_url) && (
+                                            <View style={{ padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                                                </View>
+                                                <VoiceNotePlayer uri={selectedSnag.audioDownloadUrl || selectedSnag.audio_url!} isMe={false} colors={colors} />
+                                            </View>
                                         )}
 
                                         <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, gap: 8 }}>
@@ -937,28 +989,32 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                                     )}
                                                                 </View>
                                                             ))}
-                                                            <TouchableOpacity 
-                                                                onPress={pickResponsePhotos} 
-                                                                style={{ 
-                                                                    width: 70, height: 70, borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, 
-                                                                    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface 
-                                                                }}
-                                                            >
-                                                                <Feather name="camera" size={20} color={colors.textMuted} />
-                                                            </TouchableOpacity>
+                                                            {!hasPendingResponseImage && !hasExistingResponseImage && (
+                                                                <TouchableOpacity 
+                                                                    onPress={pickResponsePhotos} 
+                                                                    style={{ 
+                                                                        width: 70, height: 70, borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, 
+                                                                        alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface 
+                                                                    }}
+                                                                >
+                                                                    <Feather name="camera" size={20} color={colors.textMuted} />
+                                                                </TouchableOpacity>
+                                                            )}
                                                         </View>
                                                         
                                                         <View style={{ marginTop: 12, marginBottom: 8 }}>
-                                                            <VoiceNoteRecorder
-                                                                colors={colors}
-                                                                onRecordingStateChange={setIsRecordingVoice}
-                                                                onSend={(uri) => {
-                                                                    setResponsePhotos(prev => {
-                                                                        const filtered = prev.filter(p => !isAudio(p));
-                                                                        return [...filtered, uri];
-                                                                    });
-                                                                }}
-                                                            />
+                                                            {!hasPendingResponseAudio && !hasExistingResponseAudio && (
+                                                                <VoiceNoteRecorder
+                                                                    colors={colors}
+                                                                    onRecordingStateChange={() => {}}
+                                                                    onSend={(uri) => {
+                                                                        setResponsePhotos(prev => {
+                                                                            const filtered = prev.filter(p => !isAudio(p));
+                                                                            return [...filtered, uri];
+                                                                        });
+                                                                    }}
+                                                                />
+                                                            )}
                                                         </View>
 
                                                         <TouchableOpacity
