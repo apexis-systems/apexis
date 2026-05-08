@@ -1,142 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Text, PanResponder, Platform, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, Text, Animated, PanResponder } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system/legacy';
 
-export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay }: { uri: string, isMe: boolean, colors: any, playingUri?: string | null, onPlay?: (uri: string) => void }) {
+// Shared across ALL VoiceNotePlayer instances — stops any currently playing audio
+let currentlyPlayingRef: { sound: Audio.Sound; pause: () => void } | null = null;
+
+export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay }: { uri: string, isMe: boolean, colors: any, playingUri: string | null, onPlay?: (uri: string) => void }) {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const soundRef = useRef<Audio.Sound | null>(null);
-    const loadPromiseRef = useRef<Promise<Audio.Sound | null> | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const durationRef = useRef(0);
     const [position, setPosition] = useState(0);
     const [isLoaded, setIsLoaded] = useState(false);
-    const [isPreparing, setIsPreparing] = useState(false);
-    const [loadError, setLoadError] = useState(false);
+    const [barWidth, setBarWidth] = useState(0);
     const barWidthRef = useRef(0);
     const isSeeking = useRef(false);
-
-    const getExtensionFromUri = (value: string) => {
-        const cleanUri = value.split('?')[0].toLowerCase();
-        const match = cleanUri.match(/\.([a-z0-9]+)$/);
-        const ext = match?.[1];
-        const supportedExts = new Set(['m4a', 'mp4', 'aac', 'mp3', 'wav', 'caf', 'aif', 'aiff']);
-        return ext && supportedExts.has(ext) ? ext : 'm4a';
-    };
-
-    const unloadSound = async () => {
-        const currentSound = soundRef.current;
-        soundRef.current = null;
-        loadPromiseRef.current = null;
-        setIsLoaded(false);
-        setIsPreparing(false);
-        setIsPlaying(false);
-        setPosition(0);
-        setDuration(0);
-        durationRef.current = 0;
-
-        if (currentSound) {
-            try {
-                await currentSound.unloadAsync();
-            } catch {
-                // Ignore unload failures during teardown or rapid source switches.
-            }
-        }
-    };
-
-    const resolvePlaybackUri = async (sourceUri: string) => {
-        const isRemote = /^https?:\/\//i.test(sourceUri);
-        if (!isRemote || Platform.OS !== 'ios') {
-            return sourceUri;
-        }
-
-        const fileExtension = getExtensionFromUri(sourceUri);
-        
-        // Generate a short unique hash for the URI to avoid "File name too long" errors with S3 signed URLs
-        let hash = 0;
-        for (let i = 0; i < sourceUri.length; i++) {
-            hash = ((hash << 5) - hash) + sourceUri.charCodeAt(i);
-            hash |= 0;
-        }
-        const shortName = Math.abs(hash).toString(36);
-        const localUri = `${FileSystem.cacheDirectory}vn-${shortName}.${fileExtension}`;
-
-        try {
-            const fileInfo = await FileSystem.getInfoAsync(localUri);
-            
-            // If file doesn't exist or is empty (damaged), download it
-            if (!fileInfo.exists || (fileInfo.exists && !fileInfo.isDirectory && fileInfo.size === 0)) {
-                if (fileInfo.exists) {
-                    await FileSystem.deleteAsync(localUri, { idempotent: true });
-                }
-                const result = await FileSystem.downloadAsync(sourceUri, localUri);
-                if (result.status !== 200) {
-                    throw new Error(`HTTP ${result.status}`);
-                }
-            }
-            return localUri;
-        } catch (err) {
-            console.error("Cache resolution failed", err);
-            return sourceUri; // Fallback to remote
-        }
-    };
-
-    const ensureSoundLoaded = async () => {
-        if (soundRef.current && isLoaded) {
-            return soundRef.current;
-        }
-
-        if (loadPromiseRef.current) {
-            return loadPromiseRef.current;
-        }
-
-        setIsPreparing(true);
-        setLoadError(false);
-
-        loadPromiseRef.current = (async () => {
-            try {
-                await Audio.setAudioModeAsync({
-                    allowsRecordingIOS: false,
-                    playsInSilentModeIOS: true,
-                    staysActiveInBackground: false,
-                    shouldDuckAndroid: true,
-                    playThroughEarpieceAndroid: false,
-                });
-
-                const playbackUri = await resolvePlaybackUri(uri);
-
-                const { sound: audioSound, status } = await Audio.Sound.createAsync(
-                    { uri: playbackUri },
-                    { shouldPlay: false, progressUpdateIntervalMillis: 100 },
-                    onPlaybackStatusUpdate
-                );
-
-                soundRef.current = audioSound;
-
-                if (status.isLoaded) {
-                    const nextDuration = status.durationMillis || 0;
-                    setDuration(nextDuration);
-                    durationRef.current = nextDuration;
-                    setPosition(status.positionMillis || 0);
-                    setIsLoaded(true);
-                    return audioSound;
-                }
-                return null;
-            } catch (error) {
-                await unloadSound();
-                console.error("Error loading voice note", error);
-                setLoadError(true);
-                return null;
-            } finally {
-                setIsPreparing(false);
-                loadPromiseRef.current = null;
-            }
-        })();
-
-        return loadPromiseRef.current;
-    };
 
     const onPlaybackStatusUpdate = (status: any) => {
         if (status.isLoaded) {
@@ -152,14 +32,14 @@ export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay 
             if (status.didJustFinish) {
                 setIsPlaying(false);
                 setPosition(0);
+                // Use stopAsync() instead of setPositionAsync(0).
+                // On Android, setPositionAsync(0) on a finished sound triggers
+                // the audio engine to restart playback. stopAsync() safely
+                // halts and resets position on both iOS and Android.
                 if (soundRef.current) {
-                    soundRef.current.setPositionAsync(0);
+                    soundRef.current.stopAsync().catch(() => {});
                 }
             }
-        } else if ('error' in status && status.error) {
-            console.error("Playback error", status.error);
-            setIsLoaded(false);
-            setIsPlaying(false);
         }
     };
 
@@ -199,51 +79,78 @@ export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay 
     ).current;
 
     useEffect(() => {
-        // Initial setup for audio mode
-        Audio.setAudioModeAsync({
-            allowsRecordingIOS: false,
-            playsInSilentModeIOS: true,
-            staysActiveInBackground: false,
-            shouldDuckAndroid: true,
-            playThroughEarpieceAndroid: false,
-        }).catch(err => console.warn("Audio mode setup failed", err));
+        let isMounted = true;
 
-        // Preload metadata so duration is visible before the first tap
-        void ensureSoundLoaded();
+        async function init() {
+            try {
+                // Unload previous sound if any
+                if (soundRef.current) {
+                    await soundRef.current.unloadAsync();
+                }
+
+                const { sound: audioSound, status } = await Audio.Sound.createAsync(
+                    { uri },
+                    { progressUpdateIntervalMillis: 100 },
+                    onPlaybackStatusUpdate
+                );
+
+                if (isMounted) {
+                    setSound(audioSound);
+                    soundRef.current = audioSound;
+                    if (status.isLoaded) {
+                        setDuration(status.durationMillis || 0);
+                        durationRef.current = status.durationMillis || 0;
+                        setIsLoaded(true);
+                    }
+                } else {
+                    audioSound.unloadAsync();
+                }
+            } catch (error) {
+                console.error("Error loading voice note", error);
+            }
+        }
+
+        init();
 
         return () => {
-            void unloadSound();
+            isMounted = false;
+            if (soundRef.current) {
+                soundRef.current.unloadAsync();
+            }
         };
     }, [uri]);
 
-    useEffect(() => {
-        if (playingUri && playingUri !== uri && isPlaying) {
-            soundRef.current?.pauseAsync();
-        }
-    }, [playingUri]);
+   
 
     const togglePlayback = async () => {
+        const s = soundRef.current;
+        if (!s) return;
+
         try {
-            const activeSound = soundRef.current || await ensureSoundLoaded();
-            if (!activeSound) return;
-
-            // Wait for any existing status operation to finish by getting current status
-            const status = await activeSound.getStatusAsync();
-            if (!status.isLoaded) return;
-
             if (isPlaying) {
-                await activeSound.pauseAsync();
+                await s.pauseAsync();
+                currentlyPlayingRef = null;
             } else {
-                if (onPlay) onPlay(uri);
+                // Stop whatever is currently playing (different player instance)
+                if (currentlyPlayingRef && currentlyPlayingRef.sound !== s) {
+                    currentlyPlayingRef.pause();
+                }
+
+                // Register this instance as the currently playing one
+                currentlyPlayingRef = {
+                    sound: s,
+                    pause: () => { s.pauseAsync().catch(() => {}); setIsPlaying(false); }
+                };
 
                 // Safety check: if finished, reset to start
-                if (status.positionMillis >= (status.durationMillis || 0) - 100) {
-                    await activeSound.setPositionAsync(0);
+                const status = await s.getStatusAsync();
+                if (status.isLoaded && status.positionMillis >= (status.durationMillis || 0) - 100) {
+                    await s.setPositionAsync(0);
                 }
-                await activeSound.playAsync();
+                await s.playAsync();
             }
-        } catch (err) {
-            console.error("Toggle playback failed", err);
+        } catch (e) {
+            // Sound was likely unloaded during re-render
         }
     };
 
@@ -268,7 +175,7 @@ export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay 
 
     return (
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', minWidth: 220, gap: 10, marginVertical: 4 }}>
-            <TouchableOpacity onPress={togglePlayback} disabled={isPreparing}>
+            <TouchableOpacity onPress={togglePlayback} disabled={!isLoaded}>
                 <View style={{
                     width: 32,
                     height: 32,
@@ -277,18 +184,12 @@ export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay 
                     alignItems: 'center',
                     justifyContent: 'center'
                 }}>
-                    {isPreparing ? (
-                        <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
-                    ) : loadError ? (
-                        <Feather name="alert-circle" size={16} color={isMe ? '#fff' : '#ef4444'} />
-                    ) : (
-                        <Feather
-                            name={isPlaying ? "pause" : "play"}
-                            size={16}
-                            color={isMe ? '#fff' : colors.primary}
-                            style={!isPlaying ? { transform: [{ translateX: 1 }] } : {}}
-                        />
-                    )}
+                    <Feather
+                        name={isPlaying ? "pause" : "play"}
+                        size={16}
+                        color={isMe ? '#fff' : colors.primary}
+                        style={!isPlaying ? { transform: [{ translateX: 1 }] } : {}}
+                    />
                 </View>
             </TouchableOpacity>
 
@@ -296,6 +197,7 @@ export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay 
                 <View
                     onLayout={(e) => {
                         const width = e.nativeEvent.layout.width;
+                        setBarWidth(width);
                         barWidthRef.current = width;
                     }}
                     {...panResponder.panHandlers}

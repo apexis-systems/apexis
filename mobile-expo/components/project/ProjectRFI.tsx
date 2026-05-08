@@ -2221,7 +2221,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                 <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
                               </View>
-                              <VoiceNotePlayer uri={selectedAudio} isMe={false} colors={colors} />
+                              <VoiceNotePlayer uri={selectedAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                               <TouchableOpacity
                                 onPress={() => {
                                   if (isEditing && selectedRFI && selectedAudio.startsWith('http')) {
