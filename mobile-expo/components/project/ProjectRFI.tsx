@@ -63,6 +63,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [rfis, setRfis] = useState<RFI[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'overdue'>('all');
+  const [playingUri, setPlayingUri] = useState<string | null>(null);
   const [creatorFilter, setCreatorFilter] = useState<string>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
 
@@ -89,6 +90,10 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
   // Physical Orientation Tracking
   const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
+
+  useEffect(() => {
+    console.log("Playing URI : ", playingUri)
+  }, [playingUri])
 
   useEffect(() => {
     let subscription: any;
@@ -401,8 +406,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         setAnnotatingImageIndex(selectedImageCount);
       } else {
         setResponseImages(prev => {
-            const filtered = prev.filter(p => isAudio(p));
-            return [...filtered, uri];
+          const filtered = prev.filter(p => isAudio(p));
+          return [...filtered, uri];
         });
         setAnnotatingImageIndex(0);
       }
@@ -460,8 +465,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       } else {
         // Replace existing image but keep audio
         setResponseImages(prev => {
-            const filtered = prev.filter(p => isAudio(p));
-            return [...filtered, manipulated.uri];
+          const filtered = prev.filter(p => isAudio(p));
+          return [...filtered, manipulated.uri];
         });
         setAnnotatingImageIndex(0);
       }
@@ -614,7 +619,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       const formData = new FormData();
       const finalComment = commentOverride !== undefined ? commentOverride : responseBody;
       const finalImages = imagesOverride !== undefined ? imagesOverride : responseImages;
-      
+
       formData.append('response', (finalComment || "").trim());
       finalImages.forEach((uri, index) => {
         let filename = uri.split('/').pop() || `resp_${index}.jpg`;
@@ -633,7 +638,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
       const updated = await updateRFIResponse(selectedRFI.id, formData);
       Alert.alert('Success', 'Response updated successfully');
-      
+
       // Update local state to reflect changes immediately
       setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
       setSelectedRFI(updated);
@@ -743,13 +748,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Feather name="calendar" size={10} color={colors.textMuted} />
-                  <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-                  {item.seen_at && (
-                    <Ionicons name="checkmark-done" size={12} color="#f97316" style={{ marginLeft: 4 }} />
-                  )}
-                </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Feather name="calendar" size={10} color={colors.textMuted} />
+                <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                {item.seen_at && (
+                  <Ionicons name="checkmark-done" size={12} color="#f97316" style={{ marginLeft: 4 }} />
+                )}
+              </View>
               {item.expiry_date && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Feather name="clock" size={10} color={item.status === 'overdue' ? '#ef4444' : colors.textMuted} />
@@ -986,7 +991,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
                                   <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>VOICE ATTACHMENT</Text>
                                 </View>
-                                <VoiceNotePlayer uri={url} isMe={false} colors={colors} />
+                                <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                               </View>
                             ))}
                           </View>
@@ -1108,7 +1113,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                     <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
                                   </View>
-                                  <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                  <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                   {String(selectedRFI.assigned_to) === String(user.id) && (
                                     <TouchableOpacity
                                       onPress={() => {
@@ -1180,7 +1185,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                                         <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
                                       </View>
-                                      <VoiceNotePlayer uri={uri} isMe={false} colors={colors} />
+                                      <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                     </View>
                                   ) : (
                                     <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
@@ -1214,23 +1219,23 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               )}
 
                             </View>
-                            
+
                             {/* Voice Recording Section */}
-                            <View style={{ 
-                                marginTop: 12,
-                                marginBottom: 8,
-                                minHeight: 44,
-                                justifyContent: 'center'
+                            <View style={{
+                              marginTop: 12,
+                              marginBottom: 8,
+                              minHeight: 44,
+                              justifyContent: 'center'
                             }}>
                               {!hasPendingResponseAudio && !hasExistingResponseAudio && (
                                 <VoiceNoteRecorder
                                   colors={colors}
-                                  onRecordingStateChange={() => {}}
+                                  onRecordingStateChange={() => { }}
                                   onSend={(uri) => {
-                                      setResponseImages(prev => {
-                                          const filtered = prev.filter(p => !isAudio(p));
-                                          return [...filtered, uri];
-                                      });
+                                    setResponseImages(prev => {
+                                      const filtered = prev.filter(p => !isAudio(p));
+                                      return [...filtered, uri];
+                                    });
                                   }}
                                 />
                               )}
@@ -1530,7 +1535,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                               <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
                             </View>
-                            <VoiceNotePlayer uri={selectedAudio} isMe={false} colors={colors} />
+                            <VoiceNotePlayer uri={selectedAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                             <TouchableOpacity
                               onPress={() => {
                                 if (isEditing && selectedRFI && selectedAudio.startsWith('http')) {
@@ -1550,7 +1555,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         ) : (
                           <VoiceNoteRecorder
                             colors={colors}
-                            onRecordingStateChange={() => {}}
+                            onRecordingStateChange={() => { }}
                             onSend={(uri) => setSelectedAudio(uri)}
                           />
                         )}
@@ -2236,7 +2241,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           ) : (
                             <VoiceNoteRecorder
                               colors={colors}
-                              onRecordingStateChange={() => {}}
+                              onRecordingStateChange={() => { }}
                               onSend={(uri) => setSelectedAudio(uri)}
                             />
                           )}

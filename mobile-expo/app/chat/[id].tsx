@@ -59,6 +59,7 @@ export default function ChatDetailScreen() {
     const [isDownloading, setIsDownloading] = useState<string | null>(null);
     const [isSending, setIsSending] = useState(false);
     const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+    const [playingAudioUri, setPlayingAudioUri] = useState<string | null>(null);
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
@@ -393,7 +394,7 @@ export default function ChatDetailScreen() {
         }
     }, []);
 
-    const MessageItem = React.memo(({ item, isMe, time, setReplyTo, focusInput, scrollToMessage, setFullScreenImage, handleDownload, isDownloading, colors, isDark }: any) => {
+    const MessageItem = React.memo(({ item, isMe, time, setReplyTo, focusInput, scrollToMessage, setFullScreenImage, handleDownload, isDownloading, colors, isDark, playingAudioUri, setPlayingAudioUri }: any) => {
         const swipeableRef = useRef<any>(null);
 
         const renderLeftActions = () => {
@@ -492,7 +493,13 @@ export default function ChatDetailScreen() {
 
                         {(item.type === 'audio' || item.file_type?.startsWith('audio/')) && item.downloadUrl && (
                             <View style={{ minWidth: 220 }}>
-                                <VoiceNotePlayer uri={item.downloadUrl} isMe={isMe} colors={colors} />
+                                <VoiceNotePlayer
+                                    uri={item.downloadUrl}
+                                    isMe={isMe}
+                                    colors={colors}
+                                    playingUri={playingAudioUri}
+                                    onPlay={setPlayingAudioUri}
+                                />
                             </View>
                         )}
 
@@ -594,9 +601,11 @@ export default function ChatDetailScreen() {
                 isDownloading={isDownloading}
                 colors={colors}
                 isDark={isDark}
+                playingAudioUri={playingAudioUri}
+                setPlayingAudioUri={setPlayingAudioUri}
             />
         );
-    }, [user?.id, colors, isDark, isDownloading, scrollToMessage, handleDownload]);
+    }, [user?.id, colors, isDark, isDownloading, scrollToMessage, handleDownload, playingAudioUri]);
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.surface }}>

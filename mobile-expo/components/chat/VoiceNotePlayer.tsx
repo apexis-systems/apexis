@@ -3,7 +3,7 @@ import { View, TouchableOpacity, Text, Animated, PanResponder } from 'react-nati
 import { Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 
-export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, isMe: boolean, colors: any }) {
+export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay }: { uri: string, isMe: boolean, colors: any, playingUri?: string | null, onPlay?: (uri: string) => void }) {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const soundRef = useRef<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -25,7 +25,7 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
                 durationRef.current = status.durationMillis;
             }
             setIsPlaying(status.isPlaying);
-            
+
             if (status.didJustFinish) {
                 setIsPlaying(false);
                 setPosition(0);
@@ -73,9 +73,18 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
 
     useEffect(() => {
         let isMounted = true;
-        
+
         async function init() {
             try {
+                // Ensure audio plays through speaker
+                await Audio.setAudioModeAsync({
+                    allowsRecordingIOS: false,
+                    playsInSilentModeIOS: true,
+                    shouldDuckAndroid: true,
+                    staysActiveInBackground: false,
+                    playThroughEarpieceAndroid: false,
+                });
+
                 // Unload previous sound if any
                 if (soundRef.current) {
                     await soundRef.current.unloadAsync();
@@ -86,7 +95,7 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
                     { progressUpdateIntervalMillis: 100 },
                     onPlaybackStatusUpdate
                 );
-                
+
                 if (isMounted) {
                     setSound(audioSound);
                     soundRef.current = audioSound;
@@ -113,11 +122,19 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
         };
     }, [uri]);
 
+    useEffect(() => {
+        if (playingUri && playingUri !== uri && isPlaying) {
+            soundRef.current?.pauseAsync();
+        }
+    }, [playingUri]);
+
     const togglePlayback = async () => {
         if (!soundRef.current) return;
         if (isPlaying) {
             await soundRef.current.pauseAsync();
         } else {
+            if (onPlay) onPlay(uri);
+
             // Safety check: if finished, reset to start
             const status = await soundRef.current.getStatusAsync();
             if (status.isLoaded && status.positionMillis >= (status.durationMillis || 0) - 100) {
@@ -150,56 +167,56 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', minWidth: 220, gap: 10, marginVertical: 4 }}>
             <TouchableOpacity onPress={togglePlayback} disabled={!isLoaded}>
                 <View style={{
-                    width: 32, 
-                    height: 32, 
-                    borderRadius: 16, 
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
                     backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : colors.primary + '15',
                     alignItems: 'center',
                     justifyContent: 'center'
                 }}>
-                    <Feather 
-                        name={isPlaying ? "pause" : "play"} 
-                        size={16} 
-                        color={isMe ? '#fff' : colors.primary} 
+                    <Feather
+                        name={isPlaying ? "pause" : "play"}
+                        size={16}
+                        color={isMe ? '#fff' : colors.primary}
                         style={!isPlaying ? { transform: [{ translateX: 1 }] } : {}}
                     />
                 </View>
             </TouchableOpacity>
 
             <View style={{ flex: 1 }}>
-                <View 
+                <View
                     onLayout={(e) => {
                         const width = e.nativeEvent.layout.width;
                         setBarWidth(width);
                         barWidthRef.current = width;
                     }}
                     {...panResponder.panHandlers}
-                    style={{ 
-                        height: 30, 
+                    style={{
+                        height: 30,
                         justifyContent: 'center',
                         backgroundColor: 'transparent',
                         zIndex: 10
                     }}
                 >
-                    <View 
+                    <View
                         pointerEvents="none"
                         style={{ height: 3, backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : colors.border, borderRadius: 1.5, overflow: 'hidden' }}
                     >
-                        <View style={{ 
-                            height: '100%', 
-                            width: `${progressPercentage}%`, 
-                            backgroundColor: isMe ? '#fff' : colors.primary 
+                        <View style={{
+                            height: '100%',
+                            width: `${progressPercentage}%`,
+                            backgroundColor: isMe ? '#fff' : colors.primary
                         }} />
                     </View>
                     {/* Handle/Thumb */}
-                    <View 
+                    <View
                         pointerEvents="none"
-                        style={{ 
-                            position: 'absolute', 
-                            left: `${progressPercentage}%`, 
-                            width: 12, 
-                            height: 12, 
-                            borderRadius: 6, 
+                        style={{
+                            position: 'absolute',
+                            left: `${progressPercentage}%`,
+                            width: 12,
+                            height: 12,
+                            borderRadius: 6,
                             backgroundColor: isMe ? '#fff' : colors.primary,
                             marginLeft: -6,
                             shadowColor: '#000',
@@ -207,7 +224,7 @@ export default function VoiceNotePlayer({ uri, isMe, colors }: { uri: string, is
                             shadowOpacity: 0.2,
                             shadowRadius: 1.5,
                             elevation: 2
-                        }} 
+                        }}
                     />
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: -6 }}>
