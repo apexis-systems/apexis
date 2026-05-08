@@ -217,7 +217,7 @@ export default function SnagCreateScreen() {
             if (capturedAudio) {
                 const filename = capturedAudio.split('/').pop() || `voice_${Date.now()}.m4a`;
                 const match = /\.(\w+)$/.exec(filename);
-                const type = match ? `audio/${match[1]}` : 'audio/m4a';
+                const type = match ? `audio/${match[1]}` : 'audio/mp4';
                 form.append('audio', { uri: capturedAudio, type, name: filename } as any);
             }
             await createSnag(form);

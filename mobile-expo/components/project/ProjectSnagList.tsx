@@ -349,7 +349,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             if (editAudio && !editAudio.startsWith('http')) {
                 const filename = editAudio.split('/').pop() || `voice_${Date.now()}.m4a`;
                 const match = /\.(\w+)$/.exec(filename);
-                const type = match ? `audio/${match[1]}` : `audio/m4a`;
+                const type = match ? `audio/${match[1]}` : `audio/mp4`;
                 formData.append('audio', { uri: editAudio, name: filename, type } as any);
             }
             if (removeEditAudio) {
