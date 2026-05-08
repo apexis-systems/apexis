@@ -519,7 +519,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (selectedAudio) {
         const filename = selectedAudio.split('/').pop() || `voice_${Date.now()}.m4a`;
         const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `audio/${match[1]}` : `audio/m4a`;
+        const type = match ? `audio/${match[1]}` : `audio/mp4`;
         formData.append('photos', { uri: selectedAudio, name: filename, type } as any);
       }
 
@@ -568,7 +568,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (selectedAudio && !selectedAudio.startsWith('http')) {
         const filename = selectedAudio.split('/').pop() || `voice_${Date.now()}.m4a`;
         const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `audio/${match[1]}` : `audio/m4a`;
+        const type = match ? `audio/${match[1]}` : `audio/mp4`;
         formData.append('photos', { uri: selectedAudio, name: filename, type } as any);
       }
 
