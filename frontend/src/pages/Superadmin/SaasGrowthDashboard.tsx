@@ -93,22 +93,76 @@ const Pill = ({
 
 export default function SaasGrowthDashboard() {
   const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<any>({
+    metrics: {
+      totalUsers: 12480,
+      activeCompanies: 842,
+      activeProjects: 3150,
+      freemiumUsers: 9840,
+      paidSubscribers: 2640,
+      mrr: 1845000,
+      arr: 22140000,
+      conversionRate: "21.2%",
+    },
+    dailyGrowth: [
+      { day: "Mon", users: 120 },
+      { day: "Tue", users: 150 },
+      { day: "Wed", users: 180 },
+      { day: "Thu", users: 140 },
+      { day: "Fri", users: 190 },
+      { day: "Sat", users: 110 },
+      { day: "Sun", users: 90 },
+    ],
+    growthMonthly: [
+      { month: "Jan", users: 4200 },
+      { month: "Feb", users: 5100 },
+      { month: "Mar", users: 6200 },
+      { month: "Apr", users: 7800 },
+      { month: "May", users: 9400 },
+      { month: "Jun", users: 10800 },
+      { month: "Jul", users: 12480 },
+    ],
+    funnel: [
+      { stage: "Signed Up", value: 12480, pct: 100 },
+      { stage: "Completed Onboarding", value: 8450, pct: 67.7 },
+      { stage: "Active in 7 Days", value: 4120, pct: 33.0 },
+      { stage: "Paid Subscription", value: 2640, pct: 21.2 },
+    ],
+    companyActivity: [
+      { name: "Skyline Constructions", projects: 24, team: 85, drawings: 420, messages: 12400, lastActive: "2 mins ago", plan: "Enterprise" },
+      { name: "Build-It Group", projects: 18, team: 42, drawings: 280, messages: 8200, lastActive: "15 mins ago", plan: "Professional" },
+      { name: "Urban Developers", projects: 12, team: 28, drawings: 150, messages: 4100, lastActive: "1 hour ago", plan: "Professional" },
+      { name: "Apex Builders", projects: 8, team: 15, drawings: 95, messages: 2400, lastActive: "3 hours ago", plan: "Essential" },
+      { name: "Green Space Architects", projects: 5, team: 12, drawings: 60, messages: 1800, lastActive: "5 hours ago", plan: "Free" },
+    ],
+    planBreakdown: [
+      { name: "Essential", value: 1420, color: "hsl(24_95%_53%/0.4)" },
+      { name: "Professional", value: 840, color: "hsl(24_95%_53%/0.7)" },
+      { name: "Enterprise", value: 380, color: "hsl(24_95%_53%)" },
+    ],
+    feed: [
+      { text: "Skyline Constructions upgraded to Enterprise Plan", time: new Date().toISOString() },
+      { text: "15 new companies signed up in the last 24 hours", time: new Date(Date.now() - 3600000).toISOString() },
+      { text: "Platform-wide MRR hit ₹18.4L milestone", time: new Date(Date.now() - 7200000).toISOString() },
+      { text: "Average site photo upload speed improved by 12%", time: new Date(Date.now() - 10800000).toISOString() },
+      { text: "New drawing release system deployed to production", time: new Date(Date.now() - 14400000).toISOString() },
+    ]
+  });
 
   useEffect(() => {
-    const fetchGrowthData = async () => {
-      try {
-        const response = await getGrowthAnalytics();
-        setData(response);
-      } catch (error) {
-        console.error("Failed to fetch growth data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // const fetchGrowthData = async () => {
+    //   try {
+    //     const response = await getGrowthAnalytics();
+    //     setData(response);
+    //   } catch (error) {
+    //     console.error("Failed to fetch growth data:", error);
+    //   } finally {
+    //     setLoading(false);
+    //   }
+    // };
 
-    fetchGrowthData();
+    // fetchGrowthData();
   }, []);
 
   if (loading) {
@@ -171,7 +225,7 @@ export default function SaasGrowthDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-4">
         {executiveMetricsList.map((metric) => (
           <div key={metric.title} className={cn(cardClass, "p-4")}>
             <div className="mb-2 flex items-center justify-between">

@@ -115,7 +115,7 @@ export default function LinkedDevices() {
                     onPress={requestPermission}
                     style={{ backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
                 >
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Grant Permission</Text>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Continue</Text>
                 </TouchableOpacity>
             </View>
         );

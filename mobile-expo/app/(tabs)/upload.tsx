@@ -799,9 +799,9 @@ export default function UploadScreen() {
                         </View>
                     ) : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                            <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                            <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
                             <TouchableOpacity onPress={requestCameraPermission} style={{ padding: 12, backgroundColor: colors.primary, borderRadius: 8 }}>
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Grant Permission</Text>
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Continue</Text>
                             </TouchableOpacity>
                         </View>
                     )}

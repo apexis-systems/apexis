@@ -384,7 +384,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         if (!cameraPermission?.granted) {
             const res = await requestCameraPermission();
             if (!res.granted) {
-                Alert.alert("Permission Required", "Camera permission is needed to take photos.");
+                Alert.alert("Camera Access", "Camera access is needed to take photos.");
                 return;
             }
         }
@@ -1156,9 +1156,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 <ActivityIndicator color="#fff" />
                                             ) : (
                                                 <>
-                                                    <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                                                    <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
                                                     <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                                        <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                                                        <Text style={{ color: '#fff', fontWeight: '700' }}>Continue</Text>
                                                     </TouchableOpacity>
                                                 </>
                                             )}

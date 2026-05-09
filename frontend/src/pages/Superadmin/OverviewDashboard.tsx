@@ -192,7 +192,7 @@ function MetricCard({
         <div className="flex h-7 w-7 items-center justify-center rounded bg-[hsl(24_95%_53%/0.1)]">
           <Icon className="h-3.5 w-3.5 text-[hsl(24_95%_53%)]" />
         </div>
-        <span className={cn("text-xs font-medium uppercase tracking-wide", mutedTextClass)}>
+        <span className={cn("text-[11px] uppercase tracking-wide", mutedTextClass)}>
           {title}
         </span>
       </div>
@@ -358,7 +358,7 @@ export default function OverviewDashboard() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
-        <h1 className={cn("text-xl font-bold", strongTextClass)}>Dashboard Overview</h1>
+        <h1 className={cn("text-lg font-semibold", strongTextClass)}>Dashboard Overview</h1>
         <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
           Real-time platform health & analytics
         </p>
