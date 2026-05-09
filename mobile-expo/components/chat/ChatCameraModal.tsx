@@ -160,7 +160,7 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                             onPress={requestPermission}
                             style={{ backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 }}
                         >
-                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Grant Permission</Text>
+                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Continue</Text>
                         </TouchableOpacity>
                     </View>
                 )}

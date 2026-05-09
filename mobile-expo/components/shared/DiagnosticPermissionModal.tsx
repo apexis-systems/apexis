@@ -118,7 +118,7 @@ export default function DiagnosticPermissionModal({ visible, onClose }: Props) {
                             {loading ? (
                                 <ActivityIndicator color="#fff" size="small" />
                             ) : (
-                                <Text style={[styles.buttonText, { color: '#fff' }]}>Allow</Text>
+                                <Text style={[styles.buttonText, { color: '#fff' }]}>Continue</Text>
                             )}
                         </TouchableOpacity>
                     </View>

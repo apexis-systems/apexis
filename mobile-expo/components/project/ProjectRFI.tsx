@@ -368,7 +368,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       const res = await requestCameraPermission();
       if (!res.granted) {
         Alert.alert(
-          'Permission Required',
+          'Camera Access',
           'Camera permission is needed to take RFI photos. Please enable it in your device settings.'
         );
         return;
@@ -1649,9 +1649,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             <ActivityIndicator color="#fff" />
                           ) : (
                             <>
-                              <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                              <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
                               <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                                  <Text style={{ color: '#fff', fontWeight: '700' }}>Continue</Text>
                               </TouchableOpacity>
                             </>
                           )}
@@ -1830,9 +1830,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           <ActivityIndicator color="#fff" />
                         ) : (
                           <>
-                            <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                            <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
                             <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                              <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                              <Text style={{ color: '#fff', fontWeight: '700' }}>Continue</Text>
                             </TouchableOpacity>
                           </>
                         )}
@@ -2335,9 +2335,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               <ActivityIndicator color="#fff" />
                             ) : (
                               <>
-                                <Text style={{ color: '#fff', marginBottom: 20 }}>Camera permission required</Text>
+                                <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
                                 <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                  <Text style={{ color: '#fff', fontWeight: '700' }}>Grant Permission</Text>
+                                    <Text style={{ color: '#fff', fontWeight: '700' }}>Continue</Text>
                                 </TouchableOpacity>
                               </>
                             )}
