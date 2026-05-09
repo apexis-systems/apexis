@@ -180,7 +180,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                 </View>
             ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <View style={{ 
+                    {/* <View style={{ 
                         flex: 1, 
                         height: 44, 
                         backgroundColor: colors.surface, 
@@ -200,7 +200,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                         >
                             Tap mic to record voice response
                         </Text>
-                    </View>
+                    </View> */}
                 </View>
             )}
 
