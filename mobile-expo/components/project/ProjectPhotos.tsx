@@ -438,7 +438,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         try {
             const { status } = await MediaLibrary.requestPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Required', 'Allow access to save photos to your gallery.');
+                Alert.alert('Gallery Access', 'Allow access to save photos to your gallery.');
                 return;
             }
             const ext = photo.file_name?.split('.').pop() || 'jpg';

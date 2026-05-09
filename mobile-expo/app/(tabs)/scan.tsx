@@ -68,7 +68,7 @@ export default function ScanScreen() {
                             borderRadius: 10,
                         }}
                     >
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Grant Permission</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Continue</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
