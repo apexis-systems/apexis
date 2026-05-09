@@ -326,7 +326,7 @@ function RootLayoutNav() {
   useEffect(() => {
     const checkVersion = async () => {
       try {
-        const response = await getSystemConfig();``
+        const response = await getSystemConfig();
         if (response.success && response.data) {
           const currentVersion = Constants.expoConfig?.version || '1.0.0';
           console.log(currentVersion);
