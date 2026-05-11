@@ -29,11 +29,14 @@ const UserManagement = () => {
     const [inviteRole, setInviteRole] = useState<UserRole>('contributor');
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [inviting, setInviting] = useState(false);
-    const [selectedProjectIdForLinks, setSelectedProjectIdForLinks] = useState<string>('');
     const [copied, setCopied] = useState<string | null>(null);
 
     const [deleteUserObj, setDeleteUserObj] = useState<any>(null);
     const [deleting, setDeleting] = useState(false);
+
+    // Filters
+    const [filterProject, setFilterProject] = useState<string>('all');
+    const [filterRole, setFilterRole] = useState<string>('all');
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -141,6 +144,21 @@ const UserManagement = () => {
 
     const isProjectRole = inviteRole === 'contributor' || inviteRole === 'client';
 
+    const filteredUsers = users.filter(u => {
+        const matchesRole = filterRole === 'all' || u.role === filterRole;
+        
+        let matchesProject = true;
+        if (filterProject !== 'all') {
+            // Admins/Superadmins have access to all projects
+            const isGlobalAdmin = u.role === 'admin' || u.role === 'superadmin';
+            if (!isGlobalAdmin) {
+                matchesProject = u.project_members?.some((pm: any) => String(pm.project_id) === String(filterProject));
+            }
+        }
+
+        return matchesRole && matchesProject;
+    });
+
     return (
         <div className="p-8 max-w-5xl mx-auto">
             <div className="flex items-center justify-between mb-8">
@@ -227,113 +245,120 @@ const UserManagement = () => {
                 </div>
             )}
 
-            {/* Public Access Links Section */}
-            <div className="mb-8 p-6 rounded-2xl border border-border bg-card shadow-sm">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
-                    <div>
-                        <h2 className="text-lg font-bold text-foreground">Project Access Links</h2>
-                        <p className="text-xs text-muted-foreground mt-1">Generate direct login links for internal contributors and external clients.</p>
-                    </div>
-                    <div className="w-full md:w-64">
-                        <Select value={selectedProjectIdForLinks} onValueChange={setSelectedProjectIdForLinks}>
-                            <SelectTrigger className="mt-1 w-full bg-secondary outline-none border-none shadow-none rounded-xl h-10">
-                                <SelectValue placeholder="Select a Project" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[300px]">
-                                {projects.map((proj: any) => (
-                                    <SelectItem key={`link-${proj.id}`} value={String(proj.id)}>
-                                        <div className="flex items-center gap-2">
-                                            {proj.name}
-                                        </div>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
-                {selectedProjectIdForLinks && projects.find(p => String(p.id) === selectedProjectIdForLinks) ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <div className="p-5 rounded-xl border border-border bg-background">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-accent/10 rounded-lg">
-                                        <Link className="h-4 w-4 text-accent" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-bold text-foreground">Contributor Access</h3>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Role: Contributor</p>
-                                    </div>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 rounded-lg text-xs"
-                                    onClick={() => {
-                                        const p = projects.find(it => String(it.id) === selectedProjectIdForLinks);
-                                        const deepUrl = `${window.location.origin}/auth/login-redirect?role=contributor&code=${p.contributor_code}`;
-                                        copyToClipboard(deepUrl, 'Contributor');
-                                    }}
-                                >
-                                    {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
-                                    {copied === 'Contributor' ? "Copied" : "Copy Link"}
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="p-5 rounded-xl border border-border bg-background">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-accent/10 rounded-lg">
-                                        <Link className="h-4 w-4 text-accent" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-bold text-foreground">Client Access</h3>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Role: Client</p>
-                                    </div>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 rounded-lg text-xs"
-                                    onClick={() => {
-                                        const p = projects.find(it => String(it.id) === selectedProjectIdForLinks);
-                                        const deepUrl = `${window.location.origin}/auth/login-redirect?role=client&code=${p.client_code}`;
-                                        copyToClipboard(deepUrl, 'Client');
-                                    }}
-                                >
-                                    {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
-                                    {copied === 'Client' ? "Copied" : "Copy Link"}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center p-8 bg-secondary/30 rounded-xl border border-dashed border-border text-center">
-                        <Briefcase className="h-8 w-8 text-muted-foreground opacity-30 mb-2" />
-                        <p className="text-sm font-bold text-foreground">No Project Selected</p>
-                        <p className="text-xs text-muted-foreground mt-1 max-w-sm">Please select a project from the dropdown above to generate direct access links for contributors and clients.</p>
-                    </div>
-                )}
-            </div>
+            {/* Removed Redundant Access Links Section */}
 
             {loading ? (
                 <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
             ) : (
-                <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="border-b border-border bg-secondary/30">
-                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Member</th>
-                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</th>
-                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
-                                <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {users.map(u => (
-                                <tr key={u.id} className="hover:bg-secondary/20 transition-colors">
+                <>
+                    {/* Unified Team Management Hub */}
+                    <div className="flex flex-col gap-4 mb-8 p-6 rounded-2xl border-2 border-accent/10 bg-card shadow-sm">
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-accent/10 rounded-xl">
+                                    <Shield className="h-5 w-5 text-accent" />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold text-foreground">Team Management Hub</h2>
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Filter & Access Control</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                                <div className="w-full md:w-56">
+                                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">Project Access</label>
+                                    <Select value={filterProject} onValueChange={setFilterProject}>
+                                        <SelectTrigger className="h-10 rounded-xl bg-background border-border hover:border-accent/50 transition-colors">
+                                            <SelectValue placeholder="All Projects" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Projects</SelectItem>
+                                            {projects.map(p => (
+                                                <SelectItem key={`filter-proj-${p.id}`} value={String(p.id)}>{p.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="w-full md:w-44">
+                                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">Team Role</label>
+                                    <Select value={filterRole} onValueChange={setFilterRole}>
+                                        <SelectTrigger className="h-10 rounded-xl bg-background border-border hover:border-accent/50 transition-colors">
+                                            <SelectValue placeholder="All Roles" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Roles</SelectItem>
+                                            <SelectItem value="admin">Admin</SelectItem>
+                                            <SelectItem value="contributor">Contributor</SelectItem>
+                                            <SelectItem value="client">Client</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {(filterProject !== 'all' || filterRole !== 'all') && (
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={() => { setFilterProject('all'); setFilterRole('all'); }}
+                                        className="h-10 mt-5 text-xs text-muted-foreground hover:text-foreground font-bold"
+                                    >
+                                        Reset
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Integrated Access Links */}
+                        {filterProject !== 'all' && projects.find(p => String(p.id) === filterProject) && (
+                            <div className="pt-4 mt-2 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="flex items-center gap-2">
+                                    <Link className="h-3.5 w-3.5 text-accent" />
+                                    <span className="text-xs font-bold text-foreground">Project Access Links:</span>
+                                </div>
+                                <div className="flex items-center gap-2 w-full md:w-auto">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-9 flex-1 md:flex-initial rounded-xl text-[11px] font-bold border-accent/20 hover:bg-accent/5"
+                                        onClick={() => {
+                                            const p = projects.find(it => String(it.id) === filterProject);
+                                            const deepUrl = `${window.location.origin}/auth/login-redirect?role=contributor&code=${p.contributor_code}`;
+                                            copyToClipboard(deepUrl, 'Contributor');
+                                        }}
+                                    >
+                                        {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5 text-accent" />}
+                                        {copied === 'Contributor' ? "Copied" : "Copy Contributor Link"}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-9 flex-1 md:flex-initial rounded-xl text-[11px] font-bold border-accent/20 hover:bg-accent/5"
+                                        onClick={() => {
+                                            const p = projects.find(it => String(it.id) === filterProject);
+                                            const deepUrl = `${window.location.origin}/auth/login-redirect?role=client&code=${p.client_code}`;
+                                            copyToClipboard(deepUrl, 'Client');
+                                        }}
+                                    >
+                                        {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5 text-accent" />}
+                                        {copied === 'Client' ? "Copied" : "Copy Client Link"}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="border-b border-border bg-secondary/30">
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Member</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
+                                    <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {filteredUsers.map(u => (
+                                    <tr key={u.id} className="hover:bg-secondary/20 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
                                             <span className="text-sm font-bold text-foreground">{u.name || 'Invited User'}</span>
@@ -405,14 +430,15 @@ const UserManagement = () => {
                             ))}
                         </tbody>
                     </table>
-                    {users.length === 0 && (
+                    {filteredUsers.length === 0 && (
                         <div className="p-12 text-center text-muted-foreground">
                             <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                            No users found in your organization.
+                            No users found matching your filters.
                         </div>
                     )}
                 </div>
-            )}
+            </>
+        )}
 
             {/* Delete Confirmation */}
             <Dialog open={!!deleteUserObj} onOpenChange={(open) => !open && setDeleteUserObj(null)}>

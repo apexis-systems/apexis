@@ -5,7 +5,10 @@ import { checkLimit } from '../middleware/checkLimit.ts';
 import { getRFIs, createRFI, updateRFIStatus, getRFIById, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI, getFolderRFIs, markRFISeen } from '../controllers/rfiController.ts';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+});
 
 router.use(verifyToken);
 

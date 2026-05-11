@@ -885,6 +885,7 @@ export default function UploadScreen() {
                                 <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>{isDocMode ? 'Photo' : 'Scan'}</Text>
                             </TouchableOpacity>
                         </View>
+                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, textAlign: 'center', marginTop: 12 }}>Max size: 100 MB</Text>
                     </View>
                 </View>
 
@@ -1192,6 +1193,7 @@ export default function UploadScreen() {
                                     {`Confirm & Upload ${fileQueue.length} ${isDocMode ? 'Doc' : 'Photo'}${fileQueue.length > 1 ? 's' : ''}`}
                                 </Text>
                             </TouchableOpacity>
+                            <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: 'center', marginTop: 10, fontWeight: '600' }}>Max size: 100 MB</Text>
                         </View>
                     )}
 
