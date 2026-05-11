@@ -20,7 +20,9 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Accelerometer } from 'expo-sensors';
@@ -58,19 +60,23 @@ interface Props {
     initialSnagId?: string;
 }
 
-const STATUS_CONFIG: Record<
-    SnagStatus,
-    { icon: keyof typeof Feather.glyphMap; bg: string; label: string }
-> = {
-    amber: { icon: "minus", bg: "#f59e0b", label: "Waiting for Clearance" },
-    green: { icon: "check", bg: "#22c55e", label: "Completed" },
-    red: { icon: "x", bg: "#ef4444", label: "No Action Required" },
-};
 const STATUS_CYCLE: SnagStatus[] = ["amber", "green", "red"];
+
 
 export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const { colors } = useTheme();
     const { user } = useAuth();
+    const { t } = useTranslation();
+
+    const STATUS_CONFIG: Record<
+        SnagStatus,
+        { icon: keyof typeof Feather.glyphMap; bg: string; label: string }
+    > = {
+        amber: { icon: "minus", bg: "#f59e0b", label: t('projectSnags.status.waiting') },
+        green: { icon: "check", bg: "#22c55e", label: t('projectSnags.status.completed') },
+        red: { icon: "x", bg: "#ef4444", label: t('projectSnags.status.noAction') },
+    };
+
 
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -298,23 +304,24 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             setRemovedResponsePhotos([]);
 
             if (next === snag.status) {
-                Alert.alert("Success", "Response updated successfully");
+                Alert.alert(t('projectSnags.successTitle') as string, t('projectSnags.successResponseUpdate') as string);
             } else {
-                Alert.alert("Success", `Status updated to ${STATUS_CONFIG[next].label}`);
+                Alert.alert(t('projectSnags.successTitle') as string, t('projectSnags.successStatusUpdate', { status: STATUS_CONFIG[next].label }) as string);
             }
         } catch (error) {
             console.error("handleUpdateStatus error", error);
-            Alert.alert("Error", "Failed to update status");
+            Alert.alert(t('projectSnags.errorTitle') as string, t('projectSnags.errorStatusUpdate') as string);
         } finally {
+
             setSubmitting(false);
         }
     };
 
     const handleDeleteSnag = async (snagId: number, snagTitle: string) => {
-        Alert.alert("Delete", `Remove "${snagTitle}"?`, [
-            { text: "Cancel", style: "cancel" },
+        Alert.alert(t('projectSnags.deleteConfirmTitle') as string, t('projectSnags.deleteConfirmDesc', { title: snagTitle }) as string, [
+            { text: t('projectSnags.cancel') as string, style: "cancel" },
             {
-                text: "Delete",
+                text: t('projectSnags.delete') as string,
                 style: "destructive",
                 onPress: async () => {
                     try {
@@ -322,18 +329,20 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                         setSnags((prev) => prev.filter((s) => s.id !== snagId));
                         setSelectedSnag(null);
                     } catch {
-                        Alert.alert("Error", "Failed to delete");
+                        Alert.alert(t('projectSnags.errorTitle') as string, t('projectSnags.errorDelete') as string);
                     }
                 },
             },
         ]);
     };
 
+
     const handleUpdateSnag = async () => {
         if (!selectedSnag || !editTitle.trim()) {
-            Alert.alert("Error", "Title is required");
+            Alert.alert(t('projectSnags.errorTitle') as string, t('projectSnags.errorTitleRequired') as string);
             return;
         }
+
         setSubmitting(true);
         try {
             const formData = new FormData();
@@ -361,11 +370,12 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             setSnags(prev => prev.map(s => s.id === selectedSnag.id ? updated : s));
             setSelectedSnag(updated);
             setIsEditing(false);
-            Alert.alert("Success", "Snag updated successfully");
+            Alert.alert(t('projectSnags.successTitle') as string, t('projectSnags.successUpdate') as string);
         } catch (error) {
             console.error("handleUpdateSnag error", error);
-            Alert.alert("Error", "Failed to update snag");
+            Alert.alert(t('projectSnags.errorTitle') as string, t('projectSnags.errorUpdate') as string);
         } finally {
+
             setSubmitting(false);
         }
     };
@@ -384,10 +394,11 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         if (!cameraPermission?.granted) {
             const res = await requestCameraPermission();
             if (!res.granted) {
-                Alert.alert("Camera Access", "Camera access is needed to take photos.");
+                Alert.alert(t('projectSnags.cameraAccess') as string, t('projectSnags.cameraAccessDesc') as string);
                 return;
             }
         }
+
         setCameraMode(mode);
         setCameraVisible(true);
     };
@@ -427,9 +438,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             }
         } catch (error) {
             console.error('pickImageFiles error', error);
-            Alert.alert('Error', 'Failed to pick image from gallery.');
+            Alert.alert(t('projectSnags.errorTitle') as string, t('projectSnags.failedPickGallery') as string);
         }
     };
+
 
     const capturePhoto = async () => {
         if (!cameraRef.current || isCapturing) return;
@@ -480,8 +492,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             }
         } catch (e) {
             console.error("capturePhoto error", e);
-            Alert.alert("Camera Error", "Failed to capture photo");
+            Alert.alert(t('projectSnags.cameraError') as string, t('projectSnags.failedCapture') as string);
         } finally {
+
             setIsCapturing(false);
         }
     };
@@ -520,9 +533,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 }}>
                 <Feather name="plus" size={15} color="#fff" />
                 <Text style={{ fontSize: 12, fontWeight: "600", color: "white" }}>
-                    Add Snag
+                    {t('projectSnags.addSnag')}
                 </Text>
             </TouchableOpacity>
+
 
             {/* Snag list */}
             {loading ? (
@@ -564,9 +578,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                         if (String(snag.assigned_to) === String(user?.id)) {
                                             handleUpdateStatus(snag);
                                         } else {
-                                            Alert.alert("Permission Denied", "Only the assigned person can update the status");
+                                            Alert.alert(t('projectSnags.permissionDenied') as string, t('projectSnags.onlyAssignedUpdate') as string);
                                         }
                                     }}
+
                                     style={{
                                         width: 26,
                                         height: 26,
@@ -601,9 +616,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                     ) : null}
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
                                         <Text style={{ fontSize: 10, color: colors.textMuted }}>
-                                            To: <Text style={{ color: colors.text, fontWeight: '600' }}>{snag.assignee?.name || "Unassigned"}</Text>
+                                            {t('projectSnags.to')}: <Text style={{ color: colors.text, fontWeight: '600' }}>{snag.assignee?.name || t('projectSnags.unassigned')}</Text>
                                         </Text>
                                         {snag.seen_at && (
+
                                             <Ionicons name="checkmark-done" size={14} color="#f97316" />
                                         )}
                                     </View>
@@ -622,9 +638,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 {snag.response}
                                             </Text>
                                             {snag.responsePhotoUrls && snag.responsePhotoUrls.length > 0 && (
-                                                <Text style={{ fontSize: 9, color: colors.primary, fontWeight: 'bold' }}>+{snag.responsePhotoUrls.length} photos</Text>
+                                                <Text style={{ fontSize: 9, color: colors.primary, fontWeight: 'bold' }}>+{snag.responsePhotoUrls.length} {t('projectSnags.photos')}</Text>
                                             )}
                                         </View>
+
                                     ) : null}
                                 </View>
 
@@ -657,9 +674,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                             <Feather name="check-square" size={32} color={colors.border} />
                             <Text
                                 style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>
-                                No snags yet
+                                {t('projectSnags.noSnags')}
                             </Text>
                         </View>
+
                     )}
                 </View>
             )}
@@ -678,10 +696,11 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                           style={{ flex: 1 }}
                         >
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '85%', padding: 16 }}>
+                        <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '85%', padding: 16 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{isEditing ? 'Edit Snag' : 'Snag Details'}</Text>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{isEditing ? t('projectSnags.editSnag') : t('projectSnags.snagDetails')}</Text>
                             <TouchableOpacity onPress={() => { setSelectedSnag(null); setIsEditing(false); setEditAudio(null); setRemoveEditAudio(false); setResponseComment(""); setResponsePhotos([]); }}>
+
                                 <Feather name="x" size={24} color={colors.text} />
                             </TouchableOpacity>
                         </View>
@@ -691,28 +710,31 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                 {isEditing ? (
                                     <View style={{ gap: 15, paddingBottom: 40 }}>
                                         <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>Title</Text>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.titleLabel')}</Text>
                                             <TextInput
                                                 value={editTitle}
                                                 onChangeText={setEditTitle}
-                                                placeholder="Snag Title"
+                                                placeholder={t('projectSnags.titlePlaceholder') as string}
                                                 style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, color: colors.text, borderWidth: 1, borderColor: colors.border }}
                                             />
                                         </View>
 
+
                                         <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>Description</Text>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.descriptionLabel')}</Text>
                                             <TextInput
                                                 value={editDesc}
                                                 onChangeText={setEditDesc}
-                                                placeholder="Description"
+                                                placeholder={t('projectSnags.descriptionPlaceholder') as string}
                                                 multiline
                                                 style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, color: colors.text, borderWidth: 1, borderColor: colors.border, minHeight: 80, textAlignVertical: 'top' }}
                                             />
                                         </View>
 
+
                                         <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>Assigned To</Text>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.assignedToLabel')}</Text>
+
                                             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                                 <View style={{ flexDirection: 'row', gap: 8 }}>
                                                     {assignees.map(a => (
@@ -733,7 +755,8 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                         </View>
 
                                         <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Photo</Text>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectSnags.photoLabel')}</Text>
+
                                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                                                 {editPhoto && (
                                                     <View style={{ position: 'relative' }}>
@@ -765,7 +788,8 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                         </View>
 
                                         <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Voice Note</Text>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectSnags.voiceNoteLabel')}</Text>
+
                                             {editAudio ? (
                                                 <View style={{ position: 'relative', padding: 12, paddingRight: 32, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -794,15 +818,17 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             disabled={submitting}
                                             style={{ backgroundColor: colors.primary, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 10, opacity: submitting ? 0.7 : 1 }}
                                         >
-                                            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Save Changes</Text>}
+                                            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectSnags.saveChanges')}</Text>}
                                         </TouchableOpacity>
+
 
                                         <TouchableOpacity
                                             onPress={() => setIsEditing(false)}
                                             style={{ height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
                                         >
-                                            <Text style={{ color: colors.text, fontWeight: '600' }}>Cancel</Text>
+                                            <Text style={{ color: colors.text, fontWeight: '600' }}>{t('projectSnags.cancel')}</Text>
                                         </TouchableOpacity>
+
                                     </View>
                                 ) : (
                                     <View style={{ gap: 15, paddingBottom: 40 }}>
@@ -843,7 +869,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             <View style={{ padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceNoteHeader').toUpperCase()}</Text>
                                                 </View>
                                                 <VoiceNotePlayer uri={selectedSnag.audioDownloadUrl || selectedSnag.audio_url!} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                             </View>
@@ -851,19 +877,22 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
                                         <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, gap: 8 }}>
                                             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>Assigned To</Text>
-                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{selectedSnag.assignee?.name || 'Unassigned'}</Text>
+                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.assignedToLabel')}</Text>
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{selectedSnag.assignee?.name || t('projectSnags.unassigned')}</Text>
                                             </View>
+
                                             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>Created By</Text>
+                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.createdByLabel')}</Text>
                                                 <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{selectedSnag.creator?.name || '—'}</Text>
                                             </View>
+
                                         </View>
 
                                         {(selectedSnag.response || (selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
                                             <View style={{ padding: 12, backgroundColor: colors.primary + '08', borderRadius: 12, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, marginBottom: 4, textTransform: 'uppercase' }}>Response</Text>
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, marginBottom: 4, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
                                                 {selectedSnag.response ? <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text> : null}
+
                                                 {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
                                                     <View style={{ marginTop: 10, gap: 10 }}>
                                                         {/* Images Row */}
@@ -904,8 +933,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                             }}>
                                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                                                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
+                                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceResponseHeader').toUpperCase()}</Text>
                                                                 </View>
+
                                                                 <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                                                 {String(selectedSnag.assigned_to) === String(user?.id) && (
                                                                     <TouchableOpacity
@@ -935,15 +965,17 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                         {/* Response Section */}
                                         {String(selectedSnag.assigned_to) === String(user?.id) && (
                                             <View style={{ gap: 10, marginTop: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
-                                                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{selectedSnag.response ? 'Update Response' : 'Provide Response'}</Text>
+                                                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{selectedSnag.response ? t('projectSnags.updateResponse') : t('projectSnags.provideResponse')}</Text>
+
                                                 
                                                 {selectedSnag.status !== 'green' ? (
                                                     <>
                                                         <TextInput
                                                             value={responseComment}
                                                             onChangeText={setResponseComment}
-                                                            placeholder="Type your response here..."
+                                                            placeholder={t('projectSnags.responsePlaceholder') as string}
                                                             placeholderTextColor={colors.textMuted}
+
                                                             multiline
                                                             style={{
                                                                 minHeight: 70,
@@ -967,7 +999,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                                         }}>
                                                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                                                                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                                                <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
+                                                                                <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceResponseHeader').toUpperCase()}</Text>
                                                                             </View>
                                                                             <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                                                         </View>
@@ -1030,17 +1062,19 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                                 opacity: (submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)) ? 0.6 : 1
                                                             }}
                                                         >
-                                                            {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Submit Response</Text>}
+                                                            {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('projectSnags.submitResponse')}</Text>}
                                                         </TouchableOpacity>
+
                                                     </>
                                                 ) : (
                                                     <View style={{ padding: 10, backgroundColor: colors.surface, borderRadius: 8, alignItems: 'center' }}>
-                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>Completed snags cannot be updated</Text>
+                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.completedSnagNoUpdate')}</Text>
                                                     </View>
                                                 )}
 
+
                                                 <View style={{ marginTop: 5, gap: 8 }}>
-                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Update Status</Text>
+                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('projectSnags.updateStatusHeader')}</Text>
                                                     <View style={{ flexDirection: 'row', gap: 8 }}>
                                                         {STATUS_CYCLE.map(s => (
                                                             <TouchableOpacity
@@ -1104,7 +1138,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
                                                     <Feather name="x" size={24} color="#fff" />
                                                 </TouchableOpacity>
-                                                <Text style={cameraStyles.headerTitle}>Snag Photo</Text>
+                                                <Text style={cameraStyles.headerTitle}>{t('projectSnags.photoLabel')}</Text>
                                                 <View style={{ width: 60 }} />
                                             </View>
 
@@ -1137,14 +1171,14 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                         <View style={cameraStyles.iconCircle}>
                                                             <Feather name="image" size={24} color="#fff" />
                                                         </View>
-                                                        <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                                                        <Text style={cameraStyles.btnLabel}>{t('projectSnags.gallery')}</Text>
                                                     </TouchableOpacity>
 
                                                     <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
                                                         <View style={cameraStyles.shutterOuter}>
                                                             <View style={cameraStyles.shutterInner} />
                                                         </View>
-                                                        <Text style={cameraStyles.btnLabel}>Photo</Text>
+                                                        <Text style={cameraStyles.btnLabel}>{t('projectSnags.photo')}</Text>
                                                     </TouchableOpacity>
                                                     <View style={{ width: 70 }} />
                                                 </View>
@@ -1156,11 +1190,12 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 <ActivityIndicator color="#fff" />
                                             ) : (
                                                 <>
-                                                    <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
+                                                    <Text style={{ color: '#fff', marginBottom: 20 }}>{t('projectSnags.cameraAccessDesc')}</Text>
                                                     <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                                        <Text style={{ color: '#fff', fontWeight: '700' }}>Continue</Text>
+                                                        <Text style={{ color: '#fff', fontWeight: '700' }}>{t('linkedDevices.continue')}</Text>
                                                     </TouchableOpacity>
                                                 </>
+
                                             )}
                                         </View>
                                     )}
@@ -1328,3 +1363,4 @@ const cameraStyles = StyleSheet.create({
         marginTop: 5,
     },
 });
+

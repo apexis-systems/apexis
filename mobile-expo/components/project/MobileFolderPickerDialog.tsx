@@ -3,6 +3,7 @@ import { View, TouchableOpacity, Modal, ScrollView, StyleSheet, ActivityIndicato
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { getFolders } from '@/services/folderService';
 import { Alert } from 'react-native';
 
@@ -24,6 +25,7 @@ export default function MobileFolderPickerDialog({
     submitting = false
 }: MobileFolderPickerDialogProps) {
     const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
     const [docFolders, setDocFolders] = useState<any[]>([]);
     const [photoFolders, setPhotoFolders] = useState<any[]>([]);
     const [tempSelection, setTempSelection] = useState<(string | number)[]>([]);
@@ -49,7 +51,7 @@ export default function MobileFolderPickerDialog({
             setDocFolders(extract(docData));
             setPhotoFolders(extract(photoData));
         } catch (e) {
-            Alert.alert("Error", "Failed to load folders");
+            Alert.alert(t('projectRfi.error'), t('projectRfi.failedToLoadFolders'));
         } finally {
             setLoading(false);
         }
@@ -94,8 +96,8 @@ export default function MobileFolderPickerDialog({
                 <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
                     <View style={styles.header}>
                         <View>
-                            <Text style={[styles.title, { color: colors.text }]}>Link Folders</Text>
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{tempSelection.length} folders selected</Text>
+                            <Text style={[styles.title, { color: colors.text }]}>{t('projectRfi.linkFolders')}</Text>
+                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('projectRfi.foldersSelected', { count: tempSelection.length })}</Text>
                         </View>
                         <TouchableOpacity onPress={onClose}>
                             <Feather name="x" size={20} color={colors.text} />
@@ -107,13 +109,13 @@ export default function MobileFolderPickerDialog({
                             onPress={() => setActiveTab('document')}
                             style={[styles.tab, activeTab === 'document' && { borderBottomColor: colors.primary }]}
                         >
-                            <Text style={[styles.tabText, { color: activeTab === 'document' ? colors.primary : colors.textMuted }]}>Documents</Text>
+                            <Text style={[styles.tabText, { color: activeTab === 'document' ? colors.primary : colors.textMuted }]}>{t('projectRfi.documents')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
                             onPress={() => setActiveTab('photo')}
                             style={[styles.tab, activeTab === 'photo' && { borderBottomColor: colors.primary }]}
                         >
-                            <Text style={[styles.tabText, { color: activeTab === 'photo' ? colors.primary : colors.textMuted }]}>Photos</Text>
+                            <Text style={[styles.tabText, { color: activeTab === 'photo' ? colors.primary : colors.textMuted }]}>{t('projectRfi.photos')}</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -127,7 +129,7 @@ export default function MobileFolderPickerDialog({
 
                     <View style={styles.footer}>
                         <TouchableOpacity onPress={onClose} style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}>
-                            <Text style={{ color: colors.textMuted }}>Cancel</Text>
+                            <Text style={{ color: colors.textMuted }}>{t('projectRfi.cancel')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
                             onPress={() => onConfirm(tempSelection)} 
@@ -141,7 +143,7 @@ export default function MobileFolderPickerDialog({
                             {submitting ? (
                                 <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirm</Text>
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{t('projectRfi.confirm')}</Text>
                             )}
                         </TouchableOpacity>
                     </View>

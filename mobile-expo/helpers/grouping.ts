@@ -1,13 +1,13 @@
-const MONTHS = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
+const MONTH_KEYS = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
 ];
 
 /**
  * Groups already-sorted items into month/year sections.
  * Assumes items are already sorted in the desired direction (Newest or Oldest).
  */
-export const groupItemsByMonth = (items: any[]) => {
+export const groupItemsByMonth = (items: any[], t?: any) => {
     const groups: { title: string; data: any[] }[] = [];
     
     items.forEach((item) => {
@@ -17,7 +17,10 @@ export const groupItemsByMonth = (items: any[]) => {
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return;
         
-        const monthYear = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+        const monthName = t ? t(`months.${MONTH_KEYS[d.getMonth()]}`) : 
+            MONTH_KEYS[d.getMonth()].charAt(0).toUpperCase() + MONTH_KEYS[d.getMonth()].slice(1);
+        
+        const monthYear = `${monthName} ${d.getFullYear()}`;
         
         // Since items are already sorted, we can just check the last group
         if (groups.length === 0 || groups[groups.length - 1].title !== monthYear) {

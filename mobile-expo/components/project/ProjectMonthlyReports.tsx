@@ -1,7 +1,9 @@
 import { View, TouchableOpacity, ActivityIndicator, ScrollView, BackHandler, Alert } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
+import { useTranslation } from "react-i18next";
 import { useTheme } from '@/contexts/ThemeContext';
+
 import { getReports, triggerReport, getReportShareUrl, type Report } from '@/services/reportService';
 import { useEffect, useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -19,6 +21,8 @@ interface Props {
 
 export default function ProjectMonthlyReports({ project, userRole }: Props) {
     const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
+
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
     const [expanded, setExpanded] = useState<number | null>(null);
@@ -64,28 +68,29 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
         if (s === 'amber') {
             bgColor = 'rgba(245,158,11,0.1)';
             textColor = '#d97706';
-            text = 'Waiting for Clearance';
+            text = t('projectReports.status.waiting');
         } else if (s === 'open' || s === 'pending') {
             bgColor = 'rgba(245,158,11,0.1)';
             textColor = '#d97706';
-            text = 'OPEN';
+            text = t('projectReports.status.open');
         } else if (s === 'green' || s === 'completed') {
             bgColor = 'rgba(16,185,129,0.1)';
             textColor = '#059669';
-            text = 'Completed';
+            text = t('projectReports.status.completed');
         } else if (s === 'resolved' || s === 'closed') {
             bgColor = 'rgba(16,185,129,0.1)';
             textColor = '#059669';
-            text = 'RESOLVED';
+            text = t('projectReports.status.resolved');
         } else if (s === 'red') {
             bgColor = 'rgba(239,68,68,0.1)';
             textColor = '#dc2626';
-            text = 'No Action Required';
+            text = t('projectReports.status.noAction');
         } else if (s === 'overdue' || s === 'critical') {
             bgColor = 'rgba(239,68,68,0.1)';
             textColor = '#dc2626';
-            text = 'OVERDUE';
+            text = t('projectReports.status.overdue');
         }
+
 
         return (
             <View style={{ backgroundColor: bgColor, paddingHorizontal: 4, borderRadius: 2 }}>
@@ -101,9 +106,11 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
             await fetchReports();
         } catch (e) {
             console.error('triggerReport monthly error:', e);
-            const { message, code } = parseApiError(e, 'Failed to generate monthly report');
-            Alert.alert(code === 'FEATURE_RESTRICTED' ? 'Feature Restricted' : code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
+            const { message, code } = parseApiError(e, t('projectReports.monthly.failedGenerate'));
+            const alertTitle = code === 'FEATURE_RESTRICTED' ? t('projectReports.weekly.featureRestricted') : code === 'LIMIT_REACHED' ? t('projectReports.weekly.limitReached') : t('projectReports.weekly.error');
+            Alert.alert(alertTitle as string, message);
         } finally {
+
             setGenerating(false);
         }
     };
@@ -171,9 +178,10 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
                     >
                         {generating ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="calendar" size={16} color="#fff" />}
                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
-                            {generating ? 'Generating...' : "Generate Monthly Report"}
+                            {generating ? t('projectReports.monthly.generating') : t('projectReports.monthly.generate')}
                         </Text>
                     </TouchableOpacity>
+
                 )}
 
                 {reports.map((report) => (
@@ -184,11 +192,11 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
                         >
                             <View style={{ flex: 1 }}>
                                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text }}>
-                                    Monthly Report — {fmt(report.period_start)}
+                                    {t('projectReports.monthly.title')} — {fmt(report.period_start)}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 3 }}>
-                                    <Text style={{ fontSize: 10, color: colors.primary }}>📸 {report.photos_count} photos</Text>
-                                    <Text style={{ fontSize: 10, color: colors.textMuted }}>📄 {report.docs_count} docs</Text>
+                                    <Text style={{ fontSize: 10, color: colors.primary }}>📸 {report.photos_count} {t('projectReports.weekly.photos')}</Text>
+                                    <Text style={{ fontSize: 10, color: colors.textMuted }}>📄 {report.docs_count} {t('projectReports.weekly.docs')}</Text>
                                 </View>
                             </View>
                             
@@ -214,33 +222,36 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
                                     <>
                                         {!report.summary.document_titles?.length && !report.summary.photo_summary?.length && !report.summary.photo_details?.length && !report.summary.rfis?.length && !report.summary.snags?.length && (
                                             <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 10, textAlign: 'center', fontStyle: 'italic' }}>
-                                                No detail records for this period
+                                                {t('projectReports.weekly.noDetail')}
                                             </Text>
                                         )}
+
                                         {report.summary.document_titles?.length > 0 && (
                                             <View style={{ marginTop: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📄 Documents Uploaded</Text>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📄 {t('projectReports.weekly.docsUploaded')}</Text>
                                                 {report.summary.document_titles.map((doc: any, i: number) => (
                                                     <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>
                                                         • <Text style={{ fontWeight: '600' }}>{typeof doc === 'object' ? doc.title : doc}</Text>
-                                                        {typeof doc === 'object' && doc.user && ` (by ${doc.user} in ${doc.folder})`}
+                                                        {typeof doc === 'object' && doc.user && ` (${t('projectReports.weekly.by')} ${doc.user} ${t('projectReports.weekly.in')} ${doc.folder})`}
                                                     </Text>
                                                 ))}
                                             </View>
                                         )}
 
+
                                         {report.summary.photo_summary?.length > 0 ? (
                                             <View style={{ marginTop: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📸 Photos Uploaded</Text>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📸 {t('projectReports.weekly.photosUploaded')}</Text>
                                                 {report.summary.photo_summary.map((ps: any, i: number) => (
                                                     <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>
-                                                        • <Text style={{ fontWeight: '600', color: colors.text }}>{ps.count} photos</Text> by {ps.user} in {ps.folder}
+                                                        • <Text style={{ fontWeight: '600', color: colors.text }}>{ps.count} {t('projectReports.weekly.photos')}</Text> {t('projectReports.weekly.by')} {ps.user} {t('projectReports.weekly.in')} {ps.folder}
                                                     </Text>
                                                 ))}
                                             </View>
+
                                         ) : report.summary.photo_details && report.summary.photo_details.length > 0 && (
                                             <View style={{ marginTop: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📸 Photos Uploaded (Legacy)</Text>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>📸 {t('projectReports.weekly.legacyPhotos')}</Text>
                                                 {(() => {
                                                     const grouped: Record<string, any> = {};
                                                     report.summary.photo_details?.forEach((p: any) => {
@@ -250,17 +261,18 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
                                                     });
                                                     return Object.values(grouped).map((ps: any, i: number) => (
                                                         <Text key={i} style={{ fontSize: 9, color: colors.textMuted, marginBottom: 2 }}>
-                                                            • <Text style={{ fontWeight: '600', color: colors.text }}>{ps.count} photos</Text> by {ps.user} in {ps.folder}
+                                                            • <Text style={{ fontWeight: '600', color: colors.text }}>{ps.count} {t('projectReports.weekly.photos')}</Text> {t('projectReports.weekly.by')} {ps.user} {t('projectReports.weekly.in')} {ps.folder}
                                                         </Text>
                                                     ));
                                                 })()}
                                             </View>
                                         )}
 
+
                                         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                                             {report.summary.rfis?.length > 0 && (
                                                 <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
-                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>RFIs</Text>
+                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>{t('projectReports.weekly.rfis')}</Text>
                                                     {report.summary.rfis.map((rfi: any, i: number) => (
                                                         <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                                             <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted, flex: 1, marginRight: 4 }}>{rfi.title}</Text>
@@ -271,7 +283,7 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
                                             )}
                                             {report.summary.snags?.length > 0 && (
                                                 <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 8 }}>
-                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>Snags</Text>
+                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, marginBottom: 4 }}>{t('projectReports.weekly.snags')}</Text>
                                                     {report.summary.snags.map((snag: any, i: number) => (
                                                         <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                                             <Text numberOfLines={1} style={{ fontSize: 9, color: colors.textMuted, flex: 1, marginRight: 4 }}>{snag.title}</Text>
@@ -280,6 +292,7 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
                                                     ))}
                                                 </View>
                                             )}
+
                                         </View>
                                     </>
                             </View>
@@ -291,10 +304,11 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
             {reports.length === 0 && (
                 <View style={{ marginTop: 30, alignItems: 'center' }}>
                     <Feather name="calendar" size={32} color={colors.border} />
-                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No monthly reports yet</Text>
-                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>Reports are auto-generated at the end of every month</Text>
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>{t('projectReports.monthly.noReports')}</Text>
+                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>{t('projectReports.monthly.autoGenerateHint')}</Text>
                 </View>
             )}
+
         </ScrollView>
     );
 }
