@@ -22,6 +22,16 @@ export const updateUserName = async (data: { name: string }) => {
     }
 };
 
+export const updateNotificationSettings = async (data: { mute_general_notifications: boolean }) => {
+    try {
+        const response = await PrivateAxios.patch('/users/notification-settings', data);
+        return response.data;
+    } catch (error) {
+        console.error("updateNotificationSettings Error", error);
+        throw error;
+    }
+};
+
 export const getOrgUsers = async (purpose?: 'chat' | 'management') => {
     try {
         const url = purpose ? `/users?purpose=${purpose}` : '/users';

@@ -67,6 +67,9 @@
         },
         "settings": {
             "title": "प्रोफ़ाइल",
+            "notifications": "नोटिफिकेशन",
+            "muteNotifications": "नोटिफिकेशन म्यूट करें",
+            "muteNotificationsSubtitle": "इसे चालू करने पर आपको केवल असाइन किए गए काम, टैग और सीधे चैट संदेशों की पुश सूचनाएं मिलेंगी। अपलोड जैसी सामान्य प्रोजेक्ट सूचनाएं म्यूट रहेंगी।",
             "companySettings": "कंपनी सेटिंग्स",
             "companySettingsSubtitle": "लोगो और ब्रांडिंग प्रबंधित करें",
             "resourceUsage": "संसाधन उपयोग",

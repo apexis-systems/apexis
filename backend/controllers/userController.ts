@@ -464,6 +464,34 @@ export const updateUserName = async (req: Request, res: Response) => {
     }
 };
 
+export const updateNotificationSettings = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { mute_general_notifications } = req.body;
+
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (authUser.role !== "admin") {
+            return res.status(403).json({ error: "Only admins can update this setting" });
+        }
+        if (typeof mute_general_notifications !== "boolean") {
+            return res.status(400).json({ error: "mute_general_notifications must be a boolean" });
+        }
+
+        await users.update(
+            { mute_general_notifications },
+            { where: { id: authUser.user_id } }
+        );
+
+        res.status(200).json({
+            message: "Notification settings updated successfully",
+            mute_general_notifications
+        });
+    } catch (error) {
+        console.error("Update Notification Settings Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const getOnboardingLinks = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;

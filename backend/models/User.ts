@@ -64,6 +64,11 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.BOOLEAN,
                 allowNull: true,
             },
+            mute_general_notifications: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
         },
         {
             tableName: "users",
