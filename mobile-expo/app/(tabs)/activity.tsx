@@ -209,7 +209,7 @@ export default function ActivityScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }} edges={['top', 'left', 'right']}>
             {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: themeColors.surface, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
-                <Text style={{ fontSize: 24, fontWeight: '700', color: themeColors.text }}>{t('Activity') || 'Activity'}</Text>
+                <Text style={{ fontSize: 24, fontWeight: '700', color: themeColors.text }}>{t('Activity')}</Text>
             </View>
 
             <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 14 }}>
@@ -218,20 +218,20 @@ export default function ActivityScreen() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         {user.role === 'superadmin' && (
                             <FilterButton
-                                label="Org"
+                                label={t('activity.filterOrg')}
                                 value={!!selectedOrgId}
-                                title={selectedOrgId ? organizations.find(o => String(o.id) === selectedOrgId)?.name || '...' : 'All'}
+                                title={selectedOrgId ? organizations.find(o => String(o.id) === selectedOrgId)?.name || '...' : t('All')}
                                 onPress={() => setActiveModal('org')}
                             />
                         )}
                         <FilterButton
-                            label="Project"
+                            label={t('activity.filterProject')}
                             value={selectedProjectIds.length > 0}
                             title={projectLabel}
                             onPress={() => setActiveModal('project')}
                         />
                         <FilterButton
-                            label="User"
+                            label={t('activity.filterUser')}
                             value={selectedUserIds.length > 0}
                             title={userLabel}
                             onPress={() => setActiveModal('user')}
@@ -248,7 +248,7 @@ export default function ActivityScreen() {
                 <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                     {loading ? (
                         <View style={{ marginTop: 40, alignItems: 'center' }}>
-                            <Text style={{ fontSize: 13, color: themeColors.textMuted }}>Loading activities...</Text>
+                            <Text style={{ fontSize: 13, color: themeColors.textMuted }}>{t('activity.loading')}</Text>
                         </View>
                     ) : (
                         <View style={{ gap: 8 }}>
@@ -297,7 +297,7 @@ export default function ActivityScreen() {
                     {!loading && activities.length === 0 && (
                         <View style={{ marginTop: 40, alignItems: 'center' }}>
                             <Feather name="clock" size={32} color={themeColors.border} />
-                            <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 8 }}>No recent activity</Text>
+                            <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 8 }}>{t('activity.noRecentActivity')}</Text>
                         </View>
                     )}
                 </ScrollView>
@@ -328,7 +328,7 @@ export default function ActivityScreen() {
                     }}>
                         <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: themeColors.border }}>
                             <Text style={{ fontSize: 13, fontWeight: 'bold', color: themeColors.text }}>
-                                Select {activeModal === 'org' ? 'Organization' : activeModal === 'user' ? 'User' : activeModal === 'project' ? 'Project' : 'Action'}
+                                {t('activity.select', { type: activeModal === 'org' ? t('activity.org') : activeModal === 'user' ? t('activity.user') : activeModal === 'project' ? t('activity.project') : t('Action') })}
                             </Text>
                         </View>
                         <ScrollView style={{ maxHeight: 380 }}>
@@ -353,7 +353,7 @@ export default function ActivityScreen() {
                                         )}
                                     </View>
                                     <Text style={{ fontSize: 14, color: themeColors.text }}>
-                                        All {activeModal === 'org' ? 'Organizations' : activeModal === 'user' ? 'Users' : 'Projects'}
+                                        {t('activity.all', { type: activeModal === 'org' ? t('activity.organizations') : activeModal === 'user' ? t('activity.users') : t('activity.projects') })}
                                     </Text>
                                 </TouchableOpacity>
                             )}
@@ -459,7 +459,7 @@ export default function ActivityScreen() {
                                     alignItems: 'center'
                                 }}
                             >
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Done</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{t('activity.done')}</Text>
                             </TouchableOpacity>
                         )}
                     </View>

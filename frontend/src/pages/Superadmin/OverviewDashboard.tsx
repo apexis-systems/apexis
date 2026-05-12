@@ -22,7 +22,10 @@ import {
   TrendingUp,
   Upload,
   Users,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+
 import {
   Area,
   AreaChart,
@@ -248,6 +251,8 @@ export default function OverviewDashboard() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [activitiesList, setActivitiesList] = useState<any[]>([]);
+  const [showAllUsage, setShowAllUsage] = useState(false);
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -662,7 +667,7 @@ export default function OverviewDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(data?.companyUsage || []).map((company: any, index: number) => (
+                    {(showAllUsage ? (data?.companyUsage || []) : (data?.companyUsage || []).slice(0, 6)).map((company: any, index: number) => (
                       <tr
                         key={company.name}
                         className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
@@ -677,8 +682,31 @@ export default function OverviewDashboard() {
                   </tbody>
                 </table>
               </div>
+
+              {(data?.companyUsage?.length || 0) > 6 && (
+                <div className="mt-4 flex justify-center border-t border-[hsl(35_15%_85%/0.3)] pt-4 dark:border-[hsl(30_8%_22%/0.3)]">
+                  <button
+                    onClick={() => setShowAllUsage(!showAllUsage)}
+                    className={cn(
+                      "group flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[11px] font-semibold transition-all",
+                      "bg-[hsl(24_95%_53%/0.08)] text-[hsl(24_95%_53%)] hover:bg-[hsl(24_95%_53%/0.12)] hover:shadow-sm active:scale-95"
+                    )}
+                  >
+                    {showAllUsage ? (
+                      <>
+                        Show Less <ChevronUp className="h-3 w-3 transition-transform group-hover:-translate-y-0.5" />
+                      </>
+                    ) : (
+                      <>
+                        Show More <ChevronDown className="h-3 w-3 transition-transform group-hover:translate-y-0.5" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </section>
+
         </div>
 
         <div className="space-y-4 xl:col-span-4">

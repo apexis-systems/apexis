@@ -1,16 +1,18 @@
 import { Op, fn, col, literal } from "sequelize";
-import { 
-    users, 
-    projects, 
-    organizations, 
-    snags, 
-    rfis, 
-    chat_messages, 
-    files, 
-    transactions, 
+import {
+    users,
+    projects,
+    organizations,
+    snags,
+    rfis,
+    chat_messages,
+    files,
+    transactions,
     activities,
     plans,
-    rooms
+    rooms,
+    reports,
+    manuals
 } from "../models/index.ts";
 
 export const getDashboardOverviewStats = async () => {
@@ -57,11 +59,11 @@ export const getDashboardOverviewStats = async () => {
         tasksCompletedToday: totalSnagsCompletedToday,
         messagesSentToday: totalMessagesToday,
         rfisPending: await rfis.count({ where: { status: 'open' } }),
-        drawingsUploadedToday: await files.count({ 
-            where: { 
+        drawingsUploadedToday: await files.count({
+            where: {
                 createdAt: { [Op.gte]: today },
                 file_type: { [Op.like]: 'image/%' }
-            } 
+            }
         }),
         systemHealth: {
             uptime: "99.98%",
@@ -195,11 +197,11 @@ export const getCommunicationStats = async () => {
         d.setDate(d.getDate() - i);
         const startOfDay = new Date(d.setHours(0, 0, 0, 0));
         const endOfDay = new Date(d.setHours(23, 59, 59, 999));
-        
+
         const count = await chat_messages.count({
             where: { createdAt: { [Op.between]: [startOfDay, endOfDay] } }
         });
-        
+
         last7Days.push({
             day: d.toLocaleString('default', { weekday: 'short' }),
             messages: count
@@ -262,7 +264,7 @@ export const getFreemiumLeads = async () => {
         const createdAt = new Date(u.createdAt);
         const trialEnd = new Date(createdAt);
         trialEnd.setDate(trialEnd.getDate() + 14);
-        
+
         const now = new Date();
         const diffTime = trialEnd.getTime() - now.getTime();
         const remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -316,7 +318,7 @@ export const getSaasGrowthAnalytics = async () => {
     // Plan breakdown
     const planCounts = await Promise.all(plansList.map(async (plan: any) => {
         const count = await transactions.count({
-            where: { payment_status: 'success', plan_id: plan.id },
+            where: { payment_status: 'success', subscription_tier: plan.name },
             col: 'user_id',
             distinct: true
         });
@@ -330,11 +332,11 @@ export const getSaasGrowthAnalytics = async () => {
         d.setDate(d.getDate() - i);
         const startOfDay = new Date(d.setHours(0, 0, 0, 0));
         const endOfDay = new Date(d.setHours(23, 59, 59, 999));
-        
+
         const count = await users.count({
             where: { createdAt: { [Op.between]: [startOfDay, endOfDay] } }
         });
-        
+
         dailyGrowth.push({
             day: d.toLocaleString('default', { weekday: 'short' }),
             users: count
@@ -367,7 +369,7 @@ export const getRevenueGrowthData = async () => {
         const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
 
         const mrr = await transactions.sum('payment_amount', {
-            where: { 
+            where: {
                 payment_status: 'success',
                 created_at: { [Op.lte]: endOfMonth }
             }
@@ -413,10 +415,10 @@ export const getDetailedAccountsList = async () => {
 
 export const getChurnAndRetentionMetrics = async () => {
     const totalUsers = await users.count();
-    const paidSubscribers = await transactions.count({ 
-        where: { payment_status: 'success' }, 
-        col: 'user_id', 
-        distinct: true 
+    const paidSubscribers = await transactions.count({
+        where: { payment_status: 'success' },
+        col: 'user_id',
+        distinct: true
     });
 
     return {
@@ -481,12 +483,12 @@ export const getGlobalActivityFeed = async () => {
 
 export const getPlatformInsights = async () => {
     const totalProjectsCount = await projects.count();
-    
+
     // Feature usage - how many projects have at least one entry in these tables
     const rfiUsageCount = await projects.count({
         include: [{ model: activities, as: 'activities', where: { activity_type: 'rfi' }, required: true }]
     }).catch(() => 0);
-    
+
     const drawingUsageCount = await projects.count({
         include: [{ model: activities, as: 'activities', where: { activity_type: 'drawing' }, required: true }]
     }).catch(() => 0);
@@ -578,3 +580,204 @@ export const getPlatformAlerts = async () => {
 
     return alertsList.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 };
+
+export const getCompanyUsageData = async () => {
+    const orgs = await organizations.findAll({
+        attributes: ["id", "name"],
+    });
+
+    const companyUsage = await Promise.all(
+        orgs.map(async (org: any) => {
+            const [projectCount, userCount, messageCount, snagCount, rfiCount] = await Promise.all([
+                projects.count({ where: { organization_id: org.id } }),
+                users.count({ where: { organization_id: org.id } }),
+                chat_messages.count({
+                    include: [
+                        {
+                            model: rooms,
+                            where: { organization_id: org.id },
+                            required: true,
+                        },
+                    ],
+                }),
+                snags.count({
+                    include: [
+                        {
+                            model: projects,
+                            where: { organization_id: org.id },
+                            required: true,
+                        },
+                    ],
+                }),
+                rfis.count({
+                    include: [
+                        {
+                            model: projects,
+                            where: { organization_id: org.id },
+                            required: true,
+                        },
+                    ],
+                }),
+            ]);
+
+            return {
+                name: org.name,
+                projects: projectCount,
+                users: userCount,
+                messages: messageCount,
+                tasks: snagCount + rfiCount,
+            };
+        })
+    );
+    // Sort by most active (tasks + messages + projects)
+    return companyUsage.sort((a, b) => b.tasks + b.messages + b.projects - (a.tasks + a.messages + a.projects));
+};
+
+export const getProductUsageData = async () => {
+    const months: any[] = [];
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+
+        const [projectCount, drawingCount, messageCount, releaseCount] = await Promise.all([
+            projects.count({ where: { createdAt: { [Op.lte]: endOfMonth } } }),
+            files.count({
+                where: {
+                    file_type: { [Op.like]: 'image/%' },
+                    createdAt: { [Op.lte]: endOfMonth }
+                }
+            }),
+            chat_messages.count({ where: { createdAt: { [Op.lte]: endOfMonth } } }),
+            manuals.count({ where: { createdAt: { [Op.lte]: endOfMonth } } })
+        ]);
+
+        months.push({
+            month: d.toLocaleString('default', { month: 'short' }),
+            projects: projectCount,
+            drawings: drawingCount,
+            messages: messageCount,
+            releases: releaseCount
+        });
+    }
+    return months;
+};
+
+export const getUserGrowthData = async () => {
+    const months: any[] = [];
+    for (let i = 7; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+
+        const userCount = await users.count({
+            where: { createdAt: { [Op.lte]: endOfMonth } }
+        });
+
+        months.push({
+            month: d.toLocaleString('default', { month: 'short' }),
+            users: userCount
+        });
+    }
+    return months;
+};
+
+const formatRelativeTime = (date: Date) => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - new Date(date).getTime()) / 1000);
+
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hr ago`;
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
+};
+
+export const getCompanyActivityData = async () => {
+    const orgs = await organizations.findAll({
+        include: [{
+            model: plans,
+            as: 'plan',
+            attributes: ['name', 'price']
+        }]
+    });
+
+    const activity = await Promise.all(orgs.map(async (org: any) => {
+        const [projectCount, userCount, messageCount, drawingCount, lastAct] = await Promise.all([
+            projects.count({ where: { organization_id: org.id } }),
+            users.count({ where: { organization_id: org.id } }),
+            chat_messages.count({
+                include: [{ model: rooms, where: { organization_id: org.id }, required: true }]
+            }),
+            files.count({
+                include: [{ model: projects, where: { organization_id: org.id }, required: true }],
+                where: { file_type: { [Op.like]: 'image/%' } }
+            }),
+            activities.findOne({
+                include: [{ model: projects, where: { organization_id: org.id }, required: true }],
+                order: [['createdAt', 'DESC']]
+            })
+        ]);
+
+        return {
+            name: org.name,
+            projects: projectCount,
+            team: userCount,
+            drawings: drawingCount,
+            messages: messageCount,
+            lastActive: lastAct ? formatRelativeTime(lastAct.createdAt) : "Never",
+            plan: org.plan?.name || "Free"
+        };
+    }));
+
+    // Sort by most active (projects + messages)
+    return activity.sort((a, b) => (b.projects + b.messages) - (a.projects + a.messages)).slice(0, 10);
+};
+
+export const getConversionOpportunitiesData = async () => {
+    // Get all organizations to identify potential leads
+    const orgs = await organizations.findAll();
+
+    const opportunities = await Promise.all(orgs.map(async (org: any) => {
+        const [projectCount, drawingCount, userCount, admin] = await Promise.all([
+            projects.count({ where: { organization_id: org.id } }),
+            files.count({
+                include: [{ model: projects, where: { organization_id: org.id } }],
+                where: { file_type: { [Op.like]: 'image/%' } }
+            }),
+            users.count({ where: { organization_id: org.id } }),
+            users.findOne({
+                where: { organization_id: org.id },
+                order: [['is_primary', 'DESC'], ['createdAt', 'ASC']]
+            })
+        ]);
+
+        const daysLeft = org.plan_end_date
+            ? Math.ceil((new Date(org.plan_end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+            : 0;
+
+        let activity = "Low";
+        if (projectCount > 5 || drawingCount > 50) activity = "High";
+        else if (projectCount >= 1 || drawingCount >= 1) activity = "Medium";
+
+        return {
+            name: org.name,
+            email: admin?.email || "N/A",
+            phone: admin?.phone_number || "N/A",
+            projects: projectCount,
+            drawings: drawingCount,
+            teamSize: userCount,
+            daysLeft: daysLeft > 0 ? daysLeft : 0,
+            activity,
+            plan: org.plan_name || "Free"
+        };
+    }));
+
+    // Return top 10 by platform engagement
+    return opportunities
+        .sort((a, b) => (b.projects + b.drawings / 10) - (a.projects + a.drawings / 10))
+        .slice(0, 10);
+};
+
+
+
+

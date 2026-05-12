@@ -11,7 +11,9 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import * as ImageManipulator from 'expo-image-manipulator';
+
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Accelerometer } from 'expo-sensors';
@@ -45,19 +47,23 @@ interface Props {
   initialRfiId?: string;
 }
 
-const statusConfig = {
-  open: { icon: 'alert-circle', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: 'Open' },
-  closed: { icon: 'check-circle', color: '#22c55e', bg: 'rgba(34,197,94,0.1)', label: 'Closed' },
-  overdue: { icon: 'alert-triangle', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', label: 'Overdue' },
-};
+const statusConfig = (t: any) => ({
+  open: { icon: 'alert-circle', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: t('projectRfi.statusLabel.open') },
+  closed: { icon: 'check-circle', color: '#22c55e', bg: 'rgba(34,197,94,0.1)', label: t('projectRfi.statusLabel.closed') },
+  overdue: { icon: 'alert-triangle', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', label: t('projectRfi.statusLabel.overdue') },
+});
+
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
 
 export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  const config = statusConfig(t);
 
   const router = useRouter();
+
   const insets = useSafeAreaInsets();
   const MAX_RFI_IMAGES = 4;
   const [rfis, setRfis] = useState<RFI[]>([]);
@@ -356,9 +362,10 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
   const handleImageSelection = async () => {
     if (selectedImageCount >= MAX_RFI_IMAGES) {
-      Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
+      Alert.alert(t('projectRfi.limitExceeded'), t('projectRfi.maxPhotosAllowed', { max: MAX_RFI_IMAGES }));
       return;
     }
+
 
     await openCamera('create');
   };
@@ -368,11 +375,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       const res = await requestCameraPermission();
       if (!res.granted) {
         Alert.alert(
-          'Camera Access',
-          'Camera permission is needed to take RFI photos. Please enable it in your device settings.'
+          t('projectRfi.cameraAccess'),
+          t('projectRfi.cameraPermissionNeeded')
         );
         return;
       }
+
     }
     setCameraMode(mode);
     setCameraVisible(true);
@@ -413,16 +421,18 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       }
     } catch (error) {
       console.error('pickImageFiles error', error);
-      Alert.alert('Error', 'Failed to pick image from gallery.');
+      Alert.alert(t('projectRfi.error'), t('projectRfi.failedToPickImage'));
     }
+
   };
 
   const capturePhoto = async () => {
     if (!cameraRef.current || isCapturing) return;
     if (cameraMode === 'create' && selectedImageCount >= MAX_RFI_IMAGES) {
-      Alert.alert('Limit Exceeded', `Maximum ${MAX_RFI_IMAGES} photos allowed`);
+      Alert.alert(t('projectRfi.limitExceeded'), t('projectRfi.maxPhotosAllowed', { max: MAX_RFI_IMAGES }));
       return;
     }
+
     setIsCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -472,8 +482,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       }
     } catch (e: any) {
       console.error('capturePhoto error', e);
-      Alert.alert('Camera Error', e?.message || 'Failed to capture photo');
+      Alert.alert(t('projectRfi.cameraError'), e?.message || t('projectRfi.failedToCapture'));
     } finally {
+
       setIsCapturing(false);
     }
   };
@@ -493,13 +504,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
   const handleCreateRFI = async () => {
     if (!title.trim()) {
-      Alert.alert('Error', 'Title is required');
+      Alert.alert(t('projectRfi.error'), t('projectRfi.titleRequired'));
       return;
     }
     if (!assignedToId) {
-      Alert.alert('Error', 'Assignee is required');
+      Alert.alert(t('projectRfi.error'), t('projectRfi.assigneeRequired'));
       return;
     }
+
     setSubmitting(true);
     try {
       const formData = new FormData();
@@ -524,23 +536,26 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       }
 
       await createRFI(formData);
-      Alert.alert('Success', 'RFI created successfully');
+      Alert.alert(t('projectRfi.success'), t('projectRfi.rfiCreated'));
       setCreateModalVisible(false);
+
       resetForm();
       fetchRFIs();
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleCreateRFI error', err);
-      const { message, code } = parseApiError(err, 'Failed to create RFI');
-      Alert.alert(code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
+      const { message, code } = parseApiError(err, t('projectRfi.failedToCreate'));
+      Alert.alert(code === 'LIMIT_REACHED' ? t('projectRfi.limitReached') : t('projectRfi.error'), message);
     } finally {
+
       setSubmitting(false);
     }
   };
 
   const handleUpdateRFI = async () => {
     if (!selectedRFI) return;
-    if (!title.trim()) { Alert.alert('Error', 'Title is required'); return; }
+    if (!title.trim()) { Alert.alert(t('projectRfi.error'), t('projectRfi.titleRequired')); return; }
+
     setSubmitting(true);
     try {
       const formData = new FormData();
@@ -573,43 +588,47 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       }
 
       const updated = await updateRFI(selectedRFI.id, formData);
-      Alert.alert('Success', 'RFI updated');
+      Alert.alert(t('projectRfi.success'), t('projectRfi.rfiUpdated'));
       setCreateModalVisible(false);
+
       resetForm();
       setSelectedRFI(updated);
       fetchRFIs();
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleUpdateRFI error', err);
-      Alert.alert('Error', 'Failed to update RFI');
+      Alert.alert(t('projectRfi.error'), t('projectReports.weekly.failedGenerate')); // Reusing for consistency or use failedToCreate
     } finally {
+
       setSubmitting(false);
     }
   };
 
   const handleDeleteRFI = async (id: number) => {
     Alert.alert(
-      'Delete RFI',
-      'Are you sure you want to delete this RFI?',
+      t('projectRfi.deleteRfi'),
+      t('projectRfi.deleteConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('projectRfi.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('projectRfi.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await deleteRFI(id);
-              Alert.alert('Success', 'RFI deleted successfully');
+              Alert.alert(t('projectRfi.success'), t('projectRfi.rfiDeleted'));
               setDetailModalVisible(false);
+
               fetchRFIs();
               if (onUpdate) onUpdate();
             } catch (err) {
-              Alert.alert('Error', 'Failed to delete RFI');
+              Alert.alert(t('projectRfi.error'), t('projectRfi.failedToCreate')); // Simplified fallback
             }
           }
         }
       ]
     );
+
   };
 
   const handleUpdateResponse = async (commentOverride?: string, imagesOverride?: string[]) => {
@@ -637,7 +656,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       }
 
       const updated = await updateRFIResponse(selectedRFI.id, formData);
-      Alert.alert('Success', 'Response updated successfully');
+      Alert.alert(t('projectRfi.success'), t('projectRfi.responseUpdated'));
+
 
       // Update local state to reflect changes immediately
       setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
@@ -649,8 +669,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleUpdateResponse error', err);
-      Alert.alert('Error', 'Failed to submit response');
+      Alert.alert(t('projectRfi.error'), t('projectRfi.failedToUpdateResponse'));
     } finally {
+
       setUpdatingResponse(false);
     }
   };
@@ -662,16 +683,18 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const handleStatusUpdate = async (id: number, status: string) => {
     try {
       await updateRFIStatus(id, status);
-      Alert.alert('Success', `Status updated to ${status}`);
+      Alert.alert(t('projectRfi.success'), t('projectRfi.statusUpdated', { status }));
       fetchRFIs();
+
       if (onUpdate) onUpdate();
       if (selectedRFI?.id === id) {
         setSelectedRFI({ ...selectedRFI, status: status as any });
       }
     } catch (err) {
       console.error('handleStatusUpdate error', err);
-      Alert.alert('Error', 'Failed to update status');
+      Alert.alert(t('projectRfi.error'), t('projectRfi.failedToUpdateStatus'));
     }
+
   };
 
   const filteredRfis = rfis.filter(r => {
@@ -691,19 +714,22 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       const updatedRFI = await updateRFI(selectedRFI.id, formData);
       setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, folder_ids: numericIds, linked_folders: updatedRFI.linked_folders } : r));
       setSelectedRFI(prev => prev ? { ...prev, folder_ids: numericIds, linked_folders: updatedRFI.linked_folders } : null);
-      Alert.alert("Success", "Links updated successfully");
+      Alert.alert(t('projectRfi.success'), t('projectRfi.linksUpdated'));
     } catch (err) {
+
       console.error("Update Links Error:", err);
-      const { message } = parseApiError(err, 'Failed to update links');
-      Alert.alert("Error", message);
+      const { message } = parseApiError(err, t('projectRfi.failedToUpdateLinks'));
+      Alert.alert(t('projectRfi.error'), message);
+
     } finally {
       setSubmitting(false);
     }
   };
 
   const renderRFI = ({ item }: { item: RFI }) => {
-    const config = statusConfig[item.status] || statusConfig.open;
+    const itemConfig = config[item.status] || config.open;
     return (
+
       <TouchableOpacity
         onPress={() => {
           setSelectedRFI(item);
@@ -719,16 +745,19 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: config.bg, alignItems: 'center', justifyContent: 'center' }}>
-            <Feather name={config.icon as any} size={20} color={config.color} />
+          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: itemConfig.bg, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name={itemConfig.icon as any} size={20} color={itemConfig.color} />
           </View>
+
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1 }} numberOfLines={1}>{item.title}</Text>
-              <View style={{ backgroundColor: config.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                <Text style={{ fontSize: 9, fontWeight: '700', color: config.color }}>{config.label}</Text>
+              <View style={{ backgroundColor: itemConfig.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                <Text style={{ fontSize: 9, fontWeight: '700', color: itemConfig.color }}>{itemConfig.label}</Text>
               </View>
+
             </View>
+
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>{item.description}</Text>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 }}>
@@ -736,8 +765,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ fontSize: 8, color: colors.textMuted }}>{item.creator?.name?.charAt(0) || '?'}</Text>
                 </View>
-                <Text style={{ fontSize: 10, color: colors.textMuted }}>by {item.creator?.name || 'Unknown'}</Text>
+                <Text style={{ fontSize: 10, color: colors.textMuted }}>{t('projectRfi.by')} {item.creator?.name || t('projectRfi.unknown')}</Text>
               </View>
+
               {item.assignee && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Feather name="user" size={10} color={colors.primary} />
@@ -785,8 +815,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         }}
       >
         <Feather name="plus" size={20} color="#fff" />
-        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>New RFI</Text>
+        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('projectRfi.newRfi')}</Text>
       </TouchableOpacity>
+
 
       {/* Dropdown Filters */}
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
@@ -799,7 +830,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           }}
         >
           <Text style={{ fontSize: 10, fontWeight: '700', color: statusFilter !== 'all' ? colors.primary : colors.textMuted }}>
-            {statusFilter === 'all' ? 'STATUS' : statusFilter.toUpperCase()}
+            {statusFilter === 'all' ? t('projectRfi.status') : statusFilter.toUpperCase()}
           </Text>
           <Feather name="chevron-down" size={12} color={statusFilter !== 'all' ? colors.primary : colors.textMuted} />
         </TouchableOpacity>
@@ -813,7 +844,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           }}
         >
           <Text style={{ fontSize: 10, fontWeight: '700', color: creatorFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
-            {creatorFilter === 'all' ? 'CREATOR' : (rfis.find(r => String(r.created_by) === creatorFilter)?.creator?.name || 'CREATOR').toUpperCase()}
+            {creatorFilter === 'all' ? t('projectRfi.creator') : (rfis.find(r => String(r.created_by) === creatorFilter)?.creator?.name || t('projectRfi.creator')).toUpperCase()}
           </Text>
           <Feather name="chevron-down" size={12} color={creatorFilter !== 'all' ? colors.primary : colors.textMuted} />
         </TouchableOpacity>
@@ -827,7 +858,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           }}
         >
           <Text style={{ fontSize: 10, fontWeight: '700', color: assigneeFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
-            {assigneeFilter === 'all' ? 'Assignee' : rfis.find(r => String(r.assigned_to) === assigneeFilter)?.assignee?.name || 'Assignee'}
+            {assigneeFilter === 'all' ? t('projectRfi.assignee') : rfis.find(r => String(r.assigned_to) === assigneeFilter)?.assignee?.name || t('projectRfi.assignee')}
           </Text>
           <Feather name="chevron-down" size={14} color={assigneeFilter !== 'all' ? colors.primary : colors.textMuted} />
         </TouchableOpacity>
@@ -845,9 +876,10 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           ListEmptyComponent={
             <View style={{ alignItems: 'center', marginTop: 40 }}>
               <Feather name="message-square" size={48} color={colors.border} />
-              <Text style={{ color: colors.textMuted, marginTop: 12 }}>No RFIs found</Text>
+              <Text style={{ color: colors.textMuted, marginTop: 12 }}>{t('projectRfi.noRfisFound')}</Text>
             </View>
           }
+
         />
       )}
 
@@ -872,8 +904,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
             }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>RFI Details</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{t('projectRfi.rfiDetails')}</Text>
                 </View>
+
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
                   {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id)) && (
                     <TouchableOpacity onPress={() => {
@@ -920,17 +953,18 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   <View style={{ marginBottom: 20 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <View style={{
-                        backgroundColor: statusConfig[selectedRFI.status]?.bg || 'rgba(0,0,0,0.1)',
+                        backgroundColor: config[selectedRFI.status]?.bg || 'rgba(0,0,0,0.1)',
                         paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20
                       }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: statusConfig[selectedRFI.status]?.color }}>
-                          {statusConfig[selectedRFI.status]?.label}
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: config[selectedRFI.status]?.color }}>
+                          {config[selectedRFI.status]?.label}
                         </Text>
                       </View>
                       <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                        Created on {new Date(selectedRFI.createdAt).toLocaleDateString()}
+                        {t('projectRfi.createdOn', { date: new Date(selectedRFI.createdAt).toLocaleDateString() })}
                       </Text>
                     </View>
+
 
                     <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text, marginBottom: 12 }}>
                       {selectedRFI.title}
@@ -942,18 +976,20 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
                     <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 16, gap: 12, marginBottom: 20 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: 13, color: colors.textMuted }}>Created by</Text>
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectRfi.createdBy')}</Text>
                         <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{selectedRFI.creator?.name}</Text>
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: 13, color: colors.textMuted }}>Assigned to</Text>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{selectedRFI.assignee?.name || 'Unassigned'}</Text>
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectRfi.assignedTo')}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{selectedRFI.assignee?.name || t('projectRfi.unassigned')}</Text>
                       </View>
                     </View>
 
+
                     {(selectedRFI?.photoDownloadUrls?.length || 0) > 0 && (
                       <View style={{ marginBottom: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>Attachments</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>{t('projectRfi.attachments')}</Text>
+
                         {(selectedRFI.photoDownloadUrls || []).filter(url => !isAudio(url)).length > 0 && (
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                             {(selectedRFI.photoDownloadUrls || []).filter(url => !isAudio(url)).map((url, idx) => (
@@ -988,8 +1024,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               >
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
-                                  <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>VOICE ATTACHMENT</Text>
+                                  <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>{t('projectRfi.voiceAttachment')}</Text>
                                 </View>
+
                                 <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                               </View>
                             ))}
@@ -1000,8 +1037,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
                     {selectedRFI.expiry_date && (
                       <View style={{ marginBottom: 20, padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: selectedRFI.status === 'overdue' ? '#ef4444' : colors.primary }}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase' }}>Expiry Date</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase' }}>{t('projectRfi.expiryDate')}</Text>
                         <Text style={{ fontSize: 14, fontWeight: '700', color: selectedRFI.status === 'overdue' ? '#ef4444' : colors.text }}>
+
                           {new Date(selectedRFI.expiry_date).toLocaleString()}
                         </Text>
                       </View>
@@ -1009,8 +1047,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
                     {selectedRFI.linked_folders && selectedRFI.linked_folders.length > 0 && (
                       <View style={{ marginBottom: 20 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Linked Folders</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>{t('projectRfi.linkedFolders')}</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+
                           {selectedRFI.linked_folders.map((f: any) => (
                             <TouchableOpacity
                               key={f.id}
@@ -1053,8 +1092,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
                     {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
                       <View style={{ marginBottom: 20, padding: 16, backgroundColor: colors.primary + '08', borderRadius: 16, borderWidth: 1, borderColor: colors.primary + '20' }}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, marginBottom: 8, textTransform: 'uppercase' }}>Response</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, marginBottom: 8, textTransform: 'uppercase' }}>{t('projectRfi.response')}</Text>
                         {selectedRFI.response ? <Text style={{ fontSize: 14, color: colors.text, lineHeight: 22, marginBottom: 12 }}>{selectedRFI.response}</Text> : null}
+
                         {/* Existing Response Photos */}
                         {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
                           <View style={{ gap: 10 }}>
@@ -1110,8 +1150,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 }}>
                                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
+                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectRfi.voiceResponse')}</Text>
                                   </View>
+
                                   <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                   {String(selectedRFI.assigned_to) === String(user.id) && (
                                     <TouchableOpacity
@@ -1139,15 +1180,17 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
                     {String(selectedRFI.assigned_to) === String(user.id) && (
                       <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? 'Update Response' : 'Provide Response'}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? t('projectRfi.updateResponse') : t('projectRfi.provideResponse')}</Text>
+
 
                         {selectedRFI.status !== 'closed' ? (
                           <>
                             <TextInput
                               value={responseBody}
                               onChangeText={setResponseBody}
-                              placeholder="Type your response here..."
+                              placeholder={t('projectRfi.typeResponsePlaceholder')}
                               placeholderTextColor={colors.textMuted}
+
                               multiline
                               style={{
                                 minHeight: 100,
@@ -1182,8 +1225,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                     }}>
                                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE RESPONSE</Text>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectRfi.voiceResponse')}</Text>
                                       </View>
+
                                       <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                     </View>
                                   ) : (
@@ -1251,21 +1295,24 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 opacity: (updatingResponse || (responseBody === (selectedRFI.response || '') && responseImages.length === 0 && removedResponsePhotos.length === 0)) ? 0.6 : 1
                               }}
                             >
-                              {updatingResponse ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Submit Response</Text>}
+                              {updatingResponse ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.submitResponse')}</Text>}
                             </TouchableOpacity>
+
                           </>
                         ) : (
                           <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, alignItems: 'center' }}>
-                            <Text style={{ fontSize: 12, color: colors.textMuted }}>Closed RFIs cannot be updated</Text>
+                            <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectRfi.closedRfiNoUpdate')}</Text>
                           </View>
+
                         )}
                       </View>
                     )}
 
                     {String(selectedRFI.assigned_to) === String(user.id) && (
                       <View style={{ gap: 12 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Update Status</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.updateStatus')}</Text>
                         <View style={{ flexDirection: 'row', gap: 10 }}>
+
                           {['open', 'closed', 'overdue'].map((s) => (
                             <TouchableOpacity
                               key={s}
@@ -1274,7 +1321,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 flex: 1,
                                 height: 40,
                                 borderRadius: 10,
-                                backgroundColor: selectedRFI.status === s ? statusConfig[s as keyof typeof statusConfig].color : colors.surface,
+                                backgroundColor: selectedRFI.status === s ? config[s as keyof typeof config].color : colors.surface,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
@@ -1285,9 +1332,10 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 fontSize: 12, fontWeight: '700',
                                 color: selectedRFI.status === s ? '#fff' : colors.text
                               }}>
-                                {s.charAt(0).toUpperCase() + s.slice(1)}
+                                {config[s as keyof typeof config].label}
                               </Text>
                             </TouchableOpacity>
+
                           ))}
                         </View>
                       </View>
@@ -1318,7 +1366,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 padding: 20
               }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{isEditing ? 'Edit RFI' : 'New RFI'}</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{isEditing ? t('projectRfi.editRfi') : t('projectRfi.newRfi')}</Text>
+
                   <TouchableOpacity onPress={() => { setCreateModalVisible(false); setIsEditing(false); }} disabled={submitting}>
                     <Feather name="x" size={24} color={colors.text} />
                   </TouchableOpacity>
@@ -1327,11 +1376,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 <ScrollView showsVerticalScrollIndicator={false}>
                   <View style={{ gap: 20 }}>
                     <View>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title *</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.titleLabel')}</Text>
+
                       <TextInput
                         value={title}
                         onChangeText={setTitle}
-                        placeholder="Enter RFI title"
+                        placeholder={t('projectRfi.titlePlaceholder')}
+
                         placeholderTextColor={colors.textMuted}
                         style={{
                           height: 48,
@@ -1347,11 +1398,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </View>
 
                     <View>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.descriptionLabel')}</Text>
+
                       <TextInput
                         value={description}
                         onChangeText={setDescription}
-                        placeholder="Provide more details..."
+                        placeholder={t('projectRfi.descriptionPlaceholder')}
+
                         placeholderTextColor={colors.textMuted}
                         multiline
                         numberOfLines={4}
@@ -1370,7 +1423,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </View>
 
                     <View>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To *</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.assignToLabel')}</Text>
                       <TouchableOpacity
                         onPress={() => setShowAssigneeDropdown(true)}
                         style={{
@@ -1387,15 +1440,15 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       >
                         <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
                           {assignedToId
-                            ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
-                            : 'Select assignee *'}
+                            ? assignees.find(a => a.id === assignedToId)?.name || t('projectRfi.selectAssignee')
+                            : t('projectRfi.selectAssigneePlaceholder')}
                         </Text>
                         <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
                       </TouchableOpacity>
                     </View>
 
                     <View>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.expiryDate')}</Text>
                       <TouchableOpacity
                         onPress={() => setShowDatePicker(true)}
                         style={{
@@ -1411,7 +1464,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         }}
                       >
                         <Text style={{ color: expiryDate ? colors.text : colors.textMuted }}>
-                          {expiryDate ? expiryDate.toLocaleString() : 'Select Date & Time'}
+                          {expiryDate ? expiryDate.toLocaleString() : t('projectRfi.selectDate')}
                         </Text>
                         <Feather name="calendar" size={18} color={colors.textMuted} />
                       </TouchableOpacity>
@@ -1458,7 +1511,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </View> */}
 
                     <View>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>{t('projectRfi.photos')}</Text>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                         {selectedImages.map((uri: string, idx: number) => (
                           <View key={idx} style={{ position: 'relative' }}>
@@ -1519,12 +1572,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         )}
                       </View>
                       <View style={{ marginTop: 12 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Voice Note</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>{t('projectRfi.voiceNote')}</Text>
                         {selectedAudio ? (
                           <View style={{ position: 'relative', padding: 12, paddingRight: 36, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                              <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                              <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectRfi.voiceNote')}</Text>
                             </View>
                             <VoiceNotePlayer uri={selectedAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                             <TouchableOpacity
@@ -1570,7 +1623,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       {submitting ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>{isEditing ? 'Save Changes' : 'Create RFI'}</Text>
+                        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>{isEditing ? t('projectRfi.saveChanges') : t('projectRfi.createRfi')}</Text>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -1610,7 +1663,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
                               <Feather name="x" size={24} color="#fff" />
                             </TouchableOpacity>
-                            <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                            <Text style={cameraStyles.headerTitle}>{t('projectRfi.rfiPhotos')}</Text>
+
                             <View style={{ width: 60 }} />
                           </View>
 
@@ -1620,14 +1674,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 <View style={cameraStyles.iconCircle}>
                                   <Feather name="image" size={24} color="#fff" />
                                 </View>
-                                <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                                <Text style={cameraStyles.btnLabel}>{t('projectRfi.gallery')}</Text>
                               </TouchableOpacity>
 
                               <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
                                 <View style={cameraStyles.shutterOuter}>
                                   <View style={cameraStyles.shutterInner} />
                                 </View>
-                                <Text style={cameraStyles.btnLabel}>Photo</Text>
+                                <Text style={cameraStyles.btnLabel}>{t('projectRfi.photo')}</Text>
                               </TouchableOpacity>
 
                               <View style={{ width: 70 }} />
@@ -1640,10 +1694,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             <ActivityIndicator color="#fff" />
                           ) : (
                             <>
-                              <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
+                              <Text style={{ color: '#fff', marginBottom: 20 }}>{t('projectRfi.cameraAccessNeeded')}</Text>
                               <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                  <Text style={{ color: '#fff', fontWeight: '700' }}>Continue</Text>
+                                  <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.continue')}</Text>
                               </TouchableOpacity>
+
                             </>
                           )}
                         </View>
@@ -1710,7 +1765,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       borderColor: colors.border,
                     }}>
                       <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To *</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>{t('projectRfi.assignToLabel')}</Text>
                       </View>
                       <ScrollView style={{ maxHeight: 320 }}>
                         {assignees.map((a) => (
@@ -1790,7 +1845,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
                             <Feather name="x" size={24} color="#fff" />
                           </TouchableOpacity>
-                          <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                          <Text style={cameraStyles.headerTitle}>{t('projectRfi.rfiPhotos')}</Text>
                           <View style={{ width: 60 }} />
                         </View>
 
@@ -1800,14 +1855,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               <View style={cameraStyles.iconCircle}>
                                 <Feather name="image" size={24} color="#fff" />
                               </View>
-                              <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                              <Text style={cameraStyles.btnLabel}>{t('projectRfi.gallery')}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
                               <View style={cameraStyles.shutterOuter}>
                                 <View style={cameraStyles.shutterInner} />
                               </View>
-                              <Text style={cameraStyles.btnLabel}>Photo</Text>
+                              <Text style={cameraStyles.btnLabel}>{t('projectRfi.photo')}</Text>
                             </TouchableOpacity>
 
                             <View style={{ width: 70 }} />
@@ -1820,9 +1875,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           <ActivityIndicator color="#fff" />
                         ) : (
                           <>
-                            <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
+                            <Text style={{ color: '#fff', marginBottom: 20 }}>{t('projectRfi.cameraAccessNeeded')}</Text>
                             <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                              <Text style={{ color: '#fff', fontWeight: '700' }}>Continue</Text>
+                              <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.continue')}</Text>
                             </TouchableOpacity>
                           </>
                         )}
@@ -1933,7 +1988,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           <View style={{ backgroundColor: colors.background, borderRadius: 20, width: '100%', maxWidth: 340, padding: 20, maxHeight: '70%' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
-                {activeFilterType === 'status' ? 'Filter by Status' : activeFilterType === 'creator' ? 'Filter by Creator' : 'Filter by Assignee'}
+                {t('projectRfi.selectFilter', { 
+                  filter: activeFilterType === 'status' ? t('projectRfi.status') : (activeFilterType === 'creator' ? t('projectRfi.creator') : t('projectRfi.assignee')) 
+                })}
               </Text>
               <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
                 <Feather name="x" size={20} color={colors.text} />
@@ -1953,7 +2010,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>All</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{t('common.all') || 'All'}</Text>
                 {(activeFilterType === 'status' ? statusFilter === 'all' : activeFilterType === 'creator' ? creatorFilter === 'all' : assigneeFilter === 'all') && (
                   <Feather name="check" size={16} color={colors.primary} />
                 )}
@@ -1969,8 +2026,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: statusConfig[item as 'open'|'closed'|'overdue'].color }} />
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{statusConfig[item as 'open'|'closed'|'overdue'].label}</Text>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: config[item as 'open'|'closed'|'overdue'].color }} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{config[item as 'open'|'closed'|'overdue'].label}</Text>
                   </View>
                   {statusFilter === item && <Feather name="check" size={16} color={colors.primary} />}
                 </TouchableOpacity>
@@ -1995,6 +2052,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
               {activeFilterType === 'assignee' && (
                 <>
+
                   {Array.from(new Set(rfis.map(r => r.assignee?.id))).filter(Boolean).map(id => {
                     const name = rfis.find(r => r.assignee?.id === id)?.assignee?.name;
                     return (
@@ -2038,7 +2096,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   padding: 20
                 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{isEditing ? 'Edit RFI' : 'New RFI'}</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{isEditing ? t('projectRfi.editRfi') : t('projectRfi.newRfi')}</Text>
                     <TouchableOpacity onPress={() => { setCreateModalVisible(false); setIsEditing(false); }} disabled={submitting}>
                       <Feather name="x" size={24} color={colors.text} />
                     </TouchableOpacity>
@@ -2047,11 +2105,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   <ScrollView showsVerticalScrollIndicator={false}>
                     <View style={{ gap: 20 }}>
                       <View>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title *</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.titleLabel')}</Text>
                         <TextInput
                           value={title}
                           onChangeText={setTitle}
-                          placeholder="Enter RFI title"
+                          placeholder={t('projectRfi.titlePlaceholder')}
                           placeholderTextColor={colors.textMuted}
                           style={{
                             height: 48,
@@ -2067,11 +2125,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </View>
 
                       <View>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.descriptionLabel')}</Text>
                         <TextInput
                           value={description}
                           onChangeText={setDescription}
-                          placeholder="Provide more details..."
+                          placeholder={t('projectRfi.descriptionPlaceholder')}
                           placeholderTextColor={colors.textMuted}
                           multiline
                           numberOfLines={4}
@@ -2090,7 +2148,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </View>
 
                       <View>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assign To *</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.assignToLabel')}</Text>
                         <TouchableOpacity
                           onPress={() => setShowAssigneeDropdown(true)}
                           style={{
@@ -2107,15 +2165,15 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         >
                           <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
                             {assignedToId
-                              ? assignees.find(a => a.id === assignedToId)?.name || 'Select assignee'
-                              : 'Select assignee *'}
+                              ? assignees.find(a => a.id === assignedToId)?.name || t('projectRfi.selectAssignee')
+                              : t('projectRfi.selectAssigneePlaceholder')}
                           </Text>
                           <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
                         </TouchableOpacity>
                       </View>
 
                       <View>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.expiryDate')}</Text>
                         <TouchableOpacity
                           onPress={() => setShowDatePicker(true)}
                           style={{
@@ -2131,7 +2189,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           }}
                         >
                           <Text style={{ color: expiryDate ? colors.text : colors.textMuted }}>
-                            {expiryDate ? expiryDate.toLocaleString() : 'Select Date & Time'}
+                            {expiryDate ? expiryDate.toLocaleString() : t('projectRfi.selectDate')}
                           </Text>
                           <Feather name="calendar" size={18} color={colors.textMuted} />
                         </TouchableOpacity>
@@ -2154,7 +2212,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </View>
 
                       <View>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Photos</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>{t('projectRfi.photos')}</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                           {selectedImages.map((uri: string, idx: number) => (
                             <View key={idx} style={{ position: 'relative' }}>
@@ -2222,13 +2280,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           )}
                         </View>
                         <View style={{ marginTop: 12 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>Voice Note</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 12 }}>{t('projectRfi.voiceNote')}</Text>
                           {selectedAudio ? (
                             <View style={{ position: 'relative', padding: 12, paddingRight: 36, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface }}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectRfi.voiceNote')}</Text>
                               </View>
+
                               <VoiceNotePlayer uri={selectedAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                               <TouchableOpacity
                                 onPress={() => {
@@ -2273,9 +2332,10 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         {submitting ? (
                           <ActivityIndicator color="#fff" />
                         ) : (
-                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>{isEditing ? 'Save Changes' : 'Create RFI'}</Text>
+                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>{isEditing ? t('projectRfi.saveChanges') : t('projectRfi.createRfi')}</Text>
                         )}
                       </TouchableOpacity>
+
                     </View>
                   </ScrollView>
                 </View>
@@ -2313,7 +2373,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
                                 <Feather name="x" size={24} color="#fff" />
                               </TouchableOpacity>
-                              <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                              <Text style={cameraStyles.headerTitle}>{t('projectRfi.rfiPhotos')}</Text>
+
                               <View style={{ width: 60 }} />
                             </View>
 
@@ -2323,14 +2384,16 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                   <View style={cameraStyles.iconCircle}>
                                     <Feather name="image" size={24} color="#fff" />
                                   </View>
-                                  <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                                 <Text style={cameraStyles.btnLabel}>{t('projectRfi.gallery')}</Text>
+
                                 </TouchableOpacity>
 
                                 <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
                                   <View style={cameraStyles.shutterOuter}>
                                     <View style={cameraStyles.shutterInner} />
                                   </View>
-                                  <Text style={cameraStyles.btnLabel}>Photo</Text>
+                                 <Text style={cameraStyles.btnLabel}>{t('projectRfi.photo')}</Text>
+
                                 </TouchableOpacity>
 
                                 <View style={{ width: 70 }} />
@@ -2343,9 +2406,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               <ActivityIndicator color="#fff" />
                             ) : (
                               <>
-                                <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
+                                <Text style={{ color: '#fff', marginBottom: 20 }}>{t('projectRfi.cameraAccessNeeded')}</Text>
                                 <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                    <Text style={{ color: '#fff', fontWeight: '700' }}>Continue</Text>
+                                    <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.continue')}</Text>
                                 </TouchableOpacity>
                               </>
                             )}
@@ -2411,8 +2474,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         borderColor: colors.border,
                       }}>
                         <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To *</Text>
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>{t('projectRfi.assignToLabel')}</Text>
                         </View>
+
                         <ScrollView style={{ maxHeight: 320 }}>
                           {assignees.map((a) => (
                             <TouchableOpacity
@@ -2491,7 +2555,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
                               <Feather name="x" size={24} color="#fff" />
                             </TouchableOpacity>
-                            <Text style={cameraStyles.headerTitle}>RFI Photos</Text>
+                            <Text style={cameraStyles.headerTitle}>{t('projectRfi.rfiPhotos')}</Text>
+
                             <View style={{ width: 60 }} />
                           </View>
                           <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
@@ -2500,13 +2565,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 <View style={cameraStyles.iconCircle}>
                                   <Feather name="image" size={24} color="#fff" />
                                 </View>
-                                <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                                <Text style={cameraStyles.btnLabel}>{t('projectRfi.gallery')}</Text>
                               </TouchableOpacity>
                               <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
                                 <View style={cameraStyles.shutterOuter}>
                                   <View style={cameraStyles.shutterInner} />
                                 </View>
-                                <Text style={cameraStyles.btnLabel}>Photo</Text>
+                                <Text style={cameraStyles.btnLabel}>{t('projectRfi.photo')}</Text>
                               </TouchableOpacity>
                               <View style={{ width: 70 }} />
                             </View>

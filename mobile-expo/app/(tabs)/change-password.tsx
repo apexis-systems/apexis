@@ -6,11 +6,15 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { changePassword } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
+
 
 export default function ChangePasswordScreen() {
     const { colors } = useTheme();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { t } = useTranslation();
+
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -40,23 +44,25 @@ export default function ChangePasswordScreen() {
 
     const handleChangePassword = async () => {
         if (!currentPassword || !newPassword || !confirmPassword) {
-            Alert.alert('Error', 'Please fill all fields');
+            Alert.alert(t('changePassword.errorTitle') as string, t('changePassword.fillAllFields') as string);
             return;
         }
         if (newPassword !== confirmPassword) {
-            Alert.alert('Error', 'New passwords do not match');
+            Alert.alert(t('changePassword.errorTitle') as string, t('changePassword.passwordsDoNotMatch') as string);
             return;
         }
+
 
         setPasswordLoading(true);
         try {
             await changePassword({ currentPassword, newPassword });
-            Alert.alert('Success', 'Password updated successfully', [
-                { text: 'OK', onPress: () => router.push('/settings') }
+            Alert.alert(t('changePassword.successTitle') as string, t('changePassword.successMessage') as string, [
+                { text: t('changePassword.ok') as string || 'OK', onPress: () => router.push('/settings') }
             ]);
         } catch (error: any) {
-            Alert.alert('Error', error.response?.data?.error || 'Failed to update password');
+            Alert.alert(t('changePassword.errorTitle') as string, error.response?.data?.error || t('changePassword.failedUpdate') as string);
         } finally {
+
             setPasswordLoading(false);
         }
     };
@@ -75,8 +81,9 @@ export default function ChangePasswordScreen() {
                                 <TouchableOpacity onPress={() => router.push('/settings')} style={{ marginRight: 16 }}>
                                     <Feather name="arrow-left" size={24} color={colors.text} />
                                 </TouchableOpacity>
-                                <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>Change Password</Text>
+                                <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>{t('changePassword.title')}</Text>
                             </View>
+
                         </View>
 
                         <ScrollView
@@ -85,12 +92,14 @@ export default function ChangePasswordScreen() {
                             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                         >
                             <Text style={{ fontSize: 14, color: colors.textMuted, marginBottom: 24, lineHeight: 20 }}>
-                                To protect your account, make sure your new password is at least 8 characters long and includes a mix of letters and numbers.
+                                {t('changePassword.description')}
                             </Text>
+
 
                             <View style={{ gap: 20 }}>
                                 <View>
-                                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Current Password</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('changePassword.currentPassword')}</Text>
+
                                     <View style={{ height: 56, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 }}>
                                         <RNTextInput
                                             style={{ flex: 1, color: colors.text, fontSize: 16 }}
@@ -107,7 +116,8 @@ export default function ChangePasswordScreen() {
                                 </View>
 
                                 <View>
-                                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>New Password</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('changePassword.newPassword')}</Text>
+
                                     <View style={{ height: 56, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 }}>
                                         <RNTextInput
                                             style={{ flex: 1, color: colors.text, fontSize: 16 }}
@@ -124,7 +134,8 @@ export default function ChangePasswordScreen() {
                                 </View>
 
                                 <View>
-                                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Confirm New Password</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('changePassword.confirmPassword')}</Text>
+
                                     <View style={{ height: 56, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 }}>
                                         <RNTextInput
                                             style={{ flex: 1, color: colors.text, fontSize: 16 }}
@@ -161,8 +172,9 @@ export default function ChangePasswordScreen() {
                                     {passwordLoading ? (
                                         <ActivityIndicator color="#fff" />
                                     ) : (
-                                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Update Password</Text>
+                                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>{t('changePassword.updateButton')}</Text>
                                     )}
+
                                 </TouchableOpacity>
                             </View>
                         </ScrollView>

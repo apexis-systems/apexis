@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -41,6 +42,7 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectDocuments({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any, user: any, initialFolderId?: string, initialFileId?: string, searchQuery?: string }) {
     const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
 
     const router = useRouter();
     const [docs, setDocs] = useState<any[]>([]);
@@ -358,9 +360,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             await toggleFileVisibility(doc.id, !doc.client_visible);
             setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, client_visible: !doc.client_visible } : d)));
-            Alert.alert('Updated', `Document marked ${!doc.client_visible ? 'Visible' : 'Hidden'} for clients`);
+            Alert.alert(t('projectDocuments.success'), t('projectDocuments.visibilityMarked', { status: !doc.client_visible ? t('projectDocuments.visible') : t('projectDocuments.hidden') }));
         } catch (e) {
-            Alert.alert('Error', 'Failed to toggle visibility');
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
         }
     };
 
@@ -368,9 +370,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             await toggleDoNotFollow(doc.id, !doc.do_not_follow);
             setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, do_not_follow: !doc.do_not_follow } : d)));
-            Alert.alert('Updated', `Document ${!doc.do_not_follow ? 'marked' : 'unmarked'} as 'Do Not Follow'`);
+            Alert.alert(t('projectDocuments.success'), t('projectDocuments.dnfMarked', { status: !doc.do_not_follow ? t('projectDocuments.marked') : t('projectDocuments.unmarked') }));
         } catch (e) {
-            Alert.alert('Error', 'Failed to toggle Do Not Follow');
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateDnf'));
         }
     };
 
@@ -384,7 +386,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             setActionMenuVisible(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
             await fetchFolders(true); // Sync back on error
         } finally {
             setProcessing(null);
@@ -406,7 +408,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             setActionMenuVisible(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to update 'Do Not Follow' status");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateDnf'));
             await fetchFolders(true);
         } finally {
             setProcessing(null);
@@ -420,7 +422,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             await fetchFolders(true);
             setFolderMenuVisible(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
         } finally {
             setProcessing(null);
         }
@@ -440,21 +442,21 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleArchiveFileAction = async (file: any) => {
         Alert.alert(
-            "Archive Document",
-            'Are you sure you want to archive this document? It will be moved to the Archive folder and set to "Do Not Follow".',
+            t('projectDocuments.archive'),
+            t('projectDocuments.archiveConfirm'),
             [
-                { text: "Cancel", style: "cancel" },
+                { text: t('projectDocuments.cancel'), style: "cancel" },
                 {
-                    text: "Archive",
+                    text: t('projectDocuments.archive'),
                     onPress: async () => {
                         try {
                             setProcessing('archive');
                             await archiveFile(file.id);
                             await fetchFolders(true);
                             setActionMenuVisible(false);
-                            Alert.alert("Success", "Document archived");
+                            Alert.alert(t('projectDocuments.success'), t('projectDocuments.archiveSuccess'));
                         } catch (e) {
-                            Alert.alert("Error", "Failed to archive document");
+                            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToArchive'));
                         } finally {
                             setProcessing(null);
                         }
@@ -482,7 +484,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setRenamingFileId(null);
             setRenamingFileName('');
         } catch (e) {
-            Alert.alert("Error", "Failed to update file name");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateFileName'));
         } finally {
             setSubmitting(false);
         }
@@ -494,12 +496,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleDeleteFile = async (file: any) => {
         Alert.alert(
-            "Delete File",
-            `Are you sure you want to delete "${file.file_name}"?`,
+            t('projectDocuments.deleteFile'),
+            t('projectDocuments.deleteFileConfirm', { name: file.file_name }),
             [
-                { text: "Cancel", style: "cancel" },
+                { text: t('projectDocuments.cancel'), style: "cancel" },
                 {
-                    text: "Delete",
+                    text: t('projectDocuments.delete'),
                     style: "destructive",
                     onPress: async () => {
                         try {
@@ -508,7 +510,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             await fetchFolders(true);
                             setActionMenuVisible(false);
                         } catch (e) {
-                            Alert.alert("Error", "Failed to delete file");
+                            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToDeleteFile'));
                         } finally {
                             setProcessing(null);
                         }
@@ -627,7 +629,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             }
         } catch (e) {
             console.error('Share error:', e);
-            Alert.alert("Error", "Failed to share file");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToShareDocument'));
         } finally {
             setSharing(false);
         }
@@ -636,7 +638,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
         if (newFolderName.trim().toLowerCase() === 'archive') {
-            Alert.alert("Error", "The name 'Archive' is reserved for system use");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.reservedNameArchive'));
             return;
         }
         setSubmitting(true);
@@ -651,7 +653,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setNewFolderName('');
             setShowCreateFolder(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to create folder");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToCreateFolder'));
         } finally {
             setSubmitting(false);
         }
@@ -660,7 +662,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleUpdateFolder = async () => {
         if (!editFolderName.trim() || !editingFolderId) return;
         if (editFolderName.trim().toLowerCase() === 'archive') {
-            Alert.alert("Error", "The name 'Archive' is reserved for system use");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.reservedNameArchive'));
             return;
         }
         setSubmitting(true);
@@ -671,7 +673,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setEditingFolderId(null);
             setEditFolderName('');
         } catch (e) {
-            Alert.alert("Error", "Failed to update folder");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateFolder'));
         } finally {
             setSubmitting(false);
         }
@@ -686,11 +688,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     setFolders(folders.filter((f) => f.id !== folder.id));
                     setFolderMenuVisible(false);
                     Alert.alert(
-                        'Success',
-                        data.message || 'Folder deleted successfully.',
+                        t('projectDocuments.success'),
+                        data.message || t('projectDocuments.folderDeletedSuccess'),
                         [
                             {
-                                text: 'OK',
+                                text: t('projectDocuments.ok'),
                                 onPress: () => {
                                     if (selectedFolder === folder.id) setSelectedFolder(null);
                                 }
@@ -698,8 +700,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         ]
                     );
                 } else {
-                    const msg = data?.error || 'Failed to delete folder';
-                    Alert.alert('Error', msg);
+                    const msg = data?.error || t('projectDocuments.failedToDeleteFolder');
+                    Alert.alert(t('projectDocuments.error'), msg);
                 }
             } else {
                 await deleteFolder(folder.id, force);
@@ -712,18 +714,18 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const data = e.response?.data;
             if (data?.hasContent) {
                 Alert.alert(
-                    'Folder Not Empty',
-                    `"${folder.name}" contains files or subfolders. How would you like to proceed?`,
+                    t('projectDocuments.folderNotEmpty'),
+                    t('projectDocuments.folderNotEmptyMessage', { name: folder.name }),
                     [
-                        { text: 'Cancel', style: 'cancel' },
+                        { text: t('projectDocuments.cancel'), style: 'cancel' },
                         {
-                            text: 'Move Contents',
+                            text: t('projectDocuments.moveContents'),
                             onPress: () => {
                                 const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
                                 const childFiles = docs.filter(p => String(p.folder_id) === String(folder.id));
 
                                 if (childFolders.length === 0 && childFiles.length === 0) {
-                                    Alert.alert("Info", "Folder is already empty");
+                                    Alert.alert(t('projectDocuments.info'), t('projectDocuments.folderAlreadyEmpty'));
                                     return;
                                 }
 
@@ -733,15 +735,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             }
                         },
                         {
-                            text: 'Delete Everything',
+                            text: t('projectDocuments.deleteEverything'),
                             style: 'destructive',
                             onPress: () => handleDelete(folder, true)
                         }
                     ]
                 );
             } else {
-                const msg = data?.error || 'Failed to delete folder';
-                Alert.alert('Error', msg);
+                const msg = data?.error || t('projectDocuments.failedToDeleteFolder');
+                Alert.alert(t('projectDocuments.error'), msg);
             }
         } finally {
             setProcessing(null);
@@ -750,12 +752,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const confirmDeleteFolder = (folder: any) => {
         Alert.alert(
-            'Delete Folder',
-            `Are you sure you want to delete "${folder.name}"?`,
+            t('projectDocuments.deleteFolder'),
+            t('projectDocuments.deleteFileConfirm', { name: folder.name }), // Reusing deleteFileConfirm as it's the same message
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('projectDocuments.cancel'), style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('projectDocuments.delete'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }
@@ -812,14 +814,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 promises.push(bulkUpdateFiles({ ids: Array.from(selectedFiles), client_visible: visible }));
             }
             await Promise.all(promises);
-            Alert.alert("Success", "Visibility updated");
+            Alert.alert(t('projectDocuments.success'), t('projectDocuments.visibilityUpdated'));
             // Refresh
             const data = await getProjectFiles(project.id, 'document');
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
             clearSelection();
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
         } finally {
             setProcessing(null);
         }
@@ -830,7 +832,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             if (selectedFiles.size > 0) {
                 setProcessing('bulk_dnf');
                 await bulkUpdateFiles({ ids: Array.from(selectedFiles), do_not_follow: value });
-                Alert.alert("Success", "'Do Not Follow' status updated");
+                Alert.alert(t('projectDocuments.success'), t('projectDocuments.dnfStatusUpdated'));
                 // Refresh
                 const data = await getProjectFiles(project.id);
                 if (data.folderData) setFolders(data.folderData);
@@ -838,7 +840,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 clearSelection();
             }
         } catch (e) {
-            Alert.alert("Error", "Failed to update 'Do Not Follow' status");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateDnf'));
         } finally {
             setProcessing(null);
         }
@@ -850,7 +852,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const firstDoc = docs.find(d => d.id === firstId);
             if (firstDoc) handleShare(firstDoc);
         } else {
-            Alert.alert("Info", "Select at least one file to share");
+            Alert.alert(t('projectDocuments.info'), t('projectDocuments.selectAtLeastOneShare'));
         }
     };
 
@@ -861,13 +863,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const link = user.role === 'client' ? links.clientLink : links.contributorLink;
             if (link) {
                 await Share.share({
-                    message: `Join ${project.name} on Apexis: ${link}`,
+                    message: t('projectDocuments.joinProjectMessage', { projectName: project.name, link }),
                 });
             } else {
-                Alert.alert("Info", "Share link not available");
+                Alert.alert(t('projectDocuments.info'), t('projectDocuments.shareLinkNotAvailable'));
             }
         } catch (error) {
-            Alert.alert("Error", "Failed to get share link");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToGetShareLink'));
         }
     };
 
@@ -901,7 +903,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
                     mimeType: doc.file_type || 'application/pdf',
-                    dialogTitle: doc.file_name || 'Site Document'
+                    dialogTitle: doc.file_name || t('projectDocuments.document')
                 });
             } else {
                 await Share.share({
@@ -911,7 +913,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             }
         } catch (e) {
             console.error('Share error:', e);
-            Alert.alert("Error", "Failed to share document");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToShareDocument'));
         } finally {
             setProcessing(null);
         }
@@ -928,14 +930,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             style={{ flex: 1, height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                         >
                             <Feather name="upload" size={13} color="#fff" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Document</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>{t('projectDocuments.uploadDocument')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => setShowCreateFolder(true)}
                             style={{ height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 }}
                         >
                             <Feather name="folder-plus" size={13} color={colors.text} />
-                            <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
+                            <Text style={{ fontSize: 12, color: colors.text }}>{t('projectDocuments.newFolder')}</Text>
                         </TouchableOpacity>
                     </View>
                 ) : null}
@@ -1003,7 +1005,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         }}
                     >
                         <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{t(`projectDocuments.sortBy.${sortBy}`)}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -1020,7 +1022,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 ...(activeFolderTab === 'files' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
                             }}
                         >
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'files' ? colors.primary : colors.textMuted }}>Files ({sortedFolders.length + sortedDocs.length})</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'files' ? colors.primary : colors.textMuted }}>{t('projectDocuments.filesCount', { count: sortedFolders.length + sortedDocs.length })}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => setActiveFolderTab('rfis')}
@@ -1033,7 +1035,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 ...(activeFolderTab === 'rfis' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
                             }}
                         >
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>Linked RFIs ({linkedRFIs.length})</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>{t('projectDocuments.linkedRfisCount', { count: linkedRFIs.length })}</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -1082,7 +1084,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             </View>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Feather name="user" size={10} color={colors.textMuted} />
-                                                <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || 'Unassigned'}</Text>
+                                                <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || t('projectDocuments.unassigned')}</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -1092,7 +1094,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         ) : (
                             <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                                 <Feather name="link-2" size={32} color={colors.border} />
-                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>No RFIs linked to this folder</Text>
+                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>{t('projectDocuments.noRfisLinked')}</Text>
                             </View>
                         )}
                     </View>
@@ -1144,8 +1146,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
-                                        <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>{count} files{subcount > 0 ? ` · ${subcount} folders` : ''}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : folder.name}</Text>
+                                        <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
+                                            {subcount > 0 
+                                                ? t('projectDocuments.filesFoldersCount', { fileCount: count, folderCount: subcount })
+                                                : t('projectDocuments.filesOnlyCount', { count: count })}
+                                        </Text>
                                         {/* Folder Action Menu - Hidden for Clients */}
                                         {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                                             <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
@@ -1171,7 +1177,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         {!loading && currentFolders.length === 0 && visibleDocs.length === 0 && (
                             <View style={{ marginTop: 20, marginBottom: 10, alignItems: 'center' }}>
                                 <Feather name="folder" size={32} color={colors.border} />
-                                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or documents yet</Text>
+                                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>{t('projectDocuments.noFoldersDocs')}</Text>
                             </View>
                         )}
 
@@ -1346,7 +1352,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 };
 
                                 if (sortBy === 'newest' || sortBy === 'oldest') {
-                                    const groups = groupItemsByMonth(sortedDocs);
+                                    const groups = groupItemsByMonth(sortedDocs, t);
                                     return groups.map((group) => (
                                         <View key={group.title} style={{ marginBottom: 20 }}>
                                             <View style={{
@@ -1507,7 +1513,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         }}>
                                             <ActivityIndicator size="large" color={colors.primary} />
                                             <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
-                                                {isExpoGo ? 'Optimizing View…' : 'Optimizing View…'}
+                                                {t('projectDocuments.optimizingView')}
                                             </Text>
                                         </View>
                                     )}
@@ -1526,7 +1532,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     />
                                 ) : (
                                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                        <Text style={{ color: '#fff' }}>Viewer not available in this environment</Text>
+                                        <Text style={{ color: '#fff' }}>{t('projectDocuments.viewerNotAvailable')}</Text>
                                     </View>
                                 )
                             )
@@ -1561,7 +1567,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         letterSpacing: 2,
                                         textAlign: 'center'
                                     }}>
-                                        Do Not Follow
+                                        {t('projectDocuments.doNotFollow')}
                                     </Text>
                                 </View>
                             </View>
@@ -1593,7 +1599,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         >
                             <View style={{ padding: 16 }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>💬 DISCUSSION ({docComments.length})</Text>
+                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>💬 {t('projectDocuments.discussion')} ({docComments.length})</Text>
                                     <TouchableOpacity onPress={() => setShowComments(false)} style={{ padding: 4 }}>
                                         <Feather name="chevron-down" size={18} color="#aaa" />
                                     </TouchableOpacity>
@@ -1609,15 +1615,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         keyboardShouldPersistTaps="handled"
                                     >
                                         {docComments.length === 0 && (
-                                            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>No comments yet. Start the conversation!</Text>
+                                            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
                                         )}
                                         {docComments.map((c: any) => (
                                             <View key={c.id} style={{ marginBottom: 12 }}>
                                                 <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
                                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
+                                                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || t('projectDocuments.user')}</Text>
                                                         <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                            <Text style={{ color: '#888', fontSize: 10 }}>↩ Reply</Text>
+                                                            <Text style={{ color: '#888', fontSize: 10 }}>↩ {t('projectDocuments.reply')}</Text>
                                                         </TouchableOpacity>
                                                     </View>
                                                     <Text style={{ color: '#eee', fontSize: 12, lineHeight: 18 }}>
@@ -1626,7 +1632,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 </View>
                                                 {c.replies?.map((r: any) => (
                                                     <View key={r.id} style={{ marginLeft: 16, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderLeftWidth: 2, borderLeftColor: colors.primary }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700', marginBottom: 2 }}>{r.user?.name || 'User'}</Text>
+                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700', marginBottom: 2 }}>{r.user?.name || t('projectDocuments.user')}</Text>
                                                         <Text style={{ color: '#ccc', fontSize: 11, lineHeight: 16 }}>
                                                             {renderCommentText(r.text)}
                                                         </Text>
@@ -1639,7 +1645,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
                                 {replyTo && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
-                                        <Text style={{ color: colors.primary, fontSize: 10 }}>Replying to comment</Text>
+                                        <Text style={{ color: colors.primary, fontSize: 10 }}>{t('projectDocuments.replyingTo')}</Text>
                                         <TouchableOpacity onPress={() => setReplyTo(null)}>
                                             <Feather name="x-circle" size={12} color="#888" />
                                         </TouchableOpacity>
@@ -1669,7 +1675,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     <TextInput
                                         value={commentText}
                                         onChangeText={handleInputChange}
-                                        placeholder="Add a comment…"
+                                        placeholder={t('projectDocuments.addCommentPlaceholder')}
                                         placeholderTextColor="#666"
                                         style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
                                     />
@@ -1701,8 +1707,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     }}>
                         <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
                             <ActivityIndicator size="large" color={colors.primary} />
-                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Preparing...</Text>
-                            <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file to share...</Text>
+                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.preparing')}</Text>
+                            <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
                         </View>
                     </View>
                 )}
@@ -1719,8 +1725,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 }}>
                     <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
                         <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Preparing...</Text>
-                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file to share...</Text>
+                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.preparing')}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
                     </View>
                 </View>
             )}
@@ -1735,8 +1741,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 }}>
                     <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
                         <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Opening Document</Text>
-                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file for preview...</Text>
+                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.openingDocument')}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingForPreview')}</Text>
                     </View>
                 </View>
             )}
@@ -1745,20 +1751,20 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             <Modal visible={showCreateFolder} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>New Folder</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectDocuments.newFolder')}</Text>
                         <TextInput
                             value={newFolderName}
                             onChangeText={setNewFolderName}
-                            placeholder="Folder name"
+                            placeholder={t('projectDocuments.folderNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectDocuments.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleCreateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Creating…' : 'Create'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectDocuments.creating') : t('projectDocuments.create')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1956,9 +1962,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         try {
                             setProcessing('unarchive');
                             await unarchiveFile(activeActionFile.id, selectedSubFolderId === 'root' ? null : selectedSubFolderId);
-                            Alert.alert("Success", "Document unarchived successfully");
+                            Alert.alert(t('projectDocuments.success'), t('projectDocuments.unarchiveSuccess'));
                         } catch (e) {
-                            Alert.alert("Error", "Failed to unarchive document");
+                            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUnarchive'));
                             throw e; // Rethrow to let dialog handle error state if needed
                         } finally {
                             setProcessing(null);
@@ -1970,9 +1976,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     if (!isUnarchiving && movingContentsOf) {
                         try {
                             await deleteFolder(movingContentsOf.id, false);
-                            Alert.alert("Success", `Folder "${movingContentsOf.name}" deleted after moving contents`);
+                            Alert.alert(t('projectDocuments.success'), t('projectDocuments.folderDeletedMovingContents', { name: movingContentsOf.name }));
                         } catch (err) {
-                            Alert.alert("Error", "Contents moved, but failed to delete empty folder");
+                            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToDeleteEmptyFolder'));
                         }
                     }
                     const data = await getProjectFiles(project.id, 'document');
@@ -1988,20 +1994,20 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             <Modal visible={showEditFolder} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename Folder</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectDocuments.renameFolder')}</Text>
                         <TextInput
                             value={editFolderName}
                             onChangeText={setEditFolderName}
-                            placeholder="Folder name"
+                            placeholder={t('projectDocuments.folderNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowEditFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectDocuments.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleUpdateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectDocuments.updating') : t('projectDocuments.update')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -2012,20 +2018,20 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             <Modal visible={showRenameFile} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename File</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectDocuments.renameFile')}</Text>
                         <TextInput
                             value={renamingFileName}
                             onChangeText={setRenamingFileName}
-                            placeholder="File name"
+                            placeholder={t('projectDocuments.fileNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowRenameFile(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectDocuments.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleUpdateFile} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectDocuments.updating') : t('projectDocuments.update')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

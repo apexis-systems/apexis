@@ -7,11 +7,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getProjects, restoreProject, deleteProject } from '@/services/projectService';
 import { Text } from '@/components/ui/AppText';
+import { useTranslation } from 'react-i18next';
+
 
 export default function TrashScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
+
 
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,32 +58,33 @@ export default function TrashScreen() {
     try {
       setIsRestoring(projectId);
       await restoreProject(projectId);
-      Alert.alert('Success', 'Project restored successfully');
+      Alert.alert(t('trash.successTitle') as string, t('trash.successRestore') as string);
       fetchTrash();
     } catch (e) {
-      Alert.alert('Error', 'Failed to restore project');
+      Alert.alert(t('trash.errorTitle') as string, t('trash.errorRestore') as string);
     } finally {
+
       setIsRestoring(null);
     }
   };
 
   const handlePermanentDelete = (projectId: string) => {
     Alert.alert(
-      'Permanent Delete',
-      'Are you sure? This will permanently delete ALL project data. This cannot be undone.',
+      t('trash.permanentDeleteTitle') as string,
+      t('trash.permanentDeleteDesc') as string,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('trash.cancel') as string, style: 'cancel' },
         {
-          text: 'Delete Permanently',
+          text: t('trash.deletePermanently') as string,
           style: 'destructive',
           onPress: async () => {
             try {
               setIsDeleting(projectId);
               await deleteProject(projectId, true);
-              Alert.alert('Success', 'Project permanently deleted');
+              Alert.alert(t('trash.successTitle') as string, t('trash.successDelete') as string);
               fetchTrash();
             } catch (e) {
-              Alert.alert('Error', 'Failed to delete project');
+              Alert.alert(t('trash.errorTitle') as string, t('trash.errorDelete') as string);
             } finally {
               setIsDeleting(null);
             }
@@ -88,6 +93,7 @@ export default function TrashScreen() {
       ]
     );
   };
+
 
   if (!user) return null;
 
@@ -98,8 +104,9 @@ export default function TrashScreen() {
           <TouchableOpacity onPress={() => router.push('/settings')} style={{ marginRight: 16 }}>
             <Feather name="arrow-left" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>Trash Management</Text>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>{t('trash.title')}</Text>
         </View>
+
       </View>
 
       <ScrollView
@@ -115,11 +122,12 @@ export default function TrashScreen() {
             <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
               <Feather name="trash-2" size={40} color={colors.textMuted} />
             </View>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>Trash is Empty</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{t('trash.emptyTitle')}</Text>
             <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 }}>
-              Deleted projects will be saved here for 30 days before being automatically purged.
+              {t('trash.emptyDesc')}
             </Text>
           </View>
+
         ) : (
           <View style={{ gap: 16 }}>
             {projects.map((project) => (
@@ -135,15 +143,17 @@ export default function TrashScreen() {
                   borderBottomLeftRadius: 16 
                 }}>
                   <Text style={{ fontSize: 10, fontWeight: '900', color: '#fff' }}>
-                    {project.daysRemaining} {project.daysRemaining === 1 ? 'DAY' : 'DAYS'} LEFT
+                    {project.daysRemaining === 1 ? t('trash.dayLeft', { count: project.daysRemaining }) : t('trash.daysLeft', { count: project.daysRemaining })}
                   </Text>
                 </View>
+
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 4 }}>
                   <View style={{ flex: 1, marginRight: 10 }}>
                     <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }} numberOfLines={1}>{project.name}</Text>
-                    <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>{project.description || 'No description'}</Text>
+                    <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>{project.description || t('trash.noDescription')}</Text>
                   </View>
+
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <View style={{ backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
                       <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textMuted }}>CONT: {project.contributor_code}</Text>
@@ -158,12 +168,14 @@ export default function TrashScreen() {
                   <View style={{ flexDirection: 'row', gap: 16 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Feather name="file-text" size={14} color={colors.textMuted} />
-                      <Text style={{ fontSize: 13, color: colors.textMuted }}><Text style={{ fontWeight: '700', color: colors.text }}>{project.totalDocs || 0}</Text> Documents</Text>
+                      <Text style={{ fontSize: 13, color: colors.textMuted }}><Text style={{ fontWeight: '700', color: colors.text }}>{project.totalDocs || 0}</Text> {t('trash.documents')}</Text>
                     </View>
+
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Feather name="camera" size={14} color={colors.textMuted} />
-                      <Text style={{ fontSize: 13, color: colors.textMuted }}><Text style={{ fontWeight: '700', color: colors.text }}>{project.totalPhotos || 0}</Text> Photos</Text>
+                      <Text style={{ fontSize: 13, color: colors.textMuted }}><Text style={{ fontWeight: '700', color: colors.text }}>{project.totalPhotos || 0}</Text> {t('trash.photos')}</Text>
                     </View>
+
                   </View>
                   <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
                     {new Date(project.deletedAt).toLocaleDateString()}
@@ -177,16 +189,18 @@ export default function TrashScreen() {
                     style={{ flex: 1, height: 48, borderRadius: 16, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
                   >
                     {isRestoring === project.id ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="rotate-ccw" size={18} color={colors.primary} />}
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.primary }}>Restore</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.primary }}>{t('trash.restore')}</Text>
                   </TouchableOpacity>
+
                   <TouchableOpacity
                     onPress={() => handlePermanentDelete(project.id)}
                     disabled={isDeleting === project.id}
                     style={{ flex: 1, height: 48, borderRadius: 16, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
                   >
                     {isDeleting === project.id ? <ActivityIndicator size="small" color="#ef4444" /> : <Feather name="trash-2" size={18} color="#ef4444" />}
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: "#ef4444" }}>Delete</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: "#ef4444" }}>{t('trash.delete')}</Text>
                   </TouchableOpacity>
+
                 </View>
               </View>
             ))}

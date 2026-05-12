@@ -195,8 +195,9 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
         const revenue = await analyticsService.getRevenueAnalytics();
         const revenueTrend = await analyticsService.getRevenueGrowthData();
         const alerts = await analyticsService.getPlatformAlerts();
+        const companyUsage = await analyticsService.getCompanyUsageData();
         
-        res.status(200).json({ stats, growth, activity, comms, topProjects, feed, revenue, revenueTrend, alerts, ...insightsData });
+        res.status(200).json({ stats, growth, activity, comms, topProjects, feed, revenue, revenueTrend, alerts, companyUsage, ...insightsData });
     } catch (error) {
         console.error("getDashboardOverview Error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -236,7 +237,12 @@ export const getGrowthAnalytics = async (req: Request, res: Response) => {
     try {
         const data = await analyticsService.getSaasGrowthAnalytics();
         const revenueGrowth = await analyticsService.getRevenueGrowthData();
-        res.status(200).json({ ...data, revenueGrowth });
+        const productUsageData = await analyticsService.getProductUsageData();
+        const userGrowthMonthly = await analyticsService.getUserGrowthData();
+        const companyActivity = await analyticsService.getCompanyActivityData();
+        const conversionOpportunities = await analyticsService.getConversionOpportunitiesData();
+        
+        res.status(200).json({ ...data, revenueGrowth, productUsageData, userGrowthMonthly, companyActivity, conversionOpportunities });
     } catch (error) {
         console.error("getGrowthAnalytics Error:", error);
         res.status(500).json({ error: "Internal server error" });

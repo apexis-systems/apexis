@@ -289,8 +289,8 @@ export default function DashboardScreen() {
       setNewProject({ name: '', description: '', start_date: '', end_date: '' });
       fetchProjects(selectedOrgId, searchQuery);
     } catch (e: any) {
-      const message = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Failed to create project';
-      Alert.alert('Create Project Failed', message);
+      const message = e?.response?.data?.message || e?.response?.data?.error || e?.message || t('dashboard.createProjectFailed');
+      Alert.alert(t('dashboard.createProjectFailed'), message);
     } finally {
       setIsSubmitting(false);
     }
@@ -360,10 +360,10 @@ export default function DashboardScreen() {
         setProfileUri(uri);
       }
       setIsProfilePreviewOpen(false);
-      Alert.alert('Success', 'Profile picture updated successfully');
+      Alert.alert(t('Success'), t('dashboard.profilePicSuccess'));
     } catch (e) {
       console.error("Profile pic upload error:", e);
-      Alert.alert('Error', 'Failed to upload profile picture');
+      Alert.alert(t('Error'), t('dashboard.profilePicError'));
     } finally {
       setIsUploadingProfile(false);
     }
@@ -385,7 +385,7 @@ export default function DashboardScreen() {
         <UsageAlert />
         <MainHeader
           onSearchChange={setSearchQuery}
-          searchPlaceholder="Search..."
+          searchPlaceholder={t('dashboard.searchPlaceholder')}
         />
 
 
@@ -419,7 +419,7 @@ export default function DashboardScreen() {
               ) : (
                 <View style={{ alignItems: 'center' }}>
                   <Feather name="camera" size={20} color={colors.textMuted} />
-                  <Text style={{ fontSize: 8, color: colors.textMuted }}>Add Logo</Text>
+                  <Text style={{ fontSize: 8, color: colors.textMuted }}>{t('dashboard.addLogo')}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -445,7 +445,7 @@ export default function DashboardScreen() {
                   />
                 </TouchableOpacity>
                 <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>
-                  {`Hi ${user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1)}`}
+                  {t('dashboard.greeting', { name: user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1) })}
                 </Text>
               </View>
 
@@ -474,7 +474,7 @@ export default function DashboardScreen() {
                             await login(res.token);
                           }
                         } catch (err: any) {
-                          Alert.alert('Role Switch Failed', err?.response?.data?.error || 'You do not have access to this role.');
+                          Alert.alert(t('dashboard.roleSwitchFailed'), err?.response?.data?.error || t('dashboard.roleSwitchNoAccess'));
                         } finally {
                           setIsSwitching(null);
                         }
@@ -585,7 +585,7 @@ export default function DashboardScreen() {
                 }}
               >
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>
-                  {selectedOrgId ? organizations.find(o => o.id === selectedOrgId)?.name : 'All Organizations'}
+                  {selectedOrgId ? organizations.find(o => o.id === selectedOrgId)?.name : t('dashboard.allOrganizations')}
                 </Text>
                 <Feather name="chevron-down" size={12} color={colors.textMuted} />
               </TouchableOpacity>
@@ -609,7 +609,7 @@ export default function DashboardScreen() {
             >
               <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
               <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>
-                {sortType === 'name' ? 'Name' : sortType === 'newest' ? 'Newest' : 'Oldest'}
+                {t(`dashboard.sort.${sortType}`)}
               </Text>
             </TouchableOpacity>
           </View>
@@ -664,7 +664,7 @@ export default function DashboardScreen() {
                     fontStyle: 'italic'
                   }}
                 >
-                  {project.description || 'No Company/Client Name'}
+                  {project.description || t('dashboard.noCompanyClient')}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -675,11 +675,11 @@ export default function DashboardScreen() {
                 onPress={() => {
                   if (!isTourActive && !checkLimit('projects')) {
                     Alert.alert(
-                      "Limit Reached",
-                      "You have reached your project limit. Please upgrade your plan to create more projects.",
+                      t('dashboard.limitReached'),
+                      t('dashboard.projectLimitMessage'),
                       [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Upgrade", onPress: () => router.push('/subscription') }
+                        { text: t('Cancel'), style: "cancel" },
+                        { text: t('dashboard.upgrade'), onPress: () => router.push('/subscription') }
                       ]
                     );
                     return;
@@ -722,7 +722,7 @@ export default function DashboardScreen() {
           {loading ? (
             <View style={{ marginTop: 60, alignItems: 'center' }}>
               <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={{ marginTop: 12, color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>Fetching Projects...</Text>
+              <Text style={{ marginTop: 12, color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>{t('dashboard.fetchingProjects')}</Text>
             </View>
           ) : filteredProjects.length === 0 && (
             <View style={{ marginTop: 40, alignItems: 'center' }}>
@@ -749,35 +749,35 @@ export default function DashboardScreen() {
                 onPress={(e) => e.stopPropagation()}
               >
                 <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 16 }}>Create New Project</Text>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 16 }}>{t('dashboard.createNewProject')}</Text>
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Project Name (max 25)</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>{t('dashboard.projectNameLabel')}</Text>
                   <TextInput
                     style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
-                    placeholder="E.g. Alpha Tower"
+                    placeholder={t('dashboard.projectNamePlaceholder')}
                     placeholderTextColor={colors.textMuted}
                     value={newProject.name}
                     maxLength={25}
                     onChangeText={(text) => setNewProject({ ...newProject, name: text })}
                   />
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Company Name/Client Name (max 50)</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>{t('dashboard.companyNameLabel')}</Text>
                   <TextInput
                     style={{ backgroundColor: colors.background, color: colors.text, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
-                    placeholder="Enter Company/Client Name"
+                    placeholder={t('dashboard.companyNamePlaceholder')}
                     placeholderTextColor={colors.textMuted}
                     value={newProject.description}
                     maxLength={50}
                     onChangeText={(text) => setNewProject({ ...newProject, description: text })}
                   />
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>Start Date (YYYY-MM-DD)</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>{t('dashboard.startDateLabel')}</Text>
                   <TouchableOpacity
                     style={{ backgroundColor: colors.background, padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: colors.border }}
                     onPress={() => setShowStartPicker(true)}
                   >
                     <Text style={{ color: newProject.start_date ? colors.text : colors.textMuted }}>
-                      {newProject.start_date || 'Select Start Date'}
+                      {newProject.start_date || t('dashboard.selectStartDate')}
                     </Text>
                   </TouchableOpacity>
 
@@ -795,13 +795,13 @@ export default function DashboardScreen() {
                     />
                   )}
 
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>End Date (YYYY-MM-DD)</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>{t('dashboard.endDateLabel')}</Text>
                   <TouchableOpacity
                     style={{ backgroundColor: colors.background, padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}
                     onPress={() => setShowEndPicker(true)}
                   >
                     <Text style={{ color: newProject.end_date ? colors.text : colors.textMuted }}>
-                      {newProject.end_date || 'Select End Date'}
+                      {newProject.end_date || t('dashboard.selectEndDate')}
                     </Text>
                   </TouchableOpacity>
 
@@ -821,14 +821,14 @@ export default function DashboardScreen() {
 
                   <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
                     <TouchableOpacity onPress={() => setIsCreating(false)} style={{ padding: 12 }}>
-                      <Text style={{ color: colors.textMuted, fontWeight: 'bold' }}>Cancel</Text>
+                      <Text style={{ color: colors.textMuted, fontWeight: 'bold' }}>{t('Cancel')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleCreate}
                       disabled={isSubmitting}
                       style={{ backgroundColor: colors.primary, padding: 12, borderRadius: 8, paddingHorizontal: 20, justifyContent: 'center' }}
                     >
-                      {isSubmitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontWeight: 'bold' }}>Create</Text>}
+                      {isSubmitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontWeight: 'bold' }}>{t('dashboard.createProject')}</Text>}
                     </TouchableOpacity>
                   </View>
                 </ScrollView>
@@ -859,9 +859,9 @@ export default function DashboardScreen() {
         onChangePress={handleProfilePicUpload}
         uploading={isUploadingProfile}
         isCircular={true}
-        title="Profile Picture"
-        subtitle="This picture helps your team identify you on the platform."
-        buttonText="Change Photo"
+        title={t('dashboard.profilePictureTitle')}
+        subtitle={t('dashboard.profilePictureSubtitle')}
+        buttonText={t('dashboard.changePhoto')}
       />
 
       {/* Org Selection Modal for Superadmin */}
@@ -873,14 +873,14 @@ export default function DashboardScreen() {
         >
           <View style={{ backgroundColor: colors.surface, borderRadius: 20, width: '100%', maxWidth: 400, padding: 10, overflow: 'hidden' }}>
             <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text }}>Select Organization</Text>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text }}>{t('dashboard.selectOrganization')}</Text>
             </View>
             <ScrollView style={{ maxHeight: 400 }}>
               <TouchableOpacity
                 onPress={() => { setSelectedOrgId(null); setIsOrgDropdownOpen(false); }}
                 style={{ padding: 15, backgroundColor: selectedOrgId === null ? colors.background : 'transparent' }}
               >
-                <Text style={{ fontSize: 14, color: colors.text, fontWeight: selectedOrgId === null ? 'bold' : 'normal' }}>All Organizations</Text>
+                <Text style={{ fontSize: 14, color: colors.text, fontWeight: selectedOrgId === null ? 'bold' : 'normal' }}>{t('dashboard.allOrganizations')}</Text>
               </TouchableOpacity>
               {organizations.map((org) => (
                 <TouchableOpacity

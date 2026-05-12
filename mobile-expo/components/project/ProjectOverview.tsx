@@ -9,6 +9,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getProjectFiles } from '@/services/fileService';
 import { getReports, Report } from '@/services/reportService';
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+
 import { useFocusEffect } from 'expo-router';
 import { getSnags } from '@/services/snagService';
 import { getSecureFileUrl } from '@/services/fileService';
@@ -36,6 +38,8 @@ const getWeekNumber = (dateStr: string): number => {
 
 export default function ProjectOverview({ project, userRole, onUpdate, onActionPress }: Props) {
     const { colors } = useTheme();
+    const { t, i18n } = useTranslation();
+
     const projectId = (project as any)?.id;
     const canManageMembers = userRole === 'admin' || userRole === 'superadmin';
     const isClient = userRole === 'client';
@@ -74,8 +78,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 }));
                 setMembers(membersWithPics);
             })
-            .catch(() => Alert.alert("Error", "Failed to load members"))
+            .catch(() => Alert.alert(t('projectOverview.error') as string, t('projectOverview.failedLoadMembers') as string))
             .finally(() => setLoadingMembers(false));
+
     }, [memberModalType, projectId]);
 
     const refreshMembers = async () => {
@@ -97,22 +102,22 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const handleRemoveMember = async (member: any) => {
         if (!projectId || !member?.user?.id) return;
         Alert.alert(
-            'Remove project access?',
-            `Remove ${member.user.name} from this ${memberModalType} list? Their account will stay in the organization.`,
+            t('projectOverview.removeAccessTitle') as string,
+            t('projectOverview.removeAccessDesc', { name: member.user.name, role: memberModalType }) as string,
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('projectOverview.cancel') as string, style: 'cancel' },
                 {
-                    text: 'Remove',
+                    text: t('projectOverview.remove') as string,
                     style: 'destructive',
                     onPress: async () => {
                         try {
                             setRemovingMemberId(member.user.id);
                             await removeProjectMember(projectId, member.user.id);
                             await refreshMembers();
-                            Alert.alert('Success', 'Project access removed.');
+                            Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
                         } catch (e) {
-                            const { message } = parseApiError(e, 'Failed to remove project access');
-                            Alert.alert('Error', message);
+                            const { message } = parseApiError(e, t('projectOverview.failedRemoveAccess') as string);
+                            Alert.alert(t('projectOverview.error') as string, message);
                         } finally {
                             setRemovingMemberId(null);
                         }
@@ -120,6 +125,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 }
             ]
         );
+
     };
 
 
@@ -169,8 +175,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             });
         } catch (e) {
             console.error('Share error:', e);
-            Alert.alert("Error", "Failed to share link");
+            Alert.alert(t('projectOverview.error') as string, t('projectOverview.failedShareLink') as string);
         }
+
     };
 
     // Initial Export Status Fetch
@@ -229,11 +236,12 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             if (data.statusType === 'success') {
                 setIsExporting(false);
                 setLatestExport({ url: data.presignedUrl, date: new Date().toISOString() });
-                Alert.alert("Success", `Export completed in ${Math.round(data.totalTimeMs / 1000)}s!`);
+                Alert.alert(t('projectOverview.success') as string, t('projectOverview.exportCompleted', { time: Math.round(data.totalTimeMs / 1000) }) as string);
             } else if (data.statusType === 'failed') {
                 setIsExporting(false);
-                Alert.alert("Error", 'Export failed: ' + data.status);
+                Alert.alert(t('projectOverview.error') as string, t('projectOverview.exportFailed') + data.status);
             }
+
         };
 
         socket.on('export-status', handleExportStatus);
@@ -287,15 +295,16 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         try {
             if (!projectId) return;
             setIsExporting(true);
-            setExportStatusText('Starting export process...');
+            setExportStatusText(t('projectOverview.exportStarted') as string);
             setExportTimerMs(0);
             setIsCountingDown(false);
             await exportHandoverPackage(projectId);
         } catch (e: any) {
-            const { message, code } = parseApiError(e, 'Failed to trigger export');
-            Alert.alert(code === 'FEATURE_RESTRICTED' ? 'Feature Restricted' : code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error', message);
+            const { message, code } = parseApiError(e, t('projectOverview.failedTriggerExport') as string);
+            Alert.alert(code === 'FEATURE_RESTRICTED' ? 'Feature Restricted' : code === 'LIMIT_REACHED' ? 'Limit Reached' : t('projectOverview.error') as string, message);
             setIsExporting(false);
         }
+
     };
 
     const formatElapsed = (ms: number) => {
@@ -303,6 +312,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         const m = Math.floor(s / 60);
         return `${m.toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
     };
+
 
     /**
      * Helper to format dates correctly for Indian locale
@@ -395,8 +405,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             {overallLoading ? (
                 <View style={{ flex: 1, minHeight: 400, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={{ marginTop: 12, color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>Loading Overview...</Text>
+                    <Text style={{ marginTop: 12, color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>{t('projectOverview.loading')}</Text>
                 </View>
+
             ) : (
                 <>
             <View style={{ gap: 20 }}>
@@ -404,12 +415,13 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                     {[
                         ...(isClient ? [] : [
-                            { icon: 'calendar', label: 'Start Date', value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
-                            { icon: 'calendar', label: 'End Date', value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
+                            { icon: 'calendar', label: t('projectOverview.startDate'), value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
+                            { icon: 'calendar', label: t('projectOverview.endDate'), value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
                         ]),
-                        { icon: 'file-text', label: 'Documents', value: counting ? '…' : String(docsCount), id: 'documents' },
-                        { icon: 'camera', label: 'Photos', value: counting ? '…' : String(photosCount), id: 'photos' },
+                        { icon: 'file-text', label: t('projectOverview.documents'), value: counting ? '…' : String(docsCount), id: 'documents' },
+                        { icon: 'camera', label: t('projectOverview.photos'), value: counting ? '…' : String(photosCount), id: 'photos' },
                     ].map((item) => {
+
                         const isClickable = true;
                         const Container = TouchableOpacity;
                         return (
@@ -448,8 +460,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     <View style={{ gap: 12 }}>
                         <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
                             <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                Client Project Code
+                                {t('projectOverview.clientProjectCode')}
                             </Text>
+
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 }}>
                                 <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, flex: 1 }}>
                                     {(project as any).client_code || '—'}
@@ -470,10 +483,11 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}
                             >
                                 <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
-                                    {(project as any).totalClients || 0} active {((project as any).totalClients || 0) === 1 ? 'client' : 'clients'}
+                                    {(project as any).totalClients || 0} {((project as any).totalClients || 0) === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients')}
                                 </Text>
                                 <Feather name="chevron-right" size={12} color={colors.primary} />
                             </TouchableOpacity>
+
                         </View>
                     </View>
                 )}
@@ -482,9 +496,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {userRole === 'contributor' && (
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                         {[
-                            { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0, type: 'contributor' as const },
-                            { label: 'Client List', value: null, id: 'client_list', count: (project as any).totalClients || 0, type: 'client' as const },
+                            { label: t('projectOverview.contributorCode'), value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0, type: 'contributor' as const },
+                            { label: t('projectOverview.clientList'), value: null, id: 'client_list', count: (project as any).totalClients || 0, type: 'client' as const },
                         ].map((item) => (
+
                             <View
                                 key={item.id}
                                 style={{
@@ -538,10 +553,11 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                     style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
                                 >
                                     <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
-                                        {item.count} active {item.type === 'contributor' ? (item.count === 1 ? 'contributor' : 'contributors') : (item.count === 1 ? 'client' : 'clients')}
+                                        {item.count} {item.type === 'contributor' ? (item.count === 1 ? t('projectOverview.activeContributor') : t('projectOverview.activeContributors')) : (item.count === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients'))}
                                     </Text>
                                     <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
                                 </TouchableOpacity>
+
                             </View>
                         ))}
                     </View>
@@ -551,9 +567,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {userRole === 'admin' && (
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                         {[
-                            { label: 'Contributor Code', value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0 },
-                            { label: 'Client Code', value: (project as any).client_code, id: 'client_code', count: (project as any).totalClients || 0 },
+                            { label: t('projectOverview.contributorCode'), value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0 },
+                            { label: t('projectOverview.clientProjectCode'), value: (project as any).client_code, id: 'client_code', count: (project as any).totalClients || 0 },
                         ].map((item) => (
+
                             <View
                                 key={item.id}
                                 style={{
@@ -603,10 +620,11 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                     style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
                                 >
                                     <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
-                                        {item.count} active {item.id === 'cont_code' ? (item.count === 1 ? 'contributor' : 'contributors') : (item.count === 1 ? 'client' : 'clients')}
+                                        {item.count} {item.id === 'cont_code' ? (item.count === 1 ? t('projectOverview.activeContributor') : t('projectOverview.activeContributors')) : (item.count === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients'))}
                                     </Text>
                                     <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
                                 </TouchableOpacity>
+
                             </View>
                         ))}
                     </View>
@@ -617,15 +635,16 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     {(
                         isClient
                             ? [
-                                { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
-                                { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
+                                { id: 'reports', icon: 'file-text', label: t('projectOverview.reports'), color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} ${t('projectOverview.total')}` },
+                                { id: 'snags', icon: 'alert-triangle', label: t('projectOverview.snags'), color: '#f59e0b', sub: `${snagsCount} ${t('projectOverview.open')}` },
                             ]
                             : [
-                                { id: 'reports', icon: 'file-text', label: 'Reports', color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} total` },
-                                { id: 'snags', icon: 'alert-triangle', label: 'Snags', color: '#f59e0b', sub: `${snagsCount} open` },
-                                { id: 'sops', icon: 'clipboard', label: 'Checklists', color: '#3b82f6', sub: 'View all' },
+                                { id: 'reports', icon: 'file-text', label: t('projectOverview.reports'), color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} ${t('projectOverview.total')}` },
+                                { id: 'snags', icon: 'alert-triangle', label: t('projectOverview.snags'), color: '#f59e0b', sub: `${snagsCount} ${t('projectOverview.open')}` },
+                                { id: 'sops', icon: 'clipboard', label: t('projectOverview.checklists'), color: '#3b82f6', sub: t('projectOverview.viewAll') },
                             ]
                     ).map((action) => (
+
                         <TouchableOpacity
                             key={action.id}
                             onPress={() => onActionPress && onActionPress(action.id)}
@@ -669,21 +688,23 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         marginBottom: 20,
                         gap: 16
                     }}>
-                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Final Handover Report</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('projectOverview.finalHandoverReport')}</Text>
+
 
                         {isExporting ? (
                             <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 24, gap: 12, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
                                 <ActivityIndicator size="large" color={colors.primary} />
                                 <View style={{ alignItems: 'center', gap: 4 }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{exportStatusText || 'Exporting...'}</Text>
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{exportStatusText || t('projectOverview.exporting')}</Text>
                                     {isCountingDown && (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}>
                                             <Feather name="clock" size={12} color={colors.textMuted} />
                                             <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                                                {formatElapsed(exportTimerMs)} left
+                                                {formatElapsed(exportTimerMs)} {t('projectOverview.left')}
                                             </Text>
                                         </View>
                                     )}
+
                                 </View>
                             </View>
                         ) : (
@@ -695,9 +716,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                 <Feather name="check" size={16} color="#10b981" />
                                             </View>
                                             <View style={{ flex: 1 }}>
-                                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 }}>Report Ready</Text>
-                                                <Text style={{ fontSize: 11, color: colors.textMuted }}>Generated {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 }}>{t('projectOverview.reportReady')}</Text>
+                                                <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('projectOverview.generated')} {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
                                             </View>
+
                                         </View>
 
                                         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -706,16 +728,18 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                 style={{ flex: 1, backgroundColor: colors.background, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                             >
                                                 <Feather name="share" size={14} color={colors.text} />
-                                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>Share</Text>
+                                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{t('projectOverview.share')}</Text>
                                             </TouchableOpacity>
+
 
                                             <TouchableOpacity
                                                 onPress={() => Linking.openURL(latestExport.url)}
                                                 style={{ flex: 1, backgroundColor: '#10b981', paddingVertical: 10, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                             >
                                                 <Feather name="download" size={14} color="#fff" />
-                                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Download</Text>
+                                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{t('projectOverview.download')}</Text>
                                             </TouchableOpacity>
+
                                         </View>
                                     </View>
                                 )}
@@ -737,9 +761,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 >
                                     <Feather name={latestExport ? "refresh-cw" : "play-circle"} size={16} color={colors.text} />
                                     <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
-                                        {latestExport ? 'Generate New Report' : 'Export Final Handover Report'}
+                                        {latestExport ? t('projectOverview.generateNew') : t('projectOverview.exportButton')}
                                     </Text>
                                 </TouchableOpacity>
+
                             </View>
                         )}
                     </View>
@@ -754,8 +779,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             <Modal visible={!!memberModalType} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setMemberModalType(null)}>
                 <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>
-                            {memberModalType}s
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
+                            {memberModalType === 'contributor' ? t('projectOverview.contributors') : t('projectOverview.clients')}
                         </Text>
                         <TouchableOpacity onPress={() => setMemberModalType(null)} style={{ padding: 8, backgroundColor: colors.surface, borderRadius: 20 }}>
                             <Feather name="x" size={20} color={colors.text} />
@@ -765,7 +790,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         {loadingMembers ? (
                             <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
                         ) : members.length === 0 ? (
-                            <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 40 }}>No active {memberModalType}s found</Text>
+                            <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 40 }}>{t('projectOverview.noMembersFound', { role: memberModalType })}</Text>
                         ) : (
                                 members.map((m, idx) => (
                                     <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
@@ -777,8 +802,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                         </View>
                                     )}
                                     <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{m.user.name} {m.user.is_primary ? '(Primary)' : ''}</Text>
+                                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{m.user.name} {m.user.is_primary ? t('projectOverview.primary') : ''}</Text>
                                         <View style={{ marginTop: 4, gap: 2 }}>
+
                                             {m.user.email && (
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                     <Feather name="mail" size={12} color={colors.primary} />
