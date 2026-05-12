@@ -11,6 +11,7 @@ import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 
 export default function ChatDetail() {
@@ -19,6 +20,7 @@ export default function ChatDetail() {
     const { socket, isConnected } = useSocket();
 
     const { user } = useAuth() as any;
+    const { t } = useLanguage();
 
     const role = params?.role as string ?? 'admin';
     const roomId = params?.id as string;
@@ -311,7 +313,7 @@ export default function ChatDetail() {
         }
     };
 
-    if (loading) return <div className="p-6 text-center text-muted-foreground">Loading messages...</div>;
+    if (loading) return <div className="p-6 text-center text-muted-foreground">{t('loading_messages')}</div>;
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
@@ -338,12 +340,12 @@ export default function ChatDetail() {
 
                 <div className="flex-1 min-w-0">
                     <p className="font-bold text-foreground text-sm truncate">
-                        {room?.name || room?.room_members?.find((m: any) => m.user?.id !== user?.id)?.user?.name || 'Loading...'}
+                        {room?.name || room?.room_members?.find((m: any) => m.user?.id !== user?.id)?.user?.name || t('loading_chats')}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
                         {room?.type === 'group'
-                            ? `${room.room_members?.length || 0} members`
-                            : (onlineUsers.has(String(room?.room_members?.find((m: any) => m.user?.id !== user?.id)?.user?.id)) ? 'Online' : 'Offline')}
+                            ? t('members_count').replace('{count}', (room.room_members?.length || 0).toString())
+                            : (onlineUsers.has(String(room?.room_members?.find((m: any) => m.user?.id !== user?.id)?.user?.id)) ? t('online') : t('offline'))}
                     </p>
                 </div>
 
@@ -376,7 +378,7 @@ export default function ChatDetail() {
                                         }`}
                                 >
                                     {!isMe && (
-                                        <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || 'User'}</p>
+                                        <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || t('user_fallback')}</p>
                                     )}
 
                                     {(msg.parent || msg.parent_id) && (
@@ -385,12 +387,12 @@ export default function ChatDetail() {
                                             className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10 border-white/40' : 'bg-secondary/50'}`}
                                         >
                                             <p className={`font-bold mb-0.5 truncate ${isMe ? 'text-white' : 'text-accent'}`}>
-                                                {msg.parent?.sender?.name || 'User'}
+                                                {msg.parent?.sender?.name || t('user_fallback')}
                                             </p>
                                             <p className={`opacity-80 line-clamp-1 italic ${isMe ? 'text-white/90' : 'text-foreground/70'}`}>
                                                 {msg.parent ? (
-                                                    (msg.parent.type === 'audio' || msg.parent.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : msg.parent.type === 'image' ? '📷 Photo' : msg.parent.type === 'file' ? '📄 File' : msg.parent.text || 'Message'
-                                                ) : 'Replied to message'}
+                                                    (msg.parent.type === 'audio' || msg.parent.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : msg.parent.type === 'image' ? `📷 ${t('photo_message')}` : msg.parent.type === 'file' ? `📄 ${t('file_message')}` : msg.parent.text || t('message_fallback')
+                                                ) : t('replied_to_message')}
                                             </p>
                                         </div>
                                     )}
@@ -474,7 +476,7 @@ export default function ChatDetail() {
                 {typingUser && (
                     <div className="absolute bottom-3 left-5 z-20 pointer-events-none">
                         <p className="text-primary text-[11px] font-semibold animate-pulse italic drop-shadow-sm">
-                            {typingUser} is typing...
+                            {t('user_is_typing').replace('{name}', typingUser)}
                         </p>
                     </div>
                 )}
@@ -533,9 +535,9 @@ export default function ChatDetail() {
                 {replyTo && (
                     <div className="px-4 py-3 bg-secondary/30 flex items-center gap-3 border-b border-border border-l-4 border-l-accent animate-in slide-in-from-bottom-2">
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-accent">{replyTo.sender?.name || 'User'}</p>
+                            <p className="text-xs font-bold text-accent">{replyTo.sender?.name || t('user_fallback')}</p>
                             <p className="text-sm text-foreground truncate opacity-80">
-                                { (replyTo.type === 'audio' || replyTo.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : replyTo.type === 'image' ? '📷 Photo' : replyTo.type === 'file' ? '📄 File' : replyTo.text || 'Message'}
+                                { (replyTo.type === 'audio' || replyTo.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : replyTo.type === 'image' ? `📷 ${t('photo_message')}` : replyTo.type === 'file' ? `📄 ${t('file_message')}` : replyTo.text || t('message_fallback')}
                             </p>
                         </div>
                         <button
@@ -575,7 +577,7 @@ export default function ChatDetail() {
                                     }
                                 }}
                                 onKeyDown={handleKeyDown}
-                                placeholder="Message..."
+                                placeholder={t('message_placeholder')}
                                 rows={1}
                                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none max-h-32 py-0.5"
                                 style={{ lineHeight: '1.4' }}

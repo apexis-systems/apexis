@@ -8,6 +8,7 @@ import NewChatModal from '@/components/Chats/NewChatModal';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function ChatList() {
     const router = useRouter();
@@ -15,6 +16,7 @@ export default function ChatList() {
     const role = params?.role as string ?? 'admin';
     const { socket } = useSocket();
     const { user: authUser } = useAuth() as any;
+    const { t } = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
     const [rooms, setRooms] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -27,13 +29,13 @@ export default function ChatList() {
     if (role === 'superadmin') {
         return (
             <div className="p-8 max-w-2xl mx-auto text-center">
-                <h1 className="text-2xl font-bold text-foreground mb-4">Access Denied</h1>
-                <p className="text-muted-foreground">Superadmins do not have access to the chat feature.</p>
+                <h1 className="text-2xl font-bold text-foreground mb-4">{t('access_denied')}</h1>
+                <p className="text-muted-foreground">{t('superadmin_chat_no_access')}</p>
                 <button
                     onClick={() => router.push('/superadmin/dashboard')}
                     className="mt-6 px-4 py-2 bg-accent text-white rounded-lg font-medium"
                 >
-                    Back to Dashboard
+                    {t('back_to_dashboard')}
                 </button>
             </div>
         );
@@ -153,13 +155,13 @@ export default function ChatList() {
             return timeB - timeA;
         });
 
-    if (loading) return <div className="p-6 text-center text-muted-foreground">Loading chats...</div>;
+    if (loading) return <div className="p-6 text-center text-muted-foreground">{t('loading_chats')}</div>;
 
     return (
         <div className="p-6 max-w-2xl mx-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold text-foreground">Chats</h1>
+                <h1 className="text-2xl font-bold text-foreground">{t('chats')}</h1>
                 <div className="flex items-center gap-3">
                     {/* <button className="p-2 rounded-lg hover:bg-secondary transition-colors">
                         <Camera className="h-5 w-5 text-muted-foreground" />
@@ -180,7 +182,7 @@ export default function ChatList() {
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search chats..."
+                    placeholder={t('search_chats')}
                     className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                 />
             </div>
@@ -190,13 +192,13 @@ export default function ChatList() {
                 {sorted.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
                         <MessageSquare className="h-12 w-12 opacity-30" />
-                        <p className="text-sm">No chats found</p>
+                        <p className="text-sm">{t('no_chats_found')}</p>
                     </div>
                 ) : (
                     sorted.map((chat, idx) => {
                         const isGroup = chat.type === 'group';
                         const otherMember = chat.room_members?.find((m: any) => String(m.user?.id) !== String(authUser?.id));
-                        const displayName = chat.name || otherMember?.user?.name || 'Chat';
+                        const displayName = chat.name || otherMember?.user?.name || t('chat_fallback');
                         const isOnline = otherMember?.user?.id && onlineUsers.has(String(otherMember.user.id));
                         const displayAvatarKey = otherMember?.user?.profile_pic;
 
@@ -254,7 +256,7 @@ export default function ChatList() {
                                                     ))}
                                                     {otherMember.user.project_members.length > 1 && (
                                                         <span className="text-[8px] text-muted-foreground font-bold">
-                                                            +{otherMember.user.project_members.length - 1} more
+                                                            {t('more_projects').replace('{count}', (otherMember.user.project_members.length - 1).toString())}
                                                         </span>
                                                     )}
                                                 </div>
@@ -265,18 +267,18 @@ export default function ChatList() {
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between gap-2">
-                                        {typingRooms[String(chat.id)] ? (
-                                            <p className="text-xs truncate text-accent italic font-medium animate-pulse">
-                                                {typingRooms[String(chat.id)]} is typing...
-                                            </p>
-                                        ) : (
+                                            {typingRooms[String(chat.id)] ? (
+                                                <p className="text-xs truncate text-accent italic font-medium animate-pulse">
+                                                    {t('user_is_typing').replace('{name}', typingRooms[String(chat.id)])}
+                                                </p>
+                                            ) : (
                                             <p className="text-xs truncate text-muted-foreground">
                                                 {chat.chat_messages?.[0]?.type === 'image' ? (
-                                                    <span className="flex items-center gap-1"><Camera className="h-3 w-3" /> Photo</span>
+                                                    <span className="flex items-center gap-1"><Camera className="h-3 w-3" /> {t('photo')}</span>
                                                 ) : chat.chat_messages?.[0]?.type === 'file' ? (
-                                                    <span className="flex items-center gap-1">📄 File</span>
+                                                    <span className="flex items-center gap-1">📄 {t('file')}</span>
                                                 ) : (
-                                                    chat.chat_messages?.[0]?.text || (chat.type === 'group' ? 'Group Chat' : 'Direct Message')
+                                                    chat.chat_messages?.[0]?.text || (chat.type === 'group' ? t('group_chat') : t('direct_message'))
                                                 )}
                                             </p>
                                         )}

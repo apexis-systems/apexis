@@ -152,18 +152,18 @@ const Activity = () => {
         <div className="max-w-4xl p-8 mx-auto">
             <div className="flex flex-col gap-6 mb-8">
                 <div>
-                    <h1 className="text-xl font-bold text-foreground">{t('Activity')}</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">Updates from your projects</p>
+                    <h1 className="text-xl font-bold text-foreground">{t('activity')}</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">{t('activity_subtitle')}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
                     {user.role === 'superadmin' && (
                         <Select value={selectedOrgId} onValueChange={(val) => { setSelectedOrgId(val); setSelectedUserIds([]); setSelectedProjectIds([]); }}>
                             <SelectTrigger className="w-40 text-xs">
-                                <SelectValue placeholder="All Organizations" />
+                                <SelectValue placeholder={t('all_organizations')} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Organizations</SelectItem>
+                                <SelectItem value="all">{t('all_organizations')}</SelectItem>
                                 {organizations.map(org => (
                                     <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
                                 ))}
@@ -175,14 +175,14 @@ const Activity = () => {
                         options={projectOptions}
                         selected={selectedProjectIds}
                         onChange={setSelectedProjectIds}
-                        placeholder="All Projects"
+                        placeholder={t('all_projects')}
                     />
 
                     <MultiSelect
                         options={userOptions}
                         selected={selectedUserIds}
                         onChange={setSelectedUserIds}
-                        placeholder="All Users"
+                        placeholder={t('all_users')}
                     />
 
                     {/* <Select value={selectedType} onValueChange={setSelectedType}>
@@ -241,7 +241,7 @@ const Activity = () => {
             {!loading && activities.length === 0 && (
                 <div className="mt-12 text-center">
                     <Clock className="mx-auto h-8 w-8 text-muted-foreground/30" />
-                    <p className="mt-2 text-xs text-muted-foreground">No recent activity</p>
+                    <p className="mt-2 text-xs text-muted-foreground">{t('no_recent_activity')}</p>
                 </div>
             )}
         </div>

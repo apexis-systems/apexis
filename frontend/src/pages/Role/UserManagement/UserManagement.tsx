@@ -53,7 +53,7 @@ const UserManagement = () => {
             setUsers(sorted);
         } catch (error) {
             console.error("fetchUsers error", error);
-            toast.error("Failed to load users");
+            toast.error(t('load_users_error'));
         } finally {
             setLoading(false);
         }
@@ -76,20 +76,20 @@ const UserManagement = () => {
     if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
         return (
             <div className="p-8 max-w-5xl mx-auto flex items-center justify-center min-h-[50vh]">
-                <p className="text-muted-foreground">You do not have permission to view this page.</p>
+                <p className="text-muted-foreground">{t('no_permission')}</p>
             </div>
         );
     }
 
     const handleInvite = async () => {
         if (!inviteEmail.trim()) {
-            toast.error('Please enter a valid email');
+            toast.error(t('invalid_email'));
             return;
         }
 
         const isProjectRole = inviteRole === 'contributor' || inviteRole === 'client';
         if (isProjectRole && !selectedProjectId) {
-            toast.error('Please select a project for this role');
+            toast.error(t('select_project_role'));
             return;
         }
 
@@ -109,7 +109,7 @@ const UserManagement = () => {
             fetchUsers();
         } catch (error: any) {
             console.error("Invite Error", error);
-            toast.error(getApiErrorMessage(error, 'Failed to send invitation'));
+            toast.error(getApiErrorMessage(error, t('invite_error')));
         } finally {
             setInviting(false);
         }
@@ -122,11 +122,11 @@ const UserManagement = () => {
         setDeleting(true);
         try {
             await deleteUser(deleteUserObj.id);
-            toast.success("Project access removed successfully");
+            toast.success(t('remove_access_success'));
             setDeleteUserObj(null);
             fetchUsers();
         } catch (error: any) {
-            toast.error(getApiErrorMessage(error, "Failed to remove project access"));
+            toast.error(getApiErrorMessage(error, t('remove_access_error')));
         } finally {
             setDeleting(false);
         }
@@ -135,7 +135,7 @@ const UserManagement = () => {
     const copyToClipboard = (text: string, type: string) => {
         navigator.clipboard.writeText(text);
         setCopied(type);
-        toast.success(`${type} link copied to clipboard`);
+        toast.success(`${type} ${t('link_copied')}`);
         setTimeout(() => setCopied(null), 2000);
     };
 
@@ -146,7 +146,7 @@ const UserManagement = () => {
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">{t('user_mgmt')}</h1>
-                    <p className="text-sm text-muted-foreground mt-1">Manage organization members and roles.</p>
+                    <p className="text-sm text-muted-foreground mt-1">{t('user_mgmt_subtitle')}</p>
                 </div>
                 <Button
                     onClick={() => setShowInvite(!showInvite)}
@@ -155,7 +155,7 @@ const UserManagement = () => {
                         showInvite ? "bg-secondary text-foreground hover:bg-secondary/80" : "bg-accent text-accent-foreground hover:bg-accent/90"
                     )}
                 >
-                    <UserPlus className="h-4 w-4 mr-2" /> {showInvite ? "Cancel" : "Add Member"}
+                    <UserPlus className="h-4 w-4 mr-2" /> {showInvite ? t('cancel') : t('add_member')}
                 </Button>
             </div>
 
@@ -164,7 +164,7 @@ const UserManagement = () => {
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
                         <div className="md:col-span-4">
                             <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
-                                Email Address
+                                {t('email_address')}
                             </label>
                             <Input
                                 value={inviteEmail}
@@ -176,28 +176,28 @@ const UserManagement = () => {
                         </div>
                         <div className="md:col-span-3">
                             <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
-                                Role
+                                {t('role')}
                             </label>
                             <Select value={inviteRole} onValueChange={v => setInviteRole(v as UserRole)}>
                                 <SelectTrigger className="h-11 rounded-xl">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                    <SelectItem value="contributor">Contributor</SelectItem>
-                                    <SelectItem value="client">Client</SelectItem>
+                                    <SelectItem value="admin">{t('admin')}</SelectItem>
+                                    <SelectItem value="contributor">{t('contributor')}</SelectItem>
+                                    <SelectItem value="client">{t('client')}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className={cn("md:col-span-3 transition-opacity duration-300", isProjectRole ? "opacity-100" : "opacity-0 pointer-events-none")}>
                             <label className="text-xs font-bold text-muted-foreground mb-1.5 block uppercase tracking-wide">
-                                Assign Project
+                                {t('assign_project')}
                             </label>
                             {projects.length > 0 ? (
                                 <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
                                     <SelectTrigger className="h-11 rounded-xl">
-                                        <SelectValue placeholder="Choose Project" />
+                                        <SelectValue placeholder={t('choose_project')} />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {projects.map(p => (
@@ -208,7 +208,7 @@ const UserManagement = () => {
                             ) : (
                                 <div className="h-11 border border-dashed border-border rounded-xl flex items-center px-3 bg-secondary/20">
                                     <AlertCircle className="h-4 w-4 text-amber-500 mr-2" />
-                                    <span className="text-[10px] text-muted-foreground">No projects found</span>
+                                    <span className="text-[10px] text-muted-foreground">{t('no_projects_found')}</span>
                                 </div>
                             )}
                         </div>
@@ -220,7 +220,7 @@ const UserManagement = () => {
                                 className="w-full h-11 bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl font-bold shadow-md shadow-accent/20"
                             >
                                 {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
-                                {inviting ? "..." : "Invite"}
+                                {inviting ? "..." : t('invite')}
                             </Button>
                         </div>
                     </div>
@@ -231,13 +231,13 @@ const UserManagement = () => {
             <div className="mb-8 p-6 rounded-2xl border border-border bg-card shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
                     <div>
-                        <h2 className="text-lg font-bold text-foreground">Project Access Links</h2>
-                        <p className="text-xs text-muted-foreground mt-1">Generate direct login links for internal contributors and external clients.</p>
+                        <h2 className="text-lg font-bold text-foreground">{t('project_access_links')}</h2>
+                        <p className="text-xs text-muted-foreground mt-1">{t('project_access_links_subtitle')}</p>
                     </div>
                     <div className="w-full md:w-64">
                         <Select value={selectedProjectIdForLinks} onValueChange={setSelectedProjectIdForLinks}>
                             <SelectTrigger className="mt-1 w-full bg-secondary outline-none border-none shadow-none rounded-xl h-10">
-                                <SelectValue placeholder="Select a Project" />
+                                <SelectValue placeholder={t('select_project_placeholder')} />
                             </SelectTrigger>
                             <SelectContent className="max-h-[300px]">
                                 {projects.map((proj: any) => (
@@ -261,8 +261,8 @@ const UserManagement = () => {
                                         <Link className="h-4 w-4 text-accent" />
                                     </div>
                                     <div>
-                                        <h3 className="text-sm font-bold text-foreground">Contributor Access</h3>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Role: Contributor</p>
+                                        <h3 className="text-sm font-bold text-foreground">{t('contributor_access')}</h3>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">{t('role')}: {t('contributor')}</p>
                                     </div>
                                 </div>
                                 <Button
@@ -276,7 +276,7 @@ const UserManagement = () => {
                                     }}
                                 >
                                     {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
-                                    {copied === 'Contributor' ? "Copied" : "Copy Link"}
+                                    {copied === 'Contributor' ? t('copied') : t('copy_link')}
                                 </Button>
                             </div>
                         </div>
@@ -288,8 +288,8 @@ const UserManagement = () => {
                                         <Link className="h-4 w-4 text-accent" />
                                     </div>
                                     <div>
-                                        <h3 className="text-sm font-bold text-foreground">Client Access</h3>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Role: Client</p>
+                                        <h3 className="text-sm font-bold text-foreground">{t('client_access')}</h3>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">{t('role')}: {t('client')}</p>
                                     </div>
                                 </div>
                                 <Button
@@ -303,7 +303,7 @@ const UserManagement = () => {
                                     }}
                                 >
                                     {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
-                                    {copied === 'Client' ? "Copied" : "Copy Link"}
+                                    {copied === 'Client' ? t('copied') : t('copy_link')}
                                 </Button>
                             </div>
                         </div>
@@ -311,8 +311,8 @@ const UserManagement = () => {
                 ) : (
                     <div className="flex flex-col items-center justify-center p-8 bg-secondary/30 rounded-xl border border-dashed border-border text-center">
                         <Briefcase className="h-8 w-8 text-muted-foreground opacity-30 mb-2" />
-                        <p className="text-sm font-bold text-foreground">No Project Selected</p>
-                        <p className="text-xs text-muted-foreground mt-1 max-w-sm">Please select a project from the dropdown above to generate direct access links for contributors and clients.</p>
+                        <p className="text-sm font-bold text-foreground">{t('no_project_selected')}</p>
+                        <p className="text-xs text-muted-foreground mt-1 max-w-sm">{t('no_project_selected_subtitle')}</p>
                     </div>
                 )}
             </div>
@@ -324,11 +324,11 @@ const UserManagement = () => {
                     <table className="w-full text-left">
                         <thead>
                             <tr className="border-b border-border bg-secondary/30">
-                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Member</th>
-                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</th>
-                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
-                                <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
+                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('member')}</th>
+                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('role')}</th>
+                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('status')}</th>
+                                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('joined')}</th>
+                                <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -336,14 +336,14 @@ const UserManagement = () => {
                                 <tr key={u.id} className="hover:bg-secondary/20 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
-                                            <span className="text-sm font-bold text-foreground">{u.name || 'Invited User'}</span>
+                                            <span className="text-sm font-bold text-foreground">{u.name || t('invited_user')}</span>
                                             <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                                                 {u.email ? (
                                                     <><Mail className="h-3 w-3" /> {u.email}</>
                                                 ) : u.phone_number ? (
                                                     <><Phone className="h-3 w-3" /> {u.phone_number}</>
                                                 ) : (
-                                                    <span className="italic opacity-50">No contact info</span>
+                                                    <span className="italic opacity-50">{t('no_contact_info')}</span>
                                                 )}
                                             </span>
                                         </div>
@@ -354,10 +354,10 @@ const UserManagement = () => {
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[9px] font-bold uppercase text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10 flex items-center gap-1">
                                                         <Shield className="h-2.5 w-2.5" />
-                                                        {u.role}
+                                                        {t(u.role)}
                                                     </span>
                                                     <span className="text-[10px] font-bold text-muted-foreground">
-                                                        (All Projects)
+                                                        {t('all_projects_label')}
                                                     </span>
                                                 </div>
                                             ) : (
@@ -366,7 +366,7 @@ const UserManagement = () => {
                                                         u.project_members.map((pm: any, idx: number) => (
                                                             <div key={idx} className="flex items-center gap-2">
                                                                 <span className="text-[9px] font-bold uppercase text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10">
-                                                                    {pm.role}
+                                                                    {t(pm.role)}
                                                                 </span>
                                                                 <span className="text-[10px] font-bold text-muted-foreground">
                                                                     {pm.project?.name || 'Project'}
@@ -374,7 +374,7 @@ const UserManagement = () => {
                                                             </div>
                                                         ))
                                                     ) : (
-                                                        <span className="text-[10px] font-bold uppercase text-muted-foreground italic">No projects assigned</span>
+                                                        <span className="text-[10px] font-bold uppercase text-muted-foreground italic">{t('no_projects_assigned')}</span>
                                                     )}
                                                 </>
                                             )}
@@ -383,11 +383,11 @@ const UserManagement = () => {
                                     <td className="px-6 py-4">
                                         {(u.email_verified || u.phone_verified) ? (
                                             <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-600 text-[10px] font-bold uppercase w-fit">
-                                                <CheckCircle2 className="h-3 w-3" /> Verified
+                                                <CheckCircle2 className="h-3 w-3" /> {t('verified')}
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold uppercase w-fit">
-                                                <Clock className="h-3 w-3" /> Pending
+                                                <Clock className="h-3 w-3" /> {t('pending')}
                                             </div>
                                         )}
                                     </td>
@@ -408,7 +408,7 @@ const UserManagement = () => {
                     {users.length === 0 && (
                         <div className="p-12 text-center text-muted-foreground">
                             <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                            No users found in your organization.
+                            {t('no_users_found')}
                         </div>
                     )}
                 </div>
@@ -418,20 +418,20 @@ const UserManagement = () => {
             <Dialog open={!!deleteUserObj} onOpenChange={(open) => !open && setDeleteUserObj(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Remove Project Access?</DialogTitle>
+                        <DialogTitle>{t('remove_access_title')}</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to remove <span className="font-bold text-foreground">{deleteUserObj?.name || deleteUserObj?.email || deleteUserObj?.phone_number}</span> from their project access? The user account will stay in the organization.
+                            {t('remove_access_confirm').replace('{name}', deleteUserObj?.name || deleteUserObj?.email || deleteUserObj?.phone_number || '')}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="ghost" onClick={() => setDeleteUserObj(null)} disabled={deleting}>Cancel</Button>
+                        <Button variant="ghost" onClick={() => setDeleteUserObj(null)} disabled={deleting}>{t('cancel')}</Button>
                         <Button
                             variant="destructive"
                             onClick={handleDelete}
                             disabled={deleting}
                             className="rounded-xl px-6"
                         >
-                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove Access"}
+                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('remove_access_button')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
