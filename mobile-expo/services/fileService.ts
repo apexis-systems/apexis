@@ -178,3 +178,17 @@ export const markFileSeen = async (fileId: string | number) => {
         throw error;
     }
 };
+
+export const uploadConfirmationScreenshot = async (data: FormData) => {
+    try {
+        const response = await PrivateAxios.post('/files/confirm-screenshot', data, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response;
+    } catch (error) {
+        console.error("uploadConfirmationScreenshot Error", error);
+        throw error;
+    }
+};

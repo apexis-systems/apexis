@@ -54,6 +54,147 @@ const updateOrganizationStorage = async (organizationId: number, sizeMb: number)
     }
 };
 
+export const confirmScreenshot = async (req: Request | any, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { project_id, skipActivity, location, tags, assigned_to } = req.body;
+        
+        if (!project_id || project_id === '') {
+            return res.status(400).json({ error: "Project ID is required for confirmation screenshots" });
+        }
+
+        const project = await projects.findByPk(project_id);
+
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
+
+        // Check subscription status and storage limit
+        const subscriptionCheck = await checkSubscriptionStatus(project.organization_id);
+        if (!subscriptionCheck.allowed) {
+            return res.status(subscriptionCheck.status).json({
+                error: subscriptionCheck.message,
+                code: (subscriptionCheck as any).code
+            });
+        }
+
+        const fileSizeMb = (req as any).file.size / (1024 * 1024);
+        const storageCheck = await checkStorageLimit(project.organization_id, fileSizeMb);
+        if (!storageCheck.allowed) {
+            return res.status(storageCheck.status).json({
+                error: storageCheck.message,
+                code: storageCheck.code
+            });
+        }
+
+        // Find or create "Confirmation" folder
+        let folder = await folders.findOne({
+            where: {
+                project_id,
+                name: { [Op.iLike]: 'Confirmation' },
+                folder_type: 'photo'
+            }
+        });
+
+        if (!folder) {
+            folder = await folders.create({
+                project_id,
+                name: 'Confirmation',
+                client_visible: true,
+                folder_type: 'photo',
+                created_by: authUser.user_id
+            });
+            
+            await logActivity({
+                projectId: project_id,
+                userId: authUser.user_id,
+                type: 'edit',
+                description: `Created folder "Confirmation"`,
+                metadata: { folderId: folder.id, type: 'photos' }
+            });
+        }
+
+        const finalFolderId = folder.id;
+        const file_name = (req as any).file.originalname;
+        const file_type = (req as any).file.mimetype;
+        const file_size_mb = Math.max(1, Math.round((req as any).file.size / (1024 * 1024)));
+
+        const s3Key = `projects/${project_id}/folders/${finalFolderId}/${Date.now()}.jpg`;
+
+        let fileBuffer = req.file.buffer;
+        let finalFileName = file_name;
+
+        // Apply compression and watermarking to screenshots (which are images)
+        try {
+            let senderName = authUser.name;
+            if (!senderName) {
+                const sender = await users.findByPk(authUser.user_id);
+                senderName = sender?.name || "Someone";
+            }
+
+            fileBuffer = await addWatermark(req.file.buffer, project.name, senderName);
+            finalFileName = file_name.replace(/\.[^/.]+$/, "") + ".jpg";
+        } catch (sharpErr) {
+            console.error("Watermarking failed, falling back to original", sharpErr);
+        }
+
+        const command = new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+            ContentType: file_type,
+            Body: fileBuffer
+        });
+
+        await s3Client.send(command);
+
+        const newFile = await files.create({
+            folder_id: finalFolderId,
+            project_id: parseInt(project_id, 10),
+            file_url: s3Key,
+            file_name: finalFileName,
+            client_visible: true,
+            file_type,
+            file_size_mb,
+            created_by: authUser.user_id,
+            location: location || null,
+            tags: tags || null,
+            assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
+        });
+
+        // Log Activity
+        if (skipActivity !== 'true' && skipActivity !== true) {
+            await logActivity({
+                projectId: parseInt(project_id, 10),
+                userId: authUser.user_id,
+                type: 'upload_photo',
+                description: `Uploaded confirmation screenshot: ${finalFileName}`,
+                metadata: { folderId: finalFolderId, fileId: newFile.id, type: 'photos' }
+            });
+        }
+
+        // Broadcast live stats update
+        try {
+            const io = getIO();
+            io.to(`project-${project_id}`).emit('project-stats-updated', { projectId: String(project_id) });
+        } catch (e) {
+            console.error('Socket emit error (non-fatal):', e);
+        }
+
+        res.status(200).json({
+            message: "Confirmation screenshot uploaded successfully",
+            file: newFile,
+            folder: folder
+        });
+
+        await updateOrganizationStorage(project.organization_id, file_size_mb);
+    } catch (error) {
+        console.error("Confirm Screenshot Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const uploadFile = async (req: Request | any, res: Response) => {
     try {
         const authUser = (req as any).user;
