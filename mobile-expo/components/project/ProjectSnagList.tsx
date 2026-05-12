@@ -87,6 +87,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
     const [snags, setSnags] = useState<Snag[]>([]);
     const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState<'all' | 'amber' | 'green' | 'red'>('all');
+    const [creatorFilter, setCreatorFilter] = useState<string>('all');
+    const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
     // Photo viewer
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
     const [playingUri, setPlayingUri] = useState<string | null>(null);
@@ -114,6 +117,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const [isCapturing, setIsCapturing] = useState(false);
     const cameraRef = React.useRef<CameraView>(null);
+
+    // Filter Modals
+    const [filterModalVisible, setFilterModalVisible] = useState(false);
+    const [activeFilterType, setActiveFilterType] = useState<'status' | 'creator' | 'assignee' | null>(null);
 
     // Physical Orientation Tracking
     const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
@@ -316,6 +323,13 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             setSubmitting(false);
         }
     };
+
+    const filteredSnags = snags.filter(s => {
+        const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
+        const matchesCreator = creatorFilter === 'all' || String(s.created_by) === creatorFilter;
+        const matchesAssignee = assigneeFilter === 'all' || String(s.assigned_to) === assigneeFilter;
+        return matchesStatus && matchesCreator && matchesAssignee;
+    });
 
     const handleDeleteSnag = async (snagId: number, snagTitle: string) => {
         Alert.alert(t('projectSnags.deleteConfirmTitle') as string, t('projectSnags.deleteConfirmDesc', { title: snagTitle }) as string, [
@@ -537,13 +551,57 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 </Text>
             </TouchableOpacity>
 
+            {/* Dropdown Filters */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                <TouchableOpacity
+                    onPress={() => { setActiveFilterType('status'); setFilterModalVisible(true); }}
+                    style={{
+                        flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+                        backgroundColor: statusFilter !== 'all' ? colors.primary + '10' : colors.surface
+                    }}
+                >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: statusFilter !== 'all' ? colors.primary : colors.textMuted }}>
+                        {statusFilter === 'all' ? t('projectRfi.status') : STATUS_CONFIG[statusFilter].label.split(' ')[0]}
+                    </Text>
+                    <Feather name="chevron-down" size={12} color={statusFilter !== 'all' ? colors.primary : colors.textMuted} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => { setActiveFilterType('creator'); setFilterModalVisible(true); }}
+                    style={{
+                        flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+                        backgroundColor: creatorFilter !== 'all' ? colors.primary + '10' : colors.surface
+                    }}
+                >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: creatorFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
+                        {creatorFilter === 'all' ? t('projectRfi.creator') : (snags.find(s => String(s.created_by) === creatorFilter)?.creator?.name || t('projectRfi.creator')).toUpperCase()}
+                    </Text>
+                    <Feather name="chevron-down" size={12} color={creatorFilter !== 'all' ? colors.primary : colors.textMuted} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => { setActiveFilterType('assignee'); setFilterModalVisible(true); }}
+                    style={{
+                        flex: 1.2, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+                        backgroundColor: assigneeFilter !== 'all' ? colors.primary + '10' : colors.surface
+                    }}
+                >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: assigneeFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
+                        {assigneeFilter === 'all' ? t('projectRfi.assignee') : (snags.find(s => String(s.assigned_to) === assigneeFilter)?.assignee?.name || t('projectRfi.assignee')).toUpperCase()}
+                    </Text>
+                    <Feather name="chevron-down" size={14} color={assigneeFilter !== 'all' ? colors.primary : colors.textMuted} />
+                </TouchableOpacity>
+            </View>
 
             {/* Snag list */}
             {loading ? (
                 <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
             ) : (
                 <View style={{ gap: 8 }}>
-                    {snags.map((snag) => {
+                    {filteredSnags.map((snag) => {
                         const cfg = STATUS_CONFIG[snag.status];
                         const isTarget =
                             initialSnagId && String(snag.id) === String(initialSnagId);
@@ -669,7 +727,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                             </TouchableOpacity>
                         );
                     })}
-                    {snags.length === 0 && (
+                    {filteredSnags.length === 0 && (
                         <View style={{ marginTop: 30, alignItems: "center" }}>
                             <Feather name="check-square" size={32} color={colors.border} />
                             <Text
@@ -682,6 +740,110 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 </View>
             )}
             </ScrollView>
+
+            {/* Filter Picker Modal */}
+            <Modal
+                visible={filterModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setFilterModalVisible(false)}
+            >
+                <TouchableOpacity
+                    activeOpacity={1}
+                    onPress={() => setFilterModalVisible(false)}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+                >
+                    <View style={{ backgroundColor: colors.background, borderRadius: 20, width: '100%', maxWidth: 340, padding: 20, maxHeight: '70%' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
+                                {t('projectRfi.selectFilter', { 
+                                    filter: activeFilterType === 'status' ? t('projectRfi.status') : (activeFilterType === 'creator' ? t('projectRfi.creator') : t('projectRfi.assignee')) 
+                                })}
+                            </Text>
+                            <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+                                <Feather name="x" size={20} color={colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (activeFilterType === 'status') setStatusFilter('all');
+                                    else if (activeFilterType === 'creator') setCreatorFilter('all');
+                                    else setAssigneeFilter('all');
+                                    setFilterModalVisible(false);
+                                }}
+                                style={{
+                                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border
+                                }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{t('All')}</Text>
+                                {(activeFilterType === 'status' ? statusFilter === 'all' : activeFilterType === 'creator' ? creatorFilter === 'all' : assigneeFilter === 'all') && (
+                                    <Feather name="check" size={16} color={colors.primary} />
+                                )}
+                            </TouchableOpacity>
+
+                            {activeFilterType === 'status' && ['amber', 'green', 'red'].map((s: any) => (
+                                <TouchableOpacity
+                                    key={s}
+                                    onPress={() => { setStatusFilter(s); setFilterModalVisible(false); }}
+                                    style={{
+                                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                        paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: STATUS_CONFIG[s as SnagStatus].bg }} />
+                                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{STATUS_CONFIG[s as SnagStatus].label}</Text>
+                                    </View>
+                                    {statusFilter === s && <Feather name="check" size={16} color={colors.primary} />}
+                                </TouchableOpacity>
+                            ))}
+
+                            {activeFilterType === 'creator' && Array.from(new Set(snags.map(s => s.created_by))).map(id => {
+                                const creator = snags.find(s => s.created_by === id)?.creator;
+                                if (!creator) return null;
+                                return (
+                                    <TouchableOpacity
+                                        key={String(id)}
+                                        onPress={() => { setCreatorFilter(String(id)); setFilterModalVisible(false); }}
+                                        style={{
+                                            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                            paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{creator.name}</Text>
+                                        {creatorFilter === String(id) && <Feather name="check" size={16} color={colors.primary} />}
+                                    </TouchableOpacity>
+                                );
+                            })}
+
+                            {activeFilterType === 'assignee' && (
+                                <>
+                                    {Array.from(new Set(snags.map(s => s.assigned_to))).filter(Boolean).map(id => {
+                                        const assignee = snags.find(s => s.assigned_to === id)?.assignee;
+                                        if (!assignee) return null;
+                                        return (
+                                            <TouchableOpacity
+                                                key={String(id)}
+                                                onPress={() => { setAssigneeFilter(String(id)); setFilterModalVisible(false); }}
+                                                style={{
+                                                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                                    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{assignee.name}</Text>
+                                                {assigneeFilter === String(id) && <Feather name="check" size={16} color={colors.primary} />}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </>
+                            )}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
 
             {/* Snag Detail Modal */}
             <Modal 

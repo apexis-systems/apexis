@@ -142,6 +142,7 @@ const ProjectManuals = ({ project }: Props) => {
                   {fmtSize(pickedFile.size / (1024 * 1024))}
                 </p>
               )}
+              <p className="text-[10px] text-muted-foreground mt-1">Max size: 100 MB</p>
             </div>
           </div>
 

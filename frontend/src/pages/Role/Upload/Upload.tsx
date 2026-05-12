@@ -368,6 +368,7 @@ function UploadInner() {
                             {files.length > 0 ? `${files.length} file(s) selected — click to add more` : 'Click to select files (Max 20)'}
                         </p>
                         {files.length === 0 && <p className="text-xs text-muted-foreground mt-1">Documents, images, PDFs — type auto-detected</p>}
+                        <p className="text-[10px] text-muted-foreground mt-1">Max size: 100 MB</p>
                         {files.length > 0 && uploadType && (
                             <p className="text-xs text-accent mt-1">Detected as: {uploadType === 'photos' ? '📷 Photos' : '📄 Documents'}</p>
                         )}
