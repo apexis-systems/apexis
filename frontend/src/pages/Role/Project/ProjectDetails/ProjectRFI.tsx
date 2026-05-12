@@ -493,7 +493,6 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Assignees</SelectItem>
-                                <SelectItem value="null">Unassigned</SelectItem>
                                 {Array.from(new Set(rfis.map(r => r.assignee?.id))).filter(Boolean).map(id => {
                                     const name = rfis.find(r => r.assignee?.id === id)?.assignee?.name;
                                     return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
