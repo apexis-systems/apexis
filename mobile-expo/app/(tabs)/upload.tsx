@@ -33,6 +33,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { uploadFileWithProgress, uploadScans } from '@/services/fileService';
 import { getProjects } from '@/services/projectService';
 import { getFolders, createFolder } from '@/services/folderService';
+import { getProjectMembers } from '@/services/projectService';
 import { createActivity } from '@/services/activityService';
 import { getActiveProjectContext } from '@/utils/projectSelection';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -100,6 +101,8 @@ export default function UploadScreen() {
     const [folders, setFolders] = useState<any[]>([]);
     const [photoLocation, setPhotoLocation] = useState('');
     const [photoTags, setPhotoTags] = useState('');
+    const [assignedTo, setAssignedTo] = useState<string | null>(null);
+    const [projectMembers, setProjectMembers] = useState<any[]>([]);
 
     // State: Folder Browse (for nested selection)
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
@@ -110,6 +113,7 @@ export default function UploadScreen() {
     const [newFolderName, setNewFolderName] = useState('');
     const [creatingFolder, setCreatingFolder] = useState(false);
     const [isLoadingFolders, setIsLoadingFolders] = useState(false);
+    const [memberPickerVisible, setMemberPickerVisible] = useState(false);
 
     // State: Environment warnings
     const [hasWarnedScanner, setHasWarnedScanner] = useState(false);
@@ -295,7 +299,16 @@ export default function UploadScreen() {
 
     useEffect(() => {
         fetchFolders();
+        fetchMembers();
     }, [selectedProject, isDocMode]);
+
+    const fetchMembers = async () => {
+        if (!selectedProject) { setProjectMembers([]); return; }
+        try {
+            const data = await getProjectMembers(selectedProject);
+            setProjectMembers(data.members || []);
+        } catch (err) { console.error("fetchMembers Error", err); }
+    };
 
     // Auto-expand folder tree to show selected folder on initial load
     useEffect(() => {
@@ -644,6 +657,7 @@ export default function UploadScreen() {
                 formData.append('file_name', `Scan_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
                 if (photoLocation) formData.append('location', photoLocation);
                 if (photoTags) formData.append('tags', photoTags);
+                if (assignedTo) formData.append('assigned_to', assignedTo);
                 formData.append('is_doc_mode', String(isDocMode));
                 formData.append('skipActivity', 'true');
 
@@ -686,6 +700,7 @@ export default function UploadScreen() {
                     formData.append('skipActivity', 'true');
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
+                    if (assignedTo) formData.append('assigned_to', assignedTo);
 
                     formData.append('file', {
                         uri: item.asset.uri,
@@ -1249,6 +1264,43 @@ export default function UploadScreen() {
                                         </View>
                                     </View>
                                 )}
+
+                                {isDocMode && (
+                                    <View style={{ marginTop: 20 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                                                <Feather name="user" size={12} color={colors.primary} />
+                                            </View>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('upload.assignTo')}</Text>
+                                            <Text style={{ fontSize: 10, color: colors.textMuted, marginLeft: 4 }}>{t('upload.optional')}</Text>
+                                        </View>
+
+                                        <TouchableOpacity
+                                            onPress={() => setMemberPickerVisible(true)}
+                                            style={{
+                                                height: 50,
+                                                backgroundColor: colors.surface,
+                                                borderRadius: 14,
+                                                borderWidth: 1,
+                                                borderColor: colors.border,
+                                                paddingHorizontal: 16,
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between'
+                                            }}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary + '10', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Feather name="user" size={14} color={colors.primary} />
+                                                </View>
+                                                <Text style={{ fontSize: 14, color: assignedTo ? colors.text : colors.textMuted }}>
+                                                    {assignedTo ? projectMembers.find(m => String(m.user.id) === String(assignedTo))?.user?.name : t('upload.selectAssignee')}
+                                                </Text>
+                                            </View>
+                                            <Feather name="chevron-down" size={18} color={colors.textMuted} />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
                             </View>
                         )}
                     </ScrollView>
@@ -1317,6 +1369,82 @@ export default function UploadScreen() {
                             </View>
                         </View>
                     </View>
+                </Modal>
+                {/* Assignee Picker Modal */}
+                <Modal
+                    visible={memberPickerVisible}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setMemberPickerVisible(false)}
+                >
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        onPress={() => setMemberPickerVisible(false)}
+                        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+                    >
+                        <View style={{ backgroundColor: colors.background, borderRadius: 24, width: '100%', maxWidth: 360, padding: 24, maxHeight: '80%', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                <View>
+                                    <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{t('upload.selectAssignee')}</Text>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>{t('upload.assigneeDescription') || 'Assign this document to a project member'}</Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setMemberPickerVisible(false)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
+                                    <Feather name="x" size={20} color={colors.text} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setAssignedTo(null);
+                                        setMemberPickerVisible(false);
+                                    }}
+                                    style={{
+                                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                        paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4,
+                                        backgroundColor: !assignedTo ? colors.primary + '10' : 'transparent',
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: !assignedTo ? colors.primary : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
+                                            <Feather name="user-x" size={20} color={!assignedTo ? '#fff' : colors.textMuted} />
+                                        </View>
+                                        <Text style={{ fontSize: 15, fontWeight: !assignedTo ? '700' : '600', color: !assignedTo ? colors.primary : colors.text }}>{t('upload.unassigned')}</Text>
+                                    </View>
+                                    {!assignedTo && <Feather name="check-circle" size={20} color={colors.primary} />}
+                                </TouchableOpacity>
+
+                                {projectMembers.map((m) => {
+                                    const isSelected = String(assignedTo) === String(m.user.id);
+                                    return (
+                                        <TouchableOpacity
+                                            key={m.user.id}
+                                            onPress={() => {
+                                                setAssignedTo(String(m.user.id));
+                                                setMemberPickerVisible(false);
+                                            }}
+                                            style={{
+                                                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                                paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4,
+                                                backgroundColor: isSelected ? colors.primary + '10' : 'transparent',
+                                            }}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isSelected ? colors.primary : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
+                                                    <Text style={{ fontSize: 16, fontWeight: '800', color: isSelected ? '#fff' : colors.primary }}>{m.user.name.charAt(0).toUpperCase()}</Text>
+                                                </View>
+                                                <View>
+                                                    <Text style={{ fontSize: 15, fontWeight: isSelected ? '700' : '600', color: isSelected ? colors.primary : colors.text }}>{m.user.name}</Text>
+                                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 1 }}>{m.role || 'Member'}</Text>
+                                                </View>
+                                            </View>
+                                            {isSelected && <Feather name="check-circle" size={20} color={colors.primary} />}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                        </View>
+                    </TouchableOpacity>
                 </Modal>
             </SafeAreaView>
         );

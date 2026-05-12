@@ -527,6 +527,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
           const isSelected = selectedFolders.has(folder.id);
+          const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation';
           return (
             <button
               key={folder.id}
@@ -554,6 +555,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
                         className="rounded-full p-1 hover:bg-secondary transition-colors" 
                         title={t('rename_folder_tip')}
+                        disabled={isConfirmationFolder}
                       >
                         <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
@@ -561,6 +563,8 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         onClick={(e) => handleDeleteFolder(folder, e)} 
                         className="rounded-full p-1 hover:bg-destructive/10 transition-colors" 
                         title={t('delete_folder_tip')}
+                        
+                        disabled={isConfirmationFolder}
                       >
                         <Trash2 className="h-2.5 w-2.5 text-destructive" />
                       </button>
@@ -574,8 +578,8 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
                 </div>
               )}
-              <FolderIcon className="h-8 w-8 text-accent" />
-              <span className="text-[10px] font-medium text-foreground text-center leading-tight line-clamp-2 mt-1">
+              <FolderIcon className={`h-8 w-8 ${isConfirmationFolder ? 'text-orange-500' : 'text-accent'}`} />
+              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
                 {folder.name}
               </span>
               <div className="flex items-center gap-1 mt-0.5">

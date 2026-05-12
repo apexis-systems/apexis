@@ -594,6 +594,11 @@ const translations: Record<Language, Record<string, string>> = {
     upload_btn: 'Upload',
     copy_link_tip: 'Copy link',
     no_manuals_yet: 'No manuals or Checklists yet',
+    assign_to: 'Assign To',
+    optional: '(Optional)',
+    unassigned: 'Unassigned',
+    selectAssignee: 'Select Assignee',
+    assigneeDescription: 'Assign this document to a project member',
   },
   hi: {
     welcome_back: 'वापसी पर स्वागत है',
@@ -1184,6 +1189,11 @@ const translations: Record<Language, Record<string, string>> = {
     upload_btn: 'अपलोड',
     copy_link_tip: 'लिंक कॉपी करें',
     no_manuals_yet: 'अभी तक कोई मैनुअल या चेकलिस्ट नहीं है',
+    assign_to: 'किसे सौंपें',
+    optional: '(वैकल्पिक)',
+    unassigned: 'अनिर्दिष्ट',
+    selectAssignee: 'असाइनी चुनें',
+    assigneeDescription: 'इस दस्तावेज़ को प्रोजेक्ट सदस्य को सौंपें',
   },
   te: {
     welcome_back: 'తిరిగి స్వాగతం',
@@ -1774,6 +1784,11 @@ const translations: Record<Language, Record<string, string>> = {
     upload_btn: 'అప్‌లోడ్',
     copy_link_tip: 'లింక్‌ను కాపీ చేయండి',
     no_manuals_yet: 'ఇంకా మాన్యువల్‌లు లేదా చెక్ లిస్ట్‌లు లేవు',
+    assign_to: 'కేటాయించండి',
+    optional: '(ఐచ్ఛికం)',
+    unassigned: 'అన్అసైన్ చేయబడింది',
+    selectAssignee: 'అసైన్ చేసిన వ్యక్తిని ఎంచుకోండి',
+    assigneeDescription: 'ఈ పత్రాన్ని ప్రాజెక్ట్ సభ్యునికి కేటాయించండి',
   },
 };
 

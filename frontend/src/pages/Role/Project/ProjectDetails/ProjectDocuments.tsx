@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle, Archive } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -25,6 +25,7 @@ import { formatFileSize } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { getFolderRFIs } from '@/services/rfiService';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useSocket } from '@/contexts/SocketContext';
 
 interface ProjectDocumentsProps {
   project: Project;
@@ -35,6 +36,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { socket } = useSocket();
   const [docs, setDocs] = useState<any[]>([]);
   const [selectedFolder, setRawSelectedFolder] = useState<string | null>(
     searchParams?.get('folder') || searchParams?.get('folderId') || null
@@ -134,6 +136,18 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       setActiveFolderTab('files');
     }
   }, [selectedFolder]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('file-seen', (data: { fileId: string | number, seen_at: string }) => {
+      setDocs((prev) => prev.map((d) => String(d.id) === String(data.fileId) ? { ...d, seen_at: data.seen_at } : d));
+    });
+
+    return () => {
+      socket.off('file-seen');
+    };
+  }, [socket]);
 
   const importRFIsForFolder = async () => {
     if (!selectedFolder) return;
@@ -663,6 +677,16 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 <span className="text-[9px] text-muted-foreground mt-0.5">
                   {formatFileSize(doc.file_size_mb)}
                 </span>
+                
+                {doc.assignee && (
+                  <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%]">
+                    <UserIcon className="h-2 w-2 text-muted-foreground" />
+                    <span className="text-[8px] font-medium truncate text-muted-foreground">{doc.assignee.name}</span>
+                    {doc.seen_at && (
+                      <CheckCheck className="h-2.5 w-2.5 text-orange-500 ml-0.5" />
+                    )}
+                  </div>
+                )}
 
                  <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
                       {!isSelectionMode && (
@@ -747,6 +771,15 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       {formatFileSize(doc.file_size_mb)}
                     </p>
                   </button>
+                  {doc.assignee && (
+                    <div className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
+                      <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
+                      <span className="text-[9px] font-medium text-muted-foreground">{doc.assignee.name}</span>
+                      {doc.seen_at && (
+                        <CheckCheck className="h-3 w-3 text-orange-500 ml-0.5" />
+                      )}
+                    </div>
+                  )}
                   {doc.do_not_follow && (
                     <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
                       <ShieldAlert className="h-2.5 w-2.5" /> {t('do_not_follow_tag')}
