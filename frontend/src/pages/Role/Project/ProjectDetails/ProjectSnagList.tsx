@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck } from 'lucide-react';
+import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -59,6 +59,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<'all' | SnagStatus>('all');
+  const [creatorFilter, setCreatorFilter] = useState<string>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
 
   // Form state
   const [newTitle, setNewTitle] = useState('');
@@ -286,19 +291,93 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     } catch { toast.error('Failed to delete snag'); }
   };
 
+  const filteredSnags = snags.filter(s => {
+    const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
+    const matchesCreator = creatorFilter === 'all' || String(s.created_by) === creatorFilter;
+    const matchesAssignee = assigneeFilter === 'all' || String(s.assigned_to) === assigneeFilter;
+    return matchesStatus && matchesCreator && matchesAssignee;
+  });
+
   if (loading) return <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-accent" /></div>;
   if (!project) return null;
 
   return (
     <div className={cn(compact ? '' : 'mt-3')}>
       {!compact && (
-        <Button onClick={() => setShowAdd(true)} className="mb-3 bg-accent text-accent-foreground hover:bg-accent/90 text-xs h-9">
-          <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Snag
-        </Button>
+        <div className="flex flex-col gap-4 mb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-lg font-bold">Project Snags</h2>
+            <Button onClick={() => setShowAdd(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 text-xs h-9">
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Snag
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-secondary/20 rounded-xl border border-border">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Status</label>
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="amber">Waiting for Clearance</SelectItem>
+                  <SelectItem value="green">Completed</SelectItem>
+                  <SelectItem value="red">No Action Required</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Created By</label>
+              <Select value={creatorFilter} onValueChange={setCreatorFilter}>
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder="All Creators" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Creators</SelectItem>
+                  {Array.from(new Set(snags.map(s => s.creator?.id))).filter(Boolean).map(id => {
+                    const name = snags.find(s => s.creator?.id === id)?.creator?.name;
+                    return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Assigned To</label>
+              <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder="All Assignees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assignees</SelectItem>
+                  {Array.from(new Set(snags.map(s => s.assignee?.id))).filter(Boolean).map(id => {
+                    const name = snags.find(s => s.assignee?.id === id)?.assignee?.name;
+                    return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-end pb-0.5">
+              {(statusFilter !== 'all' || creatorFilter !== 'all' || assigneeFilter !== 'all') && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-[10px] h-8 text-muted-foreground hover:text-foreground"
+                  onClick={() => { setStatusFilter('all'); setCreatorFilter('all'); setAssigneeFilter('all'); }}
+                >
+                  Clear all
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="space-y-2">
-        {snags.map((snag) => {
+        {filteredSnags.map((snag) => {
           const cfg = STATUS_CONFIG[snag.status];
           const Icon = cfg.icon;
           const photoUrl = snag.photoDownloadUrl || snag.photo_url;
@@ -378,9 +457,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
         })}
       </div>
 
-      {snags.length === 0 && (
-        <div className="text-center py-6">
-          <p className="text-xs text-muted-foreground">No snags yet</p>
+      {filteredSnags.length === 0 && (
+        <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl">
+          <CheckCircle2 className="h-10 w-10 mx-auto text-muted-foreground/30 mb-4" />
+          <p className="text-sm text-muted-foreground font-medium">No snags found</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">Try changing your filters or add a new snag</p>
         </div>
       )}
 
