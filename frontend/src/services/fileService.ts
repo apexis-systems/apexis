@@ -102,3 +102,13 @@ export const downloadFile = async (fileId: string | number) => {
         throw error;
     }
 };
+
+export const markFileSeen = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.patch(`/files/${fileId}/seen`);
+        return response.data;
+    } catch (error) {
+        console.error("markFileSeen Error", error);
+        throw error;
+    }
+};

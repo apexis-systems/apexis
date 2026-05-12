@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { uploadFile, uploadScans, listFiles, deleteFile, viewFile, bulkUpdateFiles, updateFile, archiveFile, unarchiveFile, downloadFile } from "../controllers/fileController.ts";
+import { uploadFile, uploadScans, listFiles, deleteFile, viewFile, bulkUpdateFiles, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen } from "../controllers/fileController.ts";
 import { verifyToken, isNotClient } from "../middleware/verifyToken.ts";
 import { checkLimit } from "../middleware/checkLimit.ts";
 
@@ -25,6 +25,7 @@ router.put("/bulk", bulkUpdateFiles);
 router.put("/:fileId", updateFile);
 router.put("/:fileId/archive", archiveFile);
 router.put("/:fileId/unarchive", unarchiveFile);
+router.patch("/:fileId/seen", markFileSeen);
 router.delete("/:fileId", deleteFile);
 
 export default router;

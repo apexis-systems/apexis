@@ -59,7 +59,10 @@ export interface ProjectDocument {
     created_by: string;
     client_visible: boolean;
     createdAt: string;
+    assigned_to?: string | number;
+    seen_at?: string;
     creator?: { id: string; name: string };
+    assignee?: { id: string; name: string; email: string };
 }
 
 export interface ProjectPhoto {

@@ -59,7 +59,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { folder_id, project_id, skipActivity, location, tags } = req.body;
+        const { folder_id, project_id, skipActivity, location, tags, assigned_to } = req.body;
         const project = await projects.findByPk(project_id);
 
         if (!project) {
@@ -147,6 +147,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
             location: location || null,
             tags: tags || null,
+            assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
         });
 
         const isImage = file_type.startsWith('image/');
@@ -192,11 +193,12 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             for (const member of members) {
                 notifiedUserIds.add(member.user_id);
                 if (!shouldSkip) {
+                    const isAssignee = assigned_to && String(member.user_id) === String(assigned_to);
                     await sendNotification({
                         userId: member.user_id,
-                        title: isImage ? 'New Photo Uploaded' : 'New File Uploaded',
-                        body: `${senderName} uploaded ${finalFileName}`,
-                        type: notificationType,
+                        title: isAssignee ? 'New File Assigned to You' : (isImage ? 'New Photo Uploaded' : 'New File Uploaded'),
+                        body: isAssignee ? `Project Document Assigned: ${senderName} assigned a new file to you: ${finalFileName}` : `${senderName} uploaded ${finalFileName}`,
+                        type: isAssignee ? 'file_assigned' : notificationType,
                         data: { fileId: String(newFile.id), projectId: String(project_id), folderId: String(finalFolderId), type: activityCategory }
                     });
                 }
@@ -293,11 +295,18 @@ export const listFiles = async (req: Request, res: Response) => {
                     search ? { file_name: { [Op.iLike]: `%${search}%` } } : {}
                 ].filter(Boolean) as any
             },
-            include: [{
-                model: UsersModel,
-                as: 'creator',
-                attributes: ['id', 'name', 'email']
-            }]
+            include: [
+                {
+                    model: UsersModel,
+                    as: 'creator',
+                    attributes: ['id', 'name', 'email']
+                },
+                {
+                    model: UsersModel,
+                    as: 'assignee',
+                    attributes: ['id', 'name', 'email']
+                }
+            ]
         });
 
         let filteredFolders = folderData.map((f: any) => f.toJSON());
@@ -607,7 +616,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { project_id, folder_id, mode, file_name, location, tags, is_doc_mode } = req.body;
+        const { project_id, folder_id, mode, file_name, location, tags, is_doc_mode, assigned_to } = req.body;
         const project = await projects.findByPk(project_id);
         if (!project) {
             return res.status(404).json({ error: "Project not found" });
@@ -757,6 +766,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     created_by: authUser.user_id,
                     location: location || null,
                     tags: tags || null,
+                    assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
                 });
 
                 createdFiles.push(newFile);
@@ -838,6 +848,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     created_by: authUser.user_id,
                     location: location || null,
                     tags: tags || null,
+                    assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
                 });
 
                 createdFiles.push(newFile);
@@ -882,12 +893,13 @@ export const uploadScans = async (req: Request | any, res: Response) => {
 
             for (const member of members) {
                 if (!shouldSkip) {
+                    const isAssignee = assigned_to && String(member.user_id) === String(assigned_to);
                     await sendNotification({
                         userId: member.user_id,
-                        title: notificationTitle,
-                        body: notificationBody,
-                        type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload',
-                        data: { projectId: String(project_id), folderId: String(validFolderId), type: (is_doc_mode === 'true' || is_doc_mode === true) ? 'documents' : 'photos' }
+                        title: isAssignee ? 'New File Assigned to You' : notificationTitle,
+                        body: isAssignee ? `Project Document Assigned: ${senderName} assigned a document to you: ${createdFiles[0].file_name}${fileCount > 1 ? ` (+${fileCount - 1} more)` : ''}` : notificationBody,
+                        type: isAssignee ? 'file_assigned' : ((is_doc_mode === 'true' || is_doc_mode === true) ? 'file_upload' : 'photo_upload'),
+                        data: { projectId: String(project_id), folderId: String(validFolderId), type: scanType }
                     });
                 }
             }
@@ -1045,6 +1057,43 @@ export const unarchiveFile = async (req: Request, res: Response) => {
 
     } catch (error) {
         console.error("Unarchive File Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const markFileSeen = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { fileId } = req.params;
+
+        const file = await files.findByPk(fileId);
+        if (!file) {
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        // Only mark seen if current user is the assignee
+        if (file.assigned_to && String(file.assigned_to) === String(authUser.user_id)) {
+            if (!file.seen_at) {
+                file.seen_at = new Date();
+                await file.save();
+
+                // Broadcast real-time update
+                try {
+                    const io = getIO();
+                    io.to(`project-${file.project_id}`).emit('file-seen', {
+                        fileId: file.id,
+                        projectId: file.project_id,
+                        seen_at: file.seen_at
+                    });
+                } catch (e) {
+                    console.error('Socket emit error:', e);
+                }
+            }
+        }
+
+        res.status(200).json({ success: true, seen_at: file.seen_at });
+    } catch (error) {
+        console.error("Mark File Seen Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

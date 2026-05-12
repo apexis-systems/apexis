@@ -2010,7 +2010,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{t('common.all') || 'All'}</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{t('All')}</Text>
                 {(activeFilterType === 'status' ? statusFilter === 'all' : activeFilterType === 'creator' ? creatorFilter === 'all' : assigneeFilter === 'all') && (
                   <Feather name="check" size={16} color={colors.primary} />
                 )}

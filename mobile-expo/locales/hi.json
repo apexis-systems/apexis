@@ -678,6 +678,11 @@
             "failedToDeleteEmptyFolder": "सामग्री स्थानांतरित कर दी गई, लेकिन खाली फ़ोल्डर हटाने में विफल"
         },
         "upload": {
+            "assignTo": "किसे सौंपें",
+            "optional": "(वैकल्पिक)",
+            "unassigned": "अनिर्दिष्ट",
+            "selectAssignee": "असाइनमेंट चुनें",
+            "assigneeDescription": "इस दस्तावेज़ को प्रोजेक्ट सदस्य को सौंपें",
             "roleNotAllowed": "आपके रोल के लिए अपलोड उपलब्ध नहीं है।",
             "limitReachedTitle": "सीमा समाप्त",
             "limitReachedMessage": "आप एक बार में केवल 20 फ़ाइलें ही चुन सकते हैं।",
