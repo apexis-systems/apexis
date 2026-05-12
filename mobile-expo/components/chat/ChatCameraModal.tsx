@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TouchableOpacity, Modal, Image, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, TouchableOpacity, Modal, Image, ActivityIndicator, Alert, Platform, StyleSheet } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/AppText';
@@ -7,6 +7,18 @@ import { useTheme } from '@/contexts/ThemeContext';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, {
+    useSharedValue,
+    useAnimatedProps,
+    useAnimatedStyle,
+    withSpring,
+    withTiming,
+    runOnJS
+} from 'react-native-reanimated';
+
+const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
+
 
 interface Props {
     visible: boolean;
@@ -21,6 +33,60 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
     const cameraRef = useRef<CameraView>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
+
+    //zoom 
+    const zoomShared = useSharedValue(0); // 0–1 for expo-camera
+    const startZoom = useSharedValue(0);
+    const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+    const zoomLabelOpacity = useSharedValue(0);
+    let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Max real-world zoom multiplier each platform supports
+    const MAX_ZOOM_FACTOR = Platform.OS === 'ios' ? 10 : 10;
+
+    // Converts 0-1 internal value → display string like "2.3x"
+    const toDisplayZoom = (val: number) => {
+        const factor = 1 + val * (MAX_ZOOM_FACTOR - 1);
+        return `${factor.toFixed(1)}x`;
+    };
+
+    const showZoomLabel = (val: number) => {
+        setZoomDisplay(toDisplayZoom(val));
+        zoomLabelOpacity.value = withTiming(1, { duration: 80 });
+        if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
+        zoomHideTimer.current = setTimeout(() => {
+            zoomLabelOpacity.value = withTiming(0, { duration: 400 });
+        }, 1500);
+    };
+
+    const pinchGesture = React.useMemo(() =>
+        Gesture.Pinch()
+            .onStart(() => {
+                startZoom.value = zoomShared.value;
+            })
+            .onUpdate((event) => {
+                // Multiplicative zoom feels natural — same as native camera apps
+                const raw = startZoom.value + (event.scale - 1) * (1 / MAX_ZOOM_FACTOR);
+                const clamped = Math.max(0, Math.min(1, raw));
+                zoomShared.value = clamped;
+                runOnJS(showZoomLabel)(clamped);
+            }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [zoomShared, startZoom]);
+
+    const animatedCameraProps = useAnimatedProps(() => ({
+        zoom: zoomShared.value,
+    }));
+
+    const zoomLabelStyle = useAnimatedStyle(() => ({
+        opacity: zoomLabelOpacity.value,
+    }));
+
+    // Keep for backwards compat (unused after button removal)
+    const handleManualZoom = (z: number) => {
+        zoomShared.value = withSpring(z, { damping: 20, stiffness: 100 });
+        runOnJS(showZoomLabel)(z);
+    };
 
     useEffect(() => {
         if (visible && (!permission || !permission.granted)) {
@@ -61,7 +127,7 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                 // 2. Fix orientation/resolution for iOS/Android consistency
                 const manipActions: any[] = [];
                 if (crop) manipActions.push({ crop });
-                
+
                 const finalWidth = crop ? crop.width : width;
                 const finalHeight = crop ? crop.height : height;
                 const resizeOptions = finalWidth > finalHeight ? { width: 1920 } : { height: 1920 };
@@ -106,7 +172,7 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                     { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
                 );
                 uri = manipulated.uri;
-            } catch (e) {}
+            } catch (e) { }
 
             onCapture({
                 uri,
@@ -126,7 +192,7 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
             statusBarTranslucent={true}
             presentationStyle="fullScreen"
         >
-            <View style={{ flex: 1, backgroundColor: '#000' }}>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                 {/* Header */}
                 <View style={{
                     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
@@ -145,12 +211,36 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                 {permission?.granted ? (
                     <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 95 }}>
                         <View style={{ width: '100%', aspectRatio: 3 / 4, overflow: 'hidden', backgroundColor: '#111' }}>
-                            <CameraView
-                                ref={cameraRef}
-                                style={{ flex: 1 }}
-                                facing={cameraFacing}
-                                ratio="4:3"
-                            />
+                            <GestureDetector gesture={pinchGesture}>
+                                <View collapsable={false} style={StyleSheet.absoluteFill}>
+                                    <AnimatedCameraView
+                                        ref={cameraRef}
+                                        style={{ flex: 1 }}
+                                        facing={cameraFacing}
+                                        ratio="4:3"
+                                        animatedProps={animatedCameraProps}
+                                    />
+                                </View>
+                            </GestureDetector>
+                            {/* Dynamic Zoom Indicator */}
+                            <Animated.View
+                                pointerEvents="none"
+                                style={[
+                                    zoomLabelStyle,
+                                    {
+                                        position: 'absolute',
+                                        bottom: 16,
+                                        alignSelf: 'center',
+                                        backgroundColor: 'rgba(0,0,0,0.55)',
+                                        paddingHorizontal: 14,
+                                        paddingVertical: 6,
+                                        borderRadius: 20,
+                                        zIndex: 30,
+                                    }
+                                ]}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
+                            </Animated.View>
                         </View>
                     </View>
                 ) : (
@@ -204,7 +294,7 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                         <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>Flip</Text>
                     </TouchableOpacity>
                 </View>
-            </View>
+            </GestureHandlerRootView>
         </Modal>
     );
 }

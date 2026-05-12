@@ -13,6 +13,15 @@ import {
     StyleSheet,
     BackHandler
 } from "react-native";
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, {
+    useSharedValue,
+    useAnimatedProps,
+    useAnimatedStyle,
+    withSpring,
+    withTiming,
+    runOnJS
+} from 'react-native-reanimated';
 import { Image } from "expo-image";
 import { Text } from "@/components/ui/AppText";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -24,6 +33,7 @@ import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
+const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Accelerometer } from 'expo-sensors';
 import { Project } from "@/types";
@@ -124,6 +134,61 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
     // Physical Orientation Tracking
     const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
+
+
+    //zoom 
+    const zoomShared = useSharedValue(0); // 0–1 for expo-camera
+    const startZoom = useSharedValue(0);
+    const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+    const zoomLabelOpacity = useSharedValue(0);
+    let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Max real-world zoom multiplier each platform supports
+    const MAX_ZOOM_FACTOR = Platform.OS === 'ios' ? 10 : 10;
+
+    // Converts 0-1 internal value → display string like "2.3x"
+    const toDisplayZoom = (val: number) => {
+        const factor = 1 + val * (MAX_ZOOM_FACTOR - 1);
+        return `${factor.toFixed(1)}x`;
+    };
+
+    const showZoomLabel = (val: number) => {
+        setZoomDisplay(toDisplayZoom(val));
+        zoomLabelOpacity.value = withTiming(1, { duration: 80 });
+        if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
+        zoomHideTimer.current = setTimeout(() => {
+            zoomLabelOpacity.value = withTiming(0, { duration: 400 });
+        }, 1500);
+    };
+
+    const pinchGesture = React.useMemo(() =>
+        Gesture.Pinch()
+            .onStart(() => {
+                startZoom.value = zoomShared.value;
+            })
+            .onUpdate((event) => {
+                // Multiplicative zoom feels natural — same as native camera apps
+                const raw = startZoom.value + (event.scale - 1) * (1 / MAX_ZOOM_FACTOR);
+                const clamped = Math.max(0, Math.min(1, raw));
+                zoomShared.value = clamped;
+                runOnJS(showZoomLabel)(clamped);
+            }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [zoomShared, startZoom]);
+
+    const animatedCameraProps = useAnimatedProps(() => ({
+        zoom: zoomShared.value,
+    }));
+
+    const zoomLabelStyle = useAnimatedStyle(() => ({
+        opacity: zoomLabelOpacity.value,
+    }));
+
+    // Keep for backwards compat (unused after button removal)
+    const handleManualZoom = (z: number) => {
+        zoomShared.value = withSpring(z, { damping: 20, stiffness: 100 });
+        runOnJS(showZoomLabel)(z);
+    };
 
     useEffect(() => {
         let subscription: any;
@@ -363,7 +428,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             formData.append('title', editTitle.trim());
             formData.append('description', editDesc.trim());
             if (editAssignedTo) formData.append('assigned_to', String(editAssignedTo));
-            
+
             if (editPhoto && !editPhoto.startsWith('http')) {
                 const filename = editPhoto.split('/').pop() || `snag.jpg`;
                 const match = /\.(\w+)$/.exec(filename);
@@ -470,7 +535,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
             const { width, height } = photo;
             const manipActions: any[] = [];
-            
+
             // Orientation Correction
             const isLandscapePhysically = physicalOrientation === 90 || physicalOrientation === 270;
             const isPhotoPortrait = height > width;
@@ -532,213 +597,213 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     return (
         <View style={{ flex: 1 }}>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-            {/* Add Snag button */}
-            <TouchableOpacity
-                onPress={openAddSnag}
-                style={{
-                    height: 38,
-                    borderRadius: 10,
-                    backgroundColor: colors.primary,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexDirection: "row",
-                    gap: 6,
-                    marginBottom: 12,
-                }}>
-                <Feather name="plus" size={15} color="#fff" />
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "white" }}>
-                    {t('projectSnags.addSnag')}
-                </Text>
-            </TouchableOpacity>
-
-            {/* Dropdown Filters */}
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                {/* Add Snag button */}
                 <TouchableOpacity
-                    onPress={() => { setActiveFilterType('status'); setFilterModalVisible(true); }}
+                    onPress={openAddSnag}
                     style={{
-                        flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
-                        backgroundColor: statusFilter !== 'all' ? colors.primary + '10' : colors.surface
-                    }}
-                >
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: statusFilter !== 'all' ? colors.primary : colors.textMuted }}>
-                        {statusFilter === 'all' ? t('projectRfi.status') : STATUS_CONFIG[statusFilter].label.split(' ')[0]}
+                        height: 38,
+                        borderRadius: 10,
+                        backgroundColor: colors.primary,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "row",
+                        gap: 6,
+                        marginBottom: 12,
+                    }}>
+                    <Feather name="plus" size={15} color="#fff" />
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: "white" }}>
+                        {t('projectSnags.addSnag')}
                     </Text>
-                    <Feather name="chevron-down" size={12} color={statusFilter !== 'all' ? colors.primary : colors.textMuted} />
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                    onPress={() => { setActiveFilterType('creator'); setFilterModalVisible(true); }}
-                    style={{
-                        flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
-                        backgroundColor: creatorFilter !== 'all' ? colors.primary + '10' : colors.surface
-                    }}
-                >
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: creatorFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
-                        {creatorFilter === 'all' ? t('projectRfi.creator') : (snags.find(s => String(s.created_by) === creatorFilter)?.creator?.name || t('projectRfi.creator')).toUpperCase()}
-                    </Text>
-                    <Feather name="chevron-down" size={12} color={creatorFilter !== 'all' ? colors.primary : colors.textMuted} />
-                </TouchableOpacity>
+                {/* Dropdown Filters */}
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                    <TouchableOpacity
+                        onPress={() => { setActiveFilterType('status'); setFilterModalVisible(true); }}
+                        style={{
+                            flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+                            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+                            backgroundColor: statusFilter !== 'all' ? colors.primary + '10' : colors.surface
+                        }}
+                    >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: statusFilter !== 'all' ? colors.primary : colors.textMuted }}>
+                            {statusFilter === 'all' ? t('projectRfi.status') : STATUS_CONFIG[statusFilter].label.split(' ')[0]}
+                        </Text>
+                        <Feather name="chevron-down" size={12} color={statusFilter !== 'all' ? colors.primary : colors.textMuted} />
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                    onPress={() => { setActiveFilterType('assignee'); setFilterModalVisible(true); }}
-                    style={{
-                        flex: 1.2, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
-                        backgroundColor: assigneeFilter !== 'all' ? colors.primary + '10' : colors.surface
-                    }}
-                >
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: assigneeFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
-                        {assigneeFilter === 'all' ? t('projectRfi.assignee') : (snags.find(s => String(s.assigned_to) === assigneeFilter)?.assignee?.name || t('projectRfi.assignee')).toUpperCase()}
-                    </Text>
-                    <Feather name="chevron-down" size={14} color={assigneeFilter !== 'all' ? colors.primary : colors.textMuted} />
-                </TouchableOpacity>
-            </View>
+                    <TouchableOpacity
+                        onPress={() => { setActiveFilterType('creator'); setFilterModalVisible(true); }}
+                        style={{
+                            flex: 1, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+                            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+                            backgroundColor: creatorFilter !== 'all' ? colors.primary + '10' : colors.surface
+                        }}
+                    >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: creatorFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
+                            {creatorFilter === 'all' ? t('projectRfi.creator') : (snags.find(s => String(s.created_by) === creatorFilter)?.creator?.name || t('projectRfi.creator')).toUpperCase()}
+                        </Text>
+                        <Feather name="chevron-down" size={12} color={creatorFilter !== 'all' ? colors.primary : colors.textMuted} />
+                    </TouchableOpacity>
 
-            {/* Snag list */}
-            {loading ? (
-                <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
-            ) : (
-                <View style={{ gap: 8 }}>
-                    {filteredSnags.map((snag) => {
-                        const cfg = STATUS_CONFIG[snag.status];
-                        const isTarget =
-                            initialSnagId && String(snag.id) === String(initialSnagId);
-                        return (
-                            <TouchableOpacity
-                                key={snag.id}
-                                onPress={() => {
-                                    setSelectedSnag(snag);
-                                }}
-                                style={{
-                                    flexDirection: "row",
-                                    alignItems: "flex-start",
-                                    gap: 10,
-                                    borderRadius: 12,
-                                    borderWidth: isTarget ? 2 : 1,
-                                    borderColor: isTarget ? colors.primary : colors.border,
-                                    backgroundColor: colors.background,
-                                    padding: 12,
-                                    // Soft shadow if targeted
-                                    ...(isTarget
-                                        ? {
-                                            shadowColor: colors.primary,
-                                            shadowOffset: { width: 0, height: 2 },
-                                            shadowOpacity: 0.2,
-                                            shadowRadius: 4,
-                                            elevation: 3,
-                                        }
-                                        : {}),
-                                }}>
+                    <TouchableOpacity
+                        onPress={() => { setActiveFilterType('assignee'); setFilterModalVisible(true); }}
+                        style={{
+                            flex: 1.2, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+                            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+                            backgroundColor: assigneeFilter !== 'all' ? colors.primary + '10' : colors.surface
+                        }}
+                    >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: assigneeFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
+                            {assigneeFilter === 'all' ? t('projectRfi.assignee') : (snags.find(s => String(s.assigned_to) === assigneeFilter)?.assignee?.name || t('projectRfi.assignee')).toUpperCase()}
+                        </Text>
+                        <Feather name="chevron-down" size={14} color={assigneeFilter !== 'all' ? colors.primary : colors.textMuted} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Snag list */}
+                {loading ? (
+                    <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
+                ) : (
+                    <View style={{ gap: 8 }}>
+                        {filteredSnags.map((snag) => {
+                            const cfg = STATUS_CONFIG[snag.status];
+                            const isTarget =
+                                initialSnagId && String(snag.id) === String(initialSnagId);
+                            return (
                                 <TouchableOpacity
+                                    key={snag.id}
                                     onPress={() => {
-                                        if (String(snag.assigned_to) === String(user?.id)) {
-                                            handleUpdateStatus(snag);
-                                        } else {
-                                            Alert.alert(t('projectSnags.permissionDenied') as string, t('projectSnags.onlyAssignedUpdate') as string);
-                                        }
+                                        setSelectedSnag(snag);
                                     }}
-
                                     style={{
-                                        width: 26,
-                                        height: 26,
-                                        borderRadius: 13,
-                                        backgroundColor: cfg.bg,
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        marginTop: 1,
-                                        opacity: String(snag.assigned_to) === String(user?.id) ? 1 : 0.6,
+                                        flexDirection: "row",
+                                        alignItems: "flex-start",
+                                        gap: 10,
+                                        borderRadius: 12,
+                                        borderWidth: isTarget ? 2 : 1,
+                                        borderColor: isTarget ? colors.primary : colors.border,
+                                        backgroundColor: colors.background,
+                                        padding: 12,
+                                        // Soft shadow if targeted
+                                        ...(isTarget
+                                            ? {
+                                                shadowColor: colors.primary,
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.2,
+                                                shadowRadius: 4,
+                                                elevation: 3,
+                                            }
+                                            : {}),
                                     }}>
-                                    <Feather name={cfg.icon} size={13} color="#fff" />
-                                </TouchableOpacity>
-                                <View style={{ flex: 1 }}>
-                                    <Text
-                                        style={{
-                                            fontSize: 12,
-                                            fontWeight: "700",
-                                            color: colors.text,
-                                        }}>
-                                        {snag.title}
-                                    </Text>
-                                    {snag.description ? (
-                                        <Text
-                                            numberOfLines={2}
-                                            style={{
-                                                fontSize: 10,
-                                                color: colors.textMuted,
-                                                marginTop: 2,
-                                            }}>
-                                            {snag.description}
-                                        </Text>
-                                    ) : null}
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>
-                                            {t('projectSnags.to')}: <Text style={{ color: colors.text, fontWeight: '600' }}>{snag.assignee?.name || t('projectSnags.unassigned')}</Text>
-                                        </Text>
-                                        {snag.seen_at && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (String(snag.assigned_to) === String(user?.id)) {
+                                                handleUpdateStatus(snag);
+                                            } else {
+                                                Alert.alert(t('projectSnags.permissionDenied') as string, t('projectSnags.onlyAssignedUpdate') as string);
+                                            }
+                                        }}
 
-                                            <Ionicons name="checkmark-done" size={14} color="#f97316" />
-                                        )}
-                                    </View>
-                                    {snag.response ? (
-                                        <View
+                                        style={{
+                                            width: 26,
+                                            height: 26,
+                                            borderRadius: 13,
+                                            backgroundColor: cfg.bg,
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            marginTop: 1,
+                                            opacity: String(snag.assigned_to) === String(user?.id) ? 1 : 0.6,
+                                        }}>
+                                        <Feather name={cfg.icon} size={13} color="#fff" />
+                                    </TouchableOpacity>
+                                    <View style={{ flex: 1 }}>
+                                        <Text
                                             style={{
-                                                flexDirection: "row",
-                                                alignItems: "center",
-                                                gap: 4,
-                                                marginTop: 4,
+                                                fontSize: 12,
+                                                fontWeight: "700",
+                                                color: colors.text,
                                             }}>
-                                            <Feather name="message-square" size={10} color={colors.primary} />
+                                            {snag.title}
+                                        </Text>
+                                        {snag.description ? (
                                             <Text
-                                                numberOfLines={1}
-                                                style={{ fontSize: 9, color: colors.textMuted }}>
-                                                {snag.response}
+                                                numberOfLines={2}
+                                                style={{
+                                                    fontSize: 10,
+                                                    color: colors.textMuted,
+                                                    marginTop: 2,
+                                                }}>
+                                                {snag.description}
                                             </Text>
-                                            {snag.responsePhotoUrls && snag.responsePhotoUrls.length > 0 && (
-                                                <Text style={{ fontSize: 9, color: colors.primary, fontWeight: 'bold' }}>+{snag.responsePhotoUrls.length} {t('projectSnags.photos')}</Text>
+                                        ) : null}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                                            <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                                                {t('projectSnags.to')}: <Text style={{ color: colors.text, fontWeight: '600' }}>{snag.assignee?.name || t('projectSnags.unassigned')}</Text>
+                                            </Text>
+                                            {snag.seen_at && (
+
+                                                <Ionicons name="checkmark-done" size={14} color="#f97316" />
                                             )}
                                         </View>
+                                        {snag.response ? (
+                                            <View
+                                                style={{
+                                                    flexDirection: "row",
+                                                    alignItems: "center",
+                                                    gap: 4,
+                                                    marginTop: 4,
+                                                }}>
+                                                <Feather name="message-square" size={10} color={colors.primary} />
+                                                <Text
+                                                    numberOfLines={1}
+                                                    style={{ fontSize: 9, color: colors.textMuted }}>
+                                                    {snag.response}
+                                                </Text>
+                                                {snag.responsePhotoUrls && snag.responsePhotoUrls.length > 0 && (
+                                                    <Text style={{ fontSize: 9, color: colors.primary, fontWeight: 'bold' }}>+{snag.responsePhotoUrls.length} {t('projectSnags.photos')}</Text>
+                                                )}
+                                            </View>
 
+                                        ) : null}
+                                    </View>
+
+                                    {snag.photoDownloadUrl || snag.photo_url ? (
+                                        <TouchableOpacity
+                                            onPress={() =>
+                                                setViewPhoto(snag.photoDownloadUrl || snag.photo_url!)
+                                            }
+                                            style={{
+                                                width: 56,
+                                                height: 56,
+                                                borderRadius: 8,
+                                                overflow: "hidden",
+                                                borderWidth: 1,
+                                                borderColor: colors.border,
+                                            }}>
+                                            <Image
+                                                source={snag.photoDownloadUrl || snag.photo_url}
+                                                style={{ width: "100%", height: "100%" }}
+                                                contentFit="cover"
+                                                transition={200}
+                                            />
+                                        </TouchableOpacity>
                                     ) : null}
-                                </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                        {filteredSnags.length === 0 && (
+                            <View style={{ marginTop: 30, alignItems: "center" }}>
+                                <Feather name="check-square" size={32} color={colors.border} />
+                                <Text
+                                    style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>
+                                    {t('projectSnags.noSnags')}
+                                </Text>
+                            </View>
 
-                                {snag.photoDownloadUrl || snag.photo_url ? (
-                                    <TouchableOpacity
-                                        onPress={() =>
-                                            setViewPhoto(snag.photoDownloadUrl || snag.photo_url!)
-                                        }
-                                        style={{
-                                            width: 56,
-                                            height: 56,
-                                            borderRadius: 8,
-                                            overflow: "hidden",
-                                            borderWidth: 1,
-                                            borderColor: colors.border,
-                                        }}>
-                                        <Image
-                                            source={snag.photoDownloadUrl || snag.photo_url}
-                                            style={{ width: "100%", height: "100%" }}
-                                            contentFit="cover"
-                                            transition={200}
-                                        />
-                                    </TouchableOpacity>
-                                ) : null}
-                            </TouchableOpacity>
-                        );
-                    })}
-                    {filteredSnags.length === 0 && (
-                        <View style={{ marginTop: 30, alignItems: "center" }}>
-                            <Feather name="check-square" size={32} color={colors.border} />
-                            <Text
-                                style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>
-                                {t('projectSnags.noSnags')}
-                            </Text>
-                        </View>
-
-                    )}
-                </View>
-            )}
+                        )}
+                    </View>
+                )}
             </ScrollView>
 
             {/* Filter Picker Modal */}
@@ -756,8 +821,8 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                     <View style={{ backgroundColor: colors.background, borderRadius: 20, width: '100%', maxWidth: 340, padding: 20, maxHeight: '70%' }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
-                                {t('projectRfi.selectFilter', { 
-                                    filter: activeFilterType === 'status' ? t('projectRfi.status') : (activeFilterType === 'creator' ? t('projectRfi.creator') : t('projectRfi.assignee')) 
+                                {t('projectRfi.selectFilter', {
+                                    filter: activeFilterType === 'status' ? t('projectRfi.status') : (activeFilterType === 'creator' ? t('projectRfi.creator') : t('projectRfi.assignee'))
                                 })}
                             </Text>
                             <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
@@ -846,530 +911,579 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             </Modal>
 
             {/* Snag Detail Modal */}
-            <Modal 
-                visible={!!selectedSnag} 
-                animationType="slide" 
-                transparent 
+            <Modal
+                visible={!!selectedSnag}
+                animationType="slide"
+                transparent
                 presentationStyle="overFullScreen"
                 onRequestClose={() => { setSelectedSnag(null); setIsEditing(false); setEditAudio(null); setRemoveEditAudio(false); setResponseComment(""); setResponsePhotos([]); }}
             >
                 <KeyboardAvoidingView
-                          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                          style={{ flex: 1 }}
-                        >
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ flex: 1 }}
+                >
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
                         <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '85%', padding: 16 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{isEditing ? t('projectSnags.editSnag') : t('projectSnags.snagDetails')}</Text>
-                            <TouchableOpacity onPress={() => { setSelectedSnag(null); setIsEditing(false); setEditAudio(null); setRemoveEditAudio(false); setResponseComment(""); setResponsePhotos([]); }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{isEditing ? t('projectSnags.editSnag') : t('projectSnags.snagDetails')}</Text>
+                                <TouchableOpacity onPress={() => { setSelectedSnag(null); setIsEditing(false); setEditAudio(null); setRemoveEditAudio(false); setResponseComment(""); setResponsePhotos([]); }}>
 
-                                <Feather name="x" size={24} color={colors.text} />
-                            </TouchableOpacity>
-                        </View>
+                                    <Feather name="x" size={24} color={colors.text} />
+                                </TouchableOpacity>
+                            </View>
 
-                        {selectedSnag && (
-                            <ScrollView showsVerticalScrollIndicator={false}>
-                                {isEditing ? (
-                                    <View style={{ gap: 15, paddingBottom: 40 }}>
-                                        <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.titleLabel')}</Text>
-                                            <TextInput
-                                                value={editTitle}
-                                                onChangeText={setEditTitle}
-                                                placeholder={t('projectSnags.titlePlaceholder') as string}
-                                                style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, color: colors.text, borderWidth: 1, borderColor: colors.border }}
-                                            />
-                                        </View>
-
-
-                                        <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.descriptionLabel')}</Text>
-                                            <TextInput
-                                                value={editDesc}
-                                                onChangeText={setEditDesc}
-                                                placeholder={t('projectSnags.descriptionPlaceholder') as string}
-                                                multiline
-                                                style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, color: colors.text, borderWidth: 1, borderColor: colors.border, minHeight: 80, textAlignVertical: 'top' }}
-                                            />
-                                        </View>
-
-
-                                        <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.assignedToLabel')}</Text>
-
-                                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                                    {assignees.map(a => (
-                                                        <TouchableOpacity
-                                                            key={a.id}
-                                                            onPress={() => setEditAssignedTo(a.id)}
-                                                            style={{
-                                                                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
-                                                                backgroundColor: editAssignedTo === a.id ? colors.primary : colors.surface,
-                                                                borderWidth: 1, borderColor: colors.border
-                                                            }}
-                                                        >
-                                                            <Text style={{ fontSize: 11, color: editAssignedTo === a.id ? '#fff' : colors.text }}>{a.name}</Text>
-                                                        </TouchableOpacity>
-                                                    ))}
-                                                </View>
-                                            </ScrollView>
-                                        </View>
-
-                                        <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectSnags.photoLabel')}</Text>
-
-                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                                                {editPhoto && (
-                                                    <View style={{ position: 'relative' }}>
-                                                        <Image source={{ uri: editPhoto }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
-                                                        <TouchableOpacity
-                                                            onPress={() => setEditPhoto(null)}
-                                                            style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
-                                                        >
-                                                            <Feather name="x" size={14} color="#fff" />
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity
-                                                            onPress={() => setAnnotatingImageIndex(-1)}
-                                                            style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
-                                                        >
-                                                            <Feather name="edit-2" size={12} color="#fff" />
-                                                        </TouchableOpacity>
-                                                    </View>
-                                                )}
-                                                <TouchableOpacity
-                                                    onPress={pickEditPhoto}
-                                                    style={{
-                                                        width: 80, height: 80, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
-                                                        alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
-                                                    }}
-                                                >
-                                                    <Feather name="camera" size={24} color={colors.textMuted} />
-                                                </TouchableOpacity>
-                                            </View>
-                                        </View>
-
-                                        <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectSnags.voiceNoteLabel')}</Text>
-
-                                            {editAudio ? (
-                                                <View style={{ position: 'relative', padding: 12, paddingRight: 32, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
-                                                    </View>
-                                                    <VoiceNotePlayer uri={editAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                                    <TouchableOpacity
-                                                        onPress={() => { setEditAudio(null); setRemoveEditAudio(true); }}
-                                                        style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
-                                                    >
-                                                        <Feather name="x" size={14} color="#fff" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            ) : (
-                                                <VoiceNoteRecorder
-                                                    colors={colors}
-                                                    onRecordingStateChange={() => {}}
-                                                    onSend={(uri) => { setEditAudio(uri); setRemoveEditAudio(false); }}
+                            {selectedSnag && (
+                                <ScrollView showsVerticalScrollIndicator={false}>
+                                    {isEditing ? (
+                                        <View style={{ gap: 15, paddingBottom: 40 }}>
+                                            <View>
+                                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.titleLabel')}</Text>
+                                                <TextInput
+                                                    value={editTitle}
+                                                    onChangeText={setEditTitle}
+                                                    placeholder={t('projectSnags.titlePlaceholder') as string}
+                                                    style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, color: colors.text, borderWidth: 1, borderColor: colors.border }}
                                                 />
-                                            )}
-                                        </View>
-
-                                        <TouchableOpacity
-                                            onPress={handleUpdateSnag}
-                                            disabled={submitting}
-                                            style={{ backgroundColor: colors.primary, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 10, opacity: submitting ? 0.7 : 1 }}
-                                        >
-                                            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectSnags.saveChanges')}</Text>}
-                                        </TouchableOpacity>
-
-
-                                        <TouchableOpacity
-                                            onPress={() => setIsEditing(false)}
-                                            style={{ height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
-                                        >
-                                            <Text style={{ color: colors.text, fontWeight: '600' }}>{t('projectSnags.cancel')}</Text>
-                                        </TouchableOpacity>
-
-                                    </View>
-                                ) : (
-                                    <View style={{ gap: 15, paddingBottom: 40 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <View style={{ backgroundColor: STATUS_CONFIG[selectedSnag.status].bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>{STATUS_CONFIG[selectedSnag.status].label}</Text>
                                             </View>
-                                            {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id)) && !selectedSnag.response && !selectedSnag.response_photos && (
-                                                <View style={{ flexDirection: 'row', gap: 12 }}>
-                                                    <TouchableOpacity onPress={() => startEditing(selectedSnag)}>
-                                                        <Feather name="edit" size={18} color={colors.primary} />
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity onPress={() => handleDeleteSnag(selectedSnag.id, selectedSnag.title)}>
-                                                        <Feather name="trash-2" size={18} color="#ef4444" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            )}
-                                        </View>
 
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, flex: 1 }}>{selectedSnag.title}</Text>
-                                            {selectedSnag.seen_at && (
-                                                <Ionicons name="checkmark-done" size={18} color="#f97316" />
-                                            )}
-                                        </View>
-                                        <Text style={{ fontSize: 13, color: colors.textMuted }}>{selectedSnag.description}</Text>
 
-                                        {(selectedSnag.photoDownloadUrl || selectedSnag.photo_url) && (
-                                            <TouchableOpacity onPress={() => setViewPhoto(selectedSnag.photoDownloadUrl || selectedSnag.photo_url!)}>
-                                                <Image
-                                                    source={selectedSnag.photoDownloadUrl || selectedSnag.photo_url}
-                                                    style={{ width: '100%', height: 200, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+                                            <View>
+                                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.descriptionLabel')}</Text>
+                                                <TextInput
+                                                    value={editDesc}
+                                                    onChangeText={setEditDesc}
+                                                    placeholder={t('projectSnags.descriptionPlaceholder') as string}
+                                                    multiline
+                                                    style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 10, color: colors.text, borderWidth: 1, borderColor: colors.border, minHeight: 80, textAlignVertical: 'top' }}
                                                 />
-                                            </TouchableOpacity>
-                                        )}
-
-                                        {(selectedSnag.audioDownloadUrl || selectedSnag.audio_url) && (
-                                            <View style={{ padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceNoteHeader').toUpperCase()}</Text>
-                                                </View>
-                                                <VoiceNotePlayer uri={selectedSnag.audioDownloadUrl || selectedSnag.audio_url!} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                            </View>
-                                        )}
-
-                                        <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, gap: 8 }}>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.assignedToLabel')}</Text>
-                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{selectedSnag.assignee?.name || t('projectSnags.unassigned')}</Text>
                                             </View>
 
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.createdByLabel')}</Text>
-                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{selectedSnag.creator?.name || '—'}</Text>
-                                            </View>
 
-                                        </View>
+                                            <View>
+                                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 5 }}>{t('projectSnags.assignedToLabel')}</Text>
 
-                                        {(selectedSnag.response || (selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
-                                            <View style={{ padding: 12, backgroundColor: colors.primary + '08', borderRadius: 12, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, marginBottom: 4, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
-                                                {selectedSnag.response ? <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text> : null}
-
-                                                {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
-                                                    <View style={{ marginTop: 10, gap: 10 }}>
-                                                        {/* Images Row */}
-                                                        {selectedSnag.responsePhotoUrls.filter(url => !isAudio(url)).length > 0 && (
-                                                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                                                    {selectedSnag.responsePhotoUrls.filter(url => !isAudio(url)).map((url, i) => (
-                                                                        <TouchableOpacity key={i} onPress={() => setViewPhoto(url)} style={{ position: 'relative' }}>
-                                                                            <Image source={{ uri: url }} style={{ width: 80, height: 80, borderRadius: 8 }} />
-                                                                            {String(selectedSnag.assigned_to) === String(user?.id) && (
-                                                                                <TouchableOpacity
-                                                                                    onPress={() => {
-                                                                                        const absoluteIdx = selectedSnag.responsePhotoUrls!.indexOf(url);
-                                                                                        const key = selectedSnag.response_photos?.[absoluteIdx];
-                                                                                        if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                                                                        const newUrls = [...selectedSnag.responsePhotoUrls!];
-                                                                                        const newPhotos = [...(selectedSnag.response_photos || [])];
-                                                                                        newUrls.splice(absoluteIdx, 1);
-                                                                                        newPhotos.splice(absoluteIdx, 1);
-                                                                                        setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
-                                                                                    }}
-                                                                                    style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
-                                                                                >
-                                                                                    <Feather name="x" size={10} color="#fff" />
-                                                                                </TouchableOpacity>
-                                                                            )}
-                                                                        </TouchableOpacity>
-                                                                    ))}
-                                                                </View>
-                                                            </ScrollView>
-                                                        )}
-                                                        
-                                                        {/* Audios Column */}
-                                                        {selectedSnag.responsePhotoUrls.filter(url => isAudio(url)).map((url, i) => (
-                                                            <View key={i} style={{
-                                                                padding: 10, borderWidth: 1, borderColor: colors.primary + '20', borderRadius: 12,
-                                                                backgroundColor: colors.background, width: '100%', position: 'relative'
-                                                            }}>
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceResponseHeader').toUpperCase()}</Text>
-                                                                </View>
-
-                                                                <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                                                {String(selectedSnag.assigned_to) === String(user?.id) && (
-                                                                    <TouchableOpacity
-                                                                        onPress={() => {
-                                                                            const audioUrls = selectedSnag.responsePhotoUrls!.filter(url => isAudio(url));
-                                                                            const indexInAll = selectedSnag.responsePhotoUrls!.indexOf(url);
-                                                                            const key = selectedSnag.response_photos?.[indexInAll];
-                                                                            if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                                                            const newUrls = [...selectedSnag.responsePhotoUrls!];
-                                                                            newUrls.splice(indexInAll, 1);
-                                                                            const newPhotos = [...(selectedSnag.response_photos || [])];
-                                                                            newPhotos.splice(indexInAll, 1);
-                                                                            setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
-                                                                        }}
-                                                                        style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
-                                                                    >
-                                                                        <Feather name="x" size={10} color="#fff" />
-                                                                    </TouchableOpacity>
-                                                                )}
-                                                            </View>
-                                                        ))}
-                                                    </View>
-                                                )}
-                                            </View>
-                                        )}
-
-                                        {/* Response Section */}
-                                        {String(selectedSnag.assigned_to) === String(user?.id) && (
-                                            <View style={{ gap: 10, marginTop: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
-                                                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{selectedSnag.response ? t('projectSnags.updateResponse') : t('projectSnags.provideResponse')}</Text>
-
-                                                
-                                                {selectedSnag.status !== 'green' ? (
-                                                    <>
-                                                        <TextInput
-                                                            value={responseComment}
-                                                            onChangeText={setResponseComment}
-                                                            placeholder={t('projectSnags.responsePlaceholder') as string}
-                                                            placeholderTextColor={colors.textMuted}
-
-                                                            multiline
-                                                            style={{
-                                                                minHeight: 70,
-                                                                backgroundColor: colors.surface,
-                                                                borderRadius: 10,
-                                                                padding: 10,
-                                                                color: colors.text,
-                                                                borderWidth: 1,
-                                                                borderColor: colors.border,
-                                                                textAlignVertical: 'top',
-                                                                fontSize: 13
-                                                            }}
-                                                        />
-                                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                                                            {responsePhotos.map((uri, i) => (
-                                                                <View key={i} style={{ position: 'relative' }}>
-                                                                    {isAudio(uri) ? (
-                                                                        <View style={{
-                                                                            padding: 10, paddingRight: 32, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
-                                                                            backgroundColor: colors.surface, width: SCREEN_W - 80, minHeight: 64, justifyContent: 'center'
-                                                                        }}>
-                                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                                                <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceResponseHeader').toUpperCase()}</Text>
-                                                                            </View>
-                                                                            <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                                                        </View>
-                                                                    ) : (
-                                                                        <Image source={{ uri }} style={{ width: 70, height: 70, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} />
-                                                                    )}
-                                                                    <TouchableOpacity
-                                                                        onPress={() => setResponsePhotos(prev => prev.filter((_, idx) => idx !== i))}
-                                                                        style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', borderRadius: 10, padding: 2, zIndex: 10 }}
-                                                                    >
-                                                                        <Feather name="x" size={12} color="#fff" />
-                                                                    </TouchableOpacity>
-                                                                    {!isAudio(uri) && (
-                                                                        <TouchableOpacity
-                                                                            onPress={() => setAnnotatingImageIndex(i)}
-                                                                            style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 5, borderRadius: 8 }}
-                                                                        >
-                                                                            <Feather name="edit-2" size={10} color="#fff" />
-                                                                        </TouchableOpacity>
-                                                                    )}
-                                                                </View>
-                                                            ))}
-                                                            {!hasPendingResponseImage && !hasExistingResponseImage && (
-                                                                <TouchableOpacity 
-                                                                    onPress={pickResponsePhotos} 
-                                                                    style={{ 
-                                                                        width: 70, height: 70, borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, 
-                                                                        alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface 
-                                                                    }}
-                                                                >
-                                                                    <Feather name="camera" size={20} color={colors.textMuted} />
-                                                                </TouchableOpacity>
-                                                            )}
-                                                        </View>
-                                                        
-                                                        <View style={{ marginTop: 12, marginBottom: 8 }}>
-                                                            {!hasPendingResponseAudio && !hasExistingResponseAudio && (
-                                                                <VoiceNoteRecorder
-                                                                    colors={colors}
-                                                                    onRecordingStateChange={() => {}}
-                                                                    onSend={(uri) => {
-                                                                        setResponsePhotos(prev => {
-                                                                            const filtered = prev.filter(p => !isAudio(p));
-                                                                            return [...filtered, uri];
-                                                                        });
-                                                                    }}
-                                                                />
-                                                            )}
-                                                        </View>
-
-                                                        <TouchableOpacity
-                                                            onPress={() => handleUpdateStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos, removedResponsePhotos)}
-                                                            disabled={submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
-                                                            style={{
-                                                                backgroundColor: colors.primary,
-                                                                height: 42,
-                                                                borderRadius: 10,
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                opacity: (submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)) ? 0.6 : 1
-                                                            }}
-                                                        >
-                                                            {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('projectSnags.submitResponse')}</Text>}
-                                                        </TouchableOpacity>
-
-                                                    </>
-                                                ) : (
-                                                    <View style={{ padding: 10, backgroundColor: colors.surface, borderRadius: 8, alignItems: 'center' }}>
-                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.completedSnagNoUpdate')}</Text>
-                                                    </View>
-                                                )}
-
-
-                                                <View style={{ marginTop: 5, gap: 8 }}>
-                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('projectSnags.updateStatusHeader')}</Text>
+                                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                                     <View style={{ flexDirection: 'row', gap: 8 }}>
-                                                        {STATUS_CYCLE.map(s => (
+                                                        {assignees.map(a => (
                                                             <TouchableOpacity
-                                                                key={s}
-                                                                onPress={() => handleUpdateStatus(selectedSnag, s, responseComment, responsePhotos, removedResponsePhotos)}
+                                                                key={a.id}
+                                                                onPress={() => setEditAssignedTo(a.id)}
                                                                 style={{
-                                                                    flex: 1, height: 34, borderRadius: 8,
-                                                                    backgroundColor: selectedSnag.status === s ? STATUS_CONFIG[s].bg : colors.surface,
-                                                                    alignItems: 'center', justifyContent: 'center',
+                                                                    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+                                                                    backgroundColor: editAssignedTo === a.id ? colors.primary : colors.surface,
                                                                     borderWidth: 1, borderColor: colors.border
                                                                 }}
                                                             >
-                                                                <Text style={{ fontSize: 10, fontWeight: '700', color: selectedSnag.status === s ? '#fff' : colors.text }}>{STATUS_CONFIG[s].label.split(' ')[0]}</Text>
+                                                                <Text style={{ fontSize: 11, color: editAssignedTo === a.id ? '#fff' : colors.text }}>{a.name}</Text>
                                                             </TouchableOpacity>
                                                         ))}
                                                     </View>
-                                                </View>
-                                            </View>
-                                        )}
-                                    </View>
-                                )}
-                            </ScrollView>
-                        )}
-
-                        {/* ── Secondary Modals (Nested for iOS compatibility) ──────────────── */}
-                        <FullScreenImageModal
-                            visible={!!viewPhoto}
-                            onClose={() => setViewPhoto(null)}
-                            uri={viewPhoto}
-                        />
-
-                        {/* Camera Modal */}
-                        <Modal
-                            visible={cameraVisible}
-                            animationType="slide"
-                            transparent={false}
-                            presentationStyle="fullScreen"
-                            statusBarTranslucent={true}
-                            onRequestClose={() => setCameraVisible(false)}
-                        >
-                            <View style={{ flex: 1, backgroundColor: '#000' }}>
-                                <View style={{ flex: 1 }}>
-                                    {cameraPermission?.granted && cameraReady ? (
-                                        <>
-                                            <View style={{
-                                                width: SCREEN_W,
-                                                height: CAMERA_HEIGHT,
-                                                overflow: 'hidden',
-                                                marginTop: Math.max(insets.top, 20) + 60,
-                                            }}>
-                                                <CameraView
-                                                    key={cameraSessionKey}
-                                                    style={StyleSheet.absoluteFill}
-                                                    facing="back"
-                                                    ref={cameraRef}
-                                                    ratio="4:3"
-                                                />
+                                                </ScrollView>
                                             </View>
 
-                                            <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
-                                                <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
-                                                    <Feather name="x" size={24} color="#fff" />
-                                                </TouchableOpacity>
-                                                <Text style={cameraStyles.headerTitle}>{t('projectSnags.photoLabel')}</Text>
-                                                <View style={{ width: 60 }} />
-                                            </View>
+                                            <View>
+                                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectSnags.photoLabel')}</Text>
 
-                                            <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
-                                                {cameraMode === 'response' && responsePhotos.length > 0 && (
-                                                    <View style={cameraStyles.previewContainer}>
-                                                        <View style={cameraStyles.previewWrapper}>
-                                                            <Image 
-                                                                source={{ uri: responsePhotos[0] }} 
-                                                                style={cameraStyles.previewThumb} 
-                                                            />
+                                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                                    {editPhoto && (
+                                                        <View style={{ position: 'relative' }}>
+                                                            <Image source={{ uri: editPhoto }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
                                                             <TouchableOpacity
-                                                                onPress={() => setResponsePhotos([])}
-                                                                style={cameraStyles.removeBtn}
+                                                                onPress={() => setEditPhoto(null)}
+                                                                style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
                                                             >
-                                                                <Feather name="x" size={12} color="#fff" />
+                                                                <Feather name="x" size={14} color="#fff" />
                                                             </TouchableOpacity>
                                                             <TouchableOpacity
-                                                                onPress={() => setAnnotatingImageIndex(0)}
-                                                                style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 10 }}
+                                                                onPress={() => setAnnotatingImageIndex(-1)}
+                                                                style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
                                                             >
                                                                 <Feather name="edit-2" size={12} color="#fff" />
                                                             </TouchableOpacity>
                                                         </View>
-                                                    </View>
-                                                )}
-
-                                                <View style={cameraStyles.shutterRow}>
-                                                    <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
-                                                        <View style={cameraStyles.iconCircle}>
-                                                            <Feather name="image" size={24} color="#fff" />
-                                                        </View>
-                                                        <Text style={cameraStyles.btnLabel}>{t('projectSnags.gallery')}</Text>
+                                                    )}
+                                                    <TouchableOpacity
+                                                        onPress={pickEditPhoto}
+                                                        style={{
+                                                            width: 80, height: 80, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
+                                                            alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
+                                                        }}
+                                                    >
+                                                        <Feather name="camera" size={24} color={colors.textMuted} />
                                                     </TouchableOpacity>
-
-                                                    <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
-                                                        <View style={cameraStyles.shutterOuter}>
-                                                            <View style={cameraStyles.shutterInner} />
-                                                        </View>
-                                                        <Text style={cameraStyles.btnLabel}>{t('projectSnags.photo')}</Text>
-                                                    </TouchableOpacity>
-                                                    <View style={{ width: 70 }} />
                                                 </View>
                                             </View>
-                                        </>
-                                    ) : (
-                                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-                                            {cameraPermission?.granted ? (
-                                                <ActivityIndicator color="#fff" />
-                                            ) : (
-                                                <>
-                                                    <Text style={{ color: '#fff', marginBottom: 20 }}>{t('projectSnags.cameraAccessDesc')}</Text>
-                                                    <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                                        <Text style={{ color: '#fff', fontWeight: '700' }}>{t('linkedDevices.continue')}</Text>
-                                                    </TouchableOpacity>
-                                                </>
 
+                                            <View>
+                                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectSnags.voiceNoteLabel')}</Text>
+
+                                                {editAudio ? (
+                                                    <View style={{ position: 'relative', padding: 12, paddingRight: 32, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                                            <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>VOICE NOTE</Text>
+                                                        </View>
+                                                        <VoiceNotePlayer uri={editAudio} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                        <TouchableOpacity
+                                                            onPress={() => { setEditAudio(null); setRemoveEditAudio(true); }}
+                                                            style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
+                                                        >
+                                                            <Feather name="x" size={14} color="#fff" />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ) : (
+                                                    <VoiceNoteRecorder
+                                                        colors={colors}
+                                                        onRecordingStateChange={() => { }}
+                                                        onSend={(uri) => { setEditAudio(uri); setRemoveEditAudio(false); }}
+                                                    />
+                                                )}
+                                            </View>
+
+                                            <TouchableOpacity
+                                                onPress={handleUpdateSnag}
+                                                disabled={submitting}
+                                                style={{ backgroundColor: colors.primary, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 10, opacity: submitting ? 0.7 : 1 }}
+                                            >
+                                                {submitting ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectSnags.saveChanges')}</Text>}
+                                            </TouchableOpacity>
+
+
+                                            <TouchableOpacity
+                                                onPress={() => setIsEditing(false)}
+                                                style={{ height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
+                                            >
+                                                <Text style={{ color: colors.text, fontWeight: '600' }}>{t('projectSnags.cancel')}</Text>
+                                            </TouchableOpacity>
+
+                                        </View>
+                                    ) : (
+                                        <View style={{ gap: 15, paddingBottom: 40 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <View style={{ backgroundColor: STATUS_CONFIG[selectedSnag.status].bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>{STATUS_CONFIG[selectedSnag.status].label}</Text>
+                                                </View>
+                                                {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id)) && !selectedSnag.response && !selectedSnag.response_photos && (
+                                                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                                                        <TouchableOpacity onPress={() => startEditing(selectedSnag)}>
+                                                            <Feather name="edit" size={18} color={colors.primary} />
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity onPress={() => handleDeleteSnag(selectedSnag.id, selectedSnag.title)}>
+                                                            <Feather name="trash-2" size={18} color="#ef4444" />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                )}
+                                            </View>
+
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, flex: 1 }}>{selectedSnag.title}</Text>
+                                                {selectedSnag.seen_at && (
+                                                    <Ionicons name="checkmark-done" size={18} color="#f97316" />
+                                                )}
+                                            </View>
+                                            <Text style={{ fontSize: 13, color: colors.textMuted }}>{selectedSnag.description}</Text>
+
+                                            {(selectedSnag.photoDownloadUrl || selectedSnag.photo_url) && (
+                                                <TouchableOpacity onPress={() => setViewPhoto(selectedSnag.photoDownloadUrl || selectedSnag.photo_url!)}>
+                                                    <Image
+                                                        source={selectedSnag.photoDownloadUrl || selectedSnag.photo_url}
+                                                        style={{ width: '100%', height: 200, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+
+                                            {(selectedSnag.audioDownloadUrl || selectedSnag.audio_url) && (
+                                                <View style={{ padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceNoteHeader').toUpperCase()}</Text>
+                                                    </View>
+                                                    <VoiceNotePlayer uri={selectedSnag.audioDownloadUrl || selectedSnag.audio_url!} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                </View>
+                                            )}
+
+                                            <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, gap: 8 }}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.assignedToLabel')}</Text>
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{selectedSnag.assignee?.name || t('projectSnags.unassigned')}</Text>
+                                                </View>
+
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.createdByLabel')}</Text>
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{selectedSnag.creator?.name || '—'}</Text>
+                                                </View>
+
+                                            </View>
+
+                                            {(selectedSnag.response || (selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
+                                                <View style={{ padding: 12, backgroundColor: colors.primary + '08', borderRadius: 12, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, marginBottom: 4, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
+                                                    {selectedSnag.response ? <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text> : null}
+
+                                                    {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
+                                                        <View style={{ marginTop: 10, gap: 10 }}>
+                                                            {/* Images Row */}
+                                                            {selectedSnag.responsePhotoUrls.filter(url => !isAudio(url)).length > 0 && (
+                                                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                                        {selectedSnag.responsePhotoUrls.filter(url => !isAudio(url)).map((url, i) => (
+                                                                            <TouchableOpacity key={i} onPress={() => setViewPhoto(url)} style={{ position: 'relative' }}>
+                                                                                <Image source={{ uri: url }} style={{ width: 80, height: 80, borderRadius: 8 }} />
+                                                                                {String(selectedSnag.assigned_to) === String(user?.id) && (
+                                                                                    <TouchableOpacity
+                                                                                        onPress={() => {
+                                                                                            const absoluteIdx = selectedSnag.responsePhotoUrls!.indexOf(url);
+                                                                                            const key = selectedSnag.response_photos?.[absoluteIdx];
+                                                                                            if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                                                                            const newUrls = [...selectedSnag.responsePhotoUrls!];
+                                                                                            const newPhotos = [...(selectedSnag.response_photos || [])];
+                                                                                            newUrls.splice(absoluteIdx, 1);
+                                                                                            newPhotos.splice(absoluteIdx, 1);
+                                                                                            setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                                                                        }}
+                                                                                        style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
+                                                                                    >
+                                                                                        <Feather name="x" size={10} color="#fff" />
+                                                                                    </TouchableOpacity>
+                                                                                )}
+                                                                            </TouchableOpacity>
+                                                                        ))}
+                                                                    </View>
+                                                                </ScrollView>
+                                                            )}
+
+                                                            {/* Audios Column */}
+                                                            {selectedSnag.responsePhotoUrls.filter(url => isAudio(url)).map((url, i) => (
+                                                                <View key={i} style={{
+                                                                    padding: 10, borderWidth: 1, borderColor: colors.primary + '20', borderRadius: 12,
+                                                                    backgroundColor: colors.background, width: '100%', position: 'relative'
+                                                                }}>
+                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceResponseHeader').toUpperCase()}</Text>
+                                                                    </View>
+
+                                                                    <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                                    {String(selectedSnag.assigned_to) === String(user?.id) && (
+                                                                        <TouchableOpacity
+                                                                            onPress={() => {
+                                                                                const audioUrls = selectedSnag.responsePhotoUrls!.filter(url => isAudio(url));
+                                                                                const indexInAll = selectedSnag.responsePhotoUrls!.indexOf(url);
+                                                                                const key = selectedSnag.response_photos?.[indexInAll];
+                                                                                if (key) setRemovedResponsePhotos(prev => [...prev, key]);
+                                                                                const newUrls = [...selectedSnag.responsePhotoUrls!];
+                                                                                newUrls.splice(indexInAll, 1);
+                                                                                const newPhotos = [...(selectedSnag.response_photos || [])];
+                                                                                newPhotos.splice(indexInAll, 1);
+                                                                                setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                                                            }}
+                                                                            style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
+                                                                        >
+                                                                            <Feather name="x" size={10} color="#fff" />
+                                                                        </TouchableOpacity>
+                                                                    )}
+                                                                </View>
+                                                            ))}
+                                                        </View>
+                                                    )}
+                                                </View>
+                                            )}
+
+                                            {/* Response Section */}
+                                            {String(selectedSnag.assigned_to) === String(user?.id) && (
+                                                <View style={{ gap: 10, marginTop: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
+                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{selectedSnag.response ? t('projectSnags.updateResponse') : t('projectSnags.provideResponse')}</Text>
+
+
+                                                    {selectedSnag.status !== 'green' ? (
+                                                        <>
+                                                            <TextInput
+                                                                value={responseComment}
+                                                                onChangeText={setResponseComment}
+                                                                placeholder={t('projectSnags.responsePlaceholder') as string}
+                                                                placeholderTextColor={colors.textMuted}
+
+                                                                multiline
+                                                                style={{
+                                                                    minHeight: 70,
+                                                                    backgroundColor: colors.surface,
+                                                                    borderRadius: 10,
+                                                                    padding: 10,
+                                                                    color: colors.text,
+                                                                    borderWidth: 1,
+                                                                    borderColor: colors.border,
+                                                                    textAlignVertical: 'top',
+                                                                    fontSize: 13
+                                                                }}
+                                                            />
+                                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                                                {responsePhotos.map((uri, i) => (
+                                                                    <View key={i} style={{ position: 'relative' }}>
+                                                                        {isAudio(uri) ? (
+                                                                            <View style={{
+                                                                                padding: 10, paddingRight: 32, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
+                                                                                backgroundColor: colors.surface, width: SCREEN_W - 80, minHeight: 64, justifyContent: 'center'
+                                                                            }}>
+                                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                                                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceResponseHeader').toUpperCase()}</Text>
+                                                                                </View>
+                                                                                <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                                            </View>
+                                                                        ) : (
+                                                                            <Image source={{ uri }} style={{ width: 70, height: 70, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} />
+                                                                        )}
+                                                                        <TouchableOpacity
+                                                                            onPress={() => setResponsePhotos(prev => prev.filter((_, idx) => idx !== i))}
+                                                                            style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', borderRadius: 10, padding: 2, zIndex: 10 }}
+                                                                        >
+                                                                            <Feather name="x" size={12} color="#fff" />
+                                                                        </TouchableOpacity>
+                                                                        {!isAudio(uri) && (
+                                                                            <TouchableOpacity
+                                                                                onPress={() => setAnnotatingImageIndex(i)}
+                                                                                style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 5, borderRadius: 8 }}
+                                                                            >
+                                                                                <Feather name="edit-2" size={10} color="#fff" />
+                                                                            </TouchableOpacity>
+                                                                        )}
+                                                                    </View>
+                                                                ))}
+                                                                {!hasPendingResponseImage && !hasExistingResponseImage && (
+                                                                    <TouchableOpacity
+                                                                        onPress={pickResponsePhotos}
+                                                                        style={{
+                                                                            width: 70, height: 70, borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
+                                                                            alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
+                                                                        }}
+                                                                    >
+                                                                        <Feather name="camera" size={20} color={colors.textMuted} />
+                                                                    </TouchableOpacity>
+                                                                )}
+                                                            </View>
+
+                                                            <View style={{ marginTop: 12, marginBottom: 8 }}>
+                                                                {!hasPendingResponseAudio && !hasExistingResponseAudio && (
+                                                                    <VoiceNoteRecorder
+                                                                        colors={colors}
+                                                                        onRecordingStateChange={() => { }}
+                                                                        onSend={(uri) => {
+                                                                            setResponsePhotos(prev => {
+                                                                                const filtered = prev.filter(p => !isAudio(p));
+                                                                                return [...filtered, uri];
+                                                                            });
+                                                                        }}
+                                                                    />
+                                                                )}
+                                                            </View>
+
+                                                            <TouchableOpacity
+                                                                onPress={() => handleUpdateStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos, removedResponsePhotos)}
+                                                                disabled={submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
+                                                                style={{
+                                                                    backgroundColor: colors.primary,
+                                                                    height: 42,
+                                                                    borderRadius: 10,
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    opacity: (submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)) ? 0.6 : 1
+                                                                }}
+                                                            >
+                                                                {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('projectSnags.submitResponse')}</Text>}
+                                                            </TouchableOpacity>
+
+                                                        </>
+                                                    ) : (
+                                                        <View style={{ padding: 10, backgroundColor: colors.surface, borderRadius: 8, alignItems: 'center' }}>
+                                                            <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.completedSnagNoUpdate')}</Text>
+                                                        </View>
+                                                    )}
+
+
+                                                    <View style={{ marginTop: 5, gap: 8 }}>
+                                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('projectSnags.updateStatusHeader')}</Text>
+                                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                            {STATUS_CYCLE.map(s => (
+                                                                <TouchableOpacity
+                                                                    key={s}
+                                                                    onPress={() => handleUpdateStatus(selectedSnag, s, responseComment, responsePhotos, removedResponsePhotos)}
+                                                                    style={{
+                                                                        flex: 1, height: 34, borderRadius: 8,
+                                                                        backgroundColor: selectedSnag.status === s ? STATUS_CONFIG[s].bg : colors.surface,
+                                                                        alignItems: 'center', justifyContent: 'center',
+                                                                        borderWidth: 1, borderColor: colors.border
+                                                                    }}
+                                                                >
+                                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: selectedSnag.status === s ? '#fff' : colors.text }}>{STATUS_CONFIG[s].label.split(' ')[0]}</Text>
+                                                                </TouchableOpacity>
+                                                            ))}
+                                                        </View>
+                                                    </View>
+                                                </View>
                                             )}
                                         </View>
                                     )}
-                                </View>
-                            </View>
+                                </ScrollView>
+                            )}
 
-                            {/* Nested Image Annotator for immediate capture editing on iOS */}
-                            {annotatingImageIndex !== null && (
+                            {/* ── Secondary Modals (Nested for iOS compatibility) ──────────────── */}
+                            <FullScreenImageModal
+                                visible={!!viewPhoto}
+                                onClose={() => setViewPhoto(null)}
+                                uri={viewPhoto}
+                            />
+
+                            {/* Camera Modal */}
+                            <Modal
+                                visible={cameraVisible}
+                                animationType="slide"
+                                transparent={false}
+                                presentationStyle="fullScreen"
+                                statusBarTranslucent={true}
+                                onRequestClose={() => setCameraVisible(false)}
+                            >
+                                <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
+                                    <View style={{ flex: 1, backgroundColor: '#000' }}>
+                                        <View style={{ flex: 1 }}>
+                                            {cameraPermission?.granted && cameraReady ? (
+                                                <>
+                                                    <View style={{
+                                                        width: SCREEN_W,
+                                                        height: CAMERA_HEIGHT,
+                                                        overflow: 'hidden',
+                                                        marginTop: Math.max(insets.top, 20) + 60,
+                                                    }}>
+                                                        <GestureDetector gesture={pinchGesture}>
+                                                            <View collapsable={false} style={StyleSheet.absoluteFill}>
+                                                                <AnimatedCameraView
+                                                                    key={cameraSessionKey}
+                                                                    style={StyleSheet.absoluteFill}
+                                                                    facing="back"
+                                                                    ref={cameraRef}
+                                                                    ratio="4:3"
+                                                                    animatedProps={animatedCameraProps}
+                                                                />
+                                                            </View>
+                                                        </GestureDetector>
+                                                        {/* Dynamic Zoom Indicator */}
+                                                        <Animated.View
+                                                            pointerEvents="none"
+                                                            style={[
+                                                                zoomLabelStyle,
+                                                                {
+                                                                    position: 'absolute',
+                                                                    bottom: 16,
+                                                                    alignSelf: 'center',
+                                                                    backgroundColor: 'rgba(0,0,0,0.55)',
+                                                                    paddingHorizontal: 14,
+                                                                    paddingVertical: 6,
+                                                                    borderRadius: 20,
+                                                                    zIndex: 30,
+                                                                }
+                                                            ]}
+                                                        >
+                                                            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
+                                                        </Animated.View>
+
+                                                    </View>
+
+                                                    <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                                                        <TouchableOpacity onPress={() => setCameraVisible(false)} style={cameraStyles.headerBtn}>
+                                                            <Feather name="x" size={24} color="#fff" />
+                                                        </TouchableOpacity>
+                                                        <Text style={cameraStyles.headerTitle}>{t('projectSnags.photoLabel')}</Text>
+                                                        <View style={{ width: 60 }} />
+                                                    </View>
+
+                                                    <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                                                        {cameraMode === 'response' && responsePhotos.length > 0 && (
+                                                            <View style={cameraStyles.previewContainer}>
+                                                                <View style={cameraStyles.previewWrapper}>
+                                                                    <Image
+                                                                        source={{ uri: responsePhotos[0] }}
+                                                                        style={cameraStyles.previewThumb}
+                                                                    />
+                                                                    <TouchableOpacity
+                                                                        onPress={() => setResponsePhotos([])}
+                                                                        style={cameraStyles.removeBtn}
+                                                                    >
+                                                                        <Feather name="x" size={12} color="#fff" />
+                                                                    </TouchableOpacity>
+                                                                    <TouchableOpacity
+                                                                        onPress={() => setAnnotatingImageIndex(0)}
+                                                                        style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 10 }}
+                                                                    >
+                                                                        <Feather name="edit-2" size={12} color="#fff" />
+                                                                    </TouchableOpacity>
+                                                                </View>
+                                                            </View>
+                                                        )}
+
+                                                        <View style={cameraStyles.shutterRow}>
+                                                            <TouchableOpacity onPress={pickImageFiles} style={cameraStyles.sideBtn}>
+                                                                <View style={cameraStyles.iconCircle}>
+                                                                    <Feather name="image" size={24} color="#fff" />
+                                                                </View>
+                                                                <Text style={cameraStyles.btnLabel}>{t('projectSnags.gallery')}</Text>
+                                                            </TouchableOpacity>
+
+                                                            <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                                                                <View style={cameraStyles.shutterOuter}>
+                                                                    <View style={cameraStyles.shutterInner} />
+                                                                </View>
+                                                                <Text style={cameraStyles.btnLabel}>{t('projectSnags.photo')}</Text>
+                                                            </TouchableOpacity>
+                                                            <View style={{ width: 70 }} />
+                                                        </View>
+                                                    </View>
+                                                </>
+                                            ) : (
+                                                <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                                                    {cameraPermission?.granted ? (
+                                                        <ActivityIndicator color="#fff" />
+                                                    ) : (
+                                                        <>
+                                                            <Text style={{ color: '#fff', marginBottom: 20 }}>{t('projectSnags.cameraAccessDesc')}</Text>
+                                                            <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
+                                                                <Text style={{ color: '#fff', fontWeight: '700' }}>{t('linkedDevices.continue')}</Text>
+                                                            </TouchableOpacity>
+                                                        </>
+
+                                                    )}
+                                                </View>
+                                            )}
+                                        </View>
+                                    </View>
+
+                                    {/* Nested Image Annotator for immediate capture editing on iOS */}
+                                    {annotatingImageIndex !== null && (
+                                        <ImageAnnotator
+                                            uri={annotatingImageIndex === -1 ? editPhoto! :
+                                                annotatingImageIndex === -2 ? (selectedSnag?.photoDownloadUrl || selectedSnag?.photo_url)! :
+                                                    responsePhotos[annotatingImageIndex]}
+                                            onSave={(newUri) => {
+                                                if (annotatingImageIndex === -1 || annotatingImageIndex === -2) {
+                                                    setEditPhoto(newUri);
+                                                } else {
+                                                    const newImages = [...responsePhotos];
+                                                    newImages[annotatingImageIndex] = newUri;
+                                                    setResponsePhotos(newImages);
+                                                }
+                                                setAnnotatingImageIndex(null);
+                                                setCameraVisible(false);
+                                            }}
+                                            onCancel={() => setAnnotatingImageIndex(null)}
+                                        />
+                                    )}
+                                </GestureHandlerRootView>
+                            </Modal>
+
+                            {/* Image Annotator for editing from the response list (when camera is closed) */}
+                            {!cameraVisible && annotatingImageIndex !== null && (
                                 <ImageAnnotator
-                                    uri={annotatingImageIndex === -1 ? editPhoto! : 
-                                         annotatingImageIndex === -2 ? (selectedSnag?.photoDownloadUrl || selectedSnag?.photo_url)! :
-                                         responsePhotos[annotatingImageIndex]}
+                                    uri={annotatingImageIndex === -1 ? editPhoto! :
+                                        annotatingImageIndex === -2 ? (selectedSnag?.photoDownloadUrl || selectedSnag?.photo_url)! :
+                                            responsePhotos[annotatingImageIndex]}
                                     onSave={(newUri) => {
                                         if (annotatingImageIndex === -1 || annotatingImageIndex === -2) {
                                             setEditPhoto(newUri);
@@ -1379,34 +1493,12 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             setResponsePhotos(newImages);
                                         }
                                         setAnnotatingImageIndex(null);
-                                        setCameraVisible(false);
                                     }}
                                     onCancel={() => setAnnotatingImageIndex(null)}
                                 />
                             )}
-                        </Modal>
-
-                        {/* Image Annotator for editing from the response list (when camera is closed) */}
-                        {!cameraVisible && annotatingImageIndex !== null && (
-                            <ImageAnnotator
-                                uri={annotatingImageIndex === -1 ? editPhoto! : 
-                                     annotatingImageIndex === -2 ? (selectedSnag?.photoDownloadUrl || selectedSnag?.photo_url)! :
-                                     responsePhotos[annotatingImageIndex]}
-                                onSave={(newUri) => {
-                                    if (annotatingImageIndex === -1 || annotatingImageIndex === -2) {
-                                        setEditPhoto(newUri);
-                                    } else {
-                                        const newImages = [...responsePhotos];
-                                        newImages[annotatingImageIndex] = newUri;
-                                        setResponsePhotos(newImages);
-                                    }
-                                    setAnnotatingImageIndex(null);
-                                }}
-                                onCancel={() => setAnnotatingImageIndex(null)}
-                            />
-                        )}
+                        </View>
                     </View>
-                </View>
                 </KeyboardAvoidingView>
             </Modal>
 

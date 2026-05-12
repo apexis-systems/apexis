@@ -4,10 +4,19 @@ import {
   Modal, ScrollView, TextInput, Alert, StyleSheet, Platform, RefreshControl, Dimensions,
   KeyboardAvoidingView
 } from 'react-native';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedProps,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS
+} from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -23,6 +32,8 @@ import {
   getRFIById, markRFISeen
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
+const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
@@ -134,6 +145,58 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = React.useRef<CameraView>(null);
+  const zoomShared = useSharedValue(0); // 0–1 for expo-camera
+  const startZoom = useSharedValue(0);
+  const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+  const zoomLabelOpacity = useSharedValue(0);
+  let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Max real-world zoom multiplier each platform supports
+  const MAX_ZOOM_FACTOR = Platform.OS === 'ios' ? 10 : 10;
+
+  // Converts 0-1 internal value → display string like "2.3x"
+  const toDisplayZoom = (val: number) => {
+    const factor = 1 + val * (MAX_ZOOM_FACTOR - 1);
+    return `${factor.toFixed(1)}x`;
+  };
+
+  const showZoomLabel = (val: number) => {
+    setZoomDisplay(toDisplayZoom(val));
+    zoomLabelOpacity.value = withTiming(1, { duration: 80 });
+    if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
+    zoomHideTimer.current = setTimeout(() => {
+      zoomLabelOpacity.value = withTiming(0, { duration: 400 });
+    }, 1500);
+  };
+
+  const pinchGesture = React.useMemo(() =>
+    Gesture.Pinch()
+      .onStart(() => {
+        startZoom.value = zoomShared.value;
+      })
+      .onUpdate((event) => {
+        // Multiplicative zoom feels natural — same as native camera apps
+        const raw = startZoom.value + (event.scale - 1) * (1 / MAX_ZOOM_FACTOR);
+        const clamped = Math.max(0, Math.min(1, raw));
+        zoomShared.value = clamped;
+        runOnJS(showZoomLabel)(clamped);
+      }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [zoomShared, startZoom]);
+
+  const animatedCameraProps = useAnimatedProps(() => ({
+    zoom: zoomShared.value,
+  }));
+
+  const zoomLabelStyle = useAnimatedStyle(() => ({
+    opacity: zoomLabelOpacity.value,
+  }));
+
+  // Keep for backwards compat (unused after button removal)
+  const handleManualZoom = (z: number) => {
+    zoomShared.value = withSpring(z, { damping: 20, stiffness: 100 });
+    runOnJS(showZoomLabel)(z);
+  };
 
   // Filter Modals
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -1640,7 +1703,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   statusBarTranslucent={true}
                   onRequestClose={() => setCameraVisible(false)}
                 >
-                  <View style={{ flex: 1, backgroundColor: '#000' }}>
+                  <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                     <View style={{ flex: 1 }}>
                       {cameraPermission?.granted && cameraReady ? (
                         <>
@@ -1650,13 +1713,37 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             overflow: 'hidden',
                             marginTop: Math.max(insets.top, 20) + 60,
                           }}>
-                            <CameraView
-                              key={cameraSessionKey}
-                              style={StyleSheet.absoluteFill}
-                              facing="back"
-                              ref={cameraRef}
-                              ratio="4:3"
-                            />
+                            <GestureDetector gesture={pinchGesture}>
+                              <View collapsable={false} style={StyleSheet.absoluteFill}>
+                                <AnimatedCameraView
+                                  key={cameraSessionKey}
+                                  style={StyleSheet.absoluteFill}
+                                  facing="back"
+                                  ref={cameraRef as any}
+                                  ratio="4:3"
+                                  animatedProps={animatedCameraProps}
+                                />
+                              </View>
+                            </GestureDetector>
+                            {/* Dynamic Zoom Indicator */}
+                            <Animated.View
+                              pointerEvents="none"
+                              style={[
+                                zoomLabelStyle,
+                                {
+                                  position: 'absolute',
+                                  bottom: 16,
+                                  alignSelf: 'center',
+                                  backgroundColor: 'rgba(0,0,0,0.55)',
+                                  paddingHorizontal: 14,
+                                  paddingVertical: 6,
+                                  borderRadius: 20,
+                                  zIndex: 30,
+                                }
+                              ]}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
+                            </Animated.View>
                           </View>
 
                           <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -1696,7 +1783,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             <>
                               <Text style={{ color: '#fff', marginBottom: 20 }}>{t('projectRfi.cameraAccessNeeded')}</Text>
                               <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                  <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.continue')}</Text>
+                                <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.continue')}</Text>
                               </TouchableOpacity>
 
                             </>
@@ -1725,7 +1812,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         onCancel={() => setAnnotatingImageIndex(null)}
                       />
                     )}
-                  </View>
+                  </GestureHandlerRootView>
                 </Modal>
               )}
 
@@ -1822,7 +1909,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 statusBarTranslucent={true}
                 onRequestClose={() => setCameraVisible(false)}
               >
-                <View style={{ flex: 1, backgroundColor: '#000' }}>
+                <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                   <View style={{ flex: 1 }}>
                     {cameraPermission?.granted && cameraReady ? (
                       <>
@@ -1832,13 +1919,37 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           overflow: 'hidden',
                           marginTop: Math.max(insets.top, 20) + 60,
                         }}>
-                          <CameraView
-                            key={cameraSessionKey}
-                            style={StyleSheet.absoluteFill}
-                            facing="back"
-                            ref={cameraRef}
-                            ratio="4:3"
-                          />
+                          <GestureDetector gesture={pinchGesture}>
+                            <View collapsable={false} style={StyleSheet.absoluteFill}>
+                              <AnimatedCameraView
+                                key={cameraSessionKey}
+                                style={StyleSheet.absoluteFill}
+                                facing="back"
+                                ref={cameraRef as any}
+                                ratio="4:3"
+                                animatedProps={animatedCameraProps}
+                              />
+                            </View>
+                          </GestureDetector>
+                          {/* Dynamic Zoom Indicator */}
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              zoomLabelStyle,
+                              {
+                                position: 'absolute',
+                                bottom: 16,
+                                alignSelf: 'center',
+                                backgroundColor: 'rgba(0,0,0,0.55)',
+                                paddingHorizontal: 14,
+                                paddingVertical: 6,
+                                borderRadius: 20,
+                                zIndex: 30,
+                              }
+                            ]}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
+                          </Animated.View>
                         </View>
 
                         <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -1905,7 +2016,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       onCancel={() => setAnnotatingImageIndex(null)}
                     />
                   )}
-                </View>
+                </GestureHandlerRootView>
               </Modal>
             )}
 
@@ -1988,8 +2099,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           <View style={{ backgroundColor: colors.background, borderRadius: 20, width: '100%', maxWidth: 340, padding: 20, maxHeight: '70%' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
-                {t('projectRfi.selectFilter', { 
-                  filter: activeFilterType === 'status' ? t('projectRfi.status') : (activeFilterType === 'creator' ? t('projectRfi.creator') : t('projectRfi.assignee')) 
+                {t('projectRfi.selectFilter', {
+                  filter: activeFilterType === 'status' ? t('projectRfi.status') : (activeFilterType === 'creator' ? t('projectRfi.creator') : t('projectRfi.assignee'))
                 })}
               </Text>
               <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
@@ -2026,8 +2137,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: config[item as 'open'|'closed'|'overdue'].color }} />
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{config[item as 'open'|'closed'|'overdue'].label}</Text>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: config[item as 'open' | 'closed' | 'overdue'].color }} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{config[item as 'open' | 'closed' | 'overdue'].label}</Text>
                   </View>
                   {statusFilter === item && <Feather name="check" size={16} color={colors.primary} />}
                 </TouchableOpacity>
@@ -2350,7 +2461,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     statusBarTranslucent={true}
                     onRequestClose={() => setCameraVisible(false)}
                   >
-                    <View style={{ flex: 1, backgroundColor: '#000' }}>
+                    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                       <View style={{ flex: 1 }}>
                         {cameraPermission?.granted && cameraReady ? (
                           <>
@@ -2360,13 +2471,37 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               overflow: 'hidden',
                               marginTop: Math.max(insets.top, 20) + 60,
                             }}>
-                              <CameraView
-                                key={cameraSessionKey}
-                                style={StyleSheet.absoluteFill}
-                                facing="back"
-                                ref={cameraRef}
-                                ratio="4:3"
-                              />
+                              <GestureDetector gesture={pinchGesture}>
+                                <View collapsable={false} style={StyleSheet.absoluteFill}>
+                                  <AnimatedCameraView
+                                    key={cameraSessionKey}
+                                    style={StyleSheet.absoluteFill}
+                                    facing="back"
+                                    ref={cameraRef as any}
+                                    ratio="4:3"
+                                    animatedProps={animatedCameraProps}
+                                  />
+                                </View>
+                              </GestureDetector>
+                              {/* Dynamic Zoom Indicator */}
+                              <Animated.View
+                                pointerEvents="none"
+                                style={[
+                                  zoomLabelStyle,
+                                  {
+                                    position: 'absolute',
+                                    bottom: 16,
+                                    alignSelf: 'center',
+                                    backgroundColor: 'rgba(0,0,0,0.55)',
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 6,
+                                    borderRadius: 20,
+                                    zIndex: 30,
+                                  }
+                                ]}
+                              >
+                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
+                              </Animated.View>
                             </View>
 
                             <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -2384,7 +2519,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                   <View style={cameraStyles.iconCircle}>
                                     <Feather name="image" size={24} color="#fff" />
                                   </View>
-                                 <Text style={cameraStyles.btnLabel}>{t('projectRfi.gallery')}</Text>
+                                  <Text style={cameraStyles.btnLabel}>{t('projectRfi.gallery')}</Text>
 
                                 </TouchableOpacity>
 
@@ -2392,7 +2527,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                   <View style={cameraStyles.shutterOuter}>
                                     <View style={cameraStyles.shutterInner} />
                                   </View>
-                                 <Text style={cameraStyles.btnLabel}>{t('projectRfi.photo')}</Text>
+                                  <Text style={cameraStyles.btnLabel}>{t('projectRfi.photo')}</Text>
 
                                 </TouchableOpacity>
 
@@ -2408,7 +2543,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               <>
                                 <Text style={{ color: '#fff', marginBottom: 20 }}>{t('projectRfi.cameraAccessNeeded')}</Text>
                                 <TouchableOpacity onPress={requestCameraPermission} style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.primary, borderRadius: 10 }}>
-                                    <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.continue')}</Text>
+                                  <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.continue')}</Text>
                                 </TouchableOpacity>
                               </>
                             )}
@@ -2434,7 +2569,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           onCancel={() => setAnnotatingImageIndex(null)}
                         />
                       )}
-                    </View>
+                    </GestureHandlerRootView>
                   </Modal>
                 )}
 
