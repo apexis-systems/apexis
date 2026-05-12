@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { updateProject } from "@/services/projectService";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface EditProjectModalProps {
     isOpen: boolean;
@@ -32,6 +33,7 @@ export default function EditProjectModal({
     onUpdate,
     initialFocus,
 }: EditProjectModalProps) {
+    const { t } = useLanguage();
     const [name, setName] = useState(project.name);
     const [description, setDescription] = useState(project.description || "");
     const [startDate, setStartDate] = useState(
@@ -76,11 +78,11 @@ export default function EditProjectModal({
             });
 
             onUpdate(response.project);
-            toast.success("Project updated successfully");
+            toast.success(t("project_updated_success"));
             onClose();
         } catch (error) {
             console.error("Update error:", error);
-            toast.error("Failed to update project");
+            toast.error(t("project_update_failed"));
         } finally {
             setLoading(false);
         }
@@ -90,11 +92,11 @@ export default function EditProjectModal({
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle>Edit Project</DialogTitle>
+                    <DialogTitle>{t('edit_project')}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="name">Project Name (max 25)</Label>
+                        <Label htmlFor="name">{t('project_name_max')}</Label>
                         <Input
                             id="name"
                             value={name}
@@ -104,7 +106,7 @@ export default function EditProjectModal({
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="description">Company Name/Client Name (max 50)</Label>
+                        <Label htmlFor="description">{t('company_client_max')}</Label>
                         <Textarea
                             id="description"
                             value={description}
@@ -115,7 +117,7 @@ export default function EditProjectModal({
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="start_date">Start Date</Label>
+                            <Label htmlFor="start_date">{t('start_date')}</Label>
                             <Input
                                 id="start_date"
                                 type="date"
@@ -125,7 +127,7 @@ export default function EditProjectModal({
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="end_date">End Date</Label>
+                            <Label htmlFor="end_date">{t('end_date')}</Label>
                             <Input
                                 id="end_date"
                                 type="date"
@@ -137,11 +139,11 @@ export default function EditProjectModal({
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-                            Cancel
+                            {t('cancel')}
                         </Button>
                         <Button type="submit" disabled={loading}>
                             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save Changes
+                            {t('save_changes')}
                         </Button>
                     </DialogFooter>
                 </form>

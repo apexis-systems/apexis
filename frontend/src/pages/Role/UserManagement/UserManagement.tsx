@@ -259,20 +259,20 @@ const UserManagement = () => {
                                     <Shield className="h-5 w-5 text-accent" />
                                 </div>
                                 <div>
-                                    <h2 className="text-base font-bold text-foreground">Team Management Hub</h2>
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Filter & Access Control</p>
+                                    <h2 className="text-base font-bold text-foreground">{t('team_mgmt_hub')}</h2>
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{t('filter_access_control')}</p>
                                 </div>
                             </div>
                             
                             <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
                                 <div className="w-full md:w-56">
-                                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">Project Access</label>
+                                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">{t('project_access')}</label>
                                     <Select value={filterProject} onValueChange={setFilterProject}>
                                         <SelectTrigger className="h-10 rounded-xl bg-background border-border hover:border-accent/50 transition-colors">
-                                            <SelectValue placeholder="All Projects" />
+                                            <SelectValue placeholder={t('all_projects')} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Projects</SelectItem>
+                                            <SelectItem value="all">{t('all_projects')}</SelectItem>
                                             {projects.map(p => (
                                                 <SelectItem key={`filter-proj-${p.id}`} value={String(p.id)}>{p.name}</SelectItem>
                                             ))}
@@ -280,16 +280,16 @@ const UserManagement = () => {
                                     </Select>
                                 </div>
                                 <div className="w-full md:w-44">
-                                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">Team Role</label>
+                                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">{t('team_role')}</label>
                                     <Select value={filterRole} onValueChange={setFilterRole}>
                                         <SelectTrigger className="h-10 rounded-xl bg-background border-border hover:border-accent/50 transition-colors">
-                                            <SelectValue placeholder="All Roles" />
+                                            <SelectValue placeholder={t('all_roles')} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Roles</SelectItem>
-                                            <SelectItem value="admin">Admin</SelectItem>
-                                            <SelectItem value="contributor">Contributor</SelectItem>
-                                            <SelectItem value="client">Client</SelectItem>
+                                            <SelectItem value="all">{t('all_roles')}</SelectItem>
+                                            <SelectItem value="admin">{t('admin')}</SelectItem>
+                                            <SelectItem value="contributor">{t('contributor')}</SelectItem>
+                                            <SelectItem value="client">{t('client')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -300,7 +300,7 @@ const UserManagement = () => {
                                         onClick={() => { setFilterProject('all'); setFilterRole('all'); }}
                                         className="h-10 mt-5 text-xs text-muted-foreground hover:text-foreground font-bold"
                                     >
-                                        Reset
+                                        {t('reset')}
                                     </Button>
                                 )}
                             </div>
@@ -311,7 +311,7 @@ const UserManagement = () => {
                             <div className="pt-4 mt-2 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <div className="flex items-center gap-2">
                                     <Link className="h-3.5 w-3.5 text-accent" />
-                                    <span className="text-xs font-bold text-foreground">Project Access Links:</span>
+                                    <span className="text-xs font-bold text-foreground">{t('project_access_links')}:</span>
                                 </div>
                                 <div className="flex items-center gap-2 w-full md:w-auto">
                                     <Button
@@ -325,7 +325,7 @@ const UserManagement = () => {
                                         }}
                                     >
                                         {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5 text-accent" />}
-                                        {copied === 'Contributor' ? "Copied" : "Copy Contributor Link"}
+                                        {copied === 'Contributor' ? t('copied') : t('copy_contributor_link')}
                                     </Button>
                                     <Button
                                         variant="outline"
@@ -338,7 +338,7 @@ const UserManagement = () => {
                                         }}
                                     >
                                         {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5 text-accent" />}
-                                        {copied === 'Client' ? "Copied" : "Copy Client Link"}
+                                        {copied === 'Client' ? t('copied') : t('copy_client_link')}
                                     </Button>
                                 </div>
                             </div>
@@ -349,11 +349,11 @@ const UserManagement = () => {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-border bg-secondary/30">
-                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Member</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</th>
-                                    <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('member')}</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('role')}</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('status')}</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('joined')}</th>
+                                    <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
@@ -433,7 +433,7 @@ const UserManagement = () => {
                     {filteredUsers.length === 0 && (
                         <div className="p-12 text-center text-muted-foreground">
                             <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                            No users found matching your filters.
+                            {t('no_users_filter')}
                         </div>
                     )}
                 </div>

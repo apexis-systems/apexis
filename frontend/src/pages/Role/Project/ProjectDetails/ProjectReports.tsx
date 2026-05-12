@@ -5,6 +5,7 @@ import { Project, UserRole } from '@/types';
 import { FileText, Calendar, Loader2, Image, ClipboardList, ChevronDown, ChevronUp, FileCheck, Download, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getReports, Report, triggerReport, downloadReport } from '@/services/reportService';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getApiErrorMessage } from '@/helpers/apiError';
 import { toast } from 'sonner';
 
@@ -13,6 +14,7 @@ interface Props { project: Project; userRole: UserRole; }
 type ReportType = 'daily' | 'weekly' | 'monthly';
 
 const ProjectReports = ({ project, userRole }: Props) => {
+  const { t } = useLanguage();
   if (!project) return null;
   const [activeType, setActiveType] = useState<ReportType>('daily');
   const [reports, setReports] = useState<Report[]>([]);
@@ -41,7 +43,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
       await triggerReport(project.id, activeType);
       fetchReports();
     } catch (e) {
-      toast.error(getApiErrorMessage(e, `Failed to generate ${activeType} report`));
+      toast.error(getApiErrorMessage(e, t('failed_load_reports').replace('{type}', t(activeType + '_label'))));
     } finally {
       setGenerating(false);
     }
@@ -96,30 +98,30 @@ const ProjectReports = ({ project, userRole }: Props) => {
     let text = s;
     if (s === 'amber') {
       colorClass = "bg-amber-100 text-amber-700";
-      text = 'Waiting for Clearance';
+      text = t('waiting_clearance');
     } else if (s === 'open' || s === 'pending') {
       colorClass = "bg-amber-100 text-amber-700";
-      text = 'OPEN';
+      text = t('open_status');
     } else if (s === 'green' || s === 'completed') {
       colorClass = "bg-emerald-100 text-emerald-700";
-      text = 'Completed';
+      text = t('completed_status');
     } else if (s === 'resolved' || s === 'closed') {
       colorClass = "bg-emerald-100 text-emerald-700";
-      text = 'RESOLVED';
+      text = t('resolved_status');
     } else if (s === 'red') {
       colorClass = "bg-red-100 text-red-700";
-      text = 'No Action Required';
+      text = t('no_action_required');
     } else if (s === 'overdue' || s === 'critical') {
       colorClass = "bg-red-100 text-red-700";
-      text = 'OVERDUE';
+      text = t('overdue_status');
     }
     return <span className={`px-1.5 py-0.5 rounded-[2px] text-[7px] font-bold uppercase tracking-wider ${colorClass}`}>{text}</span>;
   };
 
   const tabs: { key: ReportType; label: string; icon: any }[] = [
-    { key: 'daily', label: 'Daily', icon: ClipboardList },
-    { key: 'weekly', label: 'Weekly', icon: BarChart3 },
-    { key: 'monthly', label: 'Monthly', icon: Calendar },
+    { key: 'daily', label: t('daily_label'), icon: ClipboardList },
+    { key: 'weekly', label: t('weekly_label'), icon: BarChart3 },
+    { key: 'monthly', label: t('monthly_label'), icon: Calendar },
   ];
 
   return (
@@ -154,7 +156,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
           className="w-full mb-4 h-10 rounded-xl bg-accent text-white text-[12px] font-bold flex items-center justify-center gap-2 hover:bg-accent/90 disabled:opacity-50 transition-all shadow-sm"
         >
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <IconForKey type={activeType} />}
-          {generating ? 'Generating...' : `Generate ${activeType.charAt(0).toUpperCase() + activeType.slice(1)} Report`}
+          {generating ? t('generating_label') : t('generate_report_btn').replace('{type}', t(activeType + '_label'))}
         </button>
       )}
 
@@ -174,8 +176,8 @@ const ProjectReports = ({ project, userRole }: Props) => {
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center">
                     <p className="text-[12px] font-bold">
-                        {activeType === 'daily' ? 'Daily' : activeType === 'weekly' ? 'Weekly' : 'Monthly'} Report — {fmt(r.period_start)}
-                        {activeType === 'weekly' && ` to ${fmt(r.period_end)}`}
+                        {t(activeType + '_report')} — {fmt(r.period_start)}
+                        {activeType === 'weekly' && ` ${t('report_period_to')} ${fmt(r.period_end)}`}
                     </p>
                     <div className="flex items-center gap-2">
                       {(r.photos_count > 0 || r.docs_count > 0 || (r.summary?.rfis?.length || 0) > 0 || (r.summary?.snags?.length || 0) > 0) && (
@@ -183,7 +185,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
                           onClick={(e) => { e.stopPropagation(); handleDownload(r); }}
                           disabled={downloadingId === r.id}
                           className="p-2 rounded-lg hover:bg-accent/10 text-accent transition-colors disabled:opacity-50"
-                          title="Download PDF"
+                          title={t('download_pdf_tip')}
                         >
                           {downloadingId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                         </button>
@@ -192,8 +194,8 @@ const ProjectReports = ({ project, userRole }: Props) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-4 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
-                    <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full"><Image className="h-3 w-3" />{r.photos_count} photos</span>
-                    <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full"><FileText className="h-3 w-3" />{r.docs_count} docs</span>
+                    <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full"><Image className="h-3 w-3" />{t('photos_count_label').replace('{count}', String(r.photos_count))}</span>
+                    <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full"><FileText className="h-3 w-3" />{t('files_count_label').replace('{count}', String(r.docs_count))}</span>
                   </div>
                 </div>
               </div>
@@ -202,18 +204,18 @@ const ProjectReports = ({ project, userRole }: Props) => {
                 <div className="px-4 pb-4 pt-1 border-t border-border bg-muted/5">
                   <div className="mt-3 space-y-3">
                     {!r.summary.document_titles?.length && !r.summary.photo_summary?.length && !r.summary.photo_details?.length && !r.summary.rfis?.length && !r.summary.snags?.length && (
-                      <p className="text-[10px] text-muted-foreground py-3 text-center italic">No detail records for this period</p>
+                      <p className="text-[10px] text-muted-foreground py-3 text-center italic">{t('no_detail_records')}</p>
                     )}
                     {r.summary.document_titles && r.summary.document_titles.length > 0 && (
                       <div className="bg-muted/30 rounded-xl p-3 border border-border/50">
                         <p className="text-[10px] font-bold text-accent mb-2 flex items-center gap-1.5">
-                          <FileText className="h-3 w-3" /> Documents Uploaded
+                          <FileText className="h-3 w-3" /> {t('docs_uploaded_title')}
                         </p>
                         <ul className="text-[9px] text-muted-foreground list-disc list-inside grid grid-cols-2 gap-x-4">
                           {r.summary.document_titles.map((doc: any, idx) => (
                             <li key={idx} className="truncate py-0.5">
                               <span className="font-medium text-foreground">{typeof doc === 'object' ? doc.title : doc}</span>
-                              {typeof doc === 'object' && doc.user && ` (by ${doc.user} in ${doc.folder})`}
+                              {typeof doc === 'object' && doc.user && ` ${t('uploaded_by_in').replace('{user}', doc.user).replace('{folder}', doc.folder)}`}
                             </li>
                           ))}
                         </ul>
@@ -223,13 +225,13 @@ const ProjectReports = ({ project, userRole }: Props) => {
                     {r.summary.photo_summary && r.summary.photo_summary.length > 0 && (
                       <div className="bg-muted/30 rounded-xl p-3 border border-border/50">
                         <p className="text-[10px] font-bold text-accent mb-2 flex items-center gap-1.5">
-                          <Image className="h-3 w-3" /> Photos Uploaded
+                          <Image className="h-3 w-3" /> {t('photos_uploaded_title')}
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                           {r.summary.photo_summary.map((ps, idx) => (
                             <p key={idx} className="text-[9px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
                               <span className="h-1 w-1 rounded-full bg-accent/50" />
-                              <span className="font-semibold text-foreground">{ps.count} photos</span> by {ps.user} in {ps.folder}
+                              {t('photos_by_in').replace('{count}', String(ps.count)).replace('{user}', ps.user).replace('{folder}', ps.folder)}
                             </p>
                           ))}
                         </div>
@@ -240,7 +242,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
                       <div className="flex gap-3">
                         {r.summary.rfis && r.summary.rfis.length > 0 && (
                           <div className="flex-1 bg-muted/30 rounded-xl p-3 border border-border/50">
-                            <p className="text-[10px] font-bold text-accent mb-2 flex items-center gap-1.5">RFIs</p>
+                            <p className="text-[10px] font-bold text-accent mb-2 flex items-center gap-1.5">{t('rfi_label')}</p>
                             <ul className="text-[9px] text-muted-foreground space-y-1.5">
                               {r.summary.rfis.map((rfi, idx) => (
                                 <li key={idx} className="flex justify-between items-center bg-card/50 px-2 py-1 rounded-lg border border-border/30">
@@ -253,7 +255,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
                         )}
                         {r.summary.snags && r.summary.snags.length > 0 && (
                           <div className="flex-1 bg-muted/30 rounded-xl p-3 border border-border/50">
-                            <p className="text-[10px] font-bold text-accent mb-2 flex items-center gap-1.5">Snags</p>
+                            <p className="text-[10px] font-bold text-accent mb-2 flex items-center gap-1.5">{t('snags_label')}</p>
                             <ul className="text-[9px] text-muted-foreground space-y-1.5">
                               {r.summary.snags.map((snag, idx) => (
                                 <li key={idx} className="flex justify-between items-center bg-card/50 px-2 py-1 rounded-lg border border-border/30">
@@ -274,8 +276,8 @@ const ProjectReports = ({ project, userRole }: Props) => {
           {reports.length === 0 && (
             <div className="mt-12 text-center py-12 border-2 border-dashed border-border rounded-3xl">
               <ClipboardList className="mx-auto h-12 w-12 text-muted-foreground/20" />
-              <p className="mt-3 text-sm font-medium text-muted-foreground">No {activeType} reports found</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Generate one to get started</p>
+              <p className="mt-3 text-sm font-medium text-muted-foreground">{t('no_reports_found').replace('{type}', t(activeType + '_label'))}</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">{t('generate_to_start')}</p>
             </div>
           )}
         </div>

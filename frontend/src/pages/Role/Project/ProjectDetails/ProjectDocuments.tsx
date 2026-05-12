@@ -24,6 +24,7 @@ import FileViewer from '@/components/shared/FileViewer';
 import { formatFileSize } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { getFolderRFIs } from '@/services/rfiService';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProjectDocumentsProps {
   project: Project;
@@ -31,6 +32,7 @@ interface ProjectDocumentsProps {
 }
 
 const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
+  const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [docs, setDocs] = useState<any[]>([]);
@@ -207,9 +209,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     try {
       await toggleFileVisibility(doc.id, !doc.client_visible);
       setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, client_visible: !doc.client_visible } : d));
-      toast.success(`Document marked ${!doc.client_visible ? 'Visible' : 'Hidden'} for clients`);
+      toast.success(t(!doc.client_visible ? 'doc_marked_visible' : 'doc_marked_hidden'));
     } catch (e) {
-      toast.error('Failed to toggle visibility');
+      toast.error(t('failed_toggle_visibility'));
     }
   };
 
@@ -217,9 +219,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     try {
       await toggleDoNotFollow(doc.id, !doc.do_not_follow);
       setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, do_not_follow: !doc.do_not_follow } : d));
-      toast.success(`Document ${!doc.do_not_follow ? 'marked' : 'unmarked'} as 'Do Not Follow'`);
+      toast.success(t(!doc.do_not_follow ? 'doc_marked_dnf' : 'doc_unmarked_dnf'));
     } catch (e) {
-      toast.error('Failed to toggle Do Not Follow');
+      toast.error(t('failed_toggle_dnf'));
     }
   };
 
@@ -228,20 +230,20 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     try {
       await toggleFolderVisibility(folder.id, !folder.client_visible);
       setFolders((prev) => prev.map((f) => f.id === folder.id ? { ...f, client_visible: !folder.client_visible } : f));
-      toast.success(`Folder marked ${!folder.client_visible ? 'Visible' : 'Hidden'} for clients`);
+      toast.success(t(!folder.client_visible ? 'folder_marked_visible' : 'folder_marked_hidden'));
     } catch (err) {
-      toast.error('Failed to toggle visibility');
+      toast.error(t('failed_toggle_visibility'));
     }
   };
 
   const archiveDoc = async (docId: number) => {
-    if (!confirm('Are you sure you want to archive this document? It will be moved to the Archive folder and set to "Do Not Follow".')) return;
+    if (!confirm(t('archive_confirm_msg'))) return;
     try {
       await archiveFile(docId);
-      toast.success('Document archived');
+      toast.success(t('doc_archived'));
       importFolders(); // Refresh to see moving to Archive folder
     } catch (error) {
-      toast.error('Failed to archive document');
+      toast.error(t('failed_archive_doc'));
     }
   };
 
@@ -257,12 +259,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
   const handleCreateFolder = async (name: string) => {
     if (name.toLowerCase() === 'archive') {
-      toast.error("The name 'Archive' is reserved for system use");
+      toast.error(t("archive_name_reserved"));
       return;
     }
     try {
       const res = await createFolder({ project_id: project.id, name, parent_id: selectedFolder, folder_type: 'document' });
-      toast.success(`Folder "${name}" created`);
+      toast.success(t('folder_created_msg').replace('{name}', name));
       await importFolders(); // Refetch
       if (res.folder) {
         setSelectedFolder(String(res.folder.id));
@@ -280,10 +282,10 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     }
     try {
       await updateFolder(editFolder.id, { name: newName });
-      toast.success(`Folder renamed to "${newName}"`);
+      toast.success(t('folder_renamed_msg').replace('{name}', newName));
       await importFolders(); // Refetch
     } catch (e) {
-      toast.error("Failed to rename folder");
+      toast.error(t("failed_rename_folder"));
     }
   };
 
@@ -291,22 +293,22 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     if (!editFile) return;
     try {
       await updateFile(editFile.id, { file_name: newName });
-      toast.success(`File renamed to "${newName}"`);
+      toast.success(t('file_renamed_msg').replace('{name}', newName));
       await importFolders(); // Refetch
     } catch (e) {
-      toast.error("Failed to rename file");
+      toast.error(t("failed_rename_file"));
     }
   };
 
   const handleDeleteFolder = async (folder: any, e: React.MouseEvent, force: boolean = false) => {
     e?.stopPropagation();
     if (!force) {
-      if (!confirm(`Are you sure you want to delete folder "${folder.name}"?`)) return;
+      if (!confirm(t('confirm_delete_folder').replace('{name}', folder.name))) return;
     }
 
     try {
       await deleteFolder(folder.id, force);
-      toast.success(`Folder "${folder.name}" deleted`);
+      toast.success(t('folder_deleted_msg').replace('{name}', folder.name));
       setShowDeleteConflict(false);
       await importFolders(); // Refetch
     } catch (e: any) {
@@ -315,7 +317,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         setFolderToDelete(folder);
         setShowDeleteConflict(true);
       } else {
-        const msg = data?.error || "Failed to delete folder";
+        const msg = data?.error || t("failed_delete_folder");
         toast.error(msg);
       }
     }
@@ -334,7 +336,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     const childFiles = docs.filter(p => String(p.folder_id) === String(folderToDelete.id));
     
     if (childFolders.length === 0 && childFiles.length === 0) {
-      toast.info("Folder is already empty");
+      toast.info(t("folder_already_empty"));
       setShowDeleteConflict(false);
       return;
     }
@@ -388,11 +390,11 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         promises.push(bulkUpdateFiles({ ids: Array.from(selectedFiles), client_visible: visible }));
       }
       await Promise.all(promises);
-      toast.success(`Visibility updated for ${selectedFolders.size + selectedFiles.size} items`);
+      toast.success(t('visibility_updated_msg').replace('{count}', String(selectedFolders.size + selectedFiles.size)));
       importFolders();
       clearSelection();
     } catch (e) {
-      toast.error("Failed to update visibility");
+      toast.error(t("failed_toggle_visibility"));
     }
   };
 
@@ -400,12 +402,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     try {
       if (selectedFiles.size > 0) {
         await bulkUpdateFiles({ ids: Array.from(selectedFiles), do_not_follow: value });
-        toast.success(`'Do Not Follow' updated for ${selectedFiles.size} files`);
+        toast.success(t('dnf_updated_msg').replace('{count}', String(selectedFiles.size)));
         importFolders();
         clearSelection();
       }
     } catch (e) {
-      toast.error("Failed to update 'Do Not Follow'");
+      toast.error(t("failed_toggle_dnf"));
     }
   };
 
@@ -418,7 +420,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       const firstDoc = docs.find(d => d.id === firstId);
       if (firstDoc) setShareItem(firstDoc);
     } else {
-      toast.info("Select at least one file to share");
+      toast.info(t("select_file_share"));
     }
   };
 
@@ -430,14 +432,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             onClick={handleUpload}
             className="flex-1 h-9 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 text-xs font-semibold"
           >
-            <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload File
+            <Upload className="h-3.5 w-3.5 mr-1.5" /> {t('upload_file_btn')}
           </Button>
           <Button
             onClick={() => setShowCreateFolder(true)}
             variant="outline"
             className="h-9 rounded-lg text-xs font-semibold"
           >
-            <FolderPlus className="h-3.5 w-3.5 mr-1.5" /> New Folder
+            <FolderPlus className="h-3.5 w-3.5 mr-1.5" /> {t('new_folder_btn')}
           </Button>
           <Button
             onClick={() => {
@@ -447,7 +449,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             variant={isSelectionMode ? "secondary" : "outline"}
             className="h-9 rounded-lg text-xs font-semibold px-3"
           >
-            {isSelectionMode ? 'Cancel' : 'Select'}
+            {isSelectionMode ? t('cancel') : t('select_btn')}
           </Button>
         </div>
       )}
@@ -487,14 +489,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             <button
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-card text-accent shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              title="Grid view"
+              title={t('grid_view_tip')}
             >
               <LayoutGrid className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-card text-accent shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              title="List view"
+              title={t('list_view_tip')}
             >
               <List className="h-3.5 w-3.5" />
             </button>
@@ -504,21 +506,21 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 text-[10px] font-semibold gap-1.5 text-muted-foreground bg-secondary/50">
-                Sort by: <span className="text-foreground capitalize">{sortBy}</span>
+                {t('sort_by_label')} <span className="text-foreground capitalize">{t(sortBy + '_label')}</span>
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuLabel className="text-[10px]">Sort Docs By</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-[10px]">{t('sort_docs_title')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setSortBy('name')} className="text-xs flex items-center justify-between">
-                Name {sortBy === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                {t('name_label')} {sortBy === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy('date')} className="text-xs flex items-center justify-between">
-                Date Modified {sortBy === 'date' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                {t('date_label')} {sortBy === 'date' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy('size')} className="text-xs flex items-center justify-between">
-                Size {sortBy === 'size' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                {t('size_label')} {sortBy === 'size' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -534,7 +536,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               activeFolderTab === 'files' ? "text-accent" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Files & Folders
+            {t('files_folders_tab')}
             {activeFolderTab === 'files' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
           <button
@@ -544,7 +546,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               activeFolderTab === 'rfi' ? "text-accent" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Linked RFIs
+            {t('linked_rfi_tab')}
             {activeFolderTab === 'rfi' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
         </div>
@@ -577,7 +579,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                     </button>
                   )}
                   {(user.role === 'admin' || user.role === 'superadmin') && (
-                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Move folder">
+                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('move_folder_tip')}>
                       <Move className="h-2.5 w-2.5 text-muted-foreground" />
                     </button>
                   )}
@@ -586,7 +588,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       <button 
                         onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
                         className="rounded-full p-1 hover:bg-secondary transition-colors" 
-                        title="Rename folder"
+                        title={t('rename_folder_tip')}
                         disabled={isArchiveFolder}
                       >
                         <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
@@ -608,7 +610,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               </span>
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="text-[9px] text-muted-foreground mr-1">
-                  {folderDocs.length} files{subFolders.length > 0 ? `, ${subFolders.length} folder${subFolders.length === 1 ? '' : 's'}` : ''}
+                  {t('files_count_label').replace('{count}', String(folderDocs.length))}{subFolders.length > 0 ? `, ${t(subFolders.length === 1 ? 'folder_count_label' : 'folders_count_label').replace('{count}', String(subFolders.length))}` : ''}
                 </span>
               </div>
             </button>
@@ -665,20 +667,20 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                  <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
                       {!isSelectionMode && (
                         <>
-                          <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Share via link">
+                          <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('share_link_tip')}>
                             <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
                           {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                            <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Rename file">
+                            <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('rename_file_tip')}>
                               <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                             </button>
                           )}
                           {(user.role === 'admin' || user.role === 'superadmin') && (
                             <>
-                              <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Toggle Visibility">
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('toggle_visibility_tip')}>
                                 {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
                               </button>
-                              <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Toggle Do Not Follow">
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('toggle_dnf_tip')}>
                                 <ShieldAlert className={`h-2.5 w-2.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
                               </button>
                             </>
@@ -687,7 +689,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                             <button
                               onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
                               className="rounded-full p-1 hover:bg-secondary transition-colors"
-                              title="Move file"
+                              title={t('move_file_tip')}
                             >
                               <Move className="h-2.5 w-2.5 text-muted-foreground" />
                             </button>
@@ -696,7 +698,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                             <button
                               onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }}
                               className="rounded-full p-1 hover:bg-amber-500/10 transition-colors"
-                              title="Archive file"
+                              title={t('archive_file_tip')}
                             >
                               <Archive className="h-2.5 w-2.5 text-amber-600" />
                             </button>
@@ -706,7 +708,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 </div>
                 {doc.do_not_follow && (
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
-                    DNF
+                    {t('dnf_tag')}
                   </div>
                 )}
 
@@ -747,7 +749,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   </button>
                   {doc.do_not_follow && (
                     <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
-                      <ShieldAlert className="h-2.5 w-2.5" /> DO NOT FOLLOW
+                      <ShieldAlert className="h-2.5 w-2.5" /> {t('do_not_follow_tag')}
                     </div>
                   )}
                 </div>
@@ -760,31 +762,31 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       <button
                         onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
                         className="rounded-md p-1 hover:bg-secondary"
-                        title="Move file"
+                        title={t('move_file_tip')}
                       >
                         <Move className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                       {(user.role === 'admin' || user.role === 'superadmin') && (
                         <>
-                          <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={`Toggle client visibility (Currently: ${doc.client_visible !== false ? 'Visible' : 'Hidden'})`}>
+                          <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
                             {doc.client_visible !== false ? (
                               <Eye className="h-3.5 w-3.5 text-accent" />
                             ) : (
                               <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
                             )}
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-md p-1 hover:bg-secondary" title={`Toggle Do Not Follow (Currently: ${doc.do_not_follow ? 'Enabled' : 'Disabled'})`}>
+                          <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_dnf_tip')}>
                             <ShieldAlert className={`h-3.5 w-3.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
                           </button>
                         </>
                       )}
                       {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                        <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-md p-1 hover:bg-secondary" title="Rename file">
+                        <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('rename_file_tip')}>
                           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       )}
                        {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
-                        <button onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title="Archive file">
+                        <button onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title={t('archive_file_tip')}>
                           <Archive className="h-3.5 w-3.5 text-amber-600" />
                         </button>
                       )}
@@ -811,7 +813,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         currentFolders.length === 0 && visibleDocs.length === 0 && (
           <div className="mt-12 text-center">
             <FileText className="mx-auto h-8 w-8 text-muted-foreground/30" />
-            <p className="mt-1.5 text-xs text-muted-foreground">No folders or documents yet</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{t('no_docs_yet')}</p>
           </div>
         )
       }
@@ -836,7 +838,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
             <div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-4">
               <div className="text-[10px] font-semibold text-muted-foreground border-r border-border pr-4">
-                {selectedFolders.size + selectedFiles.size} selected
+                {t('items_selected').replace('{count}', String(selectedFolders.size + selectedFiles.size))}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -845,7 +847,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
                   onClick={handleBulkShare}
                 >
-                  <Share2 className="h-3.5 w-3.5 mr-1" /> Share
+                  <Share2 className="h-3.5 w-3.5 mr-1" /> {t('share_btn')}
                 </Button>
                 <Button
                   size="sm"
@@ -853,7 +855,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
                   onClick={handleBulkMove}
                 >
-                  <Move className="h-3.5 w-3.5 mr-1" /> Move
+                  <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
                 </Button>
                 {(user.role === 'admin' || user.role === 'superadmin') && (
                   <div className="flex items-center gap-1 border-l border-border pl-2">
@@ -863,7 +865,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       className="h-8 px-2 text-[10px] font-semibold text-accent"
                       onClick={() => handleBulkVisibility(true)}
                     >
-                      <Eye className="h-3.5 w-3.5 mr-1" /> Show
+                      <Eye className="h-3.5 w-3.5 mr-1" /> {t('show_btn')}
                     </Button>
                     <Button
                       size="sm"
@@ -871,7 +873,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
                       onClick={() => handleBulkVisibility(false)}
                     >
-                      <EyeOff className="h-3.5 w-3.5 mr-1" /> Hide
+                      <EyeOff className="h-3.5 w-3.5 mr-1" /> {t('hide_btn')}
                     </Button>
                     <Button
                       size="sm"
@@ -879,7 +881,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       className="h-8 px-2 text-[10px] font-semibold text-red-500"
                       onClick={() => handleBulkDoNotFollow(true)}
                     >
-                      <ShieldAlert className="h-3.5 w-3.5 mr-1" /> DNF
+                      <ShieldAlert className="h-3.5 w-3.5 mr-1" /> {t('dnf_tag')}
                     </Button>
                     <Button
                       size="sm"
@@ -887,7 +889,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
                       onClick={() => handleBulkDoNotFollow(false)}
                     >
-                      <ShieldAlert className="h-3.5 w-3.5 mr-1" /> Regular
+                      <ShieldAlert className="h-3.5 w-3.5 mr-1" /> {t('regular_btn')}
                     </Button>
                   </div>
                 )}
@@ -895,7 +897,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               <button
                 onClick={clearSelection}
                 className="ml-2 text-muted-foreground hover:text-foreground p-1"
-                title="Clear selection"
+                title={t('clear_selection_tip')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -931,9 +933,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             // After moving contents, delete the original folder
             try {
               await deleteFolder(movingContentsOf.id, false);
-              toast.success(`Folder "${movingContentsOf.name}" deleted after moving contents`);
+              toast.success(t('folder_deleted_move_msg').replace('{name}', movingContentsOf.name));
             } catch (err) {
-              toast.error("Contents moved, but failed to delete empty folder");
+              toast.error(t("failed_delete_empty_folder"));
             }
           }
           importFolders();
@@ -950,11 +952,10 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               <div className="p-2 bg-destructive/10 rounded-full">
                 <AlertTriangle className="h-6 w-6" />
               </div>
-              <DialogTitle>Folder Not Empty</DialogTitle>
+              <DialogTitle>{t('folder_not_empty_title')}</DialogTitle>
             </div>
             <DialogDescription className="text-sm">
-              The folder <strong>{folderToDelete?.name}</strong> contains files or subfolders. 
-              How would you like to proceed?
+              {t('folder_not_empty_desc').replace('{name}', folderToDelete?.name || '')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-4">
@@ -965,8 +966,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             >
               <Trash2 className="h-4 w-4 mr-3" />
               <div className="text-left">
-                <p className="font-semibold">Delete Everything</p>
-                <p className="text-[10px] opacity-70">Permanently remove folder and all its contents</p>
+                <p className="font-semibold">{t('delete_everything_btn')}</p>
+                <p className="text-[10px] opacity-70">{t('delete_everything_desc')}</p>
               </div>
             </Button>
             <Button
@@ -976,14 +977,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             >
               <Move className="h-4 w-4 mr-3" />
               <div className="text-left">
-                <p className="font-semibold">Move Contents First</p>
-                <p className="text-[10px] opacity-70">Select another path for the items inside</p>
+                <p className="font-semibold">{t('move_contents_first_btn')}</p>
+                <p className="text-[10px] opacity-70">{t('move_contents_first_desc')}</p>
               </div>
             </Button>
           </div>
           <DialogFooter>
             <Button variant="ghost" className="text-xs" onClick={() => setShowDeleteConflict(false)}>
-              Cancel
+              {t('cancel')}
             </Button>
           </DialogFooter>
         </DialogContent>

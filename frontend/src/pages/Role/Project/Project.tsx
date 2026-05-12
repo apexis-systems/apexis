@@ -130,18 +130,18 @@ export default function Project({ id }: ProjectProps) {
 
     const handleDeleteProject = async () => {
         if (!user) return;
-        if (!window.confirm("Are you sure you want to delete this project? It will be moved to the Trash and can be recovered later from your Profile settings.")) {
+        if (!window.confirm(t("confirm_delete_project"))) {
             return;
         }
 
         try {
             setIsDeleting(true);
             await deleteProject(id);
-            toast.success("Project moved to Trash");
+            toast.success(t("project_moved_trash"));
             router.push(`/${user.role}/dashboard`);
         } catch (error) {
             console.error("Failed to delete project:", error);
-            toast.error("Failed to delete project. Please try again.");
+            toast.error(t("delete_project_failed"));
             setIsDeleting(false);
         }
     };
@@ -171,7 +171,7 @@ export default function Project({ id }: ProjectProps) {
         { key: 'overview' as TabKey, label: t('project_overview'), icon: LayoutDashboard },
         { key: 'documents' as TabKey, label: t('documents'), icon: FileText },
         { key: 'photos' as TabKey, label: t('photos'), icon: Camera },
-        { key: 'reports' as TabKey, label: 'Reports', icon: ClipboardList, adminOnly: true },
+        { key: 'reports' as TabKey, label: t('reports_label'), icon: ClipboardList, adminOnly: true },
         { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle },
         { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle, adminOnly: true },
         { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen },
@@ -215,8 +215,8 @@ export default function Project({ id }: ProjectProps) {
                         <div className="flex flex-col items-center gap-4 bg-card p-8 rounded-xl border border-border shadow-2xl">
                             <Loader2 className="h-10 w-10 animate-spin text-accent" />
                             <div className="text-center">
-                                <p className="text-lg font-bold text-foreground">Deleting Project</p>
-                                <p className="text-sm text-muted-foreground">Please wait while we clean up all assets...</p>
+                                <p className="text-lg font-bold text-foreground">{t('deleting_project')}</p>
+                                <p className="text-sm text-muted-foreground">{t('wait_cleaning_assets')}</p>
                             </div>
                         </div>
                     </div>
@@ -255,7 +255,7 @@ export default function Project({ id }: ProjectProps) {
                 <div className="flex items-center justify-between mb-6">
 
                     <h2 className="text-lg font-bold text-foreground">
-                        {visibleNav.find((n) => n.key === activeTab)?.label || (activeTab === 'reports' ? 'Reports' : '')}
+                        {visibleNav.find((n) => n.key === activeTab)?.label || (activeTab === 'reports' ? t('reports_label') : activeTab === 'rfi' ? 'RFI' : '')}
                     </h2>
                 </div>
 
