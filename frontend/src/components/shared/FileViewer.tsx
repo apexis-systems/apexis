@@ -7,7 +7,7 @@ import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalL
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
-import { updateFile, downloadFile } from '@/services/fileService';
+import { updateFile, downloadFile, markFileSeen } from '@/services/fileService';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
@@ -46,6 +46,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   }, [open, initialIndex]);
 
   const currentFile = files[currentIndex];
+
+  // Mark as seen if assigned to current user
+  useEffect(() => {
+    if (open && currentFile && user?.id) {
+      if (currentFile.assigned_to && String(currentFile.assigned_to) === String(user.id) && !currentFile.seen_at) {
+        markFileSeen(currentFile.id).catch(console.error);
+      }
+    }
+  }, [open, currentIndex, currentFile, user?.id]);
 
 
 

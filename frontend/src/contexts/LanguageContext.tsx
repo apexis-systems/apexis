@@ -57,6 +57,11 @@ const translations: Record<Language, Record<string, string>> = {
     manuals: 'Checklists',
     project_not_found: 'Project not found.',
     back_to_dashboard: 'Back to Dashboard',
+    assign_to: 'Assign To',
+    optional: '(Optional)',
+    unassigned: 'Unassigned',
+    selectAssignee: 'Select Assignee',
+    assigneeDescription: 'Assign this document to a project member',
   },
   hi: {
     welcome_back: 'वापसी पर स्वागत है',
@@ -110,6 +115,11 @@ const translations: Record<Language, Record<string, string>> = {
     manuals: 'चेकलिस्ट',
     project_not_found: 'परियोजना नहीं मिली।',
     back_to_dashboard: 'डैशबोर्ड पर वापस जाएं',
+    assign_to: 'किसे सौंपें',
+    optional: '(वैकल्पिक)',
+    unassigned: 'अनिर्दिष्ट',
+    selectAssignee: 'असाइनी चुनें',
+    assigneeDescription: 'इस दस्तावेज़ को प्रोजेक्ट सदस्य को सौंपें',
   },
   te: {
     welcome_back: 'తిరిగి స్వాగతం',
@@ -163,6 +173,11 @@ const translations: Record<Language, Record<string, string>> = {
     manuals: 'చెక్‌లిస్ట్',
     project_not_found: 'ప్రాజెక్ట్ కనుగొనబడలేదు.',
     back_to_dashboard: 'డ్యాష్‌బోర్డ్‌కు తిరిగి వెళ్ళు',
+    assign_to: 'కేటాయించండి',
+    optional: '(ఐచ్ఛికం)',
+    unassigned: 'అన్అసైన్ చేయబడింది',
+    selectAssignee: 'అసైన్ చేసిన వ్యక్తిని ఎంచుకోండి',
+    assigneeDescription: 'ఈ పత్రాన్ని ప్రాజెక్ట్ సభ్యునికి కేటాయించండి',
   },
 };
 

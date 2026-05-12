@@ -749,3 +749,120 @@ export const createRoom = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+/**
+ * Get projects related to a specific chat room
+ * GET /api/chats/:roomId/projects
+ */
+export const getChatProjects = async (req: Request, res: Response) => {
+    try {
+        const { roomId } = req.params;
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
+
+        // 1. Fetch room members
+        const members = await room_members.findAll({
+            where: { room_id: roomId },
+            include: [{ model: users, attributes: ['id', 'role', 'organization_id'] }]
+        });
+
+        if (!members.length) {
+            return res.status(404).json({ error: 'Room not found or empty' });
+        }
+
+        // Verify current user is in the room
+        const isMember = members.some((m: any) => Number(m.user_id) === Number(authUser.user_id));
+        if (!isMember) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        // 2. Determine accessible project IDs for each member
+        const memberProjectSets: Set<number>[] = [];
+
+        for (const member of members) {
+            const userObj = (member as any).user;
+            if (!userObj) continue;
+
+            let accessibleIds = new Set<number>();
+
+            // Always fetch explicit memberships for the user
+            const explicitMemberships = await project_members.findAll({
+                where: { user_id: userObj.id },
+                attributes: ['project_id', 'role']
+            });
+            explicitMemberships.forEach((pm: any) => accessibleIds.add(pm.project_id));
+
+            // If admin, also include all projects in their org
+            if (userObj.role === 'admin' || userObj.role === 'superadmin') {
+                const orgProjects = await projects.findAll({
+                    where: { organization_id: userObj.organization_id },
+                    attributes: ['id']
+                });
+                orgProjects.forEach((p: any) => accessibleIds.add(p.id));
+            }
+
+            memberProjectSets.push(accessibleIds);
+        }
+
+        // 3. Find intersection of all project IDs
+        if (memberProjectSets.length === 0) {
+            return res.status(200).json({ projects: [] });
+        }
+
+        let commonProjectIds = new Set(memberProjectSets[0]);
+        for (let i = 1; i < memberProjectSets.length; i++) {
+            const currentSet = memberProjectSets[i];
+            commonProjectIds = new Set([...commonProjectIds].filter(id => currentSet.has(id)));
+        }
+
+        if (commonProjectIds.size === 0) {
+            return res.status(200).json({ projects: [] });
+        }
+
+        // 4. Fetch full project details
+        const commonProjects = await projects.findAll({
+            where: { id: { [Op.in]: Array.from(commonProjectIds) } },
+            attributes: ['id', 'name', 'organization_id', 'description'],
+            include: [{ model: organizations, attributes: ['name'] }]
+        });
+
+        // 5. Build user role map specifically for the current authUser
+        const dbAuthUser = await users.findByPk(authUser.user_id, { attributes: ['id', 'role'] });
+        const isAuthAdmin = dbAuthUser?.role === 'admin' || dbAuthUser?.role === 'superadmin';
+
+        const authExplicitMemberships = await project_members.findAll({
+            where: { 
+                user_id: authUser.user_id,
+                project_id: { [Op.in]: Array.from(commonProjectIds) }
+            },
+            attributes: ['project_id', 'role']
+        });
+
+        const membershipMap = new Map<number, string>();
+        authExplicitMemberships.forEach((pm: any) => {
+            membershipMap.set(Number(pm.project_id), pm.role);
+        });
+
+        const results = commonProjects.map((p: any) => {
+            const pJson = p.toJSON();
+            let userRole = 'unknown';
+
+            if (isAuthAdmin && Number(p.organization_id) === Number(dbAuthUser.organization_id)) {
+                userRole = 'admin';
+            } else {
+                userRole = membershipMap.get(Number(p.id)) || 'unknown';
+            }
+
+            return {
+                ...pJson,
+                user_role: userRole
+            };
+        });
+
+        res.status(200).json({ projects: results });
+
+    } catch (error) {
+        console.error('Get Chat Projects Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

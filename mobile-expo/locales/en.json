@@ -677,6 +677,11 @@
             "failedToDeleteEmptyFolder": "Contents moved, but failed to delete empty folder"
         },
         "upload": {
+            "assignTo": "Assign To",
+            "optional": "(Optional)",
+            "unassigned": "Unassigned",
+            "selectAssignee": "Select Assignee",
+            "assigneeDescription": "Assign this document to a project member",
             "roleNotAllowed": "Upload is not available for your role.",
             "limitReachedTitle": "Limit Reached",
             "limitReachedMessage": "You can only select up to 20 files at once.",

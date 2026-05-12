@@ -2,16 +2,20 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import * as htmlToImage from 'html-to-image';
 import { ChevronLeft, Video, Phone, Smile, Paperclip, Camera, Mic, Send, Users, Check, CheckCheck, X, FileText, Download, CornerUpLeft, ZoomIn } from 'lucide-react';
-import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile } from '@/services/chatService';
+import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile, uploadConfirmationScreenshot, getChatProjects } from '@/services/chatService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PrivateAxios } from '@/helpers/PrivateAxios';
+import { toast } from 'sonner';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MoreVertical } from 'lucide-react';
 
 export default function ChatDetail() {
     const router = useRouter();
@@ -51,6 +55,34 @@ export default function ChatDetail() {
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
     const [viewPhotoName, setViewPhotoName] = useState<string>('');
     const [viewPhotoId, setViewPhotoId] = useState<number>(0);
+    const [isCapturing, setIsCapturing] = useState(false);
+    const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
+    const [showProjectPicker, setShowProjectPicker] = useState(false);
+    const [projectsList, setProjectsList] = useState<any[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(false);
+    const [selectingProject, setSelectingProject] = useState(false);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const fetchProjects = async () => {
+            setLoadingProjects(true);
+            try {
+                if (!roomId) return;
+                const projects = await getChatProjects(roomId);
+                if (projects) {
+                    setProjectsList(projects);
+                }
+            } catch (error) {
+                console.error('Failed to fetch projects:', error);
+            } finally {
+                setLoadingProjects(false);
+            }
+        };
+
+        if (showProjectPicker) {
+            fetchProjects();
+        }
+    }, [showProjectPicker]);
 
     const handleDownload = async (messageId: number, fileName: string) => {
         if (!messageId) return;
@@ -69,6 +101,94 @@ export default function ChatDetail() {
             window.URL.revokeObjectURL(blobUrl);
         } catch (err) {
             console.error("Download failed", err);
+        }
+    };
+
+    const getActiveProjectId = () => {
+        if (room?.project_id) return room.project_id;
+        
+        // Fallback: If it's a direct chat, see if the users share exactly one project
+        if (room?.room_members && room.room_members.length >= 2) {
+            const memberProjects = room.room_members.map((m: any) => 
+                m.user?.project_members?.map((pm: any) => pm.project_id) || []
+            );
+            
+            const intersection = memberProjects.reduce((a: any[], b: any[]) => 
+                a.filter(x => b.includes(x))
+            );
+            
+            if (intersection.length === 1) return intersection[0];
+        }
+        return null;
+    };
+
+    const takeConfirmationScreenshot = async () => {
+        if (!chatContainerRef.current) return;
+        
+        setIsCapturing(true);
+        try {
+            // Use html-to-image with filter to hide the loader from capture
+            const dataUrl = await htmlToImage.toJpeg(document.body, {
+                quality: 0.9,
+                backgroundColor: document.documentElement.classList.contains('dark') ? '#0b141a' : '#efeae2',
+                imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+                filter: (node) => {
+                    const el = node as HTMLElement;
+                    if (el.id === 'capture-loader-overlay') return false;
+                    
+                    // Exclude external images to prevent strict CORS policies from failing the screenshot
+                    if (el.tagName === 'IMG') {
+                        const img = el as HTMLImageElement;
+                        if (img.src && img.src.startsWith('http') && !img.src.startsWith(window.location.origin)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            });
+            
+            const blob = await (await fetch(dataUrl)).blob();
+            setCapturedBlob(blob);
+
+            const initialProjectId = getActiveProjectId();
+            if (initialProjectId) {
+                // If we have a clear project context, upload immediately
+                await handleProjectSelected(initialProjectId, blob);
+            } else {
+                // Otherwise ask the user
+                setShowProjectPicker(true);
+            }
+        } catch (err) {
+            console.error("Screenshot failed", err);
+            toast.error("Failed to take screenshot");
+        } finally {
+            setIsCapturing(false);
+        }
+    };
+
+    const handleProjectSelected = async (projectId: string | number, blobOverride?: Blob) => {
+        const blobToUpload = blobOverride || capturedBlob;
+        if (!blobToUpload) return;
+
+        setSelectingProject(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', blobToUpload, `confirmation_${Date.now()}.jpg`);
+            formData.append('project_id', String(projectId));
+            formData.append('skipActivity', 'false');
+
+            const response = await uploadConfirmationScreenshot(formData);
+
+            if (response.status === 200) {
+                toast.success("Confirmation screenshot saved to project photos");
+                setShowProjectPicker(false);
+                setCapturedBlob(null);
+            }
+        } catch (err) {
+            console.error("Upload failed", err);
+            toast.error("Failed to save confirmation");
+        } finally {
+            setSelectingProject(false);
         }
     };
 
@@ -102,7 +222,7 @@ export default function ChatDetail() {
                 const allRooms = await listRooms();
                 const currentRoom = allRooms.find((r: any) => String(r.id) === String(roomId));
                 setRoom(currentRoom);
-                setMessages(data);
+                setMessages([...data].reverse());
 
                 if (document.hasFocus() && user?.id) {
                     data.forEach((msg: any) => {
@@ -140,7 +260,7 @@ export default function ChatDetail() {
                     if (exists) {
                         return prev.map(m => String(m.id) === String(msg.id) ? msg : m);
                     }
-                    return [...prev, msg];
+                    return [msg, ...prev];
                 });
 
                 if (msg.sender_id !== user?.id && msg.senderId !== user?.id) {
@@ -353,15 +473,17 @@ export default function ChatDetail() {
             </div>
 
             {/* Chat Messages Area */}
-            <div className="flex-1 relative flex flex-col min-h-0">
+            <div className="flex-1 relative flex flex-col min-h-0" ref={chatContainerRef}>
                 <div
-                    className="flex-1 overflow-y-auto px-4 py-4 space-y-2"
+                    className="flex-1 overflow-y-auto px-4 py-4 space-y-2 flex flex-col-reverse"
                     style={{ background: 'var(--chat-bg, #efeae2)' }}
                 >
                     <style>{`
                         :root { --chat-bg: #efeae2; }
                         .dark { --chat-bg: #0b141a; }
                     `}</style>
+
+                    <div className="flex-1 min-h-0 shrink-0 pointer-events-none" />
 
                     {messages.map(msg => {
                         const isMe = msg.sender_id === user?.id;
@@ -459,9 +581,23 @@ export default function ChatDetail() {
                                                 inputRef.current?.focus();
                                             }}
                                             className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}
+                                            title="Reply"
                                         >
                                             <CornerUpLeft className="h-3 w-3" />
                                         </button>
+
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <button className={`p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}>
+                                                    <MoreVertical className="h-3 w-3" />
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={takeConfirmationScreenshot} className="text-xs cursor-pointer">
+                                                    Confirm as Confirmation
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
                                 </div>
                             </div>
@@ -632,6 +768,74 @@ export default function ChatDetail() {
                             <img src={viewPhoto} alt="Preview" className="max-w-full max-h-[85vh] rounded-lg" />
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {isCapturing && (
+                <div id="capture-loader-overlay" className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center text-white">
+                    <div className="h-12 w-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4" />
+                    <p className="text-lg font-bold">Capturing Confirmation...</p>
+                    <p className="text-sm opacity-80">This will take a moment</p>
+                </div>
+            )}
+
+            {/* Project Selection Dialog */}
+            <Dialog open={showProjectPicker} onOpenChange={setShowProjectPicker}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Select Project</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <p className="text-sm text-muted-foreground">
+                            Which project should this confirmation screenshot be saved to?
+                        </p>
+                        <div className="max-h-[400px] overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-border">
+                            {loadingProjects ? (
+                                <div className="py-12 flex flex-col items-center justify-center text-center">
+                                    <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+                                    <p className="text-sm text-muted-foreground font-medium">Fetching projects...</p>
+                                </div>
+                            ) : projectsList.length > 0 ? (
+                                projectsList.map((p) => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => handleProjectSelected(p.id)}
+                                        disabled={selectingProject}
+                                        className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-secondary/40 transition-all text-left border border-border/50 hover:border-primary/30 group"
+                                    >
+                                        <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:bg-primary/20 transition-colors">
+                                            <span className="text-primary font-bold text-lg">{p.name ? p.name.charAt(0).toUpperCase() : '?'}</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <p className="font-bold text-[15px] truncate text-foreground">{p.name || 'Untitled Project'}</p>
+                                                {p.user_role && (
+                                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary uppercase tracking-wider border border-primary/20">
+                                                        {p.user_role}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground truncate">{p.description || 'No project description'}</p>
+                                            <p className="text-[10px] text-muted-foreground/60 uppercase font-medium mt-1">{p.organization?.name}</p>
+                                        </div>
+                                        {selectingProject ? (
+                                            <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                        ) : (
+                                            <ChevronLeft className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors rotate-180" />
+                                        )}
+                                    </button>
+                                ))
+                            ) : (
+                                <div className="text-center py-12">
+                                    <div className="h-12 w-12 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-border">
+                                        <FileText className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                    <p className="text-sm font-medium text-foreground">No projects found</p>
+                                    <p className="text-xs text-muted-foreground mt-1">You aren't assigned to any projects yet.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

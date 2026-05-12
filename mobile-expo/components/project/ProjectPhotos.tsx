@@ -1015,14 +1015,18 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     }}
                                                 />
                                                 <View style={{ marginBottom: 8 }}>
-                                                    <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
+                                                    <Feather 
+                                                        name={isArchiveFolder ? "archive" : (folder.name.toLowerCase() === 'confirmation' ? "check-circle" : "folder")} 
+                                                        size={folder.name.toLowerCase() === 'confirmation' ? 32 : 36} 
+                                                        color={isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.primary)} 
+                                                    />
                                                 </View>
                                                 {isSelected && (
                                                     <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                                         <Feather name="check" size={10} color="#fff" />
                                                     </View>
                                                 )}
-                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
+                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.text), textAlign: 'center' }}>{folder.name}</Text>
                                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                                     {subcount > 0 
                                                         ? t('projectPhotos.photosFoldersCount', { photoCount: count, folderCount: subcount }) 
@@ -1306,14 +1310,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         onPress={() => {
                                             const folderId = Array.from(selectedFolders)[0];
                                             const folder = folders.find(f => f.id === folderId);
-                                            if (folder) {
+                                            const isConfirmation = folder?.name.toLowerCase() === 'confirmation';
+                                            if (folder && !isConfirmation) {
                                                 setEditingFolderId(folder.id);
                                                 setEditFolderName(folder.name);
                                                 setShowEditFolder(true);
                                             }
                                         }}
-                                        style={{ padding: 4 }}
-                                        disabled={processing !== null}
+                                        style={{ padding: 4, opacity: Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation') ? 0.5 : 1 }}
+                                        disabled={processing !== null || Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation')}
                                     >
                                         <Feather name="edit-2" size={18} color={colors.primary} />
                                     </TouchableOpacity>
@@ -1329,10 +1334,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     onPress={() => {
                                                         const folderId = Array.from(selectedFolders)[0];
                                                         const folder = folders.find(f => f.id === folderId);
-                                                        if (folder) confirmDeleteFolder(folder);
+                                                        const isConfirmation = folder?.name.toLowerCase() === 'confirmation';
+                                                        if (folder && !isConfirmation) confirmDeleteFolder(folder);
                                                     }}
-                                                    style={{ padding: 4 }}
-                                                    disabled={processing !== null}
+                                                    style={{ padding: 4, opacity: Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation') ? 0.5 : 1 }}
+                                                    disabled={processing !== null || Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation')}
                                                 >
                                                     {processing === 'delete_folder' ? (
                                                         <ActivityIndicator size="small" color="#ef4444" />

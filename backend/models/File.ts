@@ -57,6 +57,15 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING,
                 allowNull: true,
             },
+            assigned_to: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+            },
+            seen_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+                defaultValue: null,
+            },
         },
         {
             tableName: "files",

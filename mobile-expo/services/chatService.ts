@@ -79,3 +79,13 @@ export const createRoom = async (data: { type: 'direct' | 'group', name?: string
         throw error;
     }
 };
+
+export const getChatProjects = async (roomId: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/chats/${roomId}/projects`);
+        return response.data.projects;
+    } catch (error: any) {
+        console.error("getChatProjects Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};

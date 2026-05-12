@@ -74,17 +74,17 @@ export default function FolderActionMenu({
                                 {isAdmin && (
                                     <>
                                         <TouchableOpacity 
-                                            style={[styles.option, isProcessing && { opacity: 0.5 }]} 
-                                            onPress={() => { !isProcessing && onRename(); onClose(); }}
-                                            disabled={isProcessing}
+                                            style={[styles.option, (isProcessing || folderName.toLowerCase() === 'confirmation') && { opacity: 0.5 }]} 
+                                            onPress={() => { !isProcessing && folderName.toLowerCase() !== 'confirmation' && onRename(); onClose(); }}
+                                            disabled={isProcessing || folderName.toLowerCase() === 'confirmation'}
                                         >
                                             <Feather name="edit-2" size={18} color={colors.primary} />
                                             <Text style={[styles.optionText, { color: colors.text }]}>Rename Folder</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity 
-                                            style={[styles.option, styles.deleteOption, isProcessing && { opacity: 0.5 }]} 
-                                            onPress={() => { !isProcessing && onDelete(); onClose(); }}
-                                            disabled={isProcessing}
+                                            style={[styles.option, styles.deleteOption, (isProcessing || folderName.toLowerCase() === 'confirmation') && { opacity: 0.5 }]} 
+                                            onPress={() => { !isProcessing && folderName.toLowerCase() !== 'confirmation' && onDelete(); onClose(); }}
+                                            disabled={isProcessing || folderName.toLowerCase() === 'confirmation'}
                                         >
                                             <Feather name="trash-2" size={18} color="#ef4444" />
                                             <Text style={[styles.optionText, { color: "#ef4444" }]}>Delete Folder</Text>
