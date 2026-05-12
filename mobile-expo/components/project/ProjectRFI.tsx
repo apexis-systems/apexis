@@ -33,7 +33,9 @@ import {
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
+// Removed AnimatedCameraView for stability
+
+// Removed AnimatedCameraView for stability
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
@@ -147,7 +149,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const cameraRef = React.useRef<CameraView>(null);
   const zoomShared = useSharedValue(0); // 0–1 for expo-camera
   const startZoom = useSharedValue(0);
-  const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+  const MIN_ZOOM = Platform.OS === 'ios' ? 0.5 : 1.0;
+  const [zoomDisplay, setZoomDisplay] = useState(Platform.OS === 'ios' ? '0.5x' : '1.0x'); // live label
+  const [cameraZoom, setCameraZoom] = useState(0); // Standard React state for camera zoom prop
   const zoomLabelOpacity = useSharedValue(0);
   let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -156,12 +160,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
   // Converts 0-1 internal value → display string like "2.3x"
   const toDisplayZoom = (val: number) => {
-    const factor = 1 + val * (MAX_ZOOM_FACTOR - 1);
+    const factor = MIN_ZOOM + val * (MAX_ZOOM_FACTOR - MIN_ZOOM);
     return `${factor.toFixed(1)}x`;
   };
 
   const showZoomLabel = (val: number) => {
-    setZoomDisplay(toDisplayZoom(val));
+    const rounded = Math.round(val * 1000) / 1000;
+    setZoomDisplay(toDisplayZoom(rounded));
+    setCameraZoom(rounded);
     zoomLabelOpacity.value = withTiming(1, { duration: 80 });
     if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
     zoomHideTimer.current = setTimeout(() => {
@@ -176,26 +182,30 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       })
       .onUpdate((event) => {
         // Multiplicative zoom feels natural — same as native camera apps
-        const raw = startZoom.value + (event.scale - 1) * (1 / MAX_ZOOM_FACTOR);
+        const raw = startZoom.value + (event.scale - 1) * (1 / (MAX_ZOOM_FACTOR - MIN_ZOOM));
         const clamped = Math.max(0, Math.min(1, raw));
         zoomShared.value = clamped;
         runOnJS(showZoomLabel)(clamped);
       }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [zoomShared, startZoom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [zoomShared, startZoom]);
 
-  const animatedCameraProps = useAnimatedProps(() => ({
-    zoom: zoomShared.value,
-  }));
+  // Removed animatedCameraProps
+
+  // Removed animatedCameraProps
 
   const zoomLabelStyle = useAnimatedStyle(() => ({
     opacity: zoomLabelOpacity.value,
   }));
 
-  // Keep for backwards compat (unused after button removal)
-  const handleManualZoom = (z: number) => {
-    zoomShared.value = withSpring(z, { damping: 20, stiffness: 100 });
-    runOnJS(showZoomLabel)(z);
+  // Unified Manual Zoom Handler
+  const handleManualZoom = (factor: number) => {
+    const z = (factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
+    const clamped = Math.max(0, Math.min(1, z));
+    
+    // Sync everything immediately
+    zoomShared.value = clamped; 
+    showZoomLabel(clamped);
   };
 
   // Filter Modals
@@ -1715,13 +1725,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           }}>
                             <GestureDetector gesture={pinchGesture}>
                               <View collapsable={false} style={StyleSheet.absoluteFill}>
-                                <AnimatedCameraView
-                                  key={cameraSessionKey}
+                                <CameraView
+                                  ref={cameraRef}
                                   style={StyleSheet.absoluteFill}
                                   facing="back"
-                                  ref={cameraRef as any}
                                   ratio="4:3"
-                                  animatedProps={animatedCameraProps}
+                                  zoom={cameraZoom}
                                 />
                               </View>
                             </GestureDetector>
@@ -1732,7 +1741,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 zoomLabelStyle,
                                 {
                                   position: 'absolute',
-                                  bottom: 16,
+                                  bottom: 64,
                                   alignSelf: 'center',
                                   backgroundColor: 'rgba(0,0,0,0.55)',
                                   paddingHorizontal: 14,
@@ -1744,6 +1753,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             >
                               <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
                             </Animated.View>
+                            {/* Direct Zoom Buttons */}
+                            <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
+                              {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                <TouchableOpacity key={factor} onPress={() => handleManualZoom((factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM))} style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
+                                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
                           </View>
 
                           <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -1921,13 +1938,13 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         }}>
                           <GestureDetector gesture={pinchGesture}>
                             <View collapsable={false} style={StyleSheet.absoluteFill}>
-                              <AnimatedCameraView
-                                key={cameraSessionKey}
+                              <CameraView
+                                
+                                ref={cameraRef}
                                 style={StyleSheet.absoluteFill}
                                 facing="back"
-                                ref={cameraRef as any}
                                 ratio="4:3"
-                                animatedProps={animatedCameraProps}
+                                zoom={cameraZoom}
                               />
                             </View>
                           </GestureDetector>
@@ -1938,7 +1955,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               zoomLabelStyle,
                               {
                                 position: 'absolute',
-                                bottom: 16,
+                                bottom: 64,
                                 alignSelf: 'center',
                                 backgroundColor: 'rgba(0,0,0,0.55)',
                                 paddingHorizontal: 14,
@@ -1950,6 +1967,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           >
                             <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
                           </Animated.View>
+                          {/* Direct Zoom Buttons */}
+                          <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
+                            {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                              <TouchableOpacity key={factor} onPress={() => handleManualZoom((factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM))} style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
                         </View>
 
                         <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -2473,13 +2498,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             }}>
                               <GestureDetector gesture={pinchGesture}>
                                 <View collapsable={false} style={StyleSheet.absoluteFill}>
-                                  <AnimatedCameraView
-                                    key={cameraSessionKey}
+                                  <CameraView
+                                    ref={cameraRef}
                                     style={StyleSheet.absoluteFill}
                                     facing="back"
-                                    ref={cameraRef as any}
                                     ratio="4:3"
-                                    animatedProps={animatedCameraProps}
+                                    zoom={cameraZoom}
                                   />
                                 </View>
                               </GestureDetector>
@@ -2490,7 +2514,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                   zoomLabelStyle,
                                   {
                                     position: 'absolute',
-                                    bottom: 16,
+                                    bottom: 64,
                                     alignSelf: 'center',
                                     backgroundColor: 'rgba(0,0,0,0.55)',
                                     paddingHorizontal: 14,
@@ -2502,6 +2526,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               >
                                 <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
                               </Animated.View>
+                              {/* Direct Zoom Buttons */}
+                              <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
+                                  {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                    <TouchableOpacity key={factor} onPress={() => handleManualZoom(factor)} style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
+                                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                              </View>
                             </View>
 
                             <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -2677,13 +2709,48 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                             overflow: 'hidden',
                             marginTop: Math.max(insets.top, 20) + 60,
                           }}>
-                            <CameraView
-                              key={cameraSessionKey}
-                              style={StyleSheet.absoluteFill}
-                              facing="back"
-                              ref={cameraRef}
-                              ratio="4:3"
-                            />
+                            <GestureDetector gesture={pinchGesture}>
+                              <View collapsable={false} style={StyleSheet.absoluteFill}>
+                                <CameraView
+                                  ref={cameraRef}
+                                  style={StyleSheet.absoluteFill}
+                                  facing="back"
+                                  ratio="4:3"
+                                  zoom={cameraZoom}
+                                />
+                              </View>
+                            </GestureDetector>
+                            {/* Dynamic Zoom Indicator */}
+                            <Animated.View
+                              pointerEvents="none"
+                              style={[
+                                zoomLabelStyle,
+                                {
+                                  position: 'absolute',
+                                  bottom: 64,
+                                  alignSelf: 'center',
+                                  backgroundColor: 'rgba(0,0,0,0.55)',
+                                  paddingHorizontal: 14,
+                                  paddingVertical: 6,
+                                  borderRadius: 20,
+                                  zIndex: 30,
+                                }
+                              ]}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
+                            </Animated.View>
+                            {/* Direct Zoom Buttons */}
+                            <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
+                              {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                <TouchableOpacity
+                                  key={factor}
+                                  onPress={() => handleManualZoom(factor)}
+                                  style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                                >
+                                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
                           </View>
                           {/* ... Header and Controls ... */}
                           <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>

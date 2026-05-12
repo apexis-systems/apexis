@@ -17,7 +17,8 @@ import Animated, {
     runOnJS
 } from 'react-native-reanimated';
 
-const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
+// Removed AnimatedCameraView in favor of direct CameraView zoom prop for stability
+// Removed AnimatedCameraView in favor of direct CameraView zoom prop for stability
 
 
 interface Props {
@@ -37,7 +38,9 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
     //zoom 
     const zoomShared = useSharedValue(0); // 0–1 for expo-camera
     const startZoom = useSharedValue(0);
-    const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+    const MIN_ZOOM = Platform.OS === 'ios' ? 0.5 : 1.0;
+    const [zoomDisplay, setZoomDisplay] = useState(Platform.OS === 'ios' ? '0.5x' : '1.0x'); // live label
+    const [cameraZoom, setCameraZoom] = useState(0); // Standard React state for camera zoom prop
     const zoomLabelOpacity = useSharedValue(0);
     let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -46,12 +49,14 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
 
     // Converts 0-1 internal value → display string like "2.3x"
     const toDisplayZoom = (val: number) => {
-        const factor = 1 + val * (MAX_ZOOM_FACTOR - 1);
+        const factor = MIN_ZOOM + val * (MAX_ZOOM_FACTOR - MIN_ZOOM);
         return `${factor.toFixed(1)}x`;
     };
 
     const showZoomLabel = (val: number) => {
-        setZoomDisplay(toDisplayZoom(val));
+        const rounded = Math.round(val * 1000) / 1000;
+        setZoomDisplay(toDisplayZoom(rounded));
+        setCameraZoom(rounded);
         zoomLabelOpacity.value = withTiming(1, { duration: 80 });
         if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
         zoomHideTimer.current = setTimeout(() => {
@@ -66,7 +71,7 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
             })
             .onUpdate((event) => {
                 // Multiplicative zoom feels natural — same as native camera apps
-                const raw = startZoom.value + (event.scale - 1) * (1 / MAX_ZOOM_FACTOR);
+                const raw = startZoom.value + (event.scale - 1) * (1 / (MAX_ZOOM_FACTOR - MIN_ZOOM));
                 const clamped = Math.max(0, Math.min(1, raw));
                 zoomShared.value = clamped;
                 runOnJS(showZoomLabel)(clamped);
@@ -74,18 +79,22 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [zoomShared, startZoom]);
 
-    const animatedCameraProps = useAnimatedProps(() => ({
-        zoom: zoomShared.value,
-    }));
+    // Removed animatedCameraProps in favor of direct state prop
+
+    // Removed animatedCameraProps in favor of direct state prop
 
     const zoomLabelStyle = useAnimatedStyle(() => ({
         opacity: zoomLabelOpacity.value,
     }));
 
-    // Keep for backwards compat (unused after button removal)
-    const handleManualZoom = (z: number) => {
-        zoomShared.value = withSpring(z, { damping: 20, stiffness: 100 });
-        runOnJS(showZoomLabel)(z);
+    // Unified Manual Zoom Handler
+    const handleManualZoom = (factor: number) => {
+        const z = (factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
+        const clamped = Math.max(0, Math.min(1, z));
+        
+        // Sync everything immediately
+        zoomShared.value = clamped; 
+        showZoomLabel(clamped);
     };
 
     useEffect(() => {
@@ -209,16 +218,16 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
 
                 {/* Camera View */}
                 {permission?.granted ? (
-                    <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 95 }}>
+                    <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'flex-start', alignItems: 'center', marginTop: Math.max(insets.top, 20) + 60, }}>
                         <View style={{ width: '100%', aspectRatio: 3 / 4, overflow: 'hidden', backgroundColor: '#111' }}>
                             <GestureDetector gesture={pinchGesture}>
                                 <View collapsable={false} style={StyleSheet.absoluteFill}>
-                                    <AnimatedCameraView
+                                    <CameraView
                                         ref={cameraRef}
                                         style={{ flex: 1 }}
                                         facing={cameraFacing}
                                         ratio="4:3"
-                                        animatedProps={animatedCameraProps}
+                                        zoom={cameraZoom}
                                     />
                                 </View>
                             </GestureDetector>
@@ -229,7 +238,7 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                                     zoomLabelStyle,
                                     {
                                         position: 'absolute',
-                                        bottom: 16,
+                                        bottom: 64,
                                         alignSelf: 'center',
                                         backgroundColor: 'rgba(0,0,0,0.55)',
                                         paddingHorizontal: 14,
@@ -241,6 +250,35 @@ export default function ChatCameraModal({ visible, onClose, onCapture }: Props) 
                             >
                                 <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
                             </Animated.View>
+
+                            {/* Direct Zoom Buttons */}
+                            <View style={{
+                                position: 'absolute',
+                                bottom: 16,
+                                alignSelf: 'center',
+                                flexDirection: 'row',
+                                gap: 16,
+                                zIndex: 40,
+                            }}>
+                                {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                    <TouchableOpacity
+                                        key={factor}
+                                        onPress={() => handleManualZoom(factor)}
+                                        style={{
+                                            backgroundColor: 'rgba(0,0,0,0.55)',
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: 18,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderWidth: 1,
+                                            borderColor: 'rgba(255,255,255,0.3)',
+                                        }}
+                                    >
+                                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
                     </View>
                 ) : (

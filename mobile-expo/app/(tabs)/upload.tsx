@@ -41,7 +41,6 @@ import Reanimated, {
     useSharedValue,
     useAnimatedProps,
     useAnimatedStyle,
-    withSpring,
     withTiming,
     runOnJS
 } from 'react-native-reanimated';
@@ -129,7 +128,10 @@ export default function UploadScreen() {
     //zoom 
     const zoomShared = useSharedValue(0); // 0–1 for expo-camera
     const startZoom = useSharedValue(0);
-    const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+    const MIN_ZOOM = Platform.OS === 'ios' ? 0.5 : 1.0;
+    const [zoomDisplay, setZoomDisplay] = useState(Platform.OS === 'ios' ? '0.5x' : '1.0x'); // live label
+    const [cameraZoom, setCameraZoom] = useState(0); // Standard React state for camera zoom prop
+
     const zoomLabelOpacity = useSharedValue(0);
     let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -138,12 +140,15 @@ export default function UploadScreen() {
 
     // Converts 0-1 internal value → display string like "2.3x"
     const toDisplayZoom = (val: number) => {
-        const factor = 1 + val * (MAX_ZOOM_FACTOR - 1);
+        const factor = MIN_ZOOM + val * (MAX_ZOOM_FACTOR - MIN_ZOOM);
         return `${factor.toFixed(1)}x`;
     };
 
     const showZoomLabel = (val: number) => {
-        setZoomDisplay(toDisplayZoom(val));
+        // Rounding to 3 decimal places ensures Android stability
+        const roundedVal = Math.round(val * 1000) / 1000;
+        setZoomDisplay(toDisplayZoom(roundedVal));
+        setCameraZoom(roundedVal); // Directly update camera state
         zoomLabelOpacity.value = withTiming(1, { duration: 80 });
         if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
         zoomHideTimer.current = setTimeout(() => {
@@ -158,7 +163,7 @@ export default function UploadScreen() {
             })
             .onUpdate((event) => {
                 // Multiplicative zoom feels natural — same as native camera apps
-                const raw = startZoom.value + (event.scale - 1) * (1 / MAX_ZOOM_FACTOR);
+                const raw = startZoom.value + (event.scale - 1) * (1 / (MAX_ZOOM_FACTOR - MIN_ZOOM));
                 const clamped = Math.max(0, Math.min(1, raw));
                 zoomShared.value = clamped;
                 runOnJS(showZoomLabel)(clamped);
@@ -167,17 +172,21 @@ export default function UploadScreen() {
         [zoomShared, startZoom]);
 
     const animatedCameraProps = useAnimatedProps(() => ({
-        zoom: zoomShared.value,
+        zoom: Math.max(0, Math.min(1, zoomShared.value)),
     }));
 
     const zoomLabelStyle = useAnimatedStyle(() => ({
         opacity: zoomLabelOpacity.value,
     }));
 
-    // Keep for backwards compat (unused after button removal)
-    const handleManualZoom = (z: number) => {
-        zoomShared.value = withSpring(z, { damping: 20, stiffness: 100 });
-        runOnJS(showZoomLabel)(z);
+    // Unified Manual Zoom Handler
+    const handleManualZoom = (factor: number) => {
+        const z = (factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
+        const clamped = Math.max(0, Math.min(1, z));
+        
+        // Sync everything immediately
+        zoomShared.value = clamped; 
+        showZoomLabel(clamped);
     };
 
     useEffect(() => {
@@ -280,9 +289,16 @@ export default function UploadScreen() {
     // Dynamic Tab Bar Visibility
     useLayoutEffect(() => {
         navigation.setOptions({
-            tabBarStyle: mode === 'capture' ? { display: 'none' } : undefined,
+            tabBarStyle: mode === 'capture' ? { display: 'none' } : {
+                backgroundColor: colors.surface,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+                paddingBottom: Platform.OS === 'android' ? insets.bottom + 4 : 20,
+                paddingTop: 8,
+                height: Platform.OS === 'android' ? 60 + insets.bottom : 82,
+            },
         });
-    }, [mode, navigation]);
+    }, [mode, navigation, colors, insets]);
 
     const fetchFolders = async () => {
         if (!selectedProject) { setFolders([]); return; }
@@ -877,27 +893,28 @@ export default function UploadScreen() {
                     </View>
 
                     {cameraPermission?.granted && isFocused ? (
-                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: "center", alignItems: "center" }}>
-                            <View style={{ width: SCREEN_W, height: CAMERA_HEIGHT, backgroundColor: '#111', overflow: 'hidden' }}>
+                        <View style={{ flex: 1, backgroundColor: '#000' }}>
+                            <View style={{ width: SCREEN_W, height: CAMERA_HEIGHT, backgroundColor: '#111', overflow: 'hidden', marginTop: Math.max(insets.top, 20) + 40, }}>
                                 <GestureDetector gesture={pinchGesture}>
                                     <View collapsable={false} style={StyleSheet.absoluteFill}>
-                                        <AnimatedCameraView
+                                        <CameraView
                                             style={StyleSheet.absoluteFill}
                                             facing="back"
                                             ref={cameraRef}
                                             ratio="4:3"
-                                            animatedProps={animatedCameraProps}
+                                            zoom={cameraZoom}
+                                        //animatedProps={animatedCameraProps}
                                         />
                                     </View>
                                 </GestureDetector>
                                 {/* Dynamic Zoom Indicator */}
-                                <Animated.View
+                                <Reanimated.View
                                     pointerEvents="none"
                                     style={[
                                         zoomLabelStyle,
                                         {
                                             position: 'absolute',
-                                            bottom: 16,
+                                            bottom: 64,
                                             alignSelf: 'center',
                                             backgroundColor: 'rgba(0,0,0,0.55)',
                                             paddingHorizontal: 14,
@@ -908,7 +925,19 @@ export default function UploadScreen() {
                                     ]}
                                 >
                                     <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
-                                </Animated.View>
+                                </Reanimated.View>
+                                {/* Direct Zoom Buttons */}
+                                <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
+                                    {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                        <TouchableOpacity
+                                            key={factor}
+                                            onPress={() => handleManualZoom(factor)}
+                                            style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                                        >
+                                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
                             </View>
                         </View>
                     ) : (

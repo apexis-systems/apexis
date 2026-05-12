@@ -32,7 +32,9 @@ import Animated, {
     runOnJS
 } from 'react-native-reanimated';
 
-const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
+// Removed AnimatedCameraView for stability
+
+// Removed AnimatedCameraView for stability
 
 type Step = 'camera' | 'details';
 
@@ -71,7 +73,9 @@ export default function SnagCreateScreen() {
     //zoom 
     const zoomShared = useSharedValue(0); // 0–1 for expo-camera
     const startZoom = useSharedValue(0);
-    const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+    const MIN_ZOOM = Platform.OS === 'ios' ? 0.5 : 1.0;
+    const [zoomDisplay, setZoomDisplay] = useState(Platform.OS === 'ios' ? '0.5x' : '1.0x'); // live label
+    const [cameraZoom, setCameraZoom] = useState(0); // Standard React state for camera zoom prop
     const zoomLabelOpacity = useSharedValue(0);
     let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -80,12 +84,14 @@ export default function SnagCreateScreen() {
 
     // Converts 0-1 internal value → display string like "2.3x"
     const toDisplayZoom = (val: number) => {
-        const factor = 1 + val * (MAX_ZOOM_FACTOR - 1);
+        const factor = MIN_ZOOM + val * (MAX_ZOOM_FACTOR - MIN_ZOOM);
         return `${factor.toFixed(1)}x`;
     };
 
     const showZoomLabel = (val: number) => {
-        setZoomDisplay(toDisplayZoom(val));
+        const rounded = Math.round(val * 1000) / 1000;
+        setZoomDisplay(toDisplayZoom(rounded));
+        setCameraZoom(rounded);
         zoomLabelOpacity.value = withTiming(1, { duration: 80 });
         if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
         zoomHideTimer.current = setTimeout(() => {
@@ -100,7 +106,7 @@ export default function SnagCreateScreen() {
             })
             .onUpdate((event) => {
                 // Multiplicative zoom feels natural — same as native camera apps
-                const raw = startZoom.value + (event.scale - 1) * (1 / MAX_ZOOM_FACTOR);
+                const raw = startZoom.value + (event.scale - 1) * (1 / (MAX_ZOOM_FACTOR - MIN_ZOOM));
                 const clamped = Math.max(0, Math.min(1, raw));
                 zoomShared.value = clamped;
                 runOnJS(showZoomLabel)(clamped);
@@ -108,18 +114,22 @@ export default function SnagCreateScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [zoomShared, startZoom]);
 
-    const animatedCameraProps = useAnimatedProps(() => ({
-        zoom: zoomShared.value,
-    }));
+    // Removed animatedCameraProps
+
+    // Removed animatedCameraProps
 
     const zoomLabelStyle = useAnimatedStyle(() => ({
         opacity: zoomLabelOpacity.value,
     }));
 
-    // Keep for backwards compat (unused after button removal)
-    const handleManualZoom = (z: number) => {
-        zoomShared.value = withSpring(z, { damping: 20, stiffness: 100 });
-        runOnJS(showZoomLabel)(z);
+    // Unified Manual Zoom Handler
+    const handleManualZoom = (factor: number) => {
+        const z = (factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
+        const clamped = Math.max(0, Math.min(1, z));
+        
+        // Sync everything immediately
+        zoomShared.value = clamped; 
+        showZoomLabel(clamped);
     };
 
     useEffect(() => {
@@ -321,133 +331,145 @@ export default function SnagCreateScreen() {
                     <View style={{ flex: 1, backgroundColor: '#000' }} />
                 ) : (cameraPermission.granted && isFocused) ? (
                     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
-                    <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-                        <View style={{
-                            width: SCREEN_W,
-                            height: CAMERA_HEIGHT,
-                            backgroundColor: '#111',
-                            overflow: 'hidden',
-                        }}>
+                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                            <View style={{
+                                width: SCREEN_W,
+                                height: CAMERA_HEIGHT,
+                                backgroundColor: '#111',
+                                overflow: 'hidden',
+                            }}>
 
-                            <GestureDetector gesture={pinchGesture}>
-                                <View collapsable={false} style={StyleSheet.absoluteFill}>
-                                    <AnimatedCameraView
-                                        style={StyleSheet.absoluteFill}
-                                        facing="back"
-                                        ref={cameraRef}
-                                        ratio="4:3"
-                                        animatedProps={animatedCameraProps}
-                                    />
+                                <GestureDetector gesture={pinchGesture}>
+                                    <View collapsable={false} style={StyleSheet.absoluteFill}>
+                                        <CameraView
+                                            style={StyleSheet.absoluteFill}
+                                            facing="back"
+                                            ref={cameraRef}
+                                            ratio="4:3"
+                                            zoom={cameraZoom}
+                                        />
 
 
-                                </View>
-                            </GestureDetector>
-                            {/* Dynamic Zoom Indicator */}
-                            <Animated.View
-                                pointerEvents="none"
-                                style={[
-                                    zoomLabelStyle,
-                                    {
-                                        position: 'absolute',
-                                        bottom: 16,
-                                        alignSelf: 'center',
-                                        backgroundColor: 'rgba(0,0,0,0.55)',
-                                        paddingHorizontal: 14,
-                                        paddingVertical: 6,
-                                        borderRadius: 20,
-                                        zIndex: 30,
-                                    }
-                                ]}
-                            >
-                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
-                            </Animated.View>
-                        </View>
-
-                        {/* Header Overlay */}
-                        <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
-                            <TouchableOpacity onPress={handleBack} style={cameraStyles.headerBtn}>
-                                <Feather name="x" size={24} color="#fff" />
-                            </TouchableOpacity>
-                            <Text style={cameraStyles.headerTitle}>Snag Photo</Text>
-                            <View style={{ width: 60 }} />
-                        </View>
-
-                        {/* Bottom Controls Overlay */}
-                        <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
-                            {/* Preview row */}
-                            {capturedPhoto && (
-                                <View style={cameraStyles.previewContainer}>
-                                    <ScrollView
-                                        horizontal
-                                        showsHorizontalScrollIndicator={false}
-                                        contentContainerStyle={{ gap: 14, paddingHorizontal: 20, paddingTop: 10, paddingRight: 30 }}
-                                    >
-                                        <View style={cameraStyles.previewWrapper}>
-                                            <Image source={{ uri: capturedPhoto.uri }} style={cameraStyles.previewThumb} />
-                                            <TouchableOpacity
-                                                onPress={() => setCapturedPhoto(null)}
-                                                style={cameraStyles.removeBtn}
-                                            >
-                                                <Feather name="x" size={12} color="#fff" />
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                onPress={() => setAnnotatingUri(capturedPhoto.uri)}
-                                                style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 10 }}
-                                            >
-                                                <Feather name="edit-2" size={12} color="#fff" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    </ScrollView>
-                                </View>
-                            )}
-
-                            <View style={cameraStyles.shutterRow}>
-                                <TouchableOpacity onPress={pickFromGallery} style={cameraStyles.sideBtn}>
-                                    <View style={cameraStyles.iconCircle}>
-                                        <Feather name="image" size={24} color="#fff" />
                                     </View>
-                                    <Text style={cameraStyles.btnLabel}>Gallery</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
-                                    <View style={cameraStyles.shutterOuter}>
-                                        <View style={cameraStyles.shutterInner} />
-                                    </View>
-                                    <Text style={cameraStyles.btnLabel}>Photo</Text>
-                                </TouchableOpacity>
-
-                                <View style={{ width: 70 }} />
+                                </GestureDetector>
+                                {/* Dynamic Zoom Indicator */}
+                                <Animated.View
+                                    pointerEvents="none"
+                                    style={[
+                                        zoomLabelStyle,
+                                        {
+                                            position: 'absolute',
+                                            bottom: 64,
+                                            alignSelf: 'center',
+                                            backgroundColor: 'rgba(0,0,0,0.55)',
+                                            paddingHorizontal: 14,
+                                            paddingVertical: 6,
+                                            borderRadius: 20,
+                                            zIndex: 30,
+                                        }
+                                    ]}
+                                >
+                                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
+                                </Animated.View>
+                                {/* Direct Zoom Buttons */}
+                                <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
+                                    {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                        <TouchableOpacity
+                                            key={factor}
+                                            onPress={() => handleManualZoom(factor)}
+                                            style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                                        >
+                                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
                             </View>
-                        </View>
 
-                        {/* Floating Done Button */}
-                        {capturedPhoto && (
-                            <TouchableOpacity
-                                onPress={() => setStep('details')}
-                                style={{
-                                    position: 'absolute',
-                                    bottom: insets.bottom + 180,
-                                    right: 20,
-                                    backgroundColor: colors.primary,
-                                    paddingHorizontal: 24,
-                                    paddingVertical: 14,
-                                    borderRadius: 30,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                    elevation: 8,
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 0, height: 4 },
-                                    shadowOpacity: 0.3,
-                                    shadowRadius: 5,
-                                    zIndex: 20
-                                }}
-                            >
-                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Done</Text>
-                                <Feather name="arrow-right" size={20} color="#fff" />
-                            </TouchableOpacity>
-                        )}
-                    </View>
+                            {/* Header Overlay */}
+                            <View style={[cameraStyles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
+                                <TouchableOpacity onPress={handleBack} style={cameraStyles.headerBtn}>
+                                    <Feather name="x" size={24} color="#fff" />
+                                </TouchableOpacity>
+                                <Text style={cameraStyles.headerTitle}>Snag Photo</Text>
+                                <View style={{ width: 60 }} />
+                            </View>
+
+                            {/* Bottom Controls Overlay */}
+                            <View style={[cameraStyles.controlsOverlay, { paddingBottom: insets.bottom + 20 }]}>
+                                {/* Preview row */}
+                                {capturedPhoto && (
+                                    <View style={cameraStyles.previewContainer}>
+                                        <ScrollView
+                                            horizontal
+                                            showsHorizontalScrollIndicator={false}
+                                            contentContainerStyle={{ gap: 14, paddingHorizontal: 20, paddingTop: 10, paddingRight: 30 }}
+                                        >
+                                            <View style={cameraStyles.previewWrapper}>
+                                                <Image source={{ uri: capturedPhoto.uri }} style={cameraStyles.previewThumb} />
+                                                <TouchableOpacity
+                                                    onPress={() => setCapturedPhoto(null)}
+                                                    style={cameraStyles.removeBtn}
+                                                >
+                                                    <Feather name="x" size={12} color="#fff" />
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    onPress={() => setAnnotatingUri(capturedPhoto.uri)}
+                                                    style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 10 }}
+                                                >
+                                                    <Feather name="edit-2" size={12} color="#fff" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        </ScrollView>
+                                    </View>
+                                )}
+
+                                <View style={cameraStyles.shutterRow}>
+                                    <TouchableOpacity onPress={pickFromGallery} style={cameraStyles.sideBtn}>
+                                        <View style={cameraStyles.iconCircle}>
+                                            <Feather name="image" size={24} color="#fff" />
+                                        </View>
+                                        <Text style={cameraStyles.btnLabel}>Gallery</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity onPress={capturePhoto} disabled={isCapturing} style={cameraStyles.shutterBtn}>
+                                        <View style={cameraStyles.shutterOuter}>
+                                            <View style={cameraStyles.shutterInner} />
+                                        </View>
+                                        <Text style={cameraStyles.btnLabel}>Photo</Text>
+                                    </TouchableOpacity>
+
+                                    <View style={{ width: 70 }} />
+                                </View>
+                            </View>
+
+                            {/* Floating Done Button */}
+                            {capturedPhoto && (
+                                <TouchableOpacity
+                                    onPress={() => setStep('details')}
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: insets.bottom + 180,
+                                        right: 20,
+                                        backgroundColor: colors.primary,
+                                        paddingHorizontal: 24,
+                                        paddingVertical: 14,
+                                        borderRadius: 30,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        elevation: 8,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 4 },
+                                        shadowOpacity: 0.3,
+                                        shadowRadius: 5,
+                                        zIndex: 20
+                                    }}
+                                >
+                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Done</Text>
+                                    <Feather name="arrow-right" size={20} color="#fff" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </GestureHandlerRootView>
                 ) : (
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
