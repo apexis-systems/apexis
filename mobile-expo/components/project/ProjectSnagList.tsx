@@ -562,9 +562,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                     }}
                 >
                     <Text style={{ fontSize: 10, fontWeight: '700', color: statusFilter !== 'all' ? colors.primary : colors.textMuted }}>
-                        {statusFilter === 'all' ? 'Status' : STATUS_CONFIG[statusFilter].label.split(' ')[0]}
+                        {statusFilter === 'all' ? t('projectRfi.status') : STATUS_CONFIG[statusFilter].label.split(' ')[0]}
                     </Text>
-                    <Feather name="chevron-down" size={14} color={statusFilter !== 'all' ? colors.primary : colors.textMuted} />
+                    <Feather name="chevron-down" size={12} color={statusFilter !== 'all' ? colors.primary : colors.textMuted} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -576,9 +576,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                     }}
                 >
                     <Text style={{ fontSize: 10, fontWeight: '700', color: creatorFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
-                        {creatorFilter === 'all' ? 'Creator' : snags.find(s => String(s.created_by) === creatorFilter)?.creator?.name || 'Creator'}
+                        {creatorFilter === 'all' ? t('projectRfi.creator') : (snags.find(s => String(s.created_by) === creatorFilter)?.creator?.name || t('projectRfi.creator')).toUpperCase()}
                     </Text>
-                    <Feather name="chevron-down" size={14} color={creatorFilter !== 'all' ? colors.primary : colors.textMuted} />
+                    <Feather name="chevron-down" size={12} color={creatorFilter !== 'all' ? colors.primary : colors.textMuted} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -590,7 +590,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                     }}
                 >
                     <Text style={{ fontSize: 10, fontWeight: '700', color: assigneeFilter !== 'all' ? colors.primary : colors.textMuted }} numberOfLines={1}>
-                        {assigneeFilter === 'all' ? 'Assignee' : snags.find(s => String(s.assigned_to) === assigneeFilter)?.assignee?.name || 'Assignee'}
+                        {assigneeFilter === 'all' ? t('projectRfi.assignee') : (snags.find(s => String(s.assigned_to) === assigneeFilter)?.assignee?.name || t('projectRfi.assignee')).toUpperCase()}
                     </Text>
                     <Feather name="chevron-down" size={14} color={assigneeFilter !== 'all' ? colors.primary : colors.textMuted} />
                 </TouchableOpacity>
@@ -756,7 +756,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                     <View style={{ backgroundColor: colors.background, borderRadius: 20, width: '100%', maxWidth: 340, padding: 20, maxHeight: '70%' }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
-                                {activeFilterType === 'status' ? 'Filter by Status' : activeFilterType === 'creator' ? 'Filter by Creator' : 'Filter by Assignee'}
+                                {t('projectRfi.selectFilter', { 
+                                    filter: activeFilterType === 'status' ? t('projectRfi.status') : (activeFilterType === 'creator' ? t('projectRfi.creator') : t('projectRfi.assignee')) 
+                                })}
                             </Text>
                             <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
                                 <Feather name="x" size={20} color={colors.text} />
@@ -776,7 +778,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                     paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border
                                 }}
                             >
-                                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>All</Text>
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{t('All')}</Text>
                                 {(activeFilterType === 'status' ? statusFilter === 'all' : activeFilterType === 'creator' ? creatorFilter === 'all' : assigneeFilter === 'all') && (
                                     <Feather name="check" size={16} color={colors.primary} />
                                 )}
