@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Dimensions } from 'react-native';
+
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,7 +14,9 @@ import { formatFileSize } from '@/helpers/format';
 const { width } = Dimensions.get('window');
 
 export default function UsageScreen() {
+    const { t } = useTranslation();
     const { colors } = useTheme();
+
     const router = useRouter();
     const { usageData, loading: usageLoading, refreshUsage } = useUsage();
     const insets = useSafeAreaInsets();
@@ -28,13 +32,14 @@ export default function UsageScreen() {
     if (!usageData) {
         return (
             <View style={[styles.centered, { backgroundColor: colors.background }]}>
-                <Text>Failed to load usage data.</Text>
+                <Text>{t('usage.failedLoad')}</Text>
                 <TouchableOpacity onPress={refreshUsage} style={{ marginTop: 20 }}>
-                    <Text style={{ color: colors.primary }}>Retry</Text>
+                    <Text style={{ color: colors.primary }}>{t('usage.retry')}</Text>
                 </TouchableOpacity>
             </View>
         );
     }
+
 
     const { plan, usage } = usageData;
 
@@ -44,11 +49,12 @@ export default function UsageScreen() {
         return (
             <View style={styles.usageItem} key={label}>
                 <View style={styles.usageHeader}>
-                    <Text style={[styles.usageLabel, { color: colors.text }]}>{label}</Text>
+                    <Text style={[styles.usageLabel, { color: colors.text }]}>{t(`usage.${label.toLowerCase().replace(' ', '')}`)}</Text>
                     <Text style={[styles.usageValue, { color: colors.textMuted }]}>
                         {label === 'Cloud Storage' ? formatFileSize(current) : `${current}${unit}`} / {label === 'Cloud Storage' ? formatFileSize(limit) : `${limit}${unit}`}
                     </Text>
                 </View>
+
                 <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
                     <View 
                         style={[
@@ -71,8 +77,9 @@ export default function UsageScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.headerIconBtn}>
                     <Feather name="arrow-left" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Resource Usage</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>{t('usage.title')}</Text>
                 <TouchableOpacity onPress={refreshUsage} style={styles.headerIconBtn}>
+
                     <Feather name="refresh-cw" size={20} color={colors.text} />
                 </TouchableOpacity>
             </View>
@@ -82,19 +89,22 @@ export default function UsageScreen() {
                 <View style={[styles.planCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     <View style={styles.planHeader}>
                         <View>
-                            <Text style={[styles.planBadge, { color: colors.primary }]}>ACTIVE PLAN</Text>
+                            <Text style={[styles.planBadge, { color: colors.primary }]}>{t('usage.activePlan')}</Text>
                             <Text style={[styles.planName, { color: colors.text }]}>{plan.name}</Text>
                         </View>
+
                         <MaterialCommunityIcons name="chart-donut" size={40} color={colors.primary} />
                     </View>
                     <Text style={{ fontSize: 13, color: colors.textMuted }}>
-                        Your plan valid until {new Date(plan.endDate).toLocaleDateString()}
+                        {t('usage.validUntil', { date: new Date(plan.endDate).toLocaleDateString() })}
                     </Text>
                 </View>
 
+
                 {/* Main Usage Grid */}
-                <Text style={[styles.sectionTitle, { color: colors.primary }]}>CONSUMPTION BREAKDOWN</Text>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('usage.consumptionBreakdown')}</Text>
                 <View style={[styles.usageGrid, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+
                     {renderUsageItem('Projects', usage.projects, plan.limits.project_limit)}
                     {renderUsageItem('Cloud Storage', usage.storage_mb, plan.limits.storage_limit_mb, ' MB')}
                     {renderUsageItem('Contributors', usage.contributors, plan.limits.contributor_limit)}
@@ -106,18 +116,20 @@ export default function UsageScreen() {
                 <View style={[styles.infoBox, { backgroundColor: colors.primary + '10' }]}>
                     <Feather name="info" size={16} color={colors.primary} />
                     <Text style={[styles.infoText, { color: colors.primary }]}>
-                        Limits reset upon plan renewal. Upgrade your plan to increase these quotas.
+                        {t('usage.infoHint')}
                     </Text>
                 </View>
+
 
                 {/* Call to action */}
                 <TouchableOpacity 
                     onPress={() => router.push('/subscription')}
                     style={[styles.upgradeBtn, { backgroundColor: colors.primary }]}
                 >
-                    <Text style={styles.upgradeBtnText}>Manage Subscription</Text>
+                    <Text style={styles.upgradeBtnText}>{t('usage.manageSubscription')}</Text>
                     <Feather name="arrow-right" size={18} color="white" />
                 </TouchableOpacity>
+
             </ScrollView>
         </SafeAreaView>
     );

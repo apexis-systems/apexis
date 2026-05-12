@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, BackHandler, RefreshControl } from 'react-native';
+
 import { Text, TextInput } from '@/components/ui/AppText';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +13,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadOrganizationLogo, updateOrganization, fetchSecureLogo } from '@/services/organizationService';
 
 export default function CompanySettingsScreen() {
+    const { t } = useTranslation();
     const { user, updateUser } = useAuth() as any;
+
     const { colors } = useTheme();
     const router = useRouter();
 
@@ -58,9 +62,10 @@ export default function CompanySettingsScreen() {
 
     const handleUpdateName = async () => {
         if (!compName.trim()) {
-            Alert.alert('Error', 'Company name cannot be empty');
+            Alert.alert(t('common.error') || 'Error', t('companySettings.errorEmptyName'));
             return;
         }
+
 
         setLoading(true);
         try {
@@ -72,11 +77,12 @@ export default function CompanySettingsScreen() {
                     name: compName
                 }
             });
-            Alert.alert('Success', 'Company name updated successfully');
+            Alert.alert(t('common.success') || 'Success', t('companySettings.successUpdateName'));
         } catch (error) {
             console.error('Update name error:', error);
-            Alert.alert('Error', 'Failed to update company name');
+            Alert.alert(t('common.error') || 'Error', t('companySettings.errorUpdateName'));
         } finally {
+
             setLoading(true);
             // Re-fetch or update context might be better, but for now we manually update
             setLoading(false);
@@ -113,12 +119,13 @@ export default function CompanySettingsScreen() {
                     }
                 });
                 await loadLogo(res.logo);
-                Alert.alert('Success', 'Company logo updated successfully');
+                Alert.alert(t('common.success') || 'Success', t('companySettings.successUpdateLogo'));
             }
         } catch (e) {
             console.error("Logo upload error:", e);
-            Alert.alert('Error', 'Failed to upload logo');
+            Alert.alert(t('common.error') || 'Error', t('companySettings.errorUpdateLogo'));
         } finally {
+
             setUploadingLogo(false);
         }
     };
@@ -127,14 +134,15 @@ export default function CompanySettingsScreen() {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
                 <Feather name="lock" size={48} color={colors.textMuted} />
-                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 16 }}>Access Denied</Text>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 16 }}>{t('companySettings.accessDenied')}</Text>
                 <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: 8 }}>
-                    Only administrators can access company settings.
+                    {t('companySettings.onlyAdminMsg')}
                 </Text>
                 <TouchableOpacity onPress={() => router.push('/settings')} style={{ marginTop: 24, padding: 12 }}>
-                    <Text style={{ color: colors.primary, fontWeight: '700' }}>Go Back</Text>
+                    <Text style={{ color: colors.primary, fontWeight: '700' }}>{t('companySettings.goBack')}</Text>
                 </TouchableOpacity>
             </SafeAreaView>
+
         );
     }
 
@@ -159,8 +167,9 @@ export default function CompanySettingsScreen() {
                     <TouchableOpacity onPress={() => router.push('/settings')} style={{ padding: 4 }}>
                         <Feather name="arrow-left" size={24} color={colors.text} />
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Company Settings</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{t('companySettings.title')}</Text>
                     <View style={{ width: 32 }} />
+
                 </View>
 
                 <ScrollView contentContainerStyle={{ padding: 20 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
@@ -191,29 +200,33 @@ export default function CompanySettingsScreen() {
                                     ) : (
                                         <View style={{ alignItems: 'center' }}>
                                             <Feather name="image" size={40} color={colors.textMuted} />
-                                            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>Upload Logo</Text>
+                                            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>{t('companySettings.uploadLogo')}</Text>
                                         </View>
                                     )}
+
                                     <View style={{
                                         position: 'absolute', bottom: 0, right: 0, left: 0,
                                         backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4,
                                         alignItems: 'center'
                                     }}>
-                                        <Text style={{ fontSize: 10, color: '#fff', fontWeight: 'bold' }}>Change</Text>
+                                        <Text style={{ fontSize: 10, color: '#fff', fontWeight: 'bold' }}>{t('companySettings.change')}</Text>
                                     </View>
+
                                 </TouchableOpacity>
                                 <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center' }}>
-                                    This logo will represent your company across the platform.
+                                    {t('companySettings.logoHint')}
                                 </Text>
                             </View>
 
-                            {/* Name Section */}
-                            <View style={{ marginBottom: 24 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8 }}>Company Name</Text>
-                                <TextInput
-                                    value={compName}
-                                    onChangeText={setCompName}
-                                    placeholder="Enter company name"
+
+                             {/* Name Section */}
+                             <View style={{ marginBottom: 24 }}>
+                                 <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8 }}>{t('companySettings.companyName')}</Text>
+                                 <TextInput
+                                     value={compName}
+                                     onChangeText={setCompName}
+                                     placeholder={t('companySettings.placeholderName')}
+
                                     placeholderTextColor={colors.textMuted}
                                     style={{
                                         height: 52,
@@ -243,8 +256,9 @@ export default function CompanySettingsScreen() {
                                 {loading ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
-                                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Save Changes</Text>
+                                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{t('companySettings.saveChanges')}</Text>
                                 )}
+
                             </TouchableOpacity>
                         </View>
                     </TouchableWithoutFeedback>

@@ -5,13 +5,17 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { authorizeWebSession, getActiveWebSessions } from '@/services/authService';
+import { authorizeWebSession, getActiveWebSessions, revokeWebSession } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
+
 
 export default function LinkedDevices() {
     const { colors } = useTheme();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { t } = useTranslation();
+
 
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
@@ -22,6 +26,27 @@ export default function LinkedDevices() {
     const [sessionsLoading, setSessionsLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const isHandlingScan = useRef(false);
+
+    const StyledBrand = () => (
+        <>
+            <Text className="font-angelica" style={{ color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>APEXIS</Text>
+            <Text className="font-angelica" style={{ fontSize: 10, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
+        </>
+    );
+
+    const renderLocalizedBrandText = (i18nKey: string) => {
+        const fullText = t(i18nKey) as string;
+        if (!fullText.includes('[[BRAND]]')) return fullText;
+        
+        const parts = fullText.split('[[BRAND]]');
+        return (
+            <>
+                {parts[0]}
+                <StyledBrand />
+                {parts[1]}
+            </>
+        );
+    };
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -68,32 +93,35 @@ export default function LinkedDevices() {
         // A basic UUID check (length 36, contains hyphens)
         if (!data || data.length < 32 || !data.includes('-')) {
             Alert.alert(
-                "Invalid QR Code",
-                "This doesn't look like an APEXIS login code.",
-                [{ text: "OK", onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
+                t('linkedDevices.invalidQrTitle') as string,
+                t('linkedDevices.invalidQrDesc') as string,
+                [{ text: t('linkedDevices.ok') as string, onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
             );
             return;
         }
+
 
         setAuthorizing(true);
         try {
             await authorizeWebSession(data);
             Alert.alert(
-                "Success",
-                "Web session authorized! Your browser will now log in.",
-                [{ text: "OK", onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
+                t('linkedDevices.success') as string,
+                t('linkedDevices.authSuccess') as string,
+                [{ text: t('linkedDevices.ok') as string, onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
             );
             fetchSessions(); // Refresh list immediately
+
             setIsScannerOpen(false); // Close scanner on success
         } catch (error: any) {
             console.error("QR Auth Error:", error);
-            const errorMessage = error.response?.data?.error || "Could not authorize this session.";
+            const errorMessage = error.response?.data?.error || t('linkedDevices.authFailedDesc');
             Alert.alert(
-                "Authentication Failed",
-                errorMessage,
-                [{ text: "OK", onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
+                t('linkedDevices.authFailed') as string,
+                errorMessage as string,
+                [{ text: t('linkedDevices.ok') as string, onPress: () => { isHandlingScan.current = false; setScanned(false); } }]
             );
         } finally {
+
             setAuthorizing(false);
             // We no longer use a generic timeout here to reset scanned state, 
             //, as it is now handled by the Alert callbacks.
@@ -109,14 +137,16 @@ export default function LinkedDevices() {
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: 20 }}>
                 <Feather name="camera-off" size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
                 <Text style={{ textAlign: 'center', color: colors.text, marginBottom: 16 }}>
-                    We need your permission to show the camera
+                    {t('linkedDevices.cameraPermission')}
                 </Text>
+
                 <TouchableOpacity
                     onPress={requestPermission}
                     style={{ backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
                 >
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Continue</Text>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>{t('linkedDevices.continue')}</Text>
                 </TouchableOpacity>
+
             </View>
         );
     }
@@ -138,8 +168,9 @@ export default function LinkedDevices() {
                         <TouchableOpacity onPress={() => setIsScannerOpen(false)} style={{ padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 }}>
                             <Feather name="x" size={24} color="#fff" />
                         </TouchableOpacity>
-                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Scan QR Code</Text>
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{t('linkedDevices.scanQrTitle')}</Text>
                         <View style={{ width: 40 }} />
+
                     </View>
 
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} pointerEvents="none">
@@ -147,14 +178,16 @@ export default function LinkedDevices() {
                             {authorizing && (
                                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 22 }}>
                                     <ActivityIndicator size="large" color={colors.primary} />
-                                    <Text style={{ color: '#fff', marginTop: 12, fontWeight: '600' }}>Authorizing...</Text>
+                                    <Text style={{ color: '#fff', marginTop: 12, fontWeight: '600' }}>{t('linkedDevices.authorizing')}</Text>
                                 </View>
+
                             )}
                         </View>
                         <Text style={{ color: '#fff', marginTop: 30, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 }}>
-                            Point your camera at the QR code displayed on the APEXIS web login page.
+                            {t('linkedDevices.scanInstruction')}
                         </Text>
                     </View>
+
                 </View>
             </View>
         );
@@ -167,33 +200,39 @@ export default function LinkedDevices() {
                     <TouchableOpacity onPress={() => router.push('/settings')} style={{ marginRight: 16 }}>
                         <Feather name="arrow-left" size={24} color={colors.text} />
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>Linked Devices</Text>
+                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>{t('linkedDevices.title')}</Text>
                 </View>
+
 
                 <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 24 }}>
                     <Feather name="monitor" size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
                     <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, textAlign: 'center', marginBottom: 8 }}>
-                        Use <Text className="font-angelica" style={{ color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>APEXIS</Text><Text className="font-angelica" style={{ fontSize: 10, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text> on your computer
+                        {renderLocalizedBrandText('linkedDevices.heroTitle')}
                     </Text>
+
+
                     <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
-                        Open web.apexis.in on your computer and scan the QR code to sign in instantly.
+                        {t('linkedDevices.heroDesc')}
                     </Text>
+
 
                     <TouchableOpacity
                         onPress={() => setIsScannerOpen(true)}
                         style={{ backgroundColor: colors.primary, width: '100%', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }}
                     >
                         <Feather name="maximize" size={18} color="#fff" />
-                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Link a Device</Text>
+                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{t('linkedDevices.linkDevice')}</Text>
                     </TouchableOpacity>
+
                 </View>
 
                 {sessionsLoading ? (
                     <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
                 ) : activeSessions.length > 0 ? (
                     <View>
-                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text, marginBottom: 16 }}>Active Sessions</Text>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text, marginBottom: 16 }}>{t('linkedDevices.activeSessions')}</Text>
                         {activeSessions.map((session, index) => (
+
                             <View key={index} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: 16, borderRadius: 12, marginBottom: 12 }}>
                                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                     <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 10 }}>
@@ -201,41 +240,44 @@ export default function LinkedDevices() {
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>
-                                            {(session.device || "APEXIS Web API Session").startsWith("APEXIS") ? (
+                                            {(session.device || t('linkedDevices.webSession')).includes("APEXIS") ? (
                                                 <>
                                                     <Text className="font-angelica" style={{ color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>APEXIS</Text>
                                                     <Text className="font-angelica" style={{ fontSize: 10, color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>PRO™</Text>
-                                                    <Text>{(session.device || " Web API Session").replace(/APEXISpro™|APEXIS/g, "")}</Text>
+                                                    <Text>{(session.device || t('linkedDevices.webSession')).replace(/APEXISpro™|APEXIS/g, "")}</Text>
                                                 </>
                                             ) : (
-                                                session.device || "Web Session"
+                                                session.device || t('linkedDevices.webSession')
                                             )}
                                         </Text>
-                                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>Active now · Web Browser</Text>
+                                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>{t('linkedDevices.activeNow')}</Text>
                                     </View>
+
                                 </View>
 
                                 <TouchableOpacity
                                     style={{ padding: 8 }}
                                     onPress={() => {
-                                        Alert.alert("Logout from Web", "Are you sure you want to disconnect this saved device?", [
-                                            { text: "Cancel", style: "cancel" },
-                                            {
-                                                text: "Logout", style: "destructive", onPress: async () => {
-                                                    try {
-                                                        // We need to import revokeWebSession at the top... assuming it's exported from the same place as getActiveWebSessions which we already import
-                                                        const { revokeWebSession } = require('@/services/authService');
-                                                        await revokeWebSession(session.sessionId);
-                                                        // filter it out quickly local side
-                                                        setActiveSessions(prev => prev.filter(s => s.sessionId !== session.sessionId));
-                                                    } catch (err: any) {
-                                                        Alert.alert("Error", err.response?.data?.error || "Could not revoke session");
+                                        Alert.alert(
+                                            t('linkedDevices.logoutTitle') as string,
+                                            t('linkedDevices.logoutDesc') as string,
+                                            [
+                                                { text: t('linkedDevices.cancel') as string, style: "cancel" },
+                                                {
+                                                    text: t('linkedDevices.logout') as string, style: "destructive", onPress: async () => {
+                                                        try {
+                                                            await revokeWebSession(session.sessionId);
+                                                            // filter it out quickly local side
+                                                            setActiveSessions(prev => prev.filter(s => s.sessionId !== session.sessionId));
+                                                        } catch (err: any) {
+                                                            Alert.alert(t('linkedDevices.error') as string, err.response?.data?.error || t('linkedDevices.logoutErrorDesc') || "Could not revoke session");
+                                                        }
                                                     }
                                                 }
-                                            }
-                                        ]);
+                                            ]);
                                     }}
                                 >
+
                                     <Feather name="log-out" size={18} color={colors.textMuted} />
                                 </TouchableOpacity>
                             </View>
