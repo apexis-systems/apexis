@@ -1,5 +1,9 @@
 {
     "translation": {
+        "common": {
+            "cancel": "रद्द करें",
+            "share": "साझा करें"
+        },
         "Activity": "गतिविधि",
         "All": "सभी",
         "Action": "कार्य",
@@ -528,6 +532,10 @@
                 "resolved": "समाधान हुआ",
                 "noAction": "कार्रवाई की आवश्यकता नहीं",
                 "overdue": "विलंबित"
+            },
+            "shareOptions": {
+                "title": "निर्यात विकल्प",
+                "subtitle": "अपनी रिपोर्ट में शामिल करने के लिए अनुभाग चुनें"
             }
         },
         "projectPhotos": {

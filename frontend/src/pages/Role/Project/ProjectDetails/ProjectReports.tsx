@@ -22,6 +22,15 @@ const ProjectReports = ({ project, userRole }: Props) => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [generating, setGenerating] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [options, setOptions] = useState({
+    snag: true,
+    rfi: true,
+    photos: true,
+    files: true
+  });
+
 
   const fetchReports = () => {
     if (!project?.id) return;
@@ -49,9 +58,19 @@ const ProjectReports = ({ project, userRole }: Props) => {
     }
   };
 
-  const handleDownload = async (r: Report) => {
+  const handleDownload = (r: Report) => {
+    setSelectedReport(r);
+    setShowOptionsModal(true);
+  };
+
+  const confirmDownload = async () => {
+    if (!selectedReport) return;
+    const r = selectedReport;
+    setShowOptionsModal(false);
+
     setDownloadingId(r.id);
     try {
+
       const sanitize = (name?: string | number) => {
         const raw = String(name ?? project?.name ?? project?.id ?? 'project');
         return raw.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
@@ -59,7 +78,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
       const base = `${sanitize(project?.name ?? project?.id)}`;
       const start = new Date(r.period_start);
       const end = new Date(r.period_end);
-      
+
       const fmtDate = (d: Date) => {
         const dd = String(d.getDate()).padStart(2, '0');
         const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -76,7 +95,13 @@ const ProjectReports = ({ project, userRole }: Props) => {
         filename = `${base}_monthly_report_${monthName}-${year}.pdf`;
       }
 
-      await downloadReport(r.id, filename);
+      await downloadReport(r.id, filename, {
+        snag: options.snag,
+        rfi: options.rfi,
+        photos: options.photos,
+        Files: options.files
+      });
+
     } catch (e) {
       console.error(e);
     } finally {
@@ -87,7 +112,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
   const fmt = (d: string) => {
     const date = new Date(d);
     if (activeType === 'monthly') {
-        return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
     }
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
@@ -137,8 +162,8 @@ const ProjectReports = ({ project, userRole }: Props) => {
               onClick={() => setActiveType(tab.key)}
               className={cn(
                 "flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-semibold transition-all",
-                isActive 
-                  ? "bg-card text-accent shadow-sm" 
+                isActive
+                  ? "bg-card text-accent shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -166,7 +191,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
         <div className="space-y-3">
           {reports.map(r => (
             <div key={r.id} className="rounded-xl bg-card border border-border overflow-hidden shadow-sm hover:border-accent/30 transition-all">
-              <div 
+              <div
                 className="flex items-start gap-3.5 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
                 onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
               >
@@ -176,8 +201,8 @@ const ProjectReports = ({ project, userRole }: Props) => {
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center">
                     <p className="text-[12px] font-bold">
-                        {t(activeType + '_report')} — {fmt(r.period_start)}
-                        {activeType === 'weekly' && ` ${t('report_period_to')} ${fmt(r.period_end)}`}
+                      {t(activeType + '_report')} — {fmt(r.period_start)}
+                      {activeType === 'weekly' && ` ${t('report_period_to')} ${fmt(r.period_end)}`}
                     </p>
                     <div className="flex items-center gap-2">
                       {(r.photos_count > 0 || r.docs_count > 0 || (r.summary?.rfis?.length || 0) > 0 || (r.summary?.snags?.length || 0) > 0) && (
@@ -282,14 +307,78 @@ const ProjectReports = ({ project, userRole }: Props) => {
           )}
         </div>
       )}
+      {/* Selection Modal */}
+      {showOptionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card w-full max-w-[320px] rounded-3xl border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6">
+              <h3 className="text-sm font-bold mb-1">{t('export_options_title')}</h3>
+              <p className="text-[10px] text-muted-foreground mb-6">{t('export_options_subtitle')}</p>
+
+              <div className="space-y-1 mb-6">
+                {[
+                  { key: 'snag', label: t('snags_label'), icon: ClipboardList },
+                  { key: 'rfi', label: t('rfi_label'), icon: FileCheck },
+                  { key: 'photos', label: t('photos'), icon: Image },
+                  { key: 'files', label: t('files_label'), icon: FileText },
+                ].map((opt) => {
+                  const Icon = opt.icon;
+                  const isChecked = options[opt.key as keyof typeof options];
+                  return (
+                    <label key={opt.key} className="flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 cursor-pointer transition-colors group">
+                      <div className="flex items-center gap-3">
+                        <div className={cn("p-1.5 rounded-lg transition-colors", isChecked ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground")}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <span className="text-[11px] font-semibold">{opt.label}</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => setOptions(prev => ({ ...prev, [opt.key]: !prev[opt.key as keyof typeof prev] }))}
+                        className="sr-only"
+                      />
+                      <div className={cn(
+                        "w-8 h-4.5 rounded-full relative transition-colors duration-200",
+                        isChecked ? "bg-accent" : "bg-muted-foreground/30"
+                      )}>
+                        <div className={cn(
+                          "absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                          isChecked ? "translate-x-3.5" : "translate-x-0"
+                        )} />
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowOptionsModal(false)}
+                  className="flex-1 h-10 rounded-xl border border-border text-[11px] font-bold hover:bg-muted transition-colors"
+                >
+                  {t('cancel')}
+                </button>
+                <button
+                  onClick={confirmDownload}
+                  className="flex-1 h-10 rounded-xl bg-accent text-white text-[11px] font-bold hover:bg-accent/90 transition-colors shadow-sm"
+                >
+                  {t('download_label')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
   );
 };
 
 const IconForKey = ({ type, className }: { type: ReportType; className?: string }) => {
-    if (type === 'daily') return <ClipboardList className={className} />;
-    if (type === 'weekly') return <BarChart3 className={className} />;
-    return <Calendar className={className} />;
+  if (type === 'daily') return <ClipboardList className={className} />;
+  if (type === 'weekly') return <BarChart3 className={className} />;
+  return <Calendar className={className} />;
 };
 
 export default ProjectReports;

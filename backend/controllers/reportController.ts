@@ -15,8 +15,17 @@ export const shareReport = async (req: Request, res: Response) => {
         });
 
         if (!report) return res.status(404).json({ error: 'Report not found' });
+        
+        // Parse query options
+        const parseBool = (val: any) => val === 'true' || val === true || val === 'ture'; // handle user typo 'ture'
+        const options = {
+            includeSnags: req.query.snag ? parseBool(req.query.snag) : true,
+            includeRFIs: req.query.rfi ? parseBool(req.query.rfi) : true,
+            includePhotos: req.query.photos ? parseBool(req.query.photos) : true,
+            includeFiles: (req.query.Files || req.query.files) ? parseBool(req.query.Files || req.query.files) : true,
+        };
 
-        const pdfBuffer = await generateSingleReportPDF(Number(id));
+        const pdfBuffer = await generateSingleReportPDF(Number(id), options);
 
         const projectName = ((report as any).project?.name || 'Project').replace(/\s+/g, '_');
         const type = report.type;
