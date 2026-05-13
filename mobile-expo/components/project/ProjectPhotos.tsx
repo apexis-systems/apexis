@@ -12,8 +12,9 @@ import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, up
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
 import { getMemberForTag, getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Picker } from '@react-native-picker/picker';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
@@ -59,6 +60,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [sortBy, setSortBy] = useState<'name' | 'newest' | 'oldest' | 'size'>('name');
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const [monthOffsets, setMonthOffsets] = useState<{ [key: string]: number }>({});
+    const [tempMonth, setTempMonth] = useState('');
+    const [tempYear, setTempYear] = useState('');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -97,6 +102,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [folderMenuVisible, setFolderMenuVisible] = useState(false);
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
+    const mainScrollRef = useRef<ScrollView>(null);
 
     const loadFiles = async (isRefetch = false) => {
         if (!project?.id) return;
@@ -191,11 +197,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     }, [initialFileId, photos, selectedFolder, sortBy, user.role, router]);
 
 
-    const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
-    const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
-    const visiblePhotos = user.role === 'client'
+    const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
+    const currentFolderPhotos = useMemo(() => photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null')), [photos, selectedFolder]);
+    const visiblePhotos = useMemo(() => user.role === 'client'
         ? currentFolderPhotos.filter((p) => p.client_visible !== false)
-        : currentFolderPhotos;
+        : currentFolderPhotos, [currentFolderPhotos, user.role]);
 
     const sortItems = (items: any[], type: 'folder' | 'file') => {
         return [...items].sort((a: any, b: any) => {
@@ -220,6 +226,48 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const sortedFolders = sortItems(currentFolders, 'folder');
     const sortedPhotos = sortItems(visiblePhotos, 'file');
+
+    const groups = useMemo(() => {
+        if (sortBy === 'newest' || sortBy === 'oldest') {
+            return groupItemsByMonth(sortedPhotos, t);
+        }
+        return [];
+    }, [sortedPhotos, sortBy, t]);
+
+    const availableMonthsByYear = useMemo(() => {
+        const map: Record<string, Set<string>> = {};
+        groups.forEach(g => {
+            const parts = g.title.split(' ');
+            const year = parts[parts.length - 1];
+            const month = parts.slice(0, parts.length - 1).join(' ');
+            if (!map[year]) map[year] = new Set();
+            map[year].add(month);
+        });
+        return map;
+    }, [groups]);
+
+    const availableYears = useMemo(() => Object.keys(availableMonthsByYear).sort((a, b) => b.localeCompare(a)), [availableMonthsByYear]);
+
+    const prevShowMonthPicker = useRef(false);
+    useEffect(() => {
+        prevShowMonthPicker.current = showMonthPicker;
+    }, [showMonthPicker]);
+
+    const allMonths = useMemo(() => [
+        t('months.january'), t('months.february'), t('months.march'), t('months.april'),
+        t('months.may'), t('months.june'), t('months.july'), t('months.august'),
+        t('months.september'), t('months.october'), t('months.november'), t('months.december')
+    ], [t]);
+
+    // Auto-correct month if year change makes it invalid
+    useEffect(() => {
+        if (showMonthPicker && tempYear && tempMonth && availableMonthsByYear[tempYear]) {
+            if (!availableMonthsByYear[tempYear].has(tempMonth)) {
+                const firstAvailable = Array.from(availableMonthsByYear[tempYear])[0];
+                if (firstAvailable) setTempMonth(firstAvailable);
+            }
+        }
+    }, [tempYear, availableMonthsByYear, showMonthPicker]);
 
     const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
@@ -794,7 +842,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+            <ScrollView
+                ref={mainScrollRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 14 }}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') ? (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity
@@ -1015,10 +1068,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     }}
                                                 />
                                                 <View style={{ marginBottom: 8 }}>
-                                                    <Feather 
-                                                        name={isArchiveFolder ? "archive" : (folder.name.toLowerCase() === 'confirmation' ? "check-circle" : "folder")} 
-                                                        size={folder.name.toLowerCase() === 'confirmation' ? 32 : 36} 
-                                                        color={isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.primary)} 
+                                                    <Feather
+                                                        name={isArchiveFolder ? "archive" : (folder.name.toLowerCase() === 'confirmation' ? "check-circle" : "folder")}
+                                                        size={folder.name.toLowerCase() === 'confirmation' ? 32 : 36}
+                                                        color={isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.primary)}
                                                     />
                                                 </View>
                                                 {isSelected && (
@@ -1028,8 +1081,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 )}
                                                 <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.text), textAlign: 'center' }}>{folder.name}</Text>
                                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
-                                                    {subcount > 0 
-                                                        ? t('projectPhotos.photosFoldersCount', { photoCount: count, folderCount: subcount }) 
+                                                    {subcount > 0
+                                                        ? t('projectPhotos.photosFoldersCount', { photoCount: count, folderCount: subcount })
                                                         : t('projectPhotos.photosOnlyCount', { count })
                                                     }
                                                 </Text>
@@ -1064,7 +1117,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                                 <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
                                     {(() => {
-                                        const renderPhotoItem = (photo: any, index: number) => {
+                                        const renderPhotoItem = (photo: any, index: number, groupTitle?: string) => {
                                             const isSelected = selectedFiles.has(photo.id);
                                             if (viewMode === 'grid') {
                                                 return (
@@ -1104,7 +1157,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                 <Feather name="check" size={10} color="#fff" />
                                                             </View>
                                                         )}
-                                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !isSelected && (
                                                             <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 10 }}>
                                                                 <TouchableOpacity
                                                                     onPress={() => {
@@ -1204,28 +1257,122 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         };
 
                                         if (sortBy === 'newest' || sortBy === 'oldest') {
-                                            const groups = groupItemsByMonth(sortedPhotos, t);
-                                            return groups.map((group) => (
-                                                <View key={group.title} style={{ marginBottom: 20 }}>
-                                                    <View style={{
-                                                        paddingVertical: 12,
-                                                        backgroundColor: 'transparent',
-                                                        flexDirection: 'row',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between'
-                                                    }}>
-                                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
-                                                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
-                                                    </View>
-                                                    <View style={{
-                                                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
-                                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
-                                                        gap: viewMode === 'grid' ? 4 : 8
-                                                    }}>
-                                                        {group.data.map((p, i) => renderPhotoItem(p, i))}
-                                                    </View>
-                                                </View>
-                                            ));
+                                            const scrollToMonth = (title: string) => {
+                                                const offset = monthOffsets[title];
+                                                if (offset !== undefined) {
+                                                    mainScrollRef.current?.scrollTo({ y: offset, animated: true });
+                                                }
+                                                setShowMonthPicker(false);
+                                            };
+
+                                            return (
+                                                <>
+                                                    {groups.map((group) => (
+                                                        <View
+                                                            key={group.title}
+                                                            style={{ marginBottom: 20 }}
+                                                            onLayout={(e) => {
+                                                                const { y } = e.nativeEvent.layout;
+                                                                setMonthOffsets(prev => ({ ...prev, [group.title]: y }));
+                                                            }}
+                                                        >
+                                                            <TouchableOpacity
+                                                                onPress={() => {
+                                                                    const parts = group.title.split(' ');
+                                                                    setTempYear(parts[parts.length - 1]);
+                                                                    setTempMonth(parts.slice(0, parts.length - 1).join(' '));
+                                                                    setShowMonthPicker(true);
+                                                                }}
+                                                                style={{
+                                                                    paddingVertical: 12,
+                                                                    backgroundColor: 'transparent',
+                                                                    flexDirection: 'row',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'space-between'
+                                                                }}
+                                                            >
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
+                                                                    <Feather name="chevron-down" size={12} color={colors.textMuted} style={{ marginLeft: 4, opacity: 0.7 }} />
+                                                                </View>
+                                                                <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
+                                                            </TouchableOpacity>
+                                                            <View style={{
+                                                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                                                gap: viewMode === 'grid' ? 4 : 8
+                                                            }}>
+                                                                {group.data.map((p, i) => renderPhotoItem(p, i))}
+                                                            </View>
+                                                        </View>
+                                                    ))}
+
+                                                    <Modal visible={showMonthPicker} transparent animationType="slide">
+                                                        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                                                            <View style={{ 
+                                                                backgroundColor: colors.surface, 
+                                                                borderTopLeftRadius: 24, 
+                                                                borderTopRightRadius: 24, 
+                                                                padding: 24, 
+                                                                paddingBottom: insets.bottom + 10,
+                                                                shadowColor: '#000',
+                                                                shadowOffset: { width: 0, height: -4 },
+                                                                shadowOpacity: 0.1,
+                                                                shadowRadius: 10,
+                                                                elevation: 20
+                                                            }}>
+                                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                                                    <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
+                                                                        <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectPhotos.cancel')}</Text>
+                                                                    </TouchableOpacity>
+                                                                    <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>{t('projectPhotos.selectMonth')}</Text>
+                                                                    <TouchableOpacity 
+                                                                        onPress={() => {
+                                                                            const title = `${tempMonth} ${tempYear}`;
+                                                                            scrollToMonth(title);
+                                                                        }}
+                                                                    >
+                                                                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{t('projectPhotos.ok')}</Text>
+                                                                    </TouchableOpacity>
+                                                                </View>
+
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                                    <Picker
+                                                                        selectedValue={tempMonth}
+                                                                        style={{ flex: 1.2, height: 200 }}
+                                                                        itemStyle={{ fontSize: 18, color: colors.text }}
+                                                                        onValueChange={(itemValue) => setTempMonth(itemValue)}
+                                                                    >
+                                                                        {allMonths.map(m => {
+                                                                            const isAvailable = availableMonthsByYear[tempYear]?.has(m);
+                                                                            // Only render items that are available to prevent invalid selection
+                                                                            if (!isAvailable) return null;
+                                                                            return (
+                                                                                <Picker.Item 
+                                                                                    key={m} 
+                                                                                    label={m} 
+                                                                                    value={m} 
+                                                                                    color={colors.text} 
+                                                                                />
+                                                                            );
+                                                                        })}
+                                                                    </Picker>
+                                                                    <Picker
+                                                                        selectedValue={tempYear}
+                                                                        style={{ flex: 0.8, height: 200 }}
+                                                                        itemStyle={{ fontSize: 18, color: colors.text }}
+                                                                        onValueChange={(itemValue) => setTempYear(itemValue)}
+                                                                    >
+                                                                        {availableYears.map(y => (
+                                                                            <Picker.Item key={y} label={y} value={y} color={colors.text} />
+                                                                        ))}
+                                                                    </Picker>
+                                                                </View>
+                                                            </View>
+                                                        </View>
+                                                    </Modal>
+                                                </>
+                                            );
                                         }
 
                                         return (

@@ -599,9 +599,13 @@
                 "size": "Size"
             },
             "folderDeletedMovingContents": "Folder \"{{name}}\" deleted after moving contents",
-            "failedToDeleteEmptyFolder": "Contents moved, but failed to delete empty folder"
+            "failedToDeleteEmptyFolder": "Contents moved, but failed to delete empty folder",
+            "selectMonth": "Select Month",
+            "photosCountLabel": "Photos",
+            "close": "Close"
         },
         "projectDocuments": {
+            "selectMonth": "Select Month",
             "uploadDocument": "Upload Document",
             "newFolder": "New Folder",
             "renameFolder": "Rename Folder",
