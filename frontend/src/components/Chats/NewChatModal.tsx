@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { getChatUsers } from "@/services/userService";
 import { createRoom } from "@/services/chatService";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Props {
     open: boolean;
@@ -17,6 +18,7 @@ interface Props {
 
 export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
     const { user: authUser } = useAuth() as any;
+    const { t } = useLanguage();
     const [type, setType] = useState<'direct' | 'group'>('direct');
     const [searchQuery, setSearchQuery] = useState("");
     const [users, setUsers] = useState<any[]>([]);
@@ -69,7 +71,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
     const handleCreate = async () => {
         if (selectedUsers.length === 0) return;
         if (type === 'group' && !groupName.trim()) {
-            alert('Please enter a group name');
+            alert(t('enter_group_name'));
             return;
         }
 
@@ -84,7 +86,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
             onOpenChange(false);
         } catch (err: any) {
             console.error("Failed to create chat", err);
-            alert(err?.response?.data?.error || err.message || "Failed to create chat");
+            alert(err?.response?.data?.error || err.message || t('failed_create_chat'));
         } finally {
             setSubmitting(false);
         }
@@ -95,7 +97,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
             <DialogContent className="sm:max-w-md p-0 overflow-hidden gap-0">
                 <DialogHeader className="p-6 pb-4 border-b space-y-0">
                     <DialogTitle className="text-xl font-bold">
-                        {type === 'group' ? 'New Group' : 'New Direct Chat'}
+                        {type === 'group' ? t('new_group') : t('new_direct_chat')}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -104,14 +106,14 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                         onClick={() => { setType('direct'); setSelectedUsers([]); }}
                         className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'direct' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
                     >
-                        Direct Message
+                        {t('direct_message')}
                     </button>
                     {(authUser?.role === 'admin' || authUser?.role === 'contributor') && (
                         <button
                             onClick={() => { setType('group'); setSelectedUsers([]); }}
                             className={`flex-1 py-3 text-sm font-semibold transition-colors ${type === 'group' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
                         >
-                            Group Chat
+                            {t('group_chat')}
                         </button>
                     )}
                 </div>
@@ -120,7 +122,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
-                            placeholder="Search people..."
+                            placeholder={t('search_people')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="pl-9 bg-background border-border"
@@ -131,7 +133,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                 {type === 'group' && (
                     <div className="p-4 border-b">
                         <Input
-                            placeholder="Group Name"
+                            placeholder={t('group_name_placeholder')}
                             value={groupName}
                             onChange={(e) => setGroupName(e.target.value)}
                             className="bg-background border-border"
@@ -146,7 +148,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                         </div>
                     ) : filteredUsers.length === 0 ? (
                         <div className="py-10 text-center text-muted-foreground text-sm">
-                            No users found.
+                            {t('no_users_found')}
                         </div>
                     ) : (
                         filteredUsers.map((u) => (
@@ -186,7 +188,7 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                                         )}
                                         {u.project_members && u.project_members.length > 2 && (
                                             <span className="text-[7px] text-muted-foreground font-bold mt-0.5">
-                                                +{u.project_members.length - 2} more
+                                                {t('more_projects').replace('{count}', (u.project_members.length - 2).toString())}
                                             </span>
                                         )}
                                     </div>
@@ -203,11 +205,11 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
 
                 <div className="p-4 border-t bg-secondary/10 flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-foreground">
-                        {selectedUsers.length} selected
+                        {t('users_selected').replace('{count}', selectedUsers.length.toString())}
                     </p>
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-                            Cancel
+                            {t('cancel')}
                         </Button>
                         <Button
                             onClick={handleCreate}
@@ -217,9 +219,9 @@ export default function NewChatModal({ open, onOpenChange, onSuccess }: Props) {
                             {submitting ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : type === 'group' ? (
-                                `Create Group (${selectedUsers.length})`
+                                t('create_group_btn').replace('{count}', selectedUsers.length.toString())
                             ) : (
-                                'Create Chat'
+                                t('create_chat_btn')
                             )}
                         </Button>
                     </div>

@@ -116,10 +116,10 @@ const Profile = () => {
         try {
             await updateUserName({ name: editNameValue });
             setUser({ ...user, name: editNameValue.trim() });
-            toast.success("Name updated successfully");
+            toast.success(t('name_update_success'));
             setIsEditingName(false);
         } catch (e) {
-            toast.error("Failed to update name");
+            toast.error(t('name_update_error'));
         } finally {
             setNameLoading(false);
         }
@@ -131,9 +131,9 @@ const Profile = () => {
         try {
             await updateOrganization({ name: compName });
             setUser({ ...user, organization: { ...user.organization, name: compName } });
-            toast.success("Company name updated");
+            toast.success(t('company_name_success'));
         } catch (e) {
-            toast.error("Failed to update company name");
+            toast.error(t('company_name_error'));
         } finally {
             setCompLoading(false);
         }
@@ -149,10 +149,10 @@ const Profile = () => {
             const res = await uploadOrganizationLogo(formData);
             if (res.logo) {
                 setUser({ ...user, organization: { ...user.organization, logo: res.logo } });
-                toast.success("Company logo updated");
+                toast.success(t('company_logo_success'));
             }
         } catch (e) {
-            toast.error("Failed to upload company logo");
+            toast.error(t('company_logo_error'));
         } finally {
             setCompLogoUploading(false);
             if (compLogoRef.current) compLogoRef.current.value = '';
@@ -221,12 +221,12 @@ const Profile = () => {
             const res = await updateUserProfilePic(formData);
             if (res.profile_pic) {
                 setUser({ ...user, profile_pic: res.profile_pic });
-                toast.success("Profile picture updated successfully");
+                toast.success(t('profile_pic_success'));
             }
             setIsPreviewOpen(false);
         } catch (error) {
             console.error("Upload failed", error);
-            toast.error("Failed to upload profile picture");
+            toast.error(t('profile_pic_error'));
         } finally {
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -236,20 +236,20 @@ const Profile = () => {
     const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newPassword !== confirmPassword) {
-            toast.error("Passwords do not match");
+            toast.error(t('password_mismatch'));
             return;
         }
 
         setPasswordLoading(true);
         try {
             await changePassword({ currentPassword, newPassword });
-            toast.success("Password updated successfully");
+            toast.success(t('password_success'));
             setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
             setIsChangingPassword(false);
         } catch (error: any) {
-            toast.error(error.response?.data?.error || "Failed to update password");
+            toast.error(error.response?.data?.error || t('password_error'));
         } finally {
             setPasswordLoading(false);
         }
@@ -328,7 +328,7 @@ const Profile = () => {
                                 <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
                                     <Briefcase className="h-5 w-5 text-primary" />
                                 </div>
-                                <span className="font-bold text-sm uppercase tracking-wide">Company Settings</span>
+                                <span className="font-bold text-sm uppercase tracking-wide">{t('company_settings')}</span>
                             </div>
                             <span className={cn("transition-transform", isCompanySettingsOpen ? "rotate-90" : "")}>
                                 <ArrowLeft className="-rotate-90 h-4 w-4" />
@@ -354,17 +354,17 @@ const Profile = () => {
                                                 </div>
                                             )}
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground uppercase font-bold mt-2">Tap to change logo</p>
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold mt-2">{t('tap_change_logo')}</p>
                                         <input type="file" ref={compLogoRef} className="hidden" accept="image/*" onChange={handleCompLogoSelect} />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Company Name</Label>
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">{t('company_name_label')}</Label>
                                         <div className="flex gap-2">
                                             <Input
                                                 value={compName}
                                                 onChange={(e) => setCompName(e.target.value)}
-                                                placeholder="Enter company name"
+                                                placeholder={t('company_name_placeholder')}
                                                 className="h-11 rounded-xl bg-secondary/50 border-0 flex-1"
                                             />
                                             <Button
@@ -372,7 +372,7 @@ const Profile = () => {
                                                 disabled={compLoading || !compName.trim() || compName === user.organization?.name}
                                                 className="h-11 rounded-xl bg-primary text-primary-foreground font-bold px-6"
                                             >
-                                                {compLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                                                {compLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('save')}
                                             </Button>
                                         </div>
                                     </div>
@@ -393,7 +393,7 @@ const Profile = () => {
                                 <div className="h-9 w-9 rounded-xl bg-accent/10 flex items-center justify-center">
                                     <KeyRound className="h-5 w-5 text-accent" />
                                 </div>
-                                <span className="font-bold text-sm uppercase tracking-wide">Change Password</span>
+                                <span className="font-bold text-sm uppercase tracking-wide">{t('change_password')}</span>
                             </div>
                             <span className={cn("transition-transform", isChangingPassword ? "rotate-90" : "")}>
                                 <ArrowLeft className="-rotate-90 h-4 w-4" />
@@ -404,7 +404,7 @@ const Profile = () => {
                             <div className="p-4 pt-0 border-t border-border/50">
                                 <form onSubmit={handleChangePassword} className="space-y-4 pt-4">
                                     <div className="space-y-2">
-                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Current Password</Label>
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">{t('current_password')}</Label>
                                         <PasswordInput
                                             value={currentPassword}
                                             onChange={(e) => setCurrentPassword(e.target.value)}
@@ -414,7 +414,7 @@ const Profile = () => {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">New Password</Label>
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">{t('new_password')}</Label>
                                         <PasswordInput
                                             value={newPassword}
                                             onChange={(e) => setNewPassword(e.target.value)}
@@ -424,7 +424,7 @@ const Profile = () => {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Confirm New Password</Label>
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">{t('confirm_password')}</Label>
                                         <PasswordInput
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
@@ -438,7 +438,7 @@ const Profile = () => {
                                         disabled={passwordLoading}
                                         className="w-full h-11 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-xs"
                                     >
-                                        {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Password"}
+                                        {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('update_password')}
                                     </Button>
                                 </form>
                             </div>
@@ -456,8 +456,8 @@ const Profile = () => {
                                     <Trash2 className="h-5 w-5 text-destructive" />
                                 </div>
                                 <div className="flex flex-col items-start">
-                                    <span className="font-bold text-sm uppercase tracking-wide">Trash Management</span>
-                                    <span className="text-[10px] text-muted-foreground uppercase font-bold">Recover or purge deleted projects</span>
+                                    <span className="font-bold text-sm uppercase tracking-wide">{t('trash_management')}</span>
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold">{t('trash_management_subtitle')}</span>
                                 </div>
                             </div>
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -497,7 +497,7 @@ const Profile = () => {
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
                     <div className="bg-background rounded-2xl shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="p-4 border-b border-border flex justify-between items-center">
-                            <h2 className="font-bold text-lg">Crop Profile Photo</h2>
+                            <h2 className="font-bold text-lg">{t('crop_photo_title')}</h2>
                             <button onClick={() => { setIsCropModalOpen(false); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-muted-foreground hover:text-foreground">
                                 <X className="h-5 w-5" />
                             </button>
@@ -512,7 +512,7 @@ const Profile = () => {
                             >
                                 <img
                                     ref={imgRef}
-                                    alt="Crop me"
+                                    alt={t('crop_photo_title')}
                                     src={imgSrc}
                                     onLoad={onImageLoad}
                                     className="max-h-[50vh] max-w-full object-contain"
@@ -525,7 +525,7 @@ const Profile = () => {
                                 onClick={() => { setIsCropModalOpen(false); if (fileInputRef.current) fileInputRef.current.value = ''; }}
                                 className="px-6 rounded-xl hover:bg-secondary"
                             >
-                                Cancel
+                                {t('cancel')}
                             </Button>
                             <Button
                                 onClick={handleUploadCropped}
@@ -533,7 +533,7 @@ const Profile = () => {
                                 className="px-8 bg-accent hover:bg-accent/90 text-white rounded-xl font-bold"
                             >
                                 {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                Save Photo
+                                {t('save_photo')}
                             </Button>
                         </div>
                     </div>

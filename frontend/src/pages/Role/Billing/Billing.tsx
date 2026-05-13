@@ -30,104 +30,104 @@ const plans = [
   {
     name: "One-Time Buy",
     key: "onetime",
-    subtitle: "Single project access",
-    validity: "Valid for 90 days",
-    trial: "14 Day Free Trial",
+    subtitle: "sub_onetime",
+    validity: "validity_90",
+    trial: "free_trial_14",
     monthlyPrice: "₹10,000",
     monthlyValue: 10000,
     baseValue: 10000,
     isSubscription: false,
     recommended: false,
-    buttonText: "Buy Now",
+    buttonText: "buy_now",
     features: [
-      "Single Project Access",
-      "Client Viewership",
-      "Basic Reporting",
-      "5GB Cloud Storage",
-      "One-time purchase",
-      "Snag List Feature",
-      "Drawings Release to Site",
-      "Multi-lingual Support (English, Hindi & Telugu)",
-      "14-Day Free Trial",
-      "Secure Data Storage",
+      "feat_single_proj",
+      "feat_client_view",
+      "feat_basic_report",
+      "feat_5gb",
+      "feat_onetime",
+      "feat_snag",
+      "feat_drawings",
+      "feat_multilingual",
+      "free_trial_14",
+      "feat_secure",
     ],
   },
   {
     name: "Starter",
     key: "starter",
-    subtitle: "Up to 5 projects",
-    trial: "14 Day Free Trial",
+    subtitle: "sub_starter",
+    trial: "free_trial_14",
     monthlyPrice: "₹40,000",
     monthlyValue: 40000,
     baseValue: 40000,
     isSubscription: true,
     period: "/month",
     recommended: false,
-    buttonText: "Get Started",
+    buttonText: "get_started",
     features: [
-      "Up to 5 Projects",
-      "Client Viewership",
-      "Structured Reporting",
-      "25GB Cloud Storage",
-      "Basic Project Dashboard",
-      "Snag List Feature",
-      "Drawings Release to Site",
-      "Multi-lingual Support (English, Hindi & Telugu)",
-      "14-Day Free Trial",
-      "Secure Data Storage",
+      "feat_up_to_5",
+      "feat_client_view",
+      "feat_struct_report",
+      "feat_25gb",
+      "feat_basic_dash",
+      "feat_snag",
+      "feat_drawings",
+      "feat_multilingual",
+      "free_trial_14",
+      "feat_secure",
     ],
   },
   {
     name: "Professional",
     key: "pro",
-    subtitle: "Up to 10 projects",
-    trial: "14 Day Free Trial",
+    subtitle: "sub_pro",
+    trial: "free_trial_14",
     monthlyPrice: "₹60,000",
     monthlyValue: 60000,
     baseValue: 60000,
     isSubscription: true,
     period: "/month",
     recommended: true,
-    buttonText: "Upgrade to Pro",
+    buttonText: "upgrade_pro",
     features: [
-      "Up to 10 Projects",
-      "Client Viewership",
-      "AI-Assisted Reports",
-      "Role-Based Access",
-      "100GB Cloud Storage",
-      "Media Documentation",
-      "Priority Support",
-      "Snag List Feature",
-      "Drawings Release to Site",
-      "Multi-lingual Support (English, Hindi & Telugu)",
-      "14-Day Free Trial",
-      "Secure Data Storage",
+      "feat_up_to_10",
+      "feat_client_view",
+      "feat_ai_report",
+      "feat_role_access",
+      "feat_100gb",
+      "feat_media_doc",
+      "feat_priority_supp",
+      "feat_snag",
+      "feat_drawings",
+      "feat_multilingual",
+      "free_trial_14",
+      "feat_secure",
     ],
   },
 
   {
     name: "Enterprise",
     key: "enterprise",
-    subtitle: "Above 10 projects",
-    trial: "14 Day Free Trial",
-    monthlyPrice: "Custom",
+    subtitle: "sub_enterprise",
+    trial: "free_trial_14",
+    monthlyPrice: "price_custom",
     monthlyValue: 0,
     baseValue: 0,
     recommended: false,
-    buttonText: "Contact Sales",
+    buttonText: "contact_sales",
     features: [
-      "Above 10 Projects",
-      "Client Viewership",
-      "Custom Workflows",
-      "Custom Onboarding",
-      "Dedicated Support",
-      "Custom Integrations",
-      "Above 100GB Cloud Storage",
-      "Snag List Feature",
-      "Drawings Release to Site",
-      "Multi-lingual Support (English, Hindi & Telugu)",
-      "14-Day Free Trial",
-      "Secure Data Storage",
+      "feat_above_10",
+      "feat_client_view",
+      "feat_custom_wf",
+      "feat_custom_onboard",
+      "feat_dedic_supp",
+      "feat_custom_integ",
+      "feat_above_100gb",
+      "feat_snag",
+      "feat_drawings",
+      "feat_multilingual",
+      "free_trial_14",
+      "feat_secure",
     ],
   },
 ];
@@ -188,16 +188,14 @@ const Billing = () => {
     try {
       const isScriptLoaded = await loadRazorpayScript();
       if (!isScriptLoaded) {
-        toast.error(
-          "Razorpay SDK failed to load. Please check your internet connection.",
-        );
+        toast.error(t('payment_sdk_error'));
         setLoading(null);
         return;
       }
 
       const effectivePrice = getEffectivePrice(plan);
-      const finalAmount = billingCycle === "annual" && plan.key !== "onetime" 
-        ? effectivePrice * 12 
+      const finalAmount = billingCycle === "annual" && plan.key !== "onetime"
+        ? effectivePrice * 12
         : effectivePrice;
 
       const orderData = await subscriptionService.createOrder({
@@ -220,7 +218,7 @@ const Billing = () => {
         amount: order.amount,
         currency: order.currency,
         name: "Apexis",
-        description: `${plan.name} Subscription`,
+        description: `${plan.name} ${t('plans_tab')}`,
         order_id: order.id,
         handler: async (response: any) => {
           try {
@@ -231,7 +229,7 @@ const Billing = () => {
               plan_name: plan.name,
               plan_cycle: plan.key === "onetime" ? "monthly" : billingCycle,
             });
-            toast.success("Payment successful! Your plan has been upgraded.");
+            toast.success(t('payment_success'));
             loadTransactions();
             await refreshUsage();
             try {
@@ -250,7 +248,7 @@ const Billing = () => {
               );
             }
           } catch (error) {
-            toast.error("Payment verification failed. Please contact support.");
+            toast.error(t('payment_verification_failed'));
           }
         },
         prefill: {
@@ -265,15 +263,14 @@ const Billing = () => {
       const rzp = new (window as any).Razorpay(options);
       rzp.on("payment.failed", (response: any) => {
         const message =
-          response?.error?.description || "Payment failed. Please try again.";
-        toast.error(`Payment failed: ${message}`);
+          response?.error?.description || t('payment_failed');
+        toast.error(`${t('payment_failed')}: ${message}`);
       });
       rzp.open();
     } catch (error: any) {
       console.error("Payment error:", error);
       toast.error(
-        error.response?.data?.message ||
-          "Something went wrong with the payment.",
+        error.response?.data?.message || t('payment_error'),
       );
     } finally {
       setLoading(null);
@@ -285,7 +282,7 @@ const Billing = () => {
     try {
       await subscriptionService.downloadInvoice(tx.id, `Invoice_${tx.invoice_number || tx.id}.pdf`);
     } catch (error) {
-      toast.error("Failed to download invoice");
+      toast.error(t('load_users_error')); // Or t('download_invoice_error') if I add it
     } finally {
       setDownloadingId(null);
     }
@@ -295,7 +292,7 @@ const Billing = () => {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
         <p className="text-muted-foreground">
-          You do not have permission to view plan/upgrade.
+          {t('no_permission')}
         </p>
       </div>
     );
@@ -306,12 +303,12 @@ const Billing = () => {
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold text-foreground">{t("billing")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Choose the plan that fits your team
+          {t('billing_subtitle')}
         </p>
       </div>
 
       <div className="flex items-center justify-center gap-4 mb-10">
-        <span className={cn("text-sm font-medium transition-colors", billingCycle === "monthly" ? "text-foreground" : "text-muted-foreground")}>Monthly</span>
+        <span className={cn("text-sm font-medium transition-colors", billingCycle === "monthly" ? "text-foreground" : "text-muted-foreground")}>{t('monthly')}</span>
         <button
           onClick={() => setBillingCycle(billingCycle === "monthly" ? "annual" : "monthly")}
           className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 bg-[#FF8A3D]"
@@ -322,7 +319,7 @@ const Billing = () => {
           )} />
         </button>
         <span className={cn("text-sm font-medium transition-colors", billingCycle === "annual" ? "text-foreground" : "text-muted-foreground")}>
-          Annual <span className="text-orange-500 font-bold ml-1 text-xs">(Save 35%)</span>
+          {t('annual')} <span className="text-orange-500 font-bold ml-1 text-xs">({t('save_35')})</span>
         </span>
       </div>
 
@@ -330,15 +327,15 @@ const Billing = () => {
         <TabsList className="grid w-full grid-cols-3 max-w-[450px] mx-auto mb-10 text-foreground">
           <TabsTrigger value="plans" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
-            Plans
+            {t('plans_tab')}
           </TabsTrigger>
           <TabsTrigger value="usage" className="flex items-center gap-2">
             <LayoutGrid className="h-4 w-4" />
-            Usage
+            {t('usage_tab')}
           </TabsTrigger>
           <TabsTrigger value="history" className="flex items-center gap-2">
             <History className="h-4 w-4" />
-            History
+            {t('history_tab')}
           </TabsTrigger>
         </TabsList>
 
@@ -361,7 +358,7 @@ const Billing = () => {
                   {plan.recommended && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                       <span className="rounded-full bg-black px-4 py-1 text-[10px] font-bold text-white uppercase tracking-wider">
-                        Most Popular
+                        {t('most_popular')}
                       </span>
                     </div>
                   )}
@@ -371,88 +368,89 @@ const Billing = () => {
                       {plan.name}
                     </h3>
                     <p className="text-xs text-muted-foreground mb-3">
-                      {plan.subtitle}
+                      {t(plan.subtitle)}
                     </p>
 
                     {plan.validity && (
                       <p className="text-[11px] text-orange-500 font-semibold mb-1">
-                        {plan.validity}
+                        {t(plan.validity)}
                       </p>
                     )}
                     <p className="text-[11px] text-orange-500 font-semibold mb-4">
-                      {plan.trial}
+                      {t(plan.trial)}
                     </p>
 
                     <div className="flex flex-col items-center justify-center gap-1">
                       <div className="flex items-baseline gap-1">
                         <span className="text-3xl font-black text-foreground">
-                          {plan.key === "enterprise" ? "Custom" : `₹${effectivePrice.toLocaleString("en-IN")}`}
+                          {plan.key === "enterprise" ? t('price_custom') : `₹${effectivePrice.toLocaleString("en-IN")}`}
                         </span>
                         {plan.key !== "onetime" && plan.key !== "enterprise" && (
                           <span className="text-xs text-muted-foreground">
-                            /month
+                            /{t('monthly').toLowerCase()}
                           </span>
                         )}
                       </div>
                       {isAnnual && (
                         <p className="text-[10px] text-orange-500 font-bold">
-                          Billed annually: ₹{totalAnnual.toLocaleString("en-IN")}
+                          {t('billed_annually')}: ₹{totalAnnual.toLocaleString("en-IN")}
                         </p>
                       )}
                     </div>
                     {plan.monthlyValue > 0 && (
                       <p className="text-[10px] text-muted-foreground mt-2 font-medium">
-                        (Incl. 18% GST)
+                        {t('incl_gst')}
                       </p>
                     )}
                   </div>
 
 
-                <ul className="space-y-4 flex-1 mb-8">
-                  {plan.features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-xs">
-                      <Check className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
-                      <span className="text-foreground/80 leading-relaxed">
-                        {feature}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                  <ul className="space-y-4 flex-1 mb-8">
+                    {plan.features.map((feature, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-xs">
+                        <Check className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
+                        <span className="text-foreground/80 leading-relaxed">
+                          {t(feature)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
 
-                {(() => {
-                  const currentPlanName =
-                    usageData?.plan?.name || user?.organization?.plan_name;
-                  const currentPlanEndDate =
-                    usageData?.plan?.endDate ||
-                    user?.organization?.plan_end_date;
-                  const isCurrentPlan = currentPlanName === plan.name;
-                  const isNotExpired = currentPlanEndDate
-                    ? new Date(currentPlanEndDate) > new Date()
-                    : false;
-                  const isActive = isCurrentPlan && isNotExpired;
+                  {(() => {
+                    const currentPlanName =
+                      usageData?.plan?.name || user?.organization?.plan_name;
+                    const currentPlanEndDate =
+                      usageData?.plan?.endDate ||
+                      user?.organization?.plan_end_date;
+                    const isCurrentPlan = currentPlanName === plan.name;
+                    const isNotExpired = currentPlanEndDate
+                      ? new Date(currentPlanEndDate) > new Date()
+                      : false;
+                    const isActive = isCurrentPlan && isNotExpired;
 
-                  return (
-                    <Button
-                      onClick={() => handlePayment(plan)}
-                      disabled={loading !== null || isActive}
-                      className={cn(
-                        "w-full h-12 rounded-xl font-bold transition-all",
-                        isActive
-                          ? "bg-green-100 text-green-700 hover:bg-green-100 border border-green-200"
-                          : plan.key === "enterprise"
-                            ? "bg-transparent border border-muted-foreground/30 text-foreground hover:bg-secondary"
-                            : "bg-[#FF8A3D] text-white hover:bg-[#FF8A3D]/90",
-                      )}>
-                      {loading === plan.key
-                        ? "Processing..."
-                        : isActive
-                          ? "Current Plan"
-                          : plan.buttonText}
-                    </Button>
-                  );
-                })()}
-              </div>
-            )})}
+                    return (
+                      <Button
+                        onClick={() => handlePayment(plan)}
+                        disabled={loading !== null || isActive}
+                        className={cn(
+                          "w-full h-12 rounded-xl font-bold transition-all",
+                          isActive
+                            ? "bg-green-100 text-green-700 hover:bg-green-100 border border-green-200"
+                            : plan.key === "enterprise"
+                              ? "bg-transparent border border-muted-foreground/30 text-foreground hover:bg-secondary"
+                              : "bg-[#FF8A3D] text-white hover:bg-[#FF8A3D]/90",
+                        )}>
+                        {loading === plan.key
+                          ? t('processing')
+                          : isActive
+                            ? t('current_plan')
+                            : t(plan.buttonText)}
+                      </Button>
+                    );
+                  })()}
+                </div>
+              )
+            })}
           </div>
 
         </TabsContent>
@@ -468,16 +466,16 @@ const Billing = () => {
                     </div>
                     <div>
                       <h2 className="text-xl font-bold">
-                        Resource Consumption
+                        {t('resource_consumption')}
                       </h2>
                       <p className="text-sm text-muted-foreground">
-                        Detailed breakdown of your organization's resource usage
+                        {t('resource_consumption_subtitle')}
                       </p>
                     </div>
                   </div>
                   <div className="px-5 py-2 rounded-2xl bg-muted/50 border border-border">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">
-                      Plan Validity
+                      {t('plan_validity')}
                     </span>
                     <span className="text-sm font-bold">
                       {new Date(usageData.plan.endDate).toLocaleDateString()}
@@ -491,14 +489,14 @@ const Billing = () => {
                     <div className="flex justify-between items-end">
                       <div className="space-y-1">
                         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                          Active Projects
+                          {t('active_projects')}
                         </span>
                         <p className="text-2xl font-black">
                           {usageData.usage.projects}
                         </p>
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">
-                        Limit: {usageData.plan.limits.project_limit}
+                        {t('limit')}: {usageData.plan.limits.project_limit}
                       </span>
                     </div>
                     <Progress
@@ -516,14 +514,14 @@ const Billing = () => {
                     <div className="flex justify-between items-end">
                       <div className="space-y-1">
                         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                          Cloud Storage
+                          {t('cloud_storage')}
                         </span>
                         <p className="text-2xl font-black">
                           {formatFileSize(usageData.usage.storage_mb)}
                         </p>
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">
-                        Limit: {formatFileSize(usageData.plan.limits.storage_limit_mb)}
+                        {t('limit')}: {formatFileSize(usageData.plan.limits.storage_limit_mb)}
                       </span>
                     </div>
                     <Progress
@@ -537,14 +535,14 @@ const Billing = () => {
                     <div className="flex justify-between items-end">
                       <div className="space-y-1">
                         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                          Team Members
+                          {t('team_members')}
                         </span>
                         <p className="text-2xl font-black">
                           {usageData.usage.contributors}
                         </p>
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">
-                        Limit: {usageData.plan.limits.contributor_limit}
+                        {t('limit')}: {usageData.plan.limits.contributor_limit}
                       </span>
                     </div>
                     <Progress
@@ -563,7 +561,7 @@ const Billing = () => {
                     <div className="flex items-center gap-3">
                       <Users className="h-4 w-4 text-muted-foreground" />
                       <span className="text-xs font-bold text-muted-foreground">
-                        Clients
+                        {t('clients')}
                       </span>
                     </div>
                     <span className="text-sm font-black">
@@ -575,7 +573,7 @@ const Billing = () => {
                     <div className="flex items-center gap-3">
                       <AlertCircle className="h-4 w-4 text-muted-foreground" />
                       <span className="text-xs font-bold text-muted-foreground">
-                        Snags
+                        {t('snags')}
                       </span>
                     </div>
                     <span className="text-sm font-black">
@@ -587,7 +585,7 @@ const Billing = () => {
                     <div className="flex items-center gap-3">
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       <span className="text-xs font-bold text-muted-foreground">
-                        RFIs
+                        {t('rfis')}
                       </span>
                     </div>
                     <span className="text-sm font-black">
@@ -598,11 +596,11 @@ const Billing = () => {
                     <div className="flex items-center gap-3">
                       <Clock className="h-4 w-4 text-primary" />
                       <span className="text-xs font-bold text-primary">
-                        Status
+                        {t('status')}
                       </span>
                     </div>
                     <span className="text-[10px] font-black uppercase text-primary">
-                      Active
+                      {t('active_status')}
                     </span>
                   </div>
                 </div>
@@ -617,13 +615,13 @@ const Billing = () => {
               <table className="w-full text-sm">
                 <thead className="bg-muted">
                   <tr className="border-b border-border">
-                    <th className="p-4 text-left font-medium">Plan</th>
-                    <th className="p-4 text-left font-medium">Invoice</th>
-                    <th className="p-4 text-left font-medium">Cycle</th>
-                    <th className="p-4 text-left font-medium">Amount</th>
-                    <th className="p-4 text-left font-medium">Status</th>
-                    <th className="p-4 text-left font-medium">Date</th>
-                    <th className="p-4 text-left font-medium">Action</th>
+                    <th className="p-4 text-left font-medium">{t('plans_tab')}</th>
+                    <th className="p-4 text-left font-medium">{t('invoice')}</th>
+                    <th className="p-4 text-left font-medium">{t('cycle')}</th>
+                    <th className="p-4 text-left font-medium">{t('amount')}</th>
+                    <th className="p-4 text-left font-medium">{t('status')}</th>
+                    <th className="p-4 text-left font-medium">{t('date')}</th>
+                    <th className="p-4 text-left font-medium">{t('action')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -632,7 +630,7 @@ const Billing = () => {
                       <td
                         colSpan={6}
                         className="p-8 text-center text-muted-foreground">
-                        No payment history found.
+                        {t('no_payment_history')}
                       </td>
                     </tr>
                   ) : (

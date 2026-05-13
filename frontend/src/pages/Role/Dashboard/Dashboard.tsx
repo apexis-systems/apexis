@@ -118,9 +118,9 @@ export default function Dashboard() {
         e.preventDefault();
 
         if (!checkLimit('projects')) {
-            toast.error("Limit Reached: You have reached your project limit. Please upgrade your plan to create more projects.", {
+            toast.error(t('project_limit_reached'), {
                 action: {
-                    label: 'Upgrade',
+                    label: t('upgrade_label'),
                     onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
                 },
                 duration: 5000,
@@ -134,10 +134,10 @@ export default function Dashboard() {
             setIsCreating(false);
             setNewProject({ name: '', description: '', start_date: '', end_date: '' });
             fetchProjects();
-            toast.success('Project created successfully');
+            toast.success(t('project_created_success'));
         } catch (e: any) {
             console.error("Failed to create project", e);
-            toast.error(getApiErrorMessage(e, 'Failed to create project'));
+            toast.error(getApiErrorMessage(e, t('project_create_failed')));
         } finally {
             setIsSubmitting(false);
         }
@@ -207,10 +207,10 @@ export default function Dashboard() {
 
             const res = await uploadOrgLogo(formData);
             setLocalLogo(res.logo);
-            toast.success('Organization logo updated');
+            toast.success(t('org_logo_updated'));
         } catch (error) {
             console.error("Logo upload failed", error);
-            toast.error('Failed to upload logo');
+            toast.error(t('logo_upload_failed'));
         } finally {
             setIsUploadingLogo(false);
             if (logoInputRef.current) logoInputRef.current.value = '';
@@ -221,13 +221,13 @@ export default function Dashboard() {
         navigator.clipboard.writeText(text);
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
-        toast.success('Copied to clipboard');
+        toast.success(t('copied_to_clipboard'));
     };
 
     if (!user) {
         return (
             <div className="p-8 max-w-6xl mx-auto flex items-center justify-center min-h-[50vh]">
-                <p className="text-muted-foreground">Please log in to view the dashboard.</p>
+                <p className="text-muted-foreground">{t('login_to_view_dashboard')}</p>
             </div>
         );
     }
@@ -253,7 +253,7 @@ export default function Dashboard() {
                         ) : logoUrl || (user.role === 'superadmin' ? '/app-icon.png' : null) ? (
                             <img src={logoUrl || '/app-icon.png'} alt="Org Logo" className="h-full w-full object-cover" />
                         ) : (
-                            <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-tighter">Logo</span>
+                            <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-tighter">{t('logo_placeholder')}</span>
                         )}
                         {user.role === 'admin' && !isUploadingLogo && (
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
@@ -335,21 +335,21 @@ export default function Dashboard() {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" className="h-8 text-[10px] font-semibold gap-1.5 text-muted-foreground bg-secondary/50">
-                                Sort by: <span className="text-foreground capitalize">{sortType === 'name' ? 'Name' : sortType}</span>
+                                {t('sort_by')} <span className="text-foreground capitalize">{t(sortType === 'name' ? 'name_label' : sortType)}</span>
                                 <ChevronDown className="h-3 w-3" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuLabel className="text-[10px]">Sort Projects By</DropdownMenuLabel>
+                            <DropdownMenuLabel className="text-[10px]">{t('sort_projects_by')}</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setSortType('name')} className="text-xs flex items-center justify-between">
-                                Name {sortType === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                                {t('name_label')} {sortType === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setSortType('newest')} className="text-xs flex items-center justify-between">
-                                Newest {sortType === 'newest' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                                {t('newest')} {sortType === 'newest' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setSortType('oldest')} className="text-xs flex items-center justify-between">
-                                Oldest {sortType === 'oldest' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                                {t('oldest')} {sortType === 'oldest' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -380,10 +380,10 @@ export default function Dashboard() {
 
             {isCreating && (
                 <div className="rounded-xl bg-card border border-border p-6 mb-8">
-                    <h3 className="text-lg font-bold text-foreground mb-4">Create New Project</h3>
+                    <h3 className="text-lg font-bold text-foreground mb-4">{t('create_new_project')}</h3>
                     <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Project Name (max 25)</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">{t('project_name_max')}</label>
                             <input
                                 required
                                 type="text"
@@ -394,18 +394,18 @@ export default function Dashboard() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Company Name/Client Name (max 50)</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">{t('company_client_max')}</label>
                             <input
                                 type="text"
                                 maxLength={50}
                                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-border/80"
-                                placeholder="Enter Company/Client Name"
+                                placeholder={t('enter_company_client')}
                                 value={newProject.description}
                                 onChange={e => setNewProject({ ...newProject, description: e.target.value })}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">Start Date</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">{t('start_date')}</label>
                             <input
                                 required
                                 type="date"
@@ -415,7 +415,7 @@ export default function Dashboard() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">End Date</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">{t('end_date')}</label>
                             <input
                                 required
                                 type="date"
@@ -430,14 +430,14 @@ export default function Dashboard() {
                                 onClick={() => setIsCreating(false)}
                                 className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors"
                             >
-                                Cancel
+                                {t('cancel')}
                             </button>
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
                                 className="px-4 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
                             >
-                                {isSubmitting ? 'Creating...' : 'Submit'}
+                                {isSubmitting ? t('processing') : t('submit')}
                             </button>
                         </div>
                     </form>
@@ -462,7 +462,7 @@ export default function Dashboard() {
                         </h3>
 
                         <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground italic">
-                            {project.description || 'No Company/Client Name'}
+                            {project.description || t('no_company_client')}
                         </div>
 
                         <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
@@ -474,7 +474,7 @@ export default function Dashboard() {
                         {user.role === 'admin' && (
                             <div className="mt-3 bg-secondary/50 self-stretch rounded-md p-2 flex flex-col gap-1 border border-border text-[10px]">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-muted-foreground font-medium uppercase tracking-wider">Contributor:</span>
+                                    <span className="text-muted-foreground font-medium uppercase tracking-wider">{t('contributor_label')}</span>
                                     <div className="flex items-center gap-2">
                                         <span className="font-mono text-foreground font-bold">{project.contributor_code}</span>
                                         <button
@@ -486,7 +486,7 @@ export default function Dashboard() {
                                     </div>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-muted-foreground font-medium uppercase tracking-wider">Client:</span>
+                                    <span className="text-muted-foreground font-medium uppercase tracking-wider">{t('client_label')}</span>
                                     <div className="flex items-center gap-2">
                                         <span className="font-mono text-foreground font-bold">{project.client_code}</span>
                                         <button
@@ -527,7 +527,7 @@ export default function Dashboard() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
                     <div className="bg-background rounded-xl shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="p-4 border-b border-border flex justify-between items-center">
-                            <h2 className="font-bold text-lg">Crop Logo</h2>
+                            <h2 className="font-bold text-lg">{t('crop_logo')}</h2>
                             <button onClick={() => { setIsCropModalOpen(false); if (logoInputRef.current) logoInputRef.current.value = ''; }} className="text-muted-foreground hover:text-foreground">
                                 ×
                             </button>
@@ -554,14 +554,14 @@ export default function Dashboard() {
                                 onClick={() => { setIsCropModalOpen(false); if (logoInputRef.current) logoInputRef.current.value = ''; }}
                                 className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors"
                             >
-                                Cancel
+                                {t('cancel')}
                             </button>
                             <button
                                 onClick={handleUploadCropped}
                                 disabled={!completedCrop?.width || !completedCrop?.height}
                                 className="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
                             >
-                                Upload Logo
+                                {t('upload_logo_btn')}
                             </button>
                         </div>
                     </div>
@@ -584,13 +584,13 @@ export default function Dashboard() {
                                 {logoUrl || (user.role === 'superadmin' ? '/app-icon.png' : null) ? (
                                     <img src={logoUrl || '/app-icon.png'} alt="Org Logo Preview" className="h-full w-full object-cover" />
                                 ) : (
-                                    <span className="text-muted-foreground font-medium italic">No Logo</span>
+                                    <span className="text-muted-foreground font-medium italic">{t('no_logo')}</span>
                                 )}
                             </div>
 
                             <div className="text-center">
-                                <h3 className="text-lg font-bold text-foreground">Organization Logo</h3>
-                                <p className="text-sm text-muted-foreground mt-1">This logo represents {orgData?.organization?.name || 'your organization'}.</p>
+                                <h3 className="text-lg font-bold text-foreground">{t('org_logo_title')}</h3>
+                                <p className="text-sm text-muted-foreground mt-1">{t('logo_represents').replace('{name}', orgData?.organization?.name || 'your organization')}</p>
                             </div>
 
                             {user.role === 'admin' && (
@@ -602,7 +602,7 @@ export default function Dashboard() {
                                     className="w-full flex items-center justify-center gap-2 py-3 bg-accent hover:bg-accent/90 text-white rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-[0.98]"
                                 >
                                     <Camera className="h-4 w-4" />
-                                    Change Logo
+                                    {t('change_logo')}
                                 </button>
                             )}
                         </div>

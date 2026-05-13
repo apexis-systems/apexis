@@ -9,19 +9,21 @@ import { toast } from 'sonner';
 import { Manual, ManualType, getManuals, uploadManual, deleteManual } from '@/services/manualService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getApiErrorMessage } from '@/helpers/apiError';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Props { project: Project; }
-
-const TYPE_OPTIONS: { label: string; value: ManualType }[] = [
-  { label: 'Manual', value: 'manual' },
-  { label: 'Checklist', value: 'sop' },
-];
 
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
 
 const ProjectManuals = ({ project }: Props) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   if (!project) return null;
+
+  const TYPE_OPTIONS: { label: string; value: ManualType }[] = [
+    { label: t('manual_label'), value: 'manual' },
+    { label: t('checklist_label'), value: 'sop' },
+  ];
 
   const [items, setItems] = useState<Manual[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ const ProjectManuals = ({ project }: Props) => {
     try {
       const data = await getManuals(project.id as any);
       setItems(data);
-    } catch { toast.error('Failed to load manuals'); }
+    } catch { toast.error(t('failed_load_manuals')); }
     finally { setLoading(false); }
   };
 
@@ -59,20 +61,20 @@ const ProjectManuals = ({ project }: Props) => {
       form.append('file', file);
       const manual = await uploadManual(form);
       setItems(prev => [manual, ...prev]);
-      toast.success('Uploaded successfully');
-    } catch (error) { toast.error(getApiErrorMessage(error, 'Upload failed')); }
+      toast.success(t('uploaded_successfully'));
+    } catch (error) { toast.error(getApiErrorMessage(error, t('upload_failed'))); }
     finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; setShowUpload(false); }
   };
 
   // ── Delete ─────────────────────────────────────────────────────────────────────
 
   const handleDelete = async (item: Manual) => {
-    if (!confirm(`Remove "${item.file_name}"?`)) return;
+    if (!confirm(t('confirm_remove_manual').replace('{name}', item.file_name))) return;
     try {
       await deleteManual(item.id);
       setItems(prev => prev.filter(m => m.id !== item.id));
-      toast.success('Removed');
-    } catch { toast.error('Delete failed'); }
+      toast.success(t('removed_msg'));
+    } catch { toast.error(t('delete_failed')); }
   };
 
   const fmtSize = (mb: number) => mb < 1 ? `${Math.round(mb * 1024)} KB` : `${mb.toFixed(1)} MB`;
@@ -81,7 +83,7 @@ const ProjectManuals = ({ project }: Props) => {
   const handleShare = (item: Manual) => {
     if (item.downloadUrl) {
       navigator.clipboard.writeText(item.downloadUrl);
-      toast.success('Link copied to clipboard');
+      toast.success(t('link_copied_msg'));
     }
   };
 
@@ -94,7 +96,7 @@ const ProjectManuals = ({ project }: Props) => {
             className="flex-1 h-9 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 text-xs font-semibold"
           >
             <Upload className="h-3.5 w-3.5 mr-1.5" />
-            Upload Manual / Checklist
+            {t('upload_manual_checklist_btn')}
           </Button>
         </div>
       )}
@@ -106,12 +108,12 @@ const ProjectManuals = ({ project }: Props) => {
       }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Upload Manual / Checklist</DialogTitle>
+            <DialogTitle className="text-sm">{t('upload_manual_checklist_btn')}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div>
-              <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-semibold">Type</p>
+              <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-semibold">{t('type_label')}</p>
               <div className="flex gap-2">
                 {TYPE_OPTIONS.map(opt => (
                   <button
@@ -135,19 +137,19 @@ const ProjectManuals = ({ project }: Props) => {
               }} />
               <Upload className={`h-8 w-8 mb-2 ${pickedFile ? 'text-accent' : 'text-muted-foreground/50'}`} />
               <p className="text-xs font-medium text-foreground text-center">
-                {pickedFile ? pickedFile.name : 'Click to select PDF / Word / Excel'}
+                {pickedFile ? pickedFile.name : t('click_select_file_hint')}
               </p>
               {pickedFile && (
                 <p className="text-[10px] text-muted-foreground mt-1">
                   {fmtSize(pickedFile.size / (1024 * 1024))}
                 </p>
               )}
-              <p className="text-[10px] text-muted-foreground mt-1">Max size: 100 MB</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{t('max_size_hint')}</p>
             </div>
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowUpload(false)} disabled={uploading}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowUpload(false)} disabled={uploading}>{t('cancel')}</Button>
             <Button
               onClick={() => {
                 if (pickedFile) {
@@ -158,7 +160,7 @@ const ProjectManuals = ({ project }: Props) => {
               disabled={uploading || !pickedFile}
               className="bg-accent text-accent-foreground hover:bg-accent/90 min-w-[80px]"
             >
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Upload'}
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t('upload_btn')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -176,12 +178,12 @@ const ProjectManuals = ({ project }: Props) => {
               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => m.downloadUrl && window.open(m.downloadUrl, '_blank')}>
                 <p className="text-[10px] font-semibold truncate text-foreground">{m.file_name}</p>
                 <p className="text-[9px] text-muted-foreground">
-                  {m.type.toUpperCase()} · {fmtSize(m.file_size_mb)} · {fmtDate(m.createdAt)}
+                  {m.type === 'manual' ? t('manual_label').toUpperCase() : t('checklist_label').toUpperCase()} · {fmtSize(m.file_size_mb)} · {fmtDate(m.createdAt)}
                   {m.uploader ? ` · ${m.uploader.name}` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
-                <button onClick={() => handleShare(m)} className="rounded-md p-1 hover:bg-secondary" title="Copy link">
+                <button onClick={() => handleShare(m)} className="rounded-md p-1 hover:bg-secondary" title={t('copy_link_tip')}>
                   <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
                 {isAdmin && String(m.uploaded_by) === String(user?.id) && (
@@ -198,7 +200,7 @@ const ProjectManuals = ({ project }: Props) => {
       {!loading && items.length === 0 && (
         <div className="mt-6 text-center">
           <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No manuals or Checklists yet</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">{t('no_manuals_yet')}</p>
         </div>
       )}
     </div>

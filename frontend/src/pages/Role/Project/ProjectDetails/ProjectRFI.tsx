@@ -49,10 +49,10 @@ interface ProjectRFIProps {
     onUpdate?: () => void;
 }
 
-const STATUS_CONFIG: Record<RFIStatus, { icon: any; color: string; bg: string; label: string }> = {
-    open: { icon: AlertCircle, color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'Open' },
-    closed: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-600/10', label: 'Closed' },
-    overdue: { icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Overdue' },
+const STATUS_CONFIG: Record<RFIStatus, { icon: any; color: string; bg: string; key: string }> = {
+    open: { icon: AlertCircle, color: 'text-amber-500', bg: 'bg-amber-500/10', key: 'open_status' },
+    closed: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-600/10', key: 'closed_status' },
+    overdue: { icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10', key: 'overdue_status' },
 };
 
 export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
@@ -165,7 +165,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             setRfis(rfiData);
             setAssignees(assigneeData);
         } catch (e) {
-            toast.error('Failed to load RFIs');
+            toast.error(t('failed_load_rfis'));
         } finally {
             if (!silent) setLoading(false);
         }
@@ -237,11 +237,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         const validFiles = files.filter(f => f.type.startsWith('image/'));
-        if (validFiles.length !== files.length) toast.error('Some files were skipped (not images)');
+        if (validFiles.length !== files.length) toast.error(t('some_files_skipped_msg'));
 
         const total = newPhotos.length + validFiles.length;
         if (total > 4) {
-            toast.error('Maximum 4 photos allowed');
+            toast.error(t('max_4_photos_msg'));
             return;
         }
 
@@ -265,13 +265,13 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     };
 
     const addRFI = async () => {
-        if (!newTitle.trim()) { toast.error('Title is required'); return; }
-        if (!newAssignee) { toast.error('Assignee is required'); return; }
+        if (!newTitle.trim()) { toast.error(t('title_required_msg')); return; }
+        if (!newAssignee) { toast.error(t('assignee_required_msg')); return; }
 
         if (!checkLimit('rfis')) {
-            toast.error("Limit Reached: You have reached your RFI limit. Please upgrade your plan to create more RFIs.", {
+            toast.error(t('rfi_limit_msg'), {
                 action: {
-                    label: 'Upgrade',
+                    label: t('upgrade_label'),
                     onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
                 },
                 duration: 5000,
@@ -294,13 +294,13 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             }
 
             await createRFI(form);
-            toast.success('RFI created successfully');
+            toast.success(t('rfi_created_msg'));
             setShowAdd(false);
             resetForm();
             load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
-            toast.error(getApiErrorMessage(error, 'Failed to create RFI'));
+            toast.error(getApiErrorMessage(error, t('failed_create_rfi')));
         } finally {
             setSubmitting(false);
         }
@@ -316,10 +316,10 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             const updated = await updateRFI(selectedRFI.id, form);
             setRfis(prev => prev.map(r => r.id === selectedRFI.id ? { ...r, folder_ids: numericIds, linked_folders: updated.linked_folders } : r));
             setSelectedRFI(prev => prev ? { ...prev, folder_ids: numericIds, linked_folders: updated.linked_folders } : null);
-            toast.success('Links updated successfully');
+            toast.success(t('links_updated_msg'));
             setShowFolderPicker(false);
         } catch (error) {
-            toast.error('Failed to update links');
+            toast.error(t('failed_update_links'));
         } finally {
             setSubmitting(false);
         }
@@ -327,7 +327,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
     const handleUpdateRFI = async () => {
         if (!selectedRFI) return;
-        if (!newTitle.trim()) { toast.error('Title is required'); return; }
+        if (!newTitle.trim()) { toast.error(t('title_required_msg')); return; }
         setSubmitting(true);
         try {
             const form = new FormData();
@@ -343,30 +343,30 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             form.append('folder_ids', selectedFolderIds.join(','));
 
             const updated = await updateRFI(selectedRFI.id, form);
-            toast.success('RFI updated successfully');
+            toast.success(t('rfi_updated_msg'));
             setIsEditing(false);
             setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
             setSelectedRFI(updated);
             load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
-            toast.error(getApiErrorMessage(error, 'Failed to update RFI'));
+            toast.error(getApiErrorMessage(error, t('failed_update_rfi')));
         } finally {
             setSubmitting(false);
         }
     };
 
     const handleDeleteRFI = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this RFI?')) return;
+        if (!confirm(t('confirm_delete_rfi'))) return;
         try {
             await deleteRFI(id);
-            toast.success('RFI deleted');
+            toast.success(t('rfi_deleted_msg'));
             setRfis(prev => prev.filter(r => r.id !== id));
             setSelectedRFI(null);
             load(true);
             if (onUpdate) onUpdate();
         } catch (error) {
-            toast.error(getApiErrorMessage(error, 'Failed to delete RFI'));
+            toast.error(getApiErrorMessage(error, t('failed_delete_rfi')));
         }
     };
 
@@ -401,7 +401,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             }
             
             const updated = await updateRFIResponse(selectedRFI.id, form);
-            toast.success('Response updated');
+            toast.success(t('response_updated_msg'));
             setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
             setSelectedRFI(updated);
             setResponseBody(updated.response || '');
@@ -409,7 +409,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             setResponsePhotoPreviews([]);
             if (onUpdate) onUpdate();
         } catch (error) {
-            toast.error(getApiErrorMessage(error, 'Failed to update response'));
+            toast.error(getApiErrorMessage(error, t('failed_update_response')));
         } finally {
             setSubmitting(false);
         }
@@ -418,7 +418,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const handleStatusUpdate = async (id: number, status: RFIStatus) => {
         try {
             await updateRFIStatus(id, status);
-            toast.success(`Status updated to ${status}`);
+            toast.success(t('status_updated_to_msg').replace('{label}', t(STATUS_CONFIG[status].key)));
             
             // Update the list locally by only changing the status field
             setRfis(prev => prev.map(r => r.id === id ? { ...r, status } : r));
@@ -430,7 +430,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 setSelectedRFI({ ...selectedRFI, status });
             }
         } catch {
-            toast.error('Failed to update status');
+            toast.error(t('failed_update_status'));
         }
     };
 
@@ -441,42 +441,42 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         return matchesStatus && matchesCreator && matchesAssignee;
     });
 
-    if (loading) return <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading...</div>;
+    if (loading) return <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2" /> {t('loading')}</div>;
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h2 className="text-lg font-bold">Request for Information</h2>
+                    <h2 className="text-lg font-bold">{t('request_for_info_title')}</h2>
                     <Button onClick={() => setShowAdd(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                        <Plus className="h-4 w-4 mr-2" /> New RFI
+                        <Plus className="h-4 w-4 mr-2" /> {t('new_rfi_btn')}
                     </Button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-secondary/20 rounded-xl border border-border">
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Status</label>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">{t('status_label')}</label>
                         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
                             <SelectTrigger className="h-9 text-xs bg-background">
-                                <SelectValue placeholder="All Status" />
+                                <SelectValue placeholder={t('all_status')} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="open">Open</SelectItem>
-                                <SelectItem value="overdue">Overdue</SelectItem>
-                                <SelectItem value="closed">Closed</SelectItem>
+                                <SelectItem value="all">{t('all_status')}</SelectItem>
+                                <SelectItem value="open">{t('open_status')}</SelectItem>
+                                <SelectItem value="overdue">{t('overdue_status')}</SelectItem>
+                                <SelectItem value="closed">{t('closed_status')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Created By</label>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">{t('created_by_label')}</label>
                         <Select value={creatorFilter} onValueChange={setCreatorFilter}>
                             <SelectTrigger className="h-9 text-xs bg-background">
-                                <SelectValue placeholder="All Creators" />
+                                <SelectValue placeholder={t('all_creators_label')} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Creators</SelectItem>
+                                <SelectItem value="all">{t('all_creators_label')}</SelectItem>
                                 {Array.from(new Set(rfis.map(r => r.creator?.id))).filter(Boolean).map(id => {
                                     const name = rfis.find(r => r.creator?.id === id)?.creator?.name;
                                     return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
@@ -486,13 +486,13 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Assigned To</label>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">{t('assigned_to_label')}</label>
                         <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
                             <SelectTrigger className="h-9 text-xs bg-background">
-                                <SelectValue placeholder="All Assignees" />
+                                <SelectValue placeholder={t('all_assignees_label')} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Assignees</SelectItem>
+                                <SelectItem value="all">{t('all_assignees_label')}</SelectItem>
                                 {Array.from(new Set(rfis.map(r => r.assignee?.id))).filter(Boolean).map(id => {
                                     const name = rfis.find(r => r.assignee?.id === id)?.assignee?.name;
                                     return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
@@ -509,7 +509,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                 className="text-[10px] h-8 text-muted-foreground hover:text-foreground"
                                 onClick={() => { setStatusFilter('all'); setCreatorFilter('all'); setAssigneeFilter('all'); }}
                             >
-                                Clear all
+                                {t('clear_all_btn')}
                             </Button>
                         )}
                     </div>
@@ -535,7 +535,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         <div className="flex items-center gap-2 mb-1">
                                             <h3 className="font-semibold text-sm group-hover:text-accent transition-colors">{rfi.title}</h3>
                                             <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", cfg.bg, cfg.color)}>
-                                                {cfg.label}
+                                                {t(cfg.key)}
                                             </span>
                                         </div>
                                         <p className="text-xs text-muted-foreground line-clamp-2 max-w-2xl">{rfi.description}</p>
@@ -549,7 +549,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         {rfi.seen_at && (
                                             <div className="flex items-center gap-0.5 text-orange-500" title={`Seen at ${new Date(rfi.seen_at).toLocaleString()}`}>
                                                 <CheckCheck className="h-3 w-3" />
-                                                <span className="text-[8px] font-bold uppercase tracking-tighter">Seen</span>
+                                                <span className="text-[8px] font-bold uppercase tracking-tighter">{t('seen_badge')}</span>
                                             </div>
                                         )}
                                     </div>
@@ -561,18 +561,18 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center border border-border">
                                         <span className="text-[10px] font-bold">{rfi.creator?.name?.charAt(0)}</span>
                                     </div>
-                                    <span className="text-[10px] text-muted-foreground">by {rfi.creator?.name}</span>
+                                    <span className="text-[10px] text-muted-foreground">{t('by_user_label').replace('{name}', rfi.creator?.name || '')}</span>
                                 </div>
                                 {rfi.assignee && (
                                     <div className="flex items-center gap-1.5">
                                         <User className="h-3 w-3 text-accent" />
-                                        <span className="text-[10px] font-medium text-accent">Assigned to {rfi.assignee.name}</span>
+                                        <span className="text-[10px] font-medium text-accent">{t('assigned_to_user_label').replace('{name}', rfi.assignee.name)}</span>
                                     </div>
                                 )}
                                 {rfi.photos && rfi.photos.length > 0 && (
                                     <div className="flex items-center gap-1.5 text-muted-foreground">
                                         <Camera className="h-3 w-3" />
-                                        <span className="text-[10px]">{rfi.photos.length} attachments</span>
+                                        <span className="text-[10px]">{t('attachments_count_label').replace('{count}', String(rfi.photos.length))}</span>
                                     </div>
                                 )}
                             </div>
@@ -583,8 +583,8 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 {filteredRfis.length === 0 && (
                     <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl">
                         <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground/30 mb-4" />
-                        <p className="text-sm text-muted-foreground font-medium">No Request for Information found</p>
-                        <p className="text-xs text-muted-foreground/60 mt-1">Try changing your filters or create a new RFI</p>
+                        <p className="text-sm text-muted-foreground font-medium">{t('no_rfis_found')}</p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">{t('rfi_filter_empty_desc')}</p>
                     </div>
                 )}
             </div>
@@ -593,21 +593,21 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             <Dialog open={showAdd || isEditing} onOpenChange={(open) => { if (!open) { setShowAdd(false); setIsEditing(false); resetForm(); } }}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
-                        <DialogTitle>{isEditing ? 'Edit Request for Information' : 'New Request for Information'}</DialogTitle>
+                        <DialogTitle>{isEditing ? t('edit_rfi_title') : t('new_rfi_title')}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Title *</label>
-                            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Enter RFI title" />
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('title_label')}</label>
+                            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder={t('rfi_title_placeholder')} />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</label>
-                            <Textarea value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder="Provide more context..." className="min-h-[100px]" />
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('description_label')}</label>
+                            <Textarea value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder={t('rfi_context_placeholder')} className="min-h-[100px]" />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Assign To *</label>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('assign_to_label')}</label>
                             <Select value={newAssignee} onValueChange={setNewAssignee}>
-                                <SelectTrigger><SelectValue placeholder="Select assignee *" /></SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder={t('select_assignee_placeholder')} /></SelectTrigger>
                                 <SelectContent>
                                     {assignees.map(a => (
                                         <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.role})</SelectItem>
@@ -616,11 +616,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Expiry Date</label>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('expiry_date_label')}</label>
                             <Input type="datetime-local" value={newExpiryDate} onChange={e => setNewExpiryDate(e.target.value)} />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Attachments</label>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('attachments_label')}</label>
                             <div className="flex flex-wrap gap-2">
                                 {photoPreviews.map((src, idx) => (
                                     <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border group">
@@ -645,12 +645,12 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Voice Note</label>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('voice_note_label')}</label>
                             {audioPreview ? (
                                 <div className="relative rounded-xl border border-border bg-card p-4 pr-10">
                                     <div className="mb-2 flex items-center gap-2">
                                         <div className="h-2 w-2 rounded-full bg-accent" />
-                                        <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-accent">{t('voice_note_label')}</span>
                                     </div>
                                     <VoiceNotePlayer url={audioPreview} isMe={false} />
                                     <button onClick={() => { setNewAudio(null); setAudioPreview(null); }} className="absolute top-2 right-2 rounded-full bg-destructive/90 p-1.5">
@@ -661,7 +661,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                 <div className="relative rounded-xl border border-border bg-card p-4 pr-10">
                                     <div className="mb-2 flex items-center gap-2">
                                         <div className="h-2 w-2 rounded-full bg-accent" />
-                                        <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-accent">{t('voice_note_label')}</span>
                                     </div>
                                     <VoiceNotePlayer url={existingAudioUrl!} isMe={false} />
                                     <button
@@ -701,10 +701,10 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                         </div> */}
                     </div>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => { setShowAdd(false); setIsEditing(false); resetForm(); }} disabled={submitting}>Cancel</Button>
+                        <Button variant="ghost" onClick={() => { setShowAdd(false); setIsEditing(false); resetForm(); }} disabled={submitting}>{t('cancel')}</Button>
                         <Button onClick={isEditing ? handleUpdateRFI : addRFI} disabled={submitting || !newTitle.trim()} className="bg-accent text-accent-foreground">
                             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : (isEditing ? <CheckCircle className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />)}
-                            {isEditing ? 'Save Changes' : 'Create RFI'}
+                            {isEditing ? t('save_changes') : t('create_rfi_btn')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -719,9 +719,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                 <div className="flex items-center justify-between gap-3 mb-2 pr-8">
                                     <div className="flex items-center gap-3">
                                         <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", STATUS_CONFIG[selectedRFI.status].bg, STATUS_CONFIG[selectedRFI.status].color)}>
-                                            {STATUS_CONFIG[selectedRFI.status].label}
+                                            {t(STATUS_CONFIG[selectedRFI.status].key)}
                                         </span>
-                                        <span className="text-[10px] text-muted-foreground">RFI #{selectedRFI.id}</span>
+                                        <span className="text-[10px] text-muted-foreground">{t('rfi_id_label').replace('{id}', String(selectedRFI.id))}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && (
@@ -735,7 +735,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                 }}
                                             >
                                                 <Folder className="h-3 w-3 mr-1.5" />
-                                                Link
+                                                {t('link_btn')}
                                             </Button>
                                         )}
                                         {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && !selectedRFI.response && (
@@ -764,23 +764,23 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         setIsEditing(true);
                                                     }}
                                                 >
-                                                    Edit
+                                                    {t('edit_btn')}
                                                 </Button>
                                                 <Button 
                                                     variant="destructive" 
                                                     size="sm" 
                                                     className="h-7 text-[10px]"
                                                     onClick={() => {
-                                                        if (confirm('Are you sure you want to delete this RFI?')) {
+                                                        if (confirm(t('confirm_delete_rfi'))) {
                                                             deleteRFI(selectedRFI.id).then(() => {
                                                                 setRfis(prev => prev.filter(r => r.id !== selectedRFI.id));
                                                                 setSelectedRFI(null);
-                                                                toast.success('RFI deleted successfully');
-                                                            }).catch(() => toast.error('Failed to delete RFI'));
+                                                                toast.success(t('rfi_deleted_msg'));
+                                                            }).catch(() => toast.error(t('failed_delete_rfi')));
                                                         }
                                                     }}
                                                 >
-                                                    Delete
+                                                    {t('delete_btn')}
                                                 </Button>
                                             </>
                                         )}
@@ -795,17 +795,17 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
                                 <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-secondary/30 border border-border">
                                     <div>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Created By</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{t('created_by_label')}</p>
                                         <p className="text-xs font-semibold">{selectedRFI.creator?.name}</p>
                                         <p className="text-[10px] text-muted-foreground">{new Date(selectedRFI.createdAt).toLocaleString()}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Assigned To</p>
-                                        <p className="text-xs font-semibold">{selectedRFI.assignee?.name || 'Unassigned'}</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{t('assigned_to_label')}</p>
+                                        <p className="text-xs font-semibold">{selectedRFI.assignee?.name || t('unassigned_label')}</p>
                                     </div>
                                     {selectedRFI.expiry_date && (
                                         <div className="col-span-2 mt-2 pt-2 border-t border-border/50">
-                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Expiry Date</p>
+                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{t('expiry_date_label')}</p>
                                             <p className={cn("text-xs font-semibold flex items-center gap-1.5", 
                                                 selectedRFI.status === 'overdue' ? 'text-destructive' : 'text-foreground')}>
                                                 <Clock className="h-3 w-3" />
@@ -817,7 +817,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
                                 {selectedRFI.linked_folders && selectedRFI.linked_folders.length > 0 && (
                                     <div>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Linked Folders</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('linked_folders_title')}</p>
                                         <div className="flex flex-wrap gap-2">
                                             {selectedRFI.linked_folders.map((f: any) => (
                                                 <button 
@@ -841,14 +841,14 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
                                 {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
                                     <div>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Attachments</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">{t('attachments_label')}</p>
                                         <div className="grid grid-cols-3 gap-3">
                                             {selectedRFI.photoDownloadUrls.map((url, idx) => (
                                                 isAudio(url) ? (
                                                     <div key={idx} className="col-span-3 rounded-xl border border-border bg-card p-4 shadow-sm">
                                                         <div className="flex items-center gap-2 mb-3">
                                                             <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                                                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Voice Attachment</span>
+                                                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{t('voice_attachment_label')}</span>
                                                         </div>
                                                         <VoiceNotePlayer url={url} isMe={false} />
                                                     </div>
@@ -867,7 +867,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
                                 {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
                                     <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
-                                        <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">Response</p>
+                                        <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">{t('response_title')}</p>
                                         {selectedRFI.response && <p className="text-sm text-foreground whitespace-pre-wrap mb-3">{selectedRFI.response}</p>}
                                         {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
                                             <div className="grid grid-cols-3 gap-2">
@@ -876,7 +876,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         <div key={idx} className="col-span-3 rounded-xl border border-accent/20 bg-card p-4 shadow-sm relative group">
                                                             <div className="flex items-center gap-2 mb-3">
                                                                 <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                                                                <span className="text-[9px] font-bold text-accent uppercase tracking-widest">Voice Response</span>
+                                                                <span className="text-[9px] font-bold text-accent uppercase tracking-widest">{t('voice_response_label')}</span>
                                                             </div>
                                                             <VoiceNotePlayer url={url} isMe={false} />
                                                             {String(selectedRFI.assigned_to) === String(user?.id) && (
@@ -931,16 +931,16 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                 {String(selectedRFI.assigned_to) === String(user?.id) && selectedRFI.status !== 'closed' && (
                                     <div className="space-y-3 pt-4 border-t border-border">
                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                        {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) ? 'Update Response' : 'Provide Response'}
+                                        {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) ? t('update_response_title') : t('provide_response_title')}
                                         </p>
                                         <Textarea 
-                                            placeholder="Type your response here..." 
+                                            placeholder={t('rfi_response_placeholder')} 
                                             value={responseBody} 
                                             onChange={e => setResponseBody(e.target.value)}
                                             className="min-h-[100px] text-sm"
                                         />
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Response Attachments</label>
+                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('response_attachments_label')}</label>
                                             <div className="flex flex-wrap gap-2">
                                                 {responsePhotoPreviews.map((src, idx) => {
                                                     const isAudioFile = responsePhotos[idx]?.type.startsWith('audio/');
@@ -950,7 +950,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                                 <div className="p-4 pr-10 flex flex-col gap-2">
                                                                     <div className="flex items-center gap-2 mb-1">
                                                                         <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                                                                        <span className="text-[9px] font-bold text-accent uppercase tracking-tighter">Voice Response</span>
+                                                                        <span className="text-[9px] font-bold text-accent uppercase tracking-tighter">{t('voice_response_label')}</span>
                                                                     </div>
                                                                     <VoiceNotePlayer url={src} isMe={false} />
                                                                 </div>
@@ -1021,16 +1021,14 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                             className="w-full bg-accent text-accent-foreground"
                                         >
                                             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
-                                            Submit Response
+                                            {t('submit_response_btn')}
                                         </Button>
                                     </div>
                                 )}
 
-
-
                                 {String(selectedRFI.assigned_to) === String(user?.id) && (
                                     <div className="pt-4 border-t border-border space-y-3">
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Update Status</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('update_status_title')}</p>
                                         <div className="flex gap-2">
                                             {(['open', 'closed', 'overdue'] as RFIStatus[]).map((s) => (
                                                 <Button
@@ -1040,7 +1038,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                     className={cn("flex-1 text-[10px] h-8", selectedRFI.status === s && STATUS_CONFIG[s].bg && STATUS_CONFIG[s].color && "opacity-100")}
                                                     onClick={() => handleStatusUpdate(selectedRFI.id, s)}
                                                 >
-                                                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                                                    {t(STATUS_CONFIG[s].key)}
                                                 </Button>
                                             ))}
                                         </div>
