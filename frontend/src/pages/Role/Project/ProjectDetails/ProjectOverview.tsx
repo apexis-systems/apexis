@@ -13,6 +13,7 @@ import { getFiles, getSecureFileUrl } from '@/services/fileService';
 import ShareDialog from '@/components/shared/ShareDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getApiErrorMessage } from '@/helpers/apiError';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 
 interface ProjectOverviewProps {
@@ -24,7 +25,8 @@ interface ProjectOverviewProps {
 }
 
 const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEditClick }: ProjectOverviewProps) => {
-  if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">Loading project overview...</div>;
+  const { t } = useLanguage();
+  if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">{t('loading_overview')}</div>;
   const canManageMembers = userRole === 'admin' || userRole === 'superadmin';
   const isClient = userRole === 'client';
 
@@ -68,7 +70,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
     try {
       setRemovingMemberId(member.user.id);
       await removeProjectMember(project.id, member.user.id);
-      toast.success('Project access removed');
+      toast.success(t('project_access_removed'));
       const refreshed = await getProjectMembers(project.id);
       const fetchedMembers = refreshed.members.filter((m: any) => m.role === memberModalType);
       const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
@@ -82,7 +84,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       }));
       setMembers(membersWithPics);
     } catch (e: any) {
-      toast.error(getApiErrorMessage(e, 'Failed to remove project access'));
+      toast.error(getApiErrorMessage(e, t('failed_remove_access')));
     } finally {
       setRemovingMemberId(null);
     }
@@ -145,10 +147,10 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       if (data.statusType === 'success') {
         setIsExporting(false);
         setLatestExport({ url: data.presignedUrl, date: new Date().toISOString() });
-        toast.success(`Export completed in ${Math.round(data.totalTimeMs / 1000)}s!`);
+        toast.success(t('export_completed').replace('{count}', String(Math.round(data.totalTimeMs / 1000))));
       } else if (data.statusType === 'failed') {
         setIsExporting(false);
-        toast.error('Export failed: ' + data.status);
+        toast.error(t('export_failed').replace('{error}', data.status));
       }
     };
 
@@ -199,12 +201,12 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
     try {
       if (!project?.id) return;
       setIsExporting(true);
-      setExportStatusText('Starting export process...');
+      setExportStatusText(t('starting_export'));
       setExportTimerMs(0);
       setIsCountingDown(false);
       await exportHandoverPackage(project.id);
     } catch (e: any) {
-      toast.error(getApiErrorMessage(e, 'Failed to trigger export'));
+      toast.error(getApiErrorMessage(e, t('failed_trigger_export')));
       setIsExporting(false);
     }
   };
@@ -246,7 +248,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-    toast.success('Copied to clipboard');
+    toast.success(t('copied_to_clipboard'));
   };
 
   const handleShareLink = async (role: 'contributor' | 'client', code: string) => {
@@ -259,7 +261,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         role: role === 'contributor' ? 'contributor' : 'client'
       });
     } catch (e) {
-      toast.error("Failed to generate share link");
+      toast.error(t('failed_share_link'));
     }
   };
 
@@ -278,7 +280,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
             >
               <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
                 <CalendarDays className="h-4 w-4" />
-                <span className="text-xs">Start Date</span>
+                <span className="text-xs">{t('start_date')}</span>
               </div>
               <div className="mt-1 text-sm font-semibold">{project.start_date ? new Date(project.start_date).toLocaleDateString() : '—'}</div>
             </div>
@@ -288,7 +290,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
             >
               <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
                 <CalendarDays className="h-4 w-4" />
-                <span className="text-xs">End Date</span>
+                <span className="text-xs">{t('end_date')}</span>
               </div>
               <div className="mt-1 text-sm font-semibold">{project.end_date ? new Date(project.end_date).toLocaleDateString() : '—'}</div>
             </div>
@@ -300,7 +302,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         >
           <div className="flex items-center gap-2 text-accent group-hover:text-accent/80 transition-colors">
             <FileText className="h-4 w-4" />
-            <span className="text-xs">Documents</span>
+            <span className="text-xs">{t('documents')}</span>
           </div>
           <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : docsCount}</div>
         </div>
@@ -310,7 +312,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         >
           <div className="flex items-center gap-2 text-accent group-hover:text-accent/80 transition-colors">
             <Camera className="h-4 w-4" />
-            <span className="text-xs">Photos</span>
+            <span className="text-xs">{t('photos')}</span>
           </div>
           <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : photosCount}</div>
         </div>
@@ -319,7 +321,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       {isClient && (
         <>
           <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Client Project Code</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t('client_project_code')}</div>
             <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
               <span className="font-mono text-sm font-bold text-foreground">{project.client_code || '—'}</span>
               {project.client_code && (
@@ -345,7 +347,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
               onClick={() => setMemberModalType('client')}
               className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
             >
-              {(project as any).totalClients || 0} active {(project as any).totalClients === 1 ? 'client' : 'clients'}
+              {(project as any).totalClients || 0} {t('active_label')} {t('client')}s
               <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
             </button>
           </div>
@@ -355,17 +357,17 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
               onClick={() => onTabChange?.('reports')}
               className="rounded-lg border border-border bg-secondary/20 p-3 text-left hover:bg-secondary/40 transition-colors"
             >
-              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Reports</div>
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('reports_label')}</div>
               <div className="mt-1 text-lg font-bold text-foreground">{reports.length}</div>
-              <div className="mt-1 text-[10px] text-muted-foreground">View reports</div>
+              <div className="mt-1 text-[10px] text-muted-foreground">{t('view_reports')}</div>
             </button>
             <button
               onClick={() => onTabChange?.('snags')}
               className="rounded-lg border border-border bg-secondary/20 p-3 text-left hover:bg-secondary/40 transition-colors"
             >
-              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Snags</div>
-              <div className="mt-1 text-lg font-bold text-foreground">View</div>
-              <div className="mt-1 text-[10px] text-muted-foreground">Open issues</div>
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('snags_label')}</div>
+              <div className="mt-1 text-lg font-bold text-foreground">{t('view')}</div>
+              <div className="mt-1 text-[10px] text-muted-foreground">{t('open_issues')}</div>
             </button>
           </div>
         </>
@@ -374,10 +376,10 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       {/* Project Members & Codes */}
       {userRole === 'contributor' && (
         <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Access Codes</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('access_codes')}</h3>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Contributor Code</span>
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('contributor_code_label')}</span>
               <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
                 <span className="font-mono text-sm font-bold text-foreground">{(project as any).contributor_code || '—'}</span>
                 {(project as any).contributor_code && (
@@ -403,15 +405,15 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                  className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
                  onClick={() => setMemberModalType('contributor')}
               >
-                  {(project as any).totalContributors || 0} active {(project as any).totalContributors === 1 ? 'contributor' : 'contributors'}
+                  {(project as any).totalContributors || 0} {t('active_label')} {t('contributor')}s
                   <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
               </span>
             </div>
             
             <div className="flex flex-col gap-1 justify-center">
-               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Client List</span>
+               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('client_list_label')}</span>
                <div className="flex items-center justify-between bg-card/50 border border-border/50 border-dashed rounded-lg px-3 py-2">
-                <span className="text-xs text-muted-foreground italic">Code Restricted</span>
+                <span className="text-xs text-muted-foreground italic">{t('code_restricted')}</span>
                 <div className="p-1.5 opacity-30">
                   <Share2 className="h-4 w-4" />
                 </div>
@@ -420,7 +422,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                  className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
                  onClick={() => setMemberModalType('client')}
               >
-                  {(project as any).totalClients || 0} active {(project as any).totalClients === 1 ? 'client' : 'clients'}
+                  {(project as any).totalClients || 0} {t('active_label')} {t('client')}s
                   <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
               </span>
             </div>
@@ -431,10 +433,10 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       {/* Admin Display Codes */}
       {(userRole === 'admin' || userRole === 'superadmin') && (
         <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Access Codes</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('access_codes')}</h3>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Contributor Code</span>
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('contributor_code_label')}</span>
               <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
                 <span className="font-mono text-sm font-bold">{project.contributor_code}</span>
                 <div className="flex items-center gap-1">
@@ -458,12 +460,12 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                  className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
                  onClick={() => setMemberModalType('contributor')}
               >
-                  {(project as any).totalContributors || 0} active {(project as any).totalContributors === 1 ? 'contributor' : 'contributors'}
+                  {(project as any).totalContributors || 0} {t('active_label')} {t('contributor')}s
                   <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
               </span>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">Client Code</span>
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('client_code_label')}</span>
               <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
                 <span className="font-mono text-sm font-bold">{project.client_code}</span>
                 <div className="flex items-center gap-1">
@@ -487,7 +489,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                  className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
                  onClick={() => setMemberModalType('client')}
               >
-                  {(project as any).totalClients || 0} active {(project as any).totalClients === 1 ? 'client' : 'clients'}
+                  {(project as any).totalClients || 0} {t('active_label')} {t('client')}s
                   <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
               </span>
             </div>
@@ -504,18 +506,18 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       {(userRole === 'admin' || userRole === 'superadmin') && (
         <div className="rounded-xl border border-border bg-card p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-foreground">Final Handover Report</h3>
+            <h3 className="text-sm font-bold text-foreground">{t('final_handover_report')}</h3>
           </div>
           
           {isExporting ? (
             <div className="flex flex-col items-center justify-center py-6 gap-3 bg-secondary/30 rounded-lg border border-border/50">
               <Loader2 className="h-6 w-6 animate-spin text-accent" />
               <div className="flex flex-col items-center gap-1">
-                <p className="text-sm font-semibold animate-pulse">{exportStatusText || 'Exporting...'}</p>
+                <p className="text-sm font-semibold animate-pulse">{exportStatusText || t('exporting_label')}</p>
                 {isCountingDown && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono bg-background px-2 py-0.5 rounded-md border border-border">
                     <Clock className="h-3 w-3" />
-                    {formatElapsed(exportTimerMs)} left
+                    {t('time_left').replace('{time}', formatElapsed(exportTimerMs))}
                   </div>
                 )}
               </div>
@@ -527,9 +529,9 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Report Ready</span>
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{t('report_ready')}</span>
                       <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80">
-                        Generated {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {t('generated_label')} {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                   </div>
@@ -539,7 +541,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                     className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                     onClick={() => window.open(latestExport.url, '_blank')}
                   >
-                    <Download className="h-3.5 w-3.5 mr-1" /> Download
+                    <Download className="h-3.5 w-3.5 mr-1" /> {t('download_label')}
                   </Button>
                 </div>
               )}
@@ -550,7 +552,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                 onClick={handleStartExport}
               >
                 <PlayCircle className="h-4 w-4 mr-2" /> 
-                {latestExport ? 'Generate New Report' : 'Export Final Handover Report'}
+                {latestExport ? t('generate_new_report') : t('export_final_handover')}
               </Button>
             </>
           )}
@@ -581,7 +583,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
              {loadingMembers ? (
                 <div className="flex justify-center p-6"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>
              ) : members.length === 0 ? (
-                <div className="text-center p-6 text-sm text-muted-foreground bg-secondary/30 rounded-xl border border-dashed border-border/50">No active {memberModalType}s found</div>
+                <div className="text-center p-6 text-sm text-muted-foreground bg-secondary/30 rounded-xl border border-dashed border-border/50">{t('no_active_members').replace('{role}', memberModalType || '')}</div>
              ) : (
                 members.map((m, idx) => (
                   <div key={idx} className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
@@ -595,7 +597,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                         </div>
                      )}
                      <div className="flex flex-col flex-1 min-w-0">
-                        <span className="text-sm font-bold truncate text-foreground">{m.user.name} {m.user.is_primary && '(Primary)'}</span>
+                        <span className="text-sm font-bold truncate text-foreground">{m.user.name} {m.user.is_primary && t('primary_label')}</span>
                         <div className="flex flex-col gap-1 mt-1.5">
                            {m.user.email && (
                              <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Mail className="h-3 w-3 text-accent" />{m.user.email}</span>

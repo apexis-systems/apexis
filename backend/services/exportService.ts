@@ -829,7 +829,9 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
 
 /** --- DAILY REPORT RENDERER --- */
 
-export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
+export const generateDailyReportPDF = async (report: any, options: { includeSnags?: boolean, includeRFIs?: boolean, includePhotos?: boolean, includeFiles?: boolean } = {}): Promise<Buffer> => {
+    const { includeSnags = true, includeRFIs = true, includePhotos = true, includeFiles = true } = options;
+
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
     const orgName = organization?.name || 'APEXISpro™ Engineering Consultants';
@@ -891,61 +893,70 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
         const summary = (report.summary || {}) as any;
 
         // 1. Files
-        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
-            i + 1,
-            d.folder ? `${d.folder}/${d.title}` : d.title,
-            d.user || ' ',
-            d.date || ' '
-        ]);
-        const fileW = r - left;
-        drawStyledTable(doc, 'SECTION 1 - FILES UPLOADED TODAY', [
-            { text: '#', w: fileW * 0.08 },
-            { text: 'File Path', w: fileW * 0.52 },
-            { text: 'Uploaded By', w: fileW * 0.2 },
-            { text: 'Date', w: fileW * 0.16 }
-        ], fileRows);
+        if (includeFiles) {
+            const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
+                i + 1,
+                d.folder ? `${d.folder}/${d.title}` : d.title,
+                d.user || ' ',
+                d.date || ' '
+            ]);
+            const fileW = r - left;
+            drawStyledTable(doc, 'FILES UPLOADED TODAY', [
+                { text: '#', w: fileW * 0.08 },
+                { text: 'File Path', w: fileW * 0.52 },
+                { text: 'Uploaded By', w: fileW * 0.2 },
+                { text: 'Date', w: fileW * 0.16 }
+            ], fileRows);
+        }
 
         // 2. Photos
-        const photoRows = (summary.photo_summary || []).map((ps: any) => [ps.count, ps.user, ps.folder]);
-        const photoW = r - left;
-        drawStyledTable(doc, 'SECTION 2 - PHOTOS UPLOADED TODAY', [
-            { text: 'Qty', w: photoW * 0.15 },
-            { text: 'Uploaded By', w: photoW * 0.35 },
-            { text: 'Folder', w: photoW * 0.5 }
-        ], photoRows);
+        if (includePhotos) {
+            const photoRows = (summary.photo_summary || []).map((ps: any) => [ps.count, ps.user, ps.folder]);
+            const photoW = r - left;
+            drawStyledTable(doc, 'PHOTOS UPLOADED TODAY', [
+                { text: 'Qty', w: photoW * 0.15 },
+                { text: 'Uploaded By', w: photoW * 0.35 },
+                { text: 'Folder', w: photoW * 0.5 }
+            ], photoRows);
+        }
 
         // 3. RFIs
-        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.status || ' ', rfi.user || ' ', rfi.assigned_to || ' ']);
-        const rfiW = r - left;
-        drawStyledTable(doc, 'SECTION 3 - RFIs RAISED TODAY', [
-            { text: 'Title', w: rfiW * 0.3 },
-            { text: 'Status', w: rfiW * 0.15 },
-            { text: 'Raised By', w: rfiW * 0.2 },
-            { text: 'Assigned To', w: rfiW * 0.2 }
-        ], rfiRows);
+        if (includeRFIs) {
+            const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.status || ' ', rfi.user || ' ', rfi.assigned_to || ' ']);
+            const rfiW = r - left;
+            drawStyledTable(doc, 'RFIs RAISED TODAY', [
+                { text: 'Title', w: rfiW * 0.3 },
+                { text: 'Status', w: rfiW * 0.15 },
+                { text: 'Raised By', w: rfiW * 0.2 },
+                { text: 'Assigned To', w: rfiW * 0.2 }
+            ], rfiRows);
+        }
 
         // 4. Snags
-        const snagRows = (summary.snags || []).map((snag: any) => {
-            const s = String(snag.status || ' ').toLowerCase().trim();
-            const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
-            return [snag.title || ' ', displayStatus, snag.user || ' ', snag.assigned_to || ' '];
-        });
-        const snagW = r - left;
-        drawStyledTable(doc, 'SECTION 4 - SNAGS CREATED TODAY', [
-            { text: 'Title', w: snagW * 0.3 },
-            { text: 'Status', w: snagW * 0.15 },
-            { text: 'Raised By', w: snagW * 0.2 },
-            { text: 'Assigned To', w: snagW * 0.2 }
-        ], snagRows);
+        if (includeSnags) {
+            const snagRows = (summary.snags || []).map((snag: any) => {
+                const s = String(snag.status || ' ').toLowerCase().trim();
+                const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
+                return [snag.title || ' ', displayStatus, snag.user || ' ', snag.assigned_to || ' '];
+            });
+            const snagW = r - left;
+            drawStyledTable(doc, 'SNAGS CREATED TODAY', [
+                { text: 'Title', w: snagW * 0.3 },
+                { text: 'Status', w: snagW * 0.15 },
+                { text: 'Raised By', w: snagW * 0.2 },
+                { text: 'Assigned To', w: snagW * 0.2 }
+            ], snagRows);
+        }
 
         // 5. Uploaded Photos
         const uploadedPhotos = summary.uploaded_photos || [];
-        if (uploadedPhotos.length > 0) {
+        if (includePhotos && uploadedPhotos.length > 0) {
             // Start Section 5 on a new page to ensure the 6-photo grid covers the page
             doc.addPage();
             doc.y = 85;
 
-            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 5 - UPLOADED PHOTOS', left, doc.y).restore();
+            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('UPLOADED PHOTOS', left, doc.y).restore();
+
             doc.moveDown(1);
 
             const gridCols = 3;
@@ -1018,7 +1029,9 @@ export const generateDailyReportPDF = async (report: any): Promise<Buffer> => {
 
 /** --- WEEKLY REPORT RENDERER --- */
 
-export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
+export const generateWeeklyReportPDF = async (report: any, options: { includeSnags?: boolean, includeRFIs?: boolean, includePhotos?: boolean, includeFiles?: boolean } = {}): Promise<Buffer> => {
+    const { includeSnags = true, includeRFIs = true, includePhotos = true, includeFiles = true } = options;
+
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
     const orgName = organization?.name || 'APEXISpro™ Engineering Consultants';
@@ -1086,60 +1099,74 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
         ]);
 
         // Section 2 - Files
-        const summary = (report.summary || {}) as any;
-        const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
-            i + 1,
-            d.folder ? `${d.folder}/${d.title}` : d.title,
-            d.user || ' ',
-            d.date || ' '
-        ]);
-        const fileW = r - left;
-        drawStyledTable(doc, 'SECTION 2 - FILES UPLOADED THIS WEEK', [
-            { text: '#', w: fileW * 0.08 },
-            { text: 'File Path', w: fileW * 0.52 },
-            { text: 'Uploaded By', w: fileW * 0.2 },
-            { text: 'Date', w: fileW * 0.16 }
-        ], fileRows);
+        if (includeFiles) {
+            const summary = (report.summary || {}) as any;
+            const fileRows = (summary.document_titles || []).map((d: any, i: number) => [
+                i + 1,
+                d.folder ? `${d.folder}/${d.title}` : d.title,
+                d.user || ' ',
+                d.date || ' '
+            ]);
+            const fileW = r - left;
+            drawStyledTable(doc, 'FILES UPLOADED THIS WEEK', [
+                { text: '#', w: fileW * 0.08 },
+                { text: 'File Path', w: fileW * 0.52 },
+                { text: 'Uploaded By', w: fileW * 0.2 },
+                { text: 'Date', w: fileW * 0.16 }
+            ], fileRows);
+        }
 
         // Section 3 - Photos
-        const photoRows = (summary.photo_summary || []).map((ps: any, i: number) => [i + 1, ps.folder, ps.count, ps.user]);
-        const photoW = r - left;
-        drawStyledTable(doc, 'SECTION 3 - PHOTOS UPLOADED THIS WEEK', [
-            { text: '#', w: photoW * 0.08 },
-            { text: 'Folder Path', w: photoW * 0.47 },
-            { text: 'Count', w: photoW * 0.15 },
-            { text: 'Uploaded By', w: photoW * 0.3 }
-        ], photoRows);
+        if (includePhotos) {
+            const summary = (report.summary || {}) as any;
+            const photoRows = (summary.photo_summary || []).map((ps: any, i: number) => [i + 1, ps.folder, ps.count, ps.user]);
+            const photoW = r - left;
+            drawStyledTable(doc, 'PHOTOS UPLOADED THIS WEEK', [
+                { text: '#', w: photoW * 0.08 },
+                { text: 'Folder Path', w: photoW * 0.47 },
+                { text: 'Count', w: photoW * 0.15 },
+                { text: 'Uploaded By', w: photoW * 0.3 }
+            ], photoRows);
+        }
 
         // Section 4 — Snags
-        const snagRows = (summary.snags || []).map((snag: any) => {
-            const s = String(snag.status || ' ').toLowerCase().trim();
-            const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
-            return [snag.title || ' ', snag.user || ' ', displayStatus, snag.assigned_to || ' '];
-        });
-        drawStyledTable(doc, 'SECTION 4 - SNAGS CREATED THIS WEEK', [
-            { text: 'Title', w: fileW * 0.3 },
-            { text: 'Raised By', w: fileW * 0.2 },
-            { text: 'Status', w: fileW * 0.15 },
-            { text: 'Assigned To', w: fileW * 0.2 }
-        ], snagRows);
+        if (includeSnags) {
+            const summary = (report.summary || {}) as any;
+            const snagRows = (summary.snags || []).map((snag: any) => {
+                const s = String(snag.status || ' ').toLowerCase().trim();
+                const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
+                return [snag.title || ' ', snag.user || ' ', displayStatus, snag.assigned_to || ' '];
+            });
+            const fileW = r - left;
+            drawStyledTable(doc, 'SNAGS CREATED THIS WEEK', [
+                { text: 'Title', w: fileW * 0.3 },
+                { text: 'Raised By', w: fileW * 0.2 },
+                { text: 'Status', w: fileW * 0.15 },
+                { text: 'Assigned To', w: fileW * 0.2 }
+            ], snagRows);
+        }
 
-        // 3. RFIs
-        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ', rfi.assigned_to || ' ']);
-        const rfiW = r - left;
-        drawStyledTable(doc, 'SECTION 5 - RFIs RAISED THIS WEEK', [
-            { text: 'Title', w: rfiW * 0.3 },
-            { text: 'Raised By', w: rfiW * 0.2 },
-            { text: 'Status', w: rfiW * 0.15 },
-            { text: 'Assigned To', w: fileW * 0.2 }
-        ], rfiRows);
+        // 5. RFIs
+        if (includeRFIs) {
+            const summary = (report.summary || {}) as any;
+            const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ', rfi.assigned_to || ' ']);
+            const rfiW = r - left;
+            drawStyledTable(doc, 'RFIs RAISED THIS WEEK', [
+                { text: 'Title', w: rfiW * 0.3 },
+                { text: 'Raised By', w: rfiW * 0.2 },
+                { text: 'Status', w: rfiW * 0.15 },
+                { text: 'Assigned To', w: rfiW * 0.2 }
+            ], rfiRows);
+        }
 
         // 6. Uploaded Photos
+        const summary = (report.summary || {}) as any;
         const uploadedPhotos = summary.uploaded_photos || [];
-        if (uploadedPhotos.length > 0) {
+        if (includePhotos && uploadedPhotos.length > 0) {
             doc.addPage();
             doc.y = 85;
-            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 6 - UPLOADED PHOTOS', left, doc.y).restore();
+            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('UPLOADED PHOTOS', left, doc.y).restore();
+
             doc.moveDown(1);
             const gridCols = 3;
             const gridRows = 4;
@@ -1218,7 +1245,9 @@ export const generateWeeklyReportPDF = async (report: any): Promise<Buffer> => {
 
 /** --- MONTHLY REPORT RENDERER --- */
 
-export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => {
+export const generateMonthlyReportPDF = async (report: any, options: { includeSnags?: boolean, includeRFIs?: boolean, includePhotos?: boolean, includeFiles?: boolean } = {}): Promise<Buffer> => {
+    const { includeSnags = true, includeRFIs = true, includePhotos = true, includeFiles = true } = options;
+
     const project = await db.projects.findByPk(report.project_id);
     const organization = await organizations.findByPk(project?.organization_id);
     const orgName = organization?.name || 'APEXISpro™ Engineering Consultants';
@@ -1294,59 +1323,72 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
 
         const tblW = r - left;
         // Section 2 - Files
-        const summary = (report.summary || {}) as any;
-        const fileRows = (summary.document_titles || []).slice(0, 50).map((d: any, i: number) => [
-            i + 1,
-            d.folder ? `${d.folder}/${d.title}` : d.title,
-            d.user || ' ',
-            d.date || ' '
-        ]);
-        drawStyledTable(doc, 'SECTION 2 — FILES UPLOADED THIS MONTH', [
-            { text: '#', w: tblW * 0.08 },
-            { text: 'File Path', w: tblW * 0.52 },
-            { text: 'Uploaded By', w: tblW * 0.24 },
-            { text: 'Date', w: tblW * 0.16 }
-        ], fileRows);
+        if (includeFiles) {
+            const summary = (report.summary || {}) as any;
+            const fileRows = (summary.document_titles || []).slice(0, 50).map((d: any, i: number) => [
+                i + 1,
+                d.folder ? `${d.folder}/${d.title}` : d.title,
+                d.user || ' ',
+                d.date || ' '
+            ]);
+            drawStyledTable(doc, 'FILES UPLOADED THIS MONTH', [
+                { text: '#', w: tblW * 0.08 },
+                { text: 'File Path', w: tblW * 0.52 },
+                { text: 'Uploaded By', w: tblW * 0.24 },
+                { text: 'Date', w: tblW * 0.16 }
+            ], fileRows);
+        }
 
         // Section 3 - Photos
-        const photoRows = (summary.photo_summary || []).map((ps: any, i: number) => [i + 1, ps.folder, ps.count, ps.user]);
-        const photoW = r - left;
-        drawStyledTable(doc, 'SECTION 3 — PHOTOS UPLOADED THIS MONTH', [
-            { text: '#', w: photoW * 0.08 },
-            { text: 'Folder Path', w: photoW * 0.47 },
-            { text: 'Count', w: photoW * 0.15 },
-            { text: 'Uploaded By', w: photoW * 0.3 }
-        ], photoRows);
+        if (includePhotos) {
+            const summary = (report.summary || {}) as any;
+            const photoRows = (summary.photo_summary || []).map((ps: any, i: number) => [i + 1, ps.folder, ps.count, ps.user]);
+            const photoW = r - left;
+            drawStyledTable(doc, 'PHOTOS UPLOADED THIS MONTH', [
+                { text: '#', w: photoW * 0.08 },
+                { text: 'Folder Path', w: photoW * 0.47 },
+                { text: 'Count', w: photoW * 0.15 },
+                { text: 'Uploaded By', w: photoW * 0.3 }
+            ], photoRows);
+        }
 
 
         // Section 4 - RFIs
-        const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ', rfi.assigned_to || ' ']);
-        drawStyledTable(doc, 'SECTION 4 — RFI SUMMARY THIS MONTH', [
-            { text: 'Description', w: tblW * 0.3 },
-            { text: 'Raised By', w: tblW * 0.2 },
-            { text: 'Status', w: tblW * 0.15 },
-            { text: 'Assigned To', w: tblW * 0.2 }
-        ], rfiRows);
+        if (includeRFIs) {
+            const summary = (report.summary || {}) as any;
+            const rfiRows = (summary.rfis || []).map((rfi: any) => [rfi.title || ' ', rfi.user || ' ', rfi.status || ' ', rfi.assigned_to || ' ']);
+            drawStyledTable(doc, 'RFI SUMMARY THIS MONTH', [
+                { text: 'Description', w: tblW * 0.3 },
+                { text: 'Raised By', w: tblW * 0.2 },
+                { text: 'Status', w: tblW * 0.15 },
+                { text: 'Assigned To', w: tblW * 0.2 }
+            ], rfiRows);
+        }
 
         // Section 5 - Snags
-        const snagRows = (summary.snags || []).map((snag: any) => {
-            const s = String(snag.status || ' ').toLowerCase().trim();
-            const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
-            return [snag.title || ' ', snag.user || ' ', displayStatus, snag.assigned_to || ' '];
-        });
-        drawStyledTable(doc, 'SECTION 5 — SNAG SUMMARY THIS MONTH', [
-            { text: 'Description', w: tblW * 0.3 },
-            { text: 'Raised By', w: tblW * 0.2 },
-            { text: 'Status', w: tblW * 0.15 },
-            { text: 'Assigned To', w: tblW * 0.2 }
-        ], snagRows);
+        if (includeSnags) {
+            const summary = (report.summary || {}) as any;
+            const snagRows = (summary.snags || []).map((snag: any) => {
+                const s = String(snag.status || ' ').toLowerCase().trim();
+                const displayStatus = s === 'green' ? 'Completed' : s === 'amber' ? 'Waiting' : s === 'red' ? 'No' : (snag.status || ' ');
+                return [snag.title || ' ', snag.user || ' ', displayStatus, snag.assigned_to || ' '];
+            });
+            drawStyledTable(doc, 'SNAG SUMMARY THIS MONTH', [
+                { text: 'Description', w: tblW * 0.3 },
+                { text: 'Raised By', w: tblW * 0.2 },
+                { text: 'Status', w: tblW * 0.15 },
+                { text: 'Assigned To', w: tblW * 0.2 }
+            ], snagRows);
+        }
 
         // 6. Uploaded Photos
+        const summary = (report.summary || {}) as any;
         const uploadedPhotos = summary.uploaded_photos || [];
-        if (uploadedPhotos.length > 0) {
+        if (includePhotos && uploadedPhotos.length > 0) {
             doc.addPage();
             doc.y = 85;
-            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('SECTION 6 - UPLOADED PHOTOS', left, doc.y).restore();
+            doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('UPLOADED PHOTOS', left, doc.y).restore();
+
             doc.moveDown(1);
             const gridCols = 3;
             const gridRows = 4;
@@ -1426,8 +1468,10 @@ export const generateMonthlyReportPDF = async (report: any): Promise<Buffer> => 
 };
 
 export const generateSingleReportPDF = async (
-    reportId: number
+    reportId: number,
+    options: { includeSnags?: boolean, includeRFIs?: boolean, includePhotos?: boolean, includeFiles?: boolean } = {}
 ): Promise<Buffer> => {
+
 
     const report = await db.reports.findByPk(reportId);
     // console.log("DEBUG: Report Data ->", JSON.stringify(report, null, 2));
@@ -1440,16 +1484,17 @@ export const generateSingleReportPDF = async (
 
     // Route based on report type
     if (reportType === "daily") {
-        return generateDailyReportPDF(report);
+        return generateDailyReportPDF(report, options);
     }
 
     if (reportType === "weekly") {
-        return generateWeeklyReportPDF(report);
+        return generateWeeklyReportPDF(report, options);
     }
 
     if (reportType === "monthly") {
-        return generateMonthlyReportPDF(report);
+        return generateMonthlyReportPDF(report, options);
     }
+
 
     throw new Error(`Unsupported report type: ${reportType}`);
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   View,
   ScrollView,
@@ -52,82 +53,83 @@ const isEnterprisePlan = (plan: any): boolean => {
 const PLAN_DETAILS: Record<
   string,
   {
-    subtitle: string;
+    subtitleKey: string;
     validity?: string;
     trial?: string;
-    features: string[];
+    featureKeys: string[];
   }
 > = {
   "One-Time Buy": {
-    subtitle: "Single project access",
+    subtitleKey: "subscription.plans.oneTimeSubtitle",
     validity: "Valid for 90 days",
     trial: "14 Day Free Trial",
-    features: [
-      "Single Project Access",
-      "Client Viewership",
-      "Basic Reporting",
-      "5GB Cloud Storage",
-      "One-time purchase",
-      "Snag List Feature",
-      "Drawings Release to Site",
-      "Multi-lingual Support (English, Hindi & Telugu)",
-      "14-Day Free Trial",
-      "Secure Data Storage",
+    featureKeys: [
+      "singleProject",
+      "clientView",
+      "basicReporting",
+      "storage5GB",
+      "oneTimePurchase",
+      "snagList",
+      "drawingsRelease",
+      "multilingual",
+      "freeTrial",
+      "secureStorage",
     ],
   },
   Starter: {
-    subtitle: "Up to 5 projects",
+    subtitleKey: "subscription.plans.starterSubtitle",
     trial: "14 Day Free Trial",
-    features: [
-      "Up to 5 Projects",
-      "Client Viewership",
-      "Structured Reporting",
-      "25GB Cloud Storage",
-      "Basic Project Dashboard",
-      "Snag List Feature",
-      "Drawings Release to Site",
-      "Multi-lingual Support (English, Hindi & Telugu)",
-      "14-Day Free Trial",
-      "Secure Data Storage",
+    featureKeys: [
+      "upTo5Projects",
+      "clientView",
+      "structuredReporting",
+      "storage25GB",
+      "basicDashboard",
+      "snagList",
+      "drawingsRelease",
+      "multilingual",
+      "freeTrial",
+      "secureStorage",
     ],
   },
   Professional: {
-    subtitle: "Up to 10 projects",
+    subtitleKey: "subscription.plans.professionalSubtitle",
     trial: "14 Day Free Trial",
-    features: [
-      "Up to 10 Projects",
-      "Client Viewership",
-      "AI-Assisted Reports",
-      "Role-Based Access",
-      "100GB Cloud Storage",
-      "Media Documentation",
-      "Priority Support",
-      "Snag List Feature",
-      "Drawings Release to Site",
-      "Multi-lingual Support (English, Hindi & Telugu)",
-      "14-Day Free Trial",
-      "Secure Data Storage",
+    featureKeys: [
+      "upTo10Projects",
+      "clientView",
+      "aiReports",
+      "roleAccess",
+      "storage100GB",
+      "mediaDoc",
+      "prioritySupport",
+      "snagList",
+      "drawingsRelease",
+      "multilingual",
+      "freeTrial",
+      "secureStorage",
     ],
   },
   Enterprise: {
-    subtitle: "Above 10 projects",
+    subtitleKey: "subscription.plans.enterpriseSubtitle",
     trial: "14 Day Free Trial",
-    features: [
-      "Above 10 Projects",
-      "Client Viewership",
-      "Custom Workflows",
-      "Custom Onboarding",
-      "Dedicated Support",
-      "Custom Integrations",
-      "Above 100GB Cloud Storage",
-      "Snag List Feature",
-      "Drawings Release to Site",
-      "Multi-lingual Support (English, Hindi & Telugu)",
-      "14-Day Free Trial",
-      "Secure Data Storage",
+    featureKeys: [
+      "above10Projects",
+      "clientView",
+      "customWorkflows",
+      "customOnboarding",
+      "dedicatedSupport",
+      "customIntegrations",
+      "above100GB",
+      "snagList",
+      "drawingsRelease",
+      "multilingual",
+      "freeTrial",
+      "secureStorage",
     ],
   },
 };
+
 
 const gstAmount = (baseAmount: number): number =>
   Number((baseAmount * GST_RATE).toFixed(2));
@@ -135,7 +137,9 @@ const payableAmount = (baseAmount: number): number =>
   Number((baseAmount + gstAmount(baseAmount)).toFixed(2));
 
 export default function SubscriptionScreen() {
+  const { t } = useTranslation();
   const { colors } = useTheme();
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { usageData, loading: usageLoading, refreshUsage } = useUsage();
@@ -270,8 +274,9 @@ export default function SubscriptionScreen() {
         }
 
         await refreshUsage();
-        Alert.alert("Success", "Your plan has been upgraded successfully!");
+        Alert.alert(t('common.success') || 'Success', t('subscription.successUpgrade'));
       } catch (e: any) {
+
         const message =
           e?.response?.data?.message ||
           e?.message ||
@@ -316,21 +321,23 @@ export default function SubscriptionScreen() {
   if (!usageData) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Text>Failed to load subscription data.</Text>
+        <Text>{t('subscription.failedLoad')}</Text>
         <TouchableOpacity onPress={refreshUsage} style={{ marginTop: 20 }}>
-          <Text style={{ color: colors.primary }}>Retry</Text>
+          <Text style={{ color: colors.primary }}>{t('subscription.retry')}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
+
   const { plan, usage } = usageData;
   const selectedPlanDetails = selectedPlan
     ? PLAN_DETAILS[selectedPlan.name] || {
-        subtitle: "Subscription plan",
-        features: [],
+        subtitleKey: "subscription.plans.oneTimeSubtitle",
+        featureKeys: [],
       }
     : null;
+
 
   return (
     <SafeAreaView
@@ -347,9 +354,10 @@ export default function SubscriptionScreen() {
           <Feather name="arrow-left" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Subscription & Plans
+          {t('subscription.title')}
         </Text>
         <TouchableOpacity
+
           onPress={() => router.push("/transactions")}
           style={styles.headerIconBtn}>
           <MaterialCommunityIcons
@@ -378,9 +386,10 @@ export default function SubscriptionScreen() {
                   styles.planBadge,
                   { fontFamily: "Montserrat-Bold", color: colors.primary },
                 ]}>
-                CURRENT ACTIVE PLAN
+                {t('subscription.currentActivePlan')}
               </Text>
               <Text style={[styles.planName, { color: colors.text }]}>
+
                 {plan.name}
               </Text>
             </View>
@@ -395,13 +404,13 @@ export default function SubscriptionScreen() {
 
           <View style={styles.planDates}>
             <View style={styles.dateItem}>
-              <Text style={styles.dateLabel}>RENEWAL DATE</Text>
+              <Text style={styles.dateLabel}>{t('subscription.renewalDate')}</Text>
               <Text style={[styles.dateValue, { color: colors.text }]}>
                 {new Date(plan.endDate).toLocaleDateString()}
               </Text>
             </View>
             <View style={styles.dateItem}>
-              <Text style={styles.dateLabel}>DAYS REMAINING</Text>
+              <Text style={styles.dateLabel}>{t('subscription.daysRemaining')}</Text>
               <Text
                 style={[
                   styles.dateValue,
@@ -410,17 +419,18 @@ export default function SubscriptionScreen() {
                       plan.daysRemaining < 10 ? colors.primary : colors.text,
                   },
                 ]}>
-                {plan.daysRemaining} Days
+                {plan.daysRemaining} {t('subscription.days')}
               </Text>
             </View>
+
           </View>
         </View>
 
         {/* Available Plans */}
-        <Text style={styles.sectionTitle}>UPGRADE YOUR EXPERIENCE</Text>
+        <Text style={styles.sectionTitle}>{t('subscription.upgradeTitle')}</Text>
 
         <View style={styles.toggleContainer}>
-          <Text style={[styles.toggleLabel, billingCycle === "monthly" && { color: colors.primary, fontWeight: "700" }]}>Monthly</Text>
+          <Text style={[styles.toggleLabel, billingCycle === "monthly" && { color: colors.primary, fontWeight: "700" }]}>{t('subscription.monthly')}</Text>
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => setBillingCycle(billingCycle === "monthly" ? "annual" : "monthly")}
@@ -428,7 +438,7 @@ export default function SubscriptionScreen() {
             <View style={[styles.toggleCircle, billingCycle === "annual" ? styles.toggleCircleAnnual : styles.toggleCircleMonthly]} />
           </TouchableOpacity>
           <Text style={[styles.toggleLabel, billingCycle === "annual" && { color: colors.primary, fontWeight: "700" }]}>
-            Annual <Text style={{ color: colors.primary, fontSize: 10 }}>(Save 35%)</Text>
+            {t('subscription.annual')} <Text style={{ color: colors.primary, fontSize: 10 }}>{t('subscription.save35')}</Text>
           </Text>
         </View>
 
@@ -442,10 +452,11 @@ export default function SubscriptionScreen() {
             const isEnterprise = isEnterprisePlan(p);
             const period = p.name === "One-Time Buy" || isEnterprise ? "" : "/mo";
             const buttonLabel = isCurrent
-              ? "Current"
+              ? t('subscription.current')
               : isEnterprise
-                ? "Contact Sales"
-                : "View Details";
+                ? t('subscription.contactSales')
+                : t('subscription.viewDetails');
+
 
             return (
               <TouchableOpacity
@@ -466,11 +477,12 @@ export default function SubscriptionScreen() {
                   </Text>
                   <Text
                     style={[
-                      styles.availablePlanSubtitle,
-                      { color: colors.textMuted },
-                    ]}>
-                    {PLAN_DETAILS[p.name]?.subtitle || "Tap to view benefits"}
-                  </Text>
+                       styles.availablePlanSubtitle,
+                       { color: colors.textMuted },
+                     ]}>
+                     {t(PLAN_DETAILS[p.name]?.subtitleKey || "subscription.tapToView")}
+                   </Text>
+
                   <View
                     style={{ flexDirection: "column", alignItems: "flex-start" }}>
                     <View style={{ flexDirection: "row", alignItems: "baseline" }}>
@@ -478,11 +490,12 @@ export default function SubscriptionScreen() {
                         style={[
                           styles.availablePlanPrice,
                           { color: colors.primary },
-                        ]}>
-                        {isEnterprise
-                          ? "Custom"
-                          : `₹${effectivePrice.toLocaleString("en-IN")}`}
-                      </Text>
+                         ]}>
+                         {isEnterprise
+                           ? t('subscription.customPricing')
+                           : `₹${effectivePrice.toLocaleString("en-IN")}`}
+                       </Text>
+
                       {!!period && (
                         <Text
                           style={{
@@ -494,11 +507,12 @@ export default function SubscriptionScreen() {
                         </Text>
                       )}
                     </View>
-                    {isAnnual && !isEnterprise && (
-                      <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "600" }}>
-                        Billed annually: ₹{totalAnnual.toLocaleString("en-IN")}
-                      </Text>
-                    )}
+                     {isAnnual && !isEnterprise && (
+                       <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "600" }}>
+                         {t('subscription.billedAnnually', { amount: totalAnnual.toLocaleString("en-IN") })}
+                       </Text>
+                     )}
+
                   </View>
                   {!isEnterprise && (
                     <Text
@@ -508,9 +522,10 @@ export default function SubscriptionScreen() {
                         marginTop: 4,
                         fontWeight: "600",
                       }}>
-                      (Incl. 18% GST)
+                      {t('subscription.inclGst')}
                     </Text>
                   )}
+
                 </View>
 
                 <View
@@ -541,12 +556,13 @@ export default function SubscriptionScreen() {
         {/* Support */}
         <TouchableOpacity
           style={[styles.supportLink, { borderTopColor: colors.border }]}
-          onPress={() => Linking.openURL("mailto:support@apexis.in")}>
-          <Feather name="help-circle" size={16} color={colors.textMuted} />
-          <Text style={[styles.supportText, { color: colors.textMuted }]}>
-            Having issues? Contact Support
-          </Text>
-        </TouchableOpacity>
+           onPress={() => Linking.openURL("mailto:support@apexis.in")}>
+           <Feather name="help-circle" size={16} color={colors.textMuted} />
+           <Text style={[styles.supportText, { color: colors.textMuted }]}>
+             {t('subscription.havingIssues')}
+           </Text>
+         </TouchableOpacity>
+
       </ScrollView>
 
       <Modal
@@ -579,7 +595,7 @@ export default function SubscriptionScreen() {
                         styles.modalPlanSubtitle,
                         { color: colors.textMuted },
                       ]}>
-                      {selectedPlanDetails.subtitle}
+                      {t(selectedPlanDetails.subtitleKey)}
                     </Text>
                   </View>
                   <TouchableOpacity
@@ -607,13 +623,14 @@ export default function SubscriptionScreen() {
                     <View style={styles.modalPriceRow}>
                       <Text
                         style={[
-                          styles.modalPrice,
-                          { color: colors.primary },
-                        ]}>
-                        {isEnterprisePlan(selectedPlan)
-                          ? "Custom Pricing"
-                          : `₹${getEffectivePrice(selectedPlan).toLocaleString("en-IN")}`}
-                      </Text>
+                           styles.modalPrice,
+                           { color: colors.primary },
+                         ]}>
+                         {isEnterprisePlan(selectedPlan)
+                           ? t('subscription.customPricing')
+                           : `₹${getEffectivePrice(selectedPlan).toLocaleString("en-IN")}`}
+                       </Text>
+
                       {selectedPlan.name !== "One-Time Buy" &&
                         !isEnterprisePlan(selectedPlan) && (
                           <Text
@@ -643,11 +660,12 @@ export default function SubscriptionScreen() {
                         {selectedPlanDetails.trial}
                       </Text>
                     )}
-                    {billingCycle === "annual" && selectedPlan.name !== "One-Time Buy" && !isEnterprisePlan(selectedPlan) && (
-                      <Text style={{ color: colors.primary, fontWeight: "700", marginTop: 4 }}>
-                        Total Annual: ₹{(getEffectivePrice(selectedPlan) * 12).toLocaleString("en-IN")}
-                      </Text>
-                    )}
+                     {billingCycle === "annual" && selectedPlan.name !== "One-Time Buy" && !isEnterprisePlan(selectedPlan) && (
+                       <Text style={{ color: colors.primary, fontWeight: "700", marginTop: 4 }}>
+                         {t('subscription.billedAnnually', { amount: (getEffectivePrice(selectedPlan) * 12).toLocaleString("en-IN") })}
+                       </Text>
+                     )}
+
                     {!isEnterprisePlan(selectedPlan) && (
                       <Text
                         style={{
@@ -662,17 +680,17 @@ export default function SubscriptionScreen() {
                   </View>
 
 
-                  <View
+                   <View
                     style={[
                       styles.featureCard,
                       { backgroundColor: colors.surface },
                     ]}>
                     <Text
                       style={[styles.featureTitle, { color: colors.text }]}>
-                      What you get
+                      {t('subscription.whatYouGet')}
                     </Text>
-                    {selectedPlanDetails.features.map((feature) => (
-                      <View key={feature} style={styles.featureRow}>
+                    {selectedPlanDetails.featureKeys.map((featureKey) => (
+                      <View key={featureKey} style={styles.featureRow}>
                         <View
                           style={[
                             styles.featureIconWrap,
@@ -689,11 +707,12 @@ export default function SubscriptionScreen() {
                             styles.featureText,
                             { color: colors.textMuted },
                           ]}>
-                          {feature}
+                          {t(`subscription.features.${featureKey}`)}
                         </Text>
                       </View>
                     ))}
                   </View>
+
                 </ScrollView>
 
                 <TouchableOpacity
@@ -726,13 +745,14 @@ export default function SubscriptionScreen() {
                               ? colors.primary
                               : "white",
                         },
-                      ]}>
-                      {selectedPlan.name === plan.name
-                        ? "Current Plan"
-                        : isEnterprisePlan(selectedPlan)
-                          ? "Contact Sales"
-                          : "Buy Plan"}
-                    </Text>
+                       ]}>
+                       {selectedPlan.name === plan.name
+                         ? t('subscription.currentPlan')
+                         : isEnterprisePlan(selectedPlan)
+                           ? t('subscription.contactSales')
+                           : t('subscription.buyPlan')}
+                     </Text>
+
                   )}
                 </TouchableOpacity>
               </>

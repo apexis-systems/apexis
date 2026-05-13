@@ -35,13 +35,13 @@ const NotificationsPage = () => {
     const [loading, setLoading] = useState(true);
 
     const actionTypes = [
-        { label: 'All Actions', value: 'all' },
-        { label: 'Chat', value: 'chat' },
-        { label: 'Files', value: 'file' },
-        { label: 'Photos', value: 'photo' },
-        { label: 'Snags', value: 'snag' },
-        { label: 'RFI', value: 'rfi' },
-        { label: 'Members', value: 'member' },
+        { label: t('all_actions'), value: 'all' },
+        { label: t('chats'), value: 'chat' },
+        { label: t('documents'), value: 'file' },
+        { label: t('photos'), value: 'photo' },
+        { label: t('snags_label'), value: 'snag' },
+        { label: t('rfi_label'), value: 'rfi' },
+        { label: t('members_label'), value: 'member' },
     ];
 
     const matchesTypeFilter = (notif: any, type: string) => {
@@ -160,7 +160,7 @@ const NotificationsPage = () => {
             className="mx-auto mt-5 flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-secondary/40 transition-colors"
         >
             <History className="h-3.5 w-3.5 text-accent" />
-            {showHistory ? 'Back to unread' : 'History'}
+            {showHistory ? t('back_to_unread') : t('history')}
         </button>
     );
 
@@ -169,8 +169,8 @@ const NotificationsPage = () => {
             <div className="flex flex-col gap-6 mb-8">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h1 className="text-xl font-bold text-foreground">Notifications</h1>
-                        <p className="text-sm text-muted-foreground mt-0.5">Stay updated with project changes</p>
+                        <h1 className="text-xl font-bold text-foreground">{t('notifications')}</h1>
+                        <p className="text-sm text-muted-foreground mt-0.5">{t('notifications_subtitle')}</p>
                     </div>
                     {notifications.length > 0 && (
                         <button 
@@ -178,7 +178,7 @@ const NotificationsPage = () => {
                             className="text-xs text-accent hover:underline flex items-center gap-1.5 font-medium"
                         >
                             <CheckCircle className="h-3.5 w-3.5" />
-                            Mark all as read
+                            {t('mark_all_read')}
                         </button>
                     )}
                 </div>
@@ -187,10 +187,10 @@ const NotificationsPage = () => {
                     {user.role === 'superadmin' && (
                         <Select value={selectedOrgId} onValueChange={(val) => { setSelectedOrgId(val); setSelectedProjectIds([]); setSelectedUserIds([]); }}>
                             <SelectTrigger className="w-40 text-xs">
-                                <SelectValue placeholder="All Organizations" />
+                                <SelectValue placeholder={t('all_organizations')} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Organizations</SelectItem>
+                                <SelectItem value="all">{t('all_organizations')}</SelectItem>
                                 {organizations.map(org => (
                                     <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
                                 ))}
@@ -202,19 +202,19 @@ const NotificationsPage = () => {
                         options={projectOptions}
                         selected={selectedProjectIds}
                         onChange={setSelectedProjectIds}
-                        placeholder="All Projects"
+                        placeholder={t('all_projects')}
                     />
 
                     <MultiSelect
                         options={userOptions}
                         selected={selectedUserIds}
                         onChange={setSelectedUserIds}
-                        placeholder="All Users"
+                        placeholder={t('all_users')}
                     />
 
                     <Select value={selectedType} onValueChange={setSelectedType}>
                         <SelectTrigger className="w-40 text-xs">
-                            <SelectValue placeholder="All Actions" />
+                            <SelectValue placeholder={t('all_actions')} />
                         </SelectTrigger>
                         <SelectContent>
                             {actionTypes.map(type => (
@@ -273,9 +273,9 @@ const NotificationsPage = () => {
                 <div className="mt-12 text-center py-12 bg-secondary/20 rounded-2xl border border-dashed border-border">
                     <Bell className="mx-auto h-8 w-8 text-muted-foreground/20" />
                     <p className="mt-2 text-sm text-muted-foreground">
-                        {showHistory ? 'No notifications in the last 48 hours' : 'No new notifications'}
+                        {showHistory ? t('no_notifications_48h') : t('no_new_notifications')}
                     </p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">You're all caught up!</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">{t('all_caught_up')}</p>
                     {historyButton}
                 </div>
             )}

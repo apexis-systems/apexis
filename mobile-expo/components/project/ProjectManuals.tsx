@@ -245,6 +245,7 @@ export default function ProjectManuals({ project }: Props) {
                                     {pickedFile.size ? `${(pickedFile.size / (1024 * 1024)).toFixed(2)} MB` : ''}
                                 </Text>
                             )}
+                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>Max size: 100 MB</Text>
                         </TouchableOpacity>
 
                         {/* Buttons */}

@@ -5,7 +5,10 @@ import { getManuals, uploadManual, deleteManual } from '../controllers/manualCon
 import { checkLimit } from '../middleware/checkLimit.ts';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+});
 
 router.use(verifyToken);
 

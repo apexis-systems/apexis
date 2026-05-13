@@ -9,6 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getChatUsers, getOrgUsers } from '@/services/userService';
 import { createRoom } from '@/services/chatService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 
 export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
     const { user: authUser } = (useAuth() as any) || {};
+    const { t } = useTranslation();
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const [type, setType] = useState<'direct' | 'group'>('direct');
@@ -74,8 +76,8 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             }, Platform.OS === 'ios' ? 350 : 50);
         } catch (err: any) {
             console.error("Failed to create direct chat", err);
-            const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to start chat';
-            Alert.alert('Unable to Start Chat', errorMsg);
+            const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err.message || t('chat.failedStartChat');
+            Alert.alert(t('chat.unableStartChat'), errorMsg);
         } finally {
             setSubmitting(false);
             setSubmittingUserId(null);
@@ -97,7 +99,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
     const handleCreate = async () => {
         if (selectedUsers.length === 0) return;
         if (type === 'group' && !groupName.trim()) {
-            alert('Please enter a group name');
+            Alert.alert(t('chat.enterGroupName'));
             return;
         }
 
@@ -115,8 +117,8 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
             }, Platform.OS === 'ios' ? 350 : 50);
         } catch (err: any) {
             console.error("Failed to create chat", err);
-            const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to create chat';
-            Alert.alert('Unable to Create Chat', errorMsg);
+            const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err.message || t('chat.failedCreateChat');
+            Alert.alert(t('chat.unableCreateChat'), errorMsg);
         } finally {
             setSubmitting(false);
         }
@@ -160,7 +162,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                             </View>
                         )}
                         {item.project_members && item.project_members.length > 2 && (
-                            <Text style={{ fontSize: 7, color: colors.textMuted, marginTop: 2 }}>+{item.project_members.length - 2} more</Text>
+                            <Text style={{ fontSize: 7, color: colors.textMuted, marginTop: 2 }}>{t('chat.moreMembers', { count: item.project_members.length - 2 })}</Text>
                         )}
                     </View>
                 </View>
@@ -197,7 +199,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                             <Feather name="x" size={24} color={colors.text} />
                         </TouchableOpacity>
-                        <Text style={[styles.headerTitle, { color: colors.text }]}>{type === 'group' ? 'New Group' : 'New Direct Chat'}</Text>
+                        <Text style={[styles.headerTitle, { color: colors.text }]}>{type === 'group' ? t('chat.newGroup') : t('chat.newDirectChat')}</Text>
 
                         {type === 'group' ? (
                             <TouchableOpacity
@@ -211,7 +213,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                                 }}
                             >
                                 {submitting && <ActivityIndicator size="small" color={colors.primary} />}
-                                <Text style={[styles.createButtonText, { color: colors.primary }]}>Create</Text>
+                                <Text style={[styles.createButtonText, { color: colors.primary }]}>{t('chat.create')}</Text>
                             </TouchableOpacity>
                         ) : (
                             <View style={{ width: 40 }} />
@@ -225,14 +227,14 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                         onPress={() => { setType('direct'); setSelectedUsers([]); }}
                         style={[styles.typeTab, type === 'direct' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
                     >
-                        <Text style={[styles.typeTabText, { color: type === 'direct' ? colors.primary : colors.textMuted }]}>Direct</Text>
+                        <Text style={[styles.typeTabText, { color: type === 'direct' ? colors.primary : colors.textMuted }]}>{t('chat.direct')}</Text>
                     </TouchableOpacity>
                     {(authUser?.role === 'admin' || authUser?.role === 'contributor') && (
                         <TouchableOpacity
                             onPress={() => { setType('group'); setSelectedUsers([]); }}
                             style={[styles.typeTab, type === 'group' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
                         >
-                            <Text style={[styles.typeTabText, { color: type === 'group' ? colors.primary : colors.textMuted }]}>Group</Text>
+                            <Text style={[styles.typeTabText, { color: type === 'group' ? colors.primary : colors.textMuted }]}>{t('chat.group')}</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -241,7 +243,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                 {type === 'group' && (
                     <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
                         <TextInput
-                            placeholder="Group Name"
+                            placeholder={t('chat.groupNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             value={groupName}
                             onChangeText={setGroupName}
@@ -269,7 +271,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                     }}>
                         <Feather name="search" size={20} color={colors.textMuted} style={{ marginRight: 10 }} />
                         <TextInput
-                            placeholder="Search people..."
+                            placeholder={t('chat.searchPeoplePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -296,7 +298,7 @@ export default function NewChatModal({ visible, onClose, onSuccess }: Props) {
                         contentContainerStyle={{ paddingBottom: 80 }}
                         ListEmptyComponent={
                             <View style={styles.centerContainer}>
-                                <Text style={{ color: colors.textMuted }}>No users found</Text>
+                                <Text style={{ color: colors.textMuted }}>{t('chat.noUsersFound')}</Text>
                             </View>
                         }
                     />

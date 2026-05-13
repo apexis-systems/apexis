@@ -32,7 +32,7 @@ export default function Trash() {
             setProjects(data.projects || []);
         } catch (e) {
             console.error("Failed to fetch trash projects", e);
-            toast.error("Failed to load trash");
+            toast.error(t('load_trash_error'));
         } finally {
             setLoading(false);
         }
@@ -42,29 +42,29 @@ export default function Trash() {
         try {
             setIsRestoring(projectId);
             await restoreProject(projectId);
-            toast.success('Project restored successfully');
+            toast.success(t('restore_success'));
             fetchTrashProjects();
         } catch (e) {
             console.error("Failed to restore project", e);
-            toast.error('Failed to restore project');
+            toast.error(t('restore_error'));
         } finally {
             setIsRestoring(null);
         }
     };
 
     const handlePermanentDelete = async (projectId: string) => {
-        if (!window.confirm("Are you sure? This will permanently delete ALL project data. This cannot be undone.")) {
+        if (!window.confirm(t('permanent_delete_confirm'))) {
             return;
         }
 
         try {
             setIsSubmitting(true);
             await deleteProject(projectId, true);
-            toast.success('Project permanently deleted');
+            toast.success(t('permanent_delete_success'));
             fetchTrashProjects();
         } catch (e) {
             console.error("Failed to permanently delete project", e);
-            toast.error('Failed to delete project');
+            toast.error(t('permanent_delete_error'));
         } finally {
             setIsSubmitting(false);
         }
@@ -82,23 +82,23 @@ export default function Trash() {
                     <ChevronLeft className="h-6 w-6" />
                 </button>
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground">Trash</h1>
-                    <p className="text-sm text-muted-foreground">Manage and restore deleted projects</p>
+                    <h1 className="text-2xl font-bold text-foreground">{t('trash_title')}</h1>
+                    <p className="text-sm text-muted-foreground">{t('trash_subtitle')}</p>
                 </div>
             </div>
 
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-4">
                     <Loader2 className="h-8 w-8 animate-spin text-accent" />
-                    <p className="text-muted-foreground">Loading trash...</p>
+                    <p className="text-muted-foreground">{t('loading_trash')}</p>
                 </div>
             ) : projects.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center bg-secondary/10 rounded-3xl border-2 border-dashed border-border">
                     <div className="h-16 w-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
                         <Trash2 className="h-8 w-8 text-muted-foreground" />
                     </div>
-                    <h3 className="text-lg font-bold text-foreground">Trash is Empty</h3>
-                    <p className="text-sm text-muted-foreground max-w-xs mt-1">Deleted projects will appear here for 30 days before being permanently removed.</p>
+                    <h3 className="text-lg font-bold text-foreground">{t('trash_empty')}</h3>
+                    <p className="text-sm text-muted-foreground max-w-xs mt-1">{t('trash_empty_desc')}</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -114,7 +114,7 @@ export default function Trash() {
                                     ? "bg-destructive text-destructive-foreground border-destructive" 
                                     : "bg-orange-500 text-white border-orange-600"
                             )}>
-                                {project.daysRemaining} {project.daysRemaining === 1 ? 'DAY' : 'DAYS'} LEFT
+                                {project.daysRemaining} {project.daysRemaining === 1 ? t('day_left') : t('days_left')}
                             </div>
 
                             <div className="flex items-center justify-between w-full mb-3">
@@ -132,20 +132,20 @@ export default function Trash() {
                             </div>
 
                             <p className="text-sm text-muted-foreground line-clamp-2 mb-4 h-10">
-                                {project.description || 'No description available'}
+                                {project.description || t('no_description')}
                             </p>
 
                             <div className="flex items-center gap-4 w-full pt-4 border-t border-border mt-auto">
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <FileText className="h-3.5 w-3.5" />
-                                    <span className="font-medium text-foreground">{project.totalDocs || 0}</span> {t('docs').toLowerCase()}
+                                    <span className="font-medium text-foreground">{project.totalDocs || 0}</span> {t('documents').toLowerCase()}
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <Camera className="h-3.5 w-3.5" />
                                     <span className="font-medium text-foreground">{project.totalPhotos || 0}</span> {t('photos').toLowerCase()}
                                 </div>
                                 <div className="ml-auto text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">
-                                    Deleted: {new Date(project.deletedAt).toLocaleDateString()}
+                                    {t('deleted_at')}: {new Date(project.deletedAt).toLocaleDateString()}
                                 </div>
                             </div>
 
@@ -157,7 +157,7 @@ export default function Trash() {
                                         className="flex-1 bg-accent/10 hover:bg-accent text-accent hover:text-white text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
                                     >
                                         {isRestoring === project.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                                        Restore
+                                        {t('restore')}
                                     </button>
                                     <button 
                                         onClick={() => handlePermanentDelete(project.id)}
@@ -165,7 +165,7 @@ export default function Trash() {
                                         className="flex-1 bg-destructive/10 hover:bg-destructive text-destructive hover:text-white text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
                                     >
                                         {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                        Delete Forever
+                                        {t('delete_forever')}
                                     </button>
                                 </div>
                             )}

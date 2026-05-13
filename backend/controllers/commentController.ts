@@ -63,14 +63,15 @@ export const addComment = async (req: Request, res: Response) => {
                 // 1. Parse mentions FIRST so we know whether to skip logActivity's broadcast
                 const mentionRegex = /@\[(\d+):([^\]]+)\]/g;
                 let match;
-                const mentionedUserIds = new Set<number>();
+                const mentionedUsersMap = new Map<number, string>();
                 while ((match = mentionRegex.exec(text)) !== null) {
                     const mentionedId = Number(match[1]);
+                    const name = match[2];
                     if (mentionedId !== authUser.user_id) {
-                        mentionedUserIds.add(mentionedId);
+                        mentionedUsersMap.set(mentionedId, name);
                     }
                 }
-                const hasMentions = mentionedUserIds.size > 0;
+                const hasMentions = mentionedUsersMap.size > 0;
                 const cleanText = (text as string).replace(/@\[(\d+):([^\]]+)\]/g, (_m: string, _id: string, name: string) => `@${name}`);
 
                 // 2. Log Activity
@@ -80,17 +81,17 @@ export const addComment = async (req: Request, res: Response) => {
                     projectId: f.project_id,
                     userId: authUser.user_id,
                     type: isImage ? 'photo_comment' : 'comment',
-                    description: `commented on ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
+                    description: `${authUser.name || "Someone"} commented on ${isImage ? 'photo' : 'file'}`,
                     metadata: { folderId: f.folder_id, type: activityCategory, fileId: f.id },
                     skipNotifications: hasMentions
                 });
 
                 // 3. Send targeted "Tagged in Photo" notification + log mention activity for each tagged user
-                for (const taggedUserId of mentionedUserIds) {
+                for (const [taggedUserId, taggedUserName] of mentionedUsersMap) {
                     await sendNotification({
                         userId: taggedUserId,
                         title: isImage ? 'Tagged in Photo' : 'Tagged in Comment',
-                        body: `${authUser.name || "Someone"} tagged you in a ${isImage ? 'photo' : 'file'}: "${cleanText.substring(0, 50)}..."`,
+                        body: `${authUser.name || "Someone"} tagged you in a ${isImage ? 'photo' : 'file'}`,
                         type: isImage ? 'photo_comment' : 'comment',
                         data: {
                             fileId: String(f.id),
@@ -106,14 +107,14 @@ export const addComment = async (req: Request, res: Response) => {
                         projectId: f.project_id,
                         userId: authUser.user_id,
                         type: isImage ? 'photo_comment' : 'comment',
-                        description: `mentioned a user in ${isImage ? 'photo' : 'file'}: ${f.file_name}`,
-                        metadata: { folderId: f.folder_id, type: activityCategory, mentionedUserId: taggedUserId },
+                        description: `${authUser.name || "Someone"} mentioned ${taggedUserName} in ${isImage ? 'photo' : 'file'}`,
+                        metadata: { folderId: f.folder_id, type: activityCategory, mentionedUserId: taggedUserId, fileId: f.id },
                         skipNotifications: true  // always skip — tagged user already got direct push above
                     });
                 }
 
                 // 4. Send Notification to File Uploader (if not already mentioned and not the commenter)
-                if (f.created_by !== authUser.user_id && !mentionedUserIds.has(f.created_by)) {
+                if (f.created_by !== authUser.user_id && !mentionedUsersMap.has(f.created_by)) {
                     const uploaderMembership = await project_members.findOne({
                         where: { project_id: f.project_id, user_id: f.created_by }
                     });
@@ -121,7 +122,7 @@ export const addComment = async (req: Request, res: Response) => {
                         await sendNotification({
                             userId: f.created_by,
                             title: isImage ? 'New Photo Comment' : 'New File Comment',
-                            body: `${authUser.name || "Someone"} commented on your ${isImage ? 'photo' : 'file'}: "${cleanText.substring(0, 50)}..."`,
+                            body: `${authUser.name || "Someone"} commented on your ${isImage ? 'photo' : 'file'}`,
                             type: isImage ? 'photo_comment' : 'comment',
                             data: {
                                 fileId: String(f.id),

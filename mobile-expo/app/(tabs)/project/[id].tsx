@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler, FlatList, Platform, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
+
 import { Text } from '@/components/ui/AppText';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,6 +41,8 @@ export default function ProjectWorkspaceScreen() {
     const { user, isScreenCaptureProtected } = useAuth();
     const { colors, isDark } = useTheme();
     const router = useRouter();
+    const { t } = useTranslation();
+
 
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -185,11 +189,12 @@ export default function ProjectWorkspaceScreen() {
 
     type TabDef = { key: Tab; label: string; hideForClient?: boolean };
     const tabs: TabDef[] = [
-        { key: 'overview', label: 'Overview' },
-        { key: 'documents', label: 'Docs' },
-        { key: 'photos', label: 'Photos' },
-        { key: 'rfi', label: 'RFI' },
+        { key: 'overview', label: t('projectWorkspace.tabs.overview') },
+        { key: 'documents', label: t('projectWorkspace.tabs.documents') },
+        { key: 'photos', label: t('projectWorkspace.tabs.photos') },
+        { key: 'rfi', label: t('projectWorkspace.tabs.rfi') },
     ];
+
 
     const visibleTabs = tabs.filter((t) => !(t.hideForClient && user?.role === 'client'));
 
@@ -343,12 +348,12 @@ export default function ProjectWorkspaceScreen() {
     const isMainTab = visibleTabs.some(t => t.key === activeTab);
     const handleDeleteProject = () => {
         Alert.alert(
-            "Delete Project",
-            "Are you sure you want to delete this project? It will be moved to the Trash and can be recovered later from Settings.",
+            t('projectWorkspace.deleteTitle') as string,
+            t('projectWorkspace.deleteDesc') as string,
             [
-                { text: "Cancel", style: "cancel" },
+                { text: t('projectWorkspace.cancel') as string, style: "cancel" },
                 {
-                    text: "Move to Trash",
+                    text: t('projectWorkspace.moveToTrash') as string,
                     style: "destructive",
                     onPress: async () => {
                         try {
@@ -357,7 +362,7 @@ export default function ProjectWorkspaceScreen() {
                             router.replace('/');
                         } catch (error) {
                             console.error("Failed to delete project:", error);
-                            Alert.alert("Error", "Failed to delete project. Please try again.");
+                            Alert.alert(t('projectWorkspace.errorTitle') as string, t('projectWorkspace.errorDelete') as string);
                         } finally {
                             setIsDeleting(false);
                         }
@@ -366,6 +371,7 @@ export default function ProjectWorkspaceScreen() {
             ]
         );
     };
+
 
     // Simplified loading: if no user, we must block. 
     // If no project yet, we show a partial loader inside the layout so the Header remains visible.
@@ -381,8 +387,9 @@ export default function ProjectWorkspaceScreen() {
             <MainHeader
                 showBack
                 onSearchChange={setSearchQuery}
-                searchPlaceholder="Search in project..."
+                searchPlaceholder={t('projectWorkspace.searchPlaceholder') as string}
             />
+
 
             {loading || !project ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -391,8 +398,9 @@ export default function ProjectWorkspaceScreen() {
             ) : isDeleting ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={{ marginTop: 16, color: colors.textMuted, fontSize: 16, fontWeight: '600' }}>Deleting project...</Text>
+                    <Text style={{ marginTop: 16, color: colors.textMuted, fontSize: 16, fontWeight: '600' }}>{t('projectWorkspace.deletingProject')}</Text>
                 </View>
+
             ) : (
                 <>
                     {/* Project Title Header */}
@@ -530,8 +538,9 @@ export default function ProjectWorkspaceScreen() {
                                             <TouchableOpacity onPress={() => setActiveTab('overview')}>
                                                 <Feather name="arrow-left" size={20} color={colors.text} />
                                             </TouchableOpacity>
-                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Snags & Issues</Text>
+                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{t('projectWorkspace.snagsTitle')}</Text>
                                         </View>
+
                                         <ProjectSnagList project={project} initialSnagId={snagId} />
                                     </View>
                                 )}
@@ -541,8 +550,9 @@ export default function ProjectWorkspaceScreen() {
                                             <TouchableOpacity onPress={() => setActiveTab('overview')}>
                                                 <Feather name="arrow-left" size={20} color={colors.text} />
                                             </TouchableOpacity>
-                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Checklists & Manuals</Text>
+                                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{t('projectWorkspace.sopsTitle')}</Text>
                                         </View>
+
                                         <ProjectManuals project={project} />
                                     </View>
                                 )}
@@ -553,28 +563,30 @@ export default function ProjectWorkspaceScreen() {
                                                 <TouchableOpacity onPress={() => setActiveTab('overview')}>
                                                     <Feather name="arrow-left" size={20} color={colors.text} />
                                                 </TouchableOpacity>
-                                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Reports</Text>
+                                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{t('projectWorkspace.reportsTitle')}</Text>
                                             </View>
+
 
                                             <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#e2e8f0', borderRadius: 8, padding: 2 }}>
                                                 <TouchableOpacity
                                                     onPress={() => setReportType('daily')}
                                                     style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'daily' ? colors.surface : 'transparent' }}
                                                 >
-                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>Daily</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'daily' ? colors.text : colors.textMuted }}>{t('projectWorkspace.reportTypes.daily')}</Text>
                                                 </TouchableOpacity>
                                                 <TouchableOpacity
                                                     onPress={() => setReportType('weekly')}
                                                     style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'weekly' ? colors.surface : 'transparent' }}
                                                 >
-                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>Weekly</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'weekly' ? colors.text : colors.textMuted }}>{t('projectWorkspace.reportTypes.weekly')}</Text>
                                                 </TouchableOpacity>
                                                 <TouchableOpacity
                                                     onPress={() => setReportType('monthly')}
                                                     style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: reportType === 'monthly' ? colors.surface : 'transparent' }}
                                                 >
-                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'monthly' ? colors.text : colors.textMuted }}>Monthly</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: reportType === 'monthly' ? colors.text : colors.textMuted }}>{t('projectWorkspace.reportTypes.monthly')}</Text>
                                                 </TouchableOpacity>
+
                                             </View>
                                         </View>
                                         {reportType === 'daily' ? (

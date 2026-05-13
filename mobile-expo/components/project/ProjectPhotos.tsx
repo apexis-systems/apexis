@@ -12,7 +12,9 @@ import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, up
 import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
 import { getMemberForTag, getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Picker } from '@react-native-picker/picker';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
@@ -33,6 +35,7 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectPhotos({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any; user: any; initialFolderId?: string; initialFileId?: string; searchQuery?: string }) {
     const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
@@ -57,6 +60,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [sortBy, setSortBy] = useState<'name' | 'newest' | 'oldest' | 'size'>('name');
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const [monthOffsets, setMonthOffsets] = useState<{ [key: string]: number }>({});
+    const [tempMonth, setTempMonth] = useState('');
+    const [tempYear, setTempYear] = useState('');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -95,6 +102,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [folderMenuVisible, setFolderMenuVisible] = useState(false);
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
+    const mainScrollRef = useRef<ScrollView>(null);
 
     const loadFiles = async (isRefetch = false) => {
         if (!project?.id) return;
@@ -189,11 +197,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     }, [initialFileId, photos, selectedFolder, sortBy, user.role, router]);
 
 
-    const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
-    const currentFolderPhotos = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
-    const visiblePhotos = user.role === 'client'
+    const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
+    const currentFolderPhotos = useMemo(() => photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null')), [photos, selectedFolder]);
+    const visiblePhotos = useMemo(() => user.role === 'client'
         ? currentFolderPhotos.filter((p) => p.client_visible !== false)
-        : currentFolderPhotos;
+        : currentFolderPhotos, [currentFolderPhotos, user.role]);
 
     const sortItems = (items: any[], type: 'folder' | 'file') => {
         return [...items].sort((a: any, b: any) => {
@@ -218,6 +226,48 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const sortedFolders = sortItems(currentFolders, 'folder');
     const sortedPhotos = sortItems(visiblePhotos, 'file');
+
+    const groups = useMemo(() => {
+        if (sortBy === 'newest' || sortBy === 'oldest') {
+            return groupItemsByMonth(sortedPhotos, t);
+        }
+        return [];
+    }, [sortedPhotos, sortBy, t]);
+
+    const availableMonthsByYear = useMemo(() => {
+        const map: Record<string, Set<string>> = {};
+        groups.forEach(g => {
+            const parts = g.title.split(' ');
+            const year = parts[parts.length - 1];
+            const month = parts.slice(0, parts.length - 1).join(' ');
+            if (!map[year]) map[year] = new Set();
+            map[year].add(month);
+        });
+        return map;
+    }, [groups]);
+
+    const availableYears = useMemo(() => Object.keys(availableMonthsByYear).sort((a, b) => b.localeCompare(a)), [availableMonthsByYear]);
+
+    const prevShowMonthPicker = useRef(false);
+    useEffect(() => {
+        prevShowMonthPicker.current = showMonthPicker;
+    }, [showMonthPicker]);
+
+    const allMonths = useMemo(() => [
+        t('months.january'), t('months.february'), t('months.march'), t('months.april'),
+        t('months.may'), t('months.june'), t('months.july'), t('months.august'),
+        t('months.september'), t('months.october'), t('months.november'), t('months.december')
+    ], [t]);
+
+    // Auto-correct month if year change makes it invalid
+    useEffect(() => {
+        if (showMonthPicker && tempYear && tempMonth && availableMonthsByYear[tempYear]) {
+            if (!availableMonthsByYear[tempYear].has(tempMonth)) {
+                const firstAvailable = Array.from(availableMonthsByYear[tempYear])[0];
+                if (firstAvailable) setTempMonth(firstAvailable);
+            }
+        }
+    }, [tempYear, availableMonthsByYear, showMonthPicker]);
 
     const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
@@ -438,17 +488,17 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         try {
             const { status } = await MediaLibrary.requestPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Gallery Access', 'Allow access to save photos to your gallery.');
+                Alert.alert(t('projectPhotos.galleryAccess'), t('projectPhotos.galleryAccessMessage'));
                 return;
             }
             const ext = photo.file_name?.split('.').pop() || 'jpg';
             const localUri = (FileSystem as any).cacheDirectory + `apexis_${Date.now()}.${ext}`;
             const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
             await MediaLibrary.saveToLibraryAsync(uri);
-            Alert.alert('Saved!', 'Photo saved to your gallery.');
+            Alert.alert(t('projectPhotos.saved'), t('projectPhotos.photoSavedMessage'));
         } catch (err) {
             console.error('Download error:', err);
-            Alert.alert('Error', 'Failed to save photo.');
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToSavePhoto'));
         } finally {
             setDownloading(false);
         }
@@ -456,16 +506,16 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const confirmDeletePhoto = (photo: any) => {
         if (!photo?.id) return;
-        Alert.alert('Delete', `Remove "${photo.file_name}"?`, [
-            { text: 'Cancel', style: 'cancel' },
+        Alert.alert(t('projectPhotos.delete'), t('projectPhotos.removePhotoConfirm', { name: photo.file_name }), [
+            { text: t('projectPhotos.cancel'), style: 'cancel' },
             {
-                text: 'Delete', style: 'destructive',
+                text: t('projectPhotos.delete'), style: 'destructive',
                 onPress: async () => {
                     try {
                         await deleteFile(photo.id);
                         setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
                         if (viewerOpen) closeViewer();
-                    } catch { Alert.alert('Error', 'Failed to delete'); }
+                    } catch { Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToDelete')); }
                 }
             }
         ]);
@@ -487,7 +537,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
             setActionMenuVisible(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToUpdateVisibility'));
             await loadFiles(true);
         } finally {
             setProcessing(null);
@@ -501,7 +551,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             await loadFiles(true);
             setFolderMenuVisible(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToUpdateVisibility'));
         } finally {
             setProcessing(null);
         }
@@ -519,12 +569,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const handleDeleteFile = async (file: any) => {
         Alert.alert(
-            "Delete Photo",
-            "Are you sure you want to delete this photo?",
+            t('projectPhotos.deletePhoto'),
+            t('projectPhotos.deletePhotoConfirm'),
             [
-                { text: "Cancel", style: "cancel" },
+                { text: t('projectPhotos.cancel'), style: "cancel" },
                 {
-                    text: "Delete",
+                    text: t('projectPhotos.delete'),
                     style: "destructive",
                     onPress: async () => {
                         try {
@@ -533,7 +583,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             await loadFiles(true);
                             setActionMenuVisible(false);
                         } catch (e) {
-                            Alert.alert("Error", "Failed to delete photo");
+                            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToDeletePhoto'));
                         } finally {
                             setProcessing(null);
                         }
@@ -560,7 +610,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             setRenamingFileId(null);
             setRenamingFileName('');
         } catch (e) {
-            Alert.alert("Error", "Failed to update file");
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToUpdateFile'));
         } finally {
             setSubmitting(false);
         }
@@ -579,7 +629,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             setNewFolderName('');
             setShowCreateFolder(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to create folder");
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToCreateFolder'));
         } finally {
             setSubmitting(false);
         }
@@ -595,7 +645,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             setEditingFolderId(null);
             setEditFolderName('');
         } catch (e) {
-            Alert.alert("Error", "Failed to update folder");
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToUpdateFolder'));
         } finally {
             setSubmitting(false);
         }
@@ -609,11 +659,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 setFolders(folders.filter((f) => f.id !== folder.id));
                 setFolderMenuVisible(false);
                 Alert.alert(
-                    'Success',
-                    data.message || 'Folder deleted successfully.',
+                    t('projectPhotos.success'),
+                    data.message || t('projectPhotos.folderDeletedSuccess'),
                     [
                         {
-                            text: 'OK',
+                            text: t('projectPhotos.ok'),
                             onPress: () => {
                                 if (selectedFolder === folder.id) setSelectedFolder(null);
                             }
@@ -621,8 +671,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     ]
                 );
             } else {
-                const msg = data?.error || 'Failed to delete folder';
-                Alert.alert('Error', msg);
+                const msg = data?.error || t('projectPhotos.failedToDeleteFolder');
+                Alert.alert(t('projectPhotos.error'), msg);
             }
         } finally {
             setProcessing(null);
@@ -631,12 +681,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const confirmDeleteFolder = (folder: any) => {
         Alert.alert(
-            'Delete Folder',
-            `Are you sure you want to delete "${folder.name}"?`,
+            t('projectPhotos.deleteFolder'),
+            t('projectPhotos.deleteFolderConfirm', { name: folder.name }),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('projectPhotos.cancel'), style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('projectPhotos.delete'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }
@@ -682,12 +732,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 promises.push(bulkUpdateFiles({ ids: Array.from(selectedFiles), client_visible: visible }));
             }
             await Promise.all(promises);
-            Alert.alert("Success", "Visibility updated");
+            Alert.alert(t('projectPhotos.success'), t('projectPhotos.visibilityUpdated'));
             // Refresh
             await loadFiles(true);
             clearSelection();
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToUpdateVisibility'));
         } finally {
             setProcessing(null);
         }
@@ -719,13 +769,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     }
                 } catch (e) {
                     console.error('Bulk share error:', e);
-                    Alert.alert("Error", "Failed to share");
+                    Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToSharePhoto'));
                 } finally {
                     setDownloading(false);
                 }
             }
         } else {
-            Alert.alert("Info", "Select at least one photo to share");
+            Alert.alert(t('projectPhotos.info'), t('projectPhotos.selectAtLeastOne'));
         }
     };
 
@@ -736,13 +786,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const link = user.role === 'client' ? links.clientLink : links.contributorLink;
             if (link) {
                 await RNShare.share({
-                    message: `Join ${project.name} on Apexis: ${link}`,
+                    message: t('projectPhotos.joinProjectMessage', { projectName: project.name, link }),
                 });
             } else {
-                Alert.alert("Info", "Share link not available");
+                Alert.alert(t('projectPhotos.info'), t('projectPhotos.shareLinkNotAvailable'));
             }
         } catch (error) {
-            Alert.alert("Error", "Failed to get share link");
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToGetShareLink'));
         }
     };
 
@@ -770,7 +820,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 });
             }
         } catch (e) {
-            Alert.alert("Error", "Failed to share photo");
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToSharePhoto'));
         } finally {
             setDownloading(false);
         }
@@ -792,7 +842,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+            <ScrollView
+                ref={mainScrollRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 14 }}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') ? (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity
@@ -800,14 +855,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             style={{ flex: 1, height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                         >
                             <Feather name="upload" size={13} color="#fff" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Photo</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>{t('projectPhotos.uploadPhoto')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => setShowCreateFolder(true)}
                             style={{ height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 }}
                         >
                             <Feather name="folder-plus" size={13} color={colors.text} />
-                            <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
+                            <Text style={{ fontSize: 12, color: colors.text }}>{t('projectPhotos.newFolder')}</Text>
                         </TouchableOpacity>
                     </View>
                 ) : null}
@@ -879,7 +934,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 }}
                             >
                                 <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
-                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{t(`projectPhotos.sortBy.${sortBy}`)}</Text>
                             </TouchableOpacity>
                         </View>
 
@@ -896,7 +951,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         ...(activeFolderTab === 'files' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
                                     }}
                                 >
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'files' ? colors.primary : colors.textMuted }}>Photos ({sortedFolders.length + sortedPhotos.length})</Text>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'files' ? colors.primary : colors.textMuted }}>{t('projectPhotos.photosCount', { count: sortedFolders.length + sortedPhotos.length })}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     onPress={() => setActiveFolderTab('rfis')}
@@ -909,7 +964,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         ...(activeFolderTab === 'rfis' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
                                     }}
                                 >
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>Linked RFIs ({linkedRFIs.length})</Text>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>{t('projectPhotos.linkedRfisCount', { count: linkedRFIs.length })}</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -948,7 +1003,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                             fontWeight: '800',
                                                             textTransform: 'uppercase',
                                                             color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444'
-                                                        }}>{rfi.status}</Text>
+                                                        }}>{t(`projectRfi.statusLabel.${rfi.status}`)}</Text>
                                                     </View>
                                                 </View>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -958,7 +1013,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     </View>
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                         <Feather name="user" size={10} color={colors.textMuted} />
-                                                        <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || 'Unassigned'}</Text>
+                                                        <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || t('projectPhotos.unassigned')}</Text>
                                                     </View>
                                                 </View>
                                             </View>
@@ -968,7 +1023,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 ) : (
                                     <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                                         <Feather name="link-2" size={32} color={colors.border} />
-                                        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>No RFIs linked to this folder</Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>{t('projectPhotos.noRfisLinked')}</Text>
                                     </View>
                                 )}
                             </View>
@@ -1013,16 +1068,23 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     }}
                                                 />
                                                 <View style={{ marginBottom: 8 }}>
-                                                    <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
+                                                    <Feather
+                                                        name={isArchiveFolder ? "archive" : (folder.name.toLowerCase() === 'confirmation' ? "check-circle" : "folder")}
+                                                        size={folder.name.toLowerCase() === 'confirmation' ? 32 : 36}
+                                                        color={isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.primary)}
+                                                    />
                                                 </View>
                                                 {isSelected && (
                                                     <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                                         <Feather name="check" size={10} color="#fff" />
                                                     </View>
                                                 )}
-                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
+                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.text), textAlign: 'center' }}>{folder.name}</Text>
                                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
-                                                    {count} photos{subcount > 0 ? ` · ${subcount} folders` : ''}
+                                                    {subcount > 0
+                                                        ? t('projectPhotos.photosFoldersCount', { photoCount: count, folderCount: subcount })
+                                                        : t('projectPhotos.photosOnlyCount', { count })
+                                                    }
                                                 </Text>
                                                 {/* Folder Action Menu - Hidden for Clients */}
                                                 {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
@@ -1049,13 +1111,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 {!loading && currentFolders.length === 0 && visiblePhotos.length === 0 && (
                                     <View style={{ marginTop: 30, alignItems: 'center' }}>
                                         <Feather name="camera" size={32} color={colors.border} />
-                                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or photos yet</Text>
+                                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>{t('projectPhotos.noFoldersPhotos')}</Text>
                                     </View>
                                 )}
 
                                 <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
                                     {(() => {
-                                        const renderPhotoItem = (photo: any, index: number) => {
+                                        const renderPhotoItem = (photo: any, index: number, groupTitle?: string) => {
                                             const isSelected = selectedFiles.has(photo.id);
                                             if (viewMode === 'grid') {
                                                 return (
@@ -1095,7 +1157,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                 <Feather name="check" size={10} color="#fff" />
                                                             </View>
                                                         )}
-                                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                                        {!isSelectionMode && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !isSelected && (
                                                             <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 10 }}>
                                                                 <TouchableOpacity
                                                                     onPress={() => {
@@ -1195,28 +1257,122 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         };
 
                                         if (sortBy === 'newest' || sortBy === 'oldest') {
-                                            const groups = groupItemsByMonth(sortedPhotos);
-                                            return groups.map((group) => (
-                                                <View key={group.title} style={{ marginBottom: 20 }}>
-                                                    <View style={{
-                                                        paddingVertical: 12,
-                                                        backgroundColor: 'transparent',
-                                                        flexDirection: 'row',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between'
-                                                    }}>
-                                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
-                                                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
-                                                    </View>
-                                                    <View style={{
-                                                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
-                                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
-                                                        gap: viewMode === 'grid' ? 4 : 8
-                                                    }}>
-                                                        {group.data.map((p, i) => renderPhotoItem(p, i))}
-                                                    </View>
-                                                </View>
-                                            ));
+                                            const scrollToMonth = (title: string) => {
+                                                const offset = monthOffsets[title];
+                                                if (offset !== undefined) {
+                                                    mainScrollRef.current?.scrollTo({ y: offset, animated: true });
+                                                }
+                                                setShowMonthPicker(false);
+                                            };
+
+                                            return (
+                                                <>
+                                                    {groups.map((group) => (
+                                                        <View
+                                                            key={group.title}
+                                                            style={{ marginBottom: 20 }}
+                                                            onLayout={(e) => {
+                                                                const { y } = e.nativeEvent.layout;
+                                                                setMonthOffsets(prev => ({ ...prev, [group.title]: y }));
+                                                            }}
+                                                        >
+                                                            <TouchableOpacity
+                                                                onPress={() => {
+                                                                    const parts = group.title.split(' ');
+                                                                    setTempYear(parts[parts.length - 1]);
+                                                                    setTempMonth(parts.slice(0, parts.length - 1).join(' '));
+                                                                    setShowMonthPicker(true);
+                                                                }}
+                                                                style={{
+                                                                    paddingVertical: 12,
+                                                                    backgroundColor: 'transparent',
+                                                                    flexDirection: 'row',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'space-between'
+                                                                }}
+                                                            >
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
+                                                                    <Feather name="chevron-down" size={12} color={colors.textMuted} style={{ marginLeft: 4, opacity: 0.7 }} />
+                                                                </View>
+                                                                <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
+                                                            </TouchableOpacity>
+                                                            <View style={{
+                                                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                                                gap: viewMode === 'grid' ? 4 : 8
+                                                            }}>
+                                                                {group.data.map((p, i) => renderPhotoItem(p, i))}
+                                                            </View>
+                                                        </View>
+                                                    ))}
+
+                                                    <Modal visible={showMonthPicker} transparent animationType="slide">
+                                                        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                                                            <View style={{ 
+                                                                backgroundColor: colors.surface, 
+                                                                borderTopLeftRadius: 24, 
+                                                                borderTopRightRadius: 24, 
+                                                                padding: 24, 
+                                                                paddingBottom: insets.bottom + 10,
+                                                                shadowColor: '#000',
+                                                                shadowOffset: { width: 0, height: -4 },
+                                                                shadowOpacity: 0.1,
+                                                                shadowRadius: 10,
+                                                                elevation: 20
+                                                            }}>
+                                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                                                    <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
+                                                                        <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectPhotos.cancel')}</Text>
+                                                                    </TouchableOpacity>
+                                                                    <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>{t('projectPhotos.selectMonth')}</Text>
+                                                                    <TouchableOpacity 
+                                                                        onPress={() => {
+                                                                            const title = `${tempMonth} ${tempYear}`;
+                                                                            scrollToMonth(title);
+                                                                        }}
+                                                                    >
+                                                                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{t('projectPhotos.ok')}</Text>
+                                                                    </TouchableOpacity>
+                                                                </View>
+
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                                    <Picker
+                                                                        selectedValue={tempMonth}
+                                                                        style={{ flex: 1.2, height: 200 }}
+                                                                        itemStyle={{ fontSize: 18, color: colors.text }}
+                                                                        onValueChange={(itemValue) => setTempMonth(itemValue)}
+                                                                    >
+                                                                        {allMonths.map(m => {
+                                                                            const isAvailable = availableMonthsByYear[tempYear]?.has(m);
+                                                                            // Only render items that are available to prevent invalid selection
+                                                                            if (!isAvailable) return null;
+                                                                            return (
+                                                                                <Picker.Item 
+                                                                                    key={m} 
+                                                                                    label={m} 
+                                                                                    value={m} 
+                                                                                    color={colors.text} 
+                                                                                />
+                                                                            );
+                                                                        })}
+                                                                    </Picker>
+                                                                    <Picker
+                                                                        selectedValue={tempYear}
+                                                                        style={{ flex: 0.8, height: 200 }}
+                                                                        itemStyle={{ fontSize: 18, color: colors.text }}
+                                                                        onValueChange={(itemValue) => setTempYear(itemValue)}
+                                                                    >
+                                                                        {availableYears.map(y => (
+                                                                            <Picker.Item key={y} label={y} value={y} color={colors.text} />
+                                                                        ))}
+                                                                    </Picker>
+                                                                </View>
+                                                            </View>
+                                                        </View>
+                                                    </Modal>
+                                                </>
+                                            );
                                         }
 
                                         return (
@@ -1247,20 +1403,20 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             <Modal visible={showCreateFolder} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>New Folder</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectPhotos.newFolder')}</Text>
                         <TextInput
                             value={newFolderName}
                             onChangeText={setNewFolderName}
-                            placeholder="Folder name"
+                            placeholder={t('projectPhotos.folderNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectPhotos.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleCreateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Creating…' : 'Create'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectPhotos.creating') : t('projectPhotos.create')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1301,14 +1457,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         onPress={() => {
                                             const folderId = Array.from(selectedFolders)[0];
                                             const folder = folders.find(f => f.id === folderId);
-                                            if (folder) {
+                                            const isConfirmation = folder?.name.toLowerCase() === 'confirmation';
+                                            if (folder && !isConfirmation) {
                                                 setEditingFolderId(folder.id);
                                                 setEditFolderName(folder.name);
                                                 setShowEditFolder(true);
                                             }
                                         }}
-                                        style={{ padding: 4 }}
-                                        disabled={processing !== null}
+                                        style={{ padding: 4, opacity: Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation') ? 0.5 : 1 }}
+                                        disabled={processing !== null || Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation')}
                                     >
                                         <Feather name="edit-2" size={18} color={colors.primary} />
                                     </TouchableOpacity>
@@ -1324,10 +1481,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     onPress={() => {
                                                         const folderId = Array.from(selectedFolders)[0];
                                                         const folder = folders.find(f => f.id === folderId);
-                                                        if (folder) confirmDeleteFolder(folder);
+                                                        const isConfirmation = folder?.name.toLowerCase() === 'confirmation';
+                                                        if (folder && !isConfirmation) confirmDeleteFolder(folder);
                                                     }}
-                                                    style={{ padding: 4 }}
-                                                    disabled={processing !== null}
+                                                    style={{ padding: 4, opacity: Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation') ? 0.5 : 1 }}
+                                                    disabled={processing !== null || Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation')}
                                                 >
                                                     {processing === 'delete_folder' ? (
                                                         <ActivityIndicator size="small" color="#ef4444" />
@@ -1427,9 +1585,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     if (movingContentsOf) {
                         try {
                             await deleteFolder(movingContentsOf.id, false);
-                            Alert.alert("Success", `Folder "${movingContentsOf.name}" deleted after moving contents`);
+                            Alert.alert(t('projectPhotos.success'), t('projectPhotos.folderDeletedMovingContents', { name: movingContentsOf.name }));
                         } catch (err) {
-                            Alert.alert("Error", "Contents moved, but failed to delete empty folder");
+                            Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToDeleteEmptyFolder'));
                         }
                     }
                     getProjectFiles(project.id, 'photo')
@@ -1530,7 +1688,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
                                     <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
                                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
-                                            {sortedPhotos[viewerIndex]?.file_name || 'Photo'}
+                                            {sortedPhotos[viewerIndex]?.file_name || t('projectPhotos.photo')}
                                         </Text>
 
                                         {(sortedPhotos[viewerIndex]?.location || sortedPhotos[viewerIndex]?.tags) && (
@@ -1562,22 +1720,22 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                                     <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
                                         <Text style={{ color: '#aaa', fontSize: 10, fontWeight: '700', marginBottom: 6 }}>
-                                            💬 COMMENTS ({photoComments.length})
+                                            💬 {t('projectPhotos.comments')} ({photoComments.length})
                                         </Text>
                                         {commentLoading ? (
                                             <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
                                         ) : (
                                             <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
                                                 {photoComments.length === 0 && (
-                                                    <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>No comments yet. Be the first!</Text>
+                                                    <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>{t('projectPhotos.noComments')}</Text>
                                                 )}
                                                 {photoComments.map((c: any) => (
                                                     <View key={c.id} style={{ marginBottom: 8 }}>
                                                         <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
                                                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                                <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
+                                                                <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || t('projectPhotos.user')}</Text>
                                                                 <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                                    <Text style={{ color: '#888', fontSize: 9 }}>↩ Reply</Text>
+                                                                    <Text style={{ color: '#888', fontSize: 9 }}>↩ {t('projectPhotos.reply')}</Text>
                                                                 </TouchableOpacity>
                                                             </View>
                                                             <Text style={{ color: '#ddd', fontSize: 11 }}>
@@ -1586,7 +1744,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         </View>
                                                         {c.replies?.map((r: any) => (
                                                             <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
-                                                                <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || 'User'}</Text>
+                                                                <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || t('projectPhotos.user')}</Text>
                                                                 <Text style={{ color: '#ccc', fontSize: 10 }}>
                                                                     {renderCommentText(r.text)}
                                                                 </Text>
@@ -1598,9 +1756,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         )}
                                         {replyTo && (
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                <Text style={{ color: colors.primary, fontSize: 9 }}>Replying to comment</Text>
+                                                <Text style={{ color: colors.primary, fontSize: 9 }}>{t('projectPhotos.replyingTo')}</Text>
                                                 <TouchableOpacity onPress={() => setReplyTo(null)}>
-                                                    <Text style={{ color: '#888', fontSize: 9 }}>✕ Cancel</Text>
+                                                    <Text style={{ color: '#888', fontSize: 9 }}>✕ {t('projectPhotos.cancel')}</Text>
                                                 </TouchableOpacity>
                                             </View>
                                         )}
@@ -1626,7 +1784,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             <TextInput
                                                 value={commentText}
                                                 onChangeText={handleInputChange}
-                                                placeholder="Add a comment…"
+                                                placeholder={t('projectPhotos.addCommentPlaceholder')}
                                                 placeholderTextColor="#555"
                                                 style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
                                             />
@@ -1655,20 +1813,20 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             <Modal visible={showEditFolder} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename Folder</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectPhotos.renameFolder')}</Text>
                         <TextInput
                             value={editFolderName}
                             onChangeText={setEditFolderName}
-                            placeholder="Folder name"
+                            placeholder={t('projectPhotos.folderNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowEditFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectPhotos.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleUpdateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectPhotos.updating') : t('projectPhotos.update')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1698,20 +1856,20 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             <Modal visible={showRenameFile} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename Photo</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectPhotos.renamePhoto')}</Text>
                         <TextInput
                             value={renamingFileName}
                             onChangeText={setRenamingFileName}
-                            placeholder="Photo name"
+                            placeholder={t('projectPhotos.photoNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowRenameFile(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectPhotos.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleUpdateFile} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectPhotos.updating') : t('projectPhotos.update')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

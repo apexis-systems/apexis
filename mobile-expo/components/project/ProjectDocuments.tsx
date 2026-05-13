@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -10,7 +12,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -19,6 +21,7 @@ import { getFolderRFIs } from '@/services/rfiService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { getMemberForTag } from '@/services/projectService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSocket } from '@/contexts/SocketContext';
 
 // Detect if we are running in Expo Go
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -41,6 +44,8 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function ProjectDocuments({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any, user: any, initialFolderId?: string, initialFileId?: string, searchQuery?: string }) {
     const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
+    const { socket } = useSocket();
 
     const router = useRouter();
     const [docs, setDocs] = useState<any[]>([]);
@@ -60,8 +65,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [editingFolderId, setEditingFolderId] = useState<number | null>(null);
     const [editFolderName, setEditFolderName] = useState('');
     // View Mode: 'grid' or 'list'
-    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
     const [sortBy, setSortBy] = useState<'name' | 'newest' | 'oldest' | 'size'>('name');
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const [monthOffsets, setMonthOffsets] = useState<{ [key: string]: number }>({});
+    const [tempMonth, setTempMonth] = useState('');
+    const [tempYear, setTempYear] = useState('');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -86,6 +95,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [folderMenuVisible, setFolderMenuVisible] = useState(false);
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
+    const mainScrollRef = useRef<ScrollView>(null);
 
     const [showRenameFile, setShowRenameFile] = useState(false);
     const [renamingFileId, setRenamingFileId] = useState<number | null>(null);
@@ -136,6 +146,18 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         }, 500);
         return () => clearTimeout(timer);
     }, [searchQuery]);
+
+    useEffect(() => {
+        if (!socket) return;
+        
+        socket.on('file-seen', (data: { fileId: string | number, seen_at: string }) => {
+            setDocs((prev) => prev.map((d) => String(d.id) === String(data.fileId) ? { ...d, seen_at: data.seen_at } : d));
+        });
+
+        return () => {
+            socket.off('file-seen');
+        };
+    }, [socket]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -299,9 +321,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     }, [initialFileId, docs, selectedFolder, sortBy, user.role, router]);
 
 
-    const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
-    const currentFolderDocs = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
-    const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible !== false) : currentFolderDocs;
+    const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
+    const currentFolderDocs = useMemo(() => docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null')), [docs, selectedFolder]);
+    const visibleDocs = useMemo(() => user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible !== false) : currentFolderDocs, [currentFolderDocs, user.role]);
 
     const sortItems = (items: any[], type: 'folder' | 'file') => {
         return [...items].sort((a: any, b: any) => {
@@ -311,10 +333,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 return (nameA || '').localeCompare(nameB || '');
             }
             if (sortBy === 'newest') {
-                return new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime();
+                return new Date(b.createdAt || b.created_at || b.createdAt).getTime() - new Date(a.createdAt || a.created_at || a.createdAt).getTime();
             }
             if (sortBy === 'oldest') {
-                return new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime();
+                return new Date(a.createdAt || a.created_at || a.createdAt).getTime() - new Date(b.createdAt || b.created_at || b.createdAt).getTime();
             }
             if (sortBy === 'size') {
                 if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
@@ -324,8 +346,356 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         });
     };
 
-    const sortedFolders = sortItems(currentFolders, 'folder');
-    const sortedDocs = sortItems(visibleDocs, 'file');
+    const sortedFolders = useMemo(() => sortItems(currentFolders, 'folder'), [currentFolders, sortBy]);
+    const sortedDocs = useMemo(() => sortItems(visibleDocs, 'file'), [visibleDocs, sortBy]);
+
+    const groups = useMemo(() => {
+        if (sortBy === 'newest' || sortBy === 'oldest') {
+            return groupItemsByMonth(sortedDocs, t);
+        }
+        return [];
+    }, [sortedDocs, sortBy, t]);
+
+    const availableMonthsByYear = useMemo(() => {
+        const map: Record<string, Set<string>> = {};
+        groups.forEach(g => {
+            const parts = g.title.split(' ');
+            const year = parts[parts.length - 1];
+            const month = parts.slice(0, parts.length - 1).join(' ');
+            if (!map[year]) map[year] = new Set();
+            map[year].add(month);
+        });
+        return map;
+    }, [groups]);
+
+    const availableYears = useMemo(() => Object.keys(availableMonthsByYear).sort((a, b) => b.localeCompare(a)), [availableMonthsByYear]);
+
+    const prevShowMonthPicker = useRef(false);
+    useEffect(() => {
+        prevShowMonthPicker.current = showMonthPicker;
+    }, [showMonthPicker]);
+
+    const allMonths = useMemo(() => [
+        t('months.january'), t('months.february'), t('months.march'), t('months.april'),
+        t('months.may'), t('months.june'), t('months.july'), t('months.august'),
+        t('months.september'), t('months.october'), t('months.november'), t('months.december')
+    ], [t]);
+
+    // Auto-correct month if year change makes it invalid
+    useEffect(() => {
+        if (showMonthPicker && tempYear && tempMonth && availableMonthsByYear[tempYear]) {
+            if (!availableMonthsByYear[tempYear].has(tempMonth)) {
+                const firstAvailable = Array.from(availableMonthsByYear[tempYear])[0];
+                if (firstAvailable) setTempMonth(firstAvailable);
+            }
+        }
+    }, [tempYear, availableMonthsByYear, showMonthPicker]);
+
+    const renderDocItem = (doc: any) => {
+        const isSelected = selectedFiles.has(doc.id);
+        if (viewMode === 'grid') {
+            return (
+                <View
+                    key={doc.id}
+                    style={{
+                        width: '23.8%',
+                        aspectRatio: 1,
+                        backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        borderWidth: 1,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 8,
+                        position: 'relative'
+                    }}
+                >
+                    <TouchableOpacity
+                        onPress={() => {
+                            if (isSelectionMode) toggleSelection('file', doc.id);
+                            else openDoc(doc);
+                        }}
+                        onLongPress={() => handleLongPress('file', doc.id)}
+                        style={{
+                            ...StyleSheet.absoluteFillObject,
+                            zIndex: 5,
+                        }}
+                    />
+                    <Feather name="file-text" size={32} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
+                    <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center', paddingHorizontal: 2 }}>{doc.file_name}</Text>
+                    {doc.assignee && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
+                            <Text numberOfLines={1} style={{ fontSize: 7, color: colors.textMuted }}>{doc.assignee.name}</Text>
+                            {doc.seen_at && (
+                                <Feather name="check-circle" size={8} color="#f97316" />
+                            )}
+                        </View>
+                    )}
+                    {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                        <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 30 }}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setActiveActionFile(doc);
+                                    setActionMenuVisible(true);
+                                }}
+                                style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 12,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 1 },
+                                    shadowOpacity: isDark ? 0.3 : 0.1,
+                                    shadowRadius: 1,
+                                    elevation: 2
+                                }}
+                            >
+                                <Feather
+                                    name="more-vertical"
+                                    size={14}
+                                    color={colors.text}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                    {doc.do_not_follow && (
+                        <View style={{
+                            position: 'absolute',
+                            top: '30%',
+                            left: '20%',
+                            right: '20%',
+                            backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                            borderRadius: 4,
+                            paddingHorizontal: 4,
+                            paddingVertical: 2,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 20,
+                            transform: [{ rotate: '-10deg' }]
+                        }}>
+                            <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
+                        </View>
+                    )}
+                </View>
+            );
+        } else {
+            return (
+                <View
+                    key={doc.id}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        borderRadius: 10,
+                        backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
+                        borderWidth: 1,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        padding: 10,
+                        position: 'relative',
+                        marginVertical: 4,
+                    }}
+                >
+                    <TouchableOpacity
+                        onPress={() => {
+                            if (isSelectionMode) toggleSelection('file', doc.id);
+                            else openDoc(doc);
+                        }}
+                        onLongPress={() => handleLongPress('file', doc.id)}
+                        style={{
+                            ...StyleSheet.absoluteFillObject,
+                            zIndex: 5,
+                        }}
+                    />
+                    <View
+                        style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: 8,
+                            backgroundColor: doc.file_type?.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <Feather name="file-text" size={16} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} />
+                    </View>
+                    {isSelected && (
+                        <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                            <Feather name="check" size={10} color="#fff" />
+                        </View>
+                    )}
+                    <View style={{ flex: 1, marginRight: 4 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text, flexShrink: 1 }}>{doc.file_name}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
+                            {doc.assignee && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+                                    <Feather name="user" size={8} color={colors.textMuted} />
+                                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{doc.assignee.name}</Text>
+                                    {doc.seen_at && (
+                                        <Feather name="check-circle" size={10} color="#f97316" />
+                                    )}
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
+                        {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setActiveActionFile(doc);
+                                    setActionMenuVisible(true);
+                                }}
+                                style={{ padding: 4 }}
+                            >
+                                <Feather
+                                    name="more-vertical"
+                                    size={16}
+                                    color={colors.textMuted}
+                                />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            );
+        }
+    };
+
+    const renderDocuments = () => {
+        if (sortBy === 'newest' || sortBy === 'oldest') {
+            const scrollToMonth = (title: string) => {
+                const offset = monthOffsets[title];
+                if (offset !== undefined) {
+                    mainScrollRef.current?.scrollTo({ y: offset, animated: true });
+                }
+                setShowMonthPicker(false);
+            };
+
+            return (
+                <>
+                    {groups.map((group) => (
+                        <View 
+                            key={group.title} 
+                            style={{ marginBottom: 20 }}
+                            onLayout={(e) => {
+                                const { y } = e.nativeEvent.layout;
+                                setMonthOffsets(prev => ({ ...prev, [group.title]: y }));
+                            }}
+                        >
+                            <TouchableOpacity
+                                onPress={() => {
+                                    const parts = group.title.split(' ');
+                                    setTempYear(parts[parts.length - 1]);
+                                    setTempMonth(parts.slice(0, parts.length - 1).join(' '));
+                                    setShowMonthPicker(true);
+                                }}
+                                style={{
+                                    paddingVertical: 12,
+                                    backgroundColor: 'transparent',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between'
+                                }}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
+                                    <Feather name="chevron-down" size={12} color={colors.textMuted} style={{ marginLeft: 4, opacity: 0.7 }} />
+                                </View>
+                                <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
+                            </TouchableOpacity>
+                            <View style={{
+                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                gap: viewMode === 'grid' ? 4 : 4
+                            }}>
+                                {group.data.map(renderDocItem)}
+                            </View>
+                        </View>
+                    ))}
+
+                    <Modal visible={showMonthPicker} transparent animationType="slide">
+                        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                            <View style={{ 
+                                backgroundColor: colors.surface, 
+                                borderTopLeftRadius: 24, 
+                                borderTopRightRadius: 24, 
+                                padding: 24, 
+                                paddingBottom: insets.bottom + 10,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: -4 },
+                                shadowOpacity: 0.1,
+                                shadowRadius: 10,
+                                elevation: 20
+                            }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                    <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
+                                        <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectDocuments.cancel')}</Text>
+                                    </TouchableOpacity>
+                                    <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>{t('projectDocuments.selectMonth')}</Text>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            const title = `${tempMonth} ${tempYear}`;
+                                            scrollToMonth(title);
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{t('projectDocuments.ok')}</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Picker
+                                        selectedValue={tempMonth}
+                                        style={{ flex: 1.2, height: 200 }}
+                                        itemStyle={{ fontSize: 18, color: colors.text }}
+                                        onValueChange={(itemValue) => setTempMonth(itemValue)}
+                                    >
+                                        {allMonths.map(m => {
+                                            const isAvailable = availableMonthsByYear[tempYear]?.has(m);
+                                            if (!isAvailable) return null;
+                                            return (
+                                                <Picker.Item 
+                                                    key={m} 
+                                                    label={m} 
+                                                    value={m} 
+                                                    color={colors.text} 
+                                                />
+                                            );
+                                        })}
+                                    </Picker>
+                                    <Picker
+                                        selectedValue={tempYear}
+                                        style={{ flex: 0.8, height: 200 }}
+                                        itemStyle={{ fontSize: 18, color: colors.text }}
+                                        onValueChange={(itemValue) => setTempYear(itemValue)}
+                                    >
+                                        {availableYears.map(y => (
+                                            <Picker.Item key={y} label={y} value={y} color={colors.text} />
+                                        ))}
+                                    </Picker>
+                                </View>
+                            </View>
+                        </View>
+                    </Modal>
+                </>
+            );
+        }
+
+        return (
+            <View style={{
+                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                gap: viewMode === 'grid' ? 4 : 4
+            }}>
+                {sortedDocs.map(renderDocItem)}
+            </View>
+        );
+    };
 
     const currentFolder = folders.find((f) => String(f.id) === String(selectedFolder));
 
@@ -358,9 +728,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             await toggleFileVisibility(doc.id, !doc.client_visible);
             setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, client_visible: !doc.client_visible } : d)));
-            Alert.alert('Updated', `Document marked ${!doc.client_visible ? 'Visible' : 'Hidden'} for clients`);
+            Alert.alert(t('projectDocuments.success'), t('projectDocuments.visibilityMarked', { status: !doc.client_visible ? t('projectDocuments.visible') : t('projectDocuments.hidden') }));
         } catch (e) {
-            Alert.alert('Error', 'Failed to toggle visibility');
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
         }
     };
 
@@ -368,9 +738,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             await toggleDoNotFollow(doc.id, !doc.do_not_follow);
             setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, do_not_follow: !doc.do_not_follow } : d)));
-            Alert.alert('Updated', `Document ${!doc.do_not_follow ? 'marked' : 'unmarked'} as 'Do Not Follow'`);
+            Alert.alert(t('projectDocuments.success'), t('projectDocuments.dnfMarked', { status: !doc.do_not_follow ? t('projectDocuments.marked') : t('projectDocuments.unmarked') }));
         } catch (e) {
-            Alert.alert('Error', 'Failed to toggle Do Not Follow');
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateDnf'));
         }
     };
 
@@ -384,7 +754,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             setActionMenuVisible(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
             await fetchFolders(true); // Sync back on error
         } finally {
             setProcessing(null);
@@ -406,7 +776,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             setActionMenuVisible(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to update 'Do Not Follow' status");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateDnf'));
             await fetchFolders(true);
         } finally {
             setProcessing(null);
@@ -420,7 +790,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             await fetchFolders(true);
             setFolderMenuVisible(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
         } finally {
             setProcessing(null);
         }
@@ -440,21 +810,21 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleArchiveFileAction = async (file: any) => {
         Alert.alert(
-            "Archive Document",
-            'Are you sure you want to archive this document? It will be moved to the Archive folder and set to "Do Not Follow".',
+            t('projectDocuments.archive'),
+            t('projectDocuments.archiveConfirm'),
             [
-                { text: "Cancel", style: "cancel" },
+                { text: t('projectDocuments.cancel'), style: "cancel" },
                 {
-                    text: "Archive",
+                    text: t('projectDocuments.archive'),
                     onPress: async () => {
                         try {
                             setProcessing('archive');
                             await archiveFile(file.id);
                             await fetchFolders(true);
                             setActionMenuVisible(false);
-                            Alert.alert("Success", "Document archived");
+                            Alert.alert(t('projectDocuments.success'), t('projectDocuments.archiveSuccess'));
                         } catch (e) {
-                            Alert.alert("Error", "Failed to archive document");
+                            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToArchive'));
                         } finally {
                             setProcessing(null);
                         }
@@ -482,7 +852,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setRenamingFileId(null);
             setRenamingFileName('');
         } catch (e) {
-            Alert.alert("Error", "Failed to update file name");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateFileName'));
         } finally {
             setSubmitting(false);
         }
@@ -494,12 +864,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleDeleteFile = async (file: any) => {
         Alert.alert(
-            "Delete File",
-            `Are you sure you want to delete "${file.file_name}"?`,
+            t('projectDocuments.deleteFile'),
+            t('projectDocuments.deleteFileConfirm', { name: file.file_name }),
             [
-                { text: "Cancel", style: "cancel" },
+                { text: t('projectDocuments.cancel'), style: "cancel" },
                 {
-                    text: "Delete",
+                    text: t('projectDocuments.delete'),
                     style: "destructive",
                     onPress: async () => {
                         try {
@@ -508,7 +878,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             await fetchFolders(true);
                             setActionMenuVisible(false);
                         } catch (e) {
-                            Alert.alert("Error", "Failed to delete file");
+                            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToDeleteFile'));
                         } finally {
                             setProcessing(null);
                         }
@@ -578,6 +948,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         } else {
             WebBrowser.openBrowserAsync(doc.downloadUrl);
         }
+
+        // Mark as seen if assigned to current user
+        if (doc.assigned_to && String(doc.assigned_to) === String(user?.id) && !doc.seen_at) {
+            markFileSeen(doc.id).catch(console.error);
+        }
     };
 
     const handleShare = async (doc: any) => {
@@ -627,7 +1002,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             }
         } catch (e) {
             console.error('Share error:', e);
-            Alert.alert("Error", "Failed to share file");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToShareDocument'));
         } finally {
             setSharing(false);
         }
@@ -636,7 +1011,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
         if (newFolderName.trim().toLowerCase() === 'archive') {
-            Alert.alert("Error", "The name 'Archive' is reserved for system use");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.reservedNameArchive'));
             return;
         }
         setSubmitting(true);
@@ -651,7 +1026,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setNewFolderName('');
             setShowCreateFolder(false);
         } catch (e) {
-            Alert.alert("Error", "Failed to create folder");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToCreateFolder'));
         } finally {
             setSubmitting(false);
         }
@@ -660,7 +1035,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleUpdateFolder = async () => {
         if (!editFolderName.trim() || !editingFolderId) return;
         if (editFolderName.trim().toLowerCase() === 'archive') {
-            Alert.alert("Error", "The name 'Archive' is reserved for system use");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.reservedNameArchive'));
             return;
         }
         setSubmitting(true);
@@ -671,7 +1046,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setEditingFolderId(null);
             setEditFolderName('');
         } catch (e) {
-            Alert.alert("Error", "Failed to update folder");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateFolder'));
         } finally {
             setSubmitting(false);
         }
@@ -686,11 +1061,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     setFolders(folders.filter((f) => f.id !== folder.id));
                     setFolderMenuVisible(false);
                     Alert.alert(
-                        'Success',
-                        data.message || 'Folder deleted successfully.',
+                        t('projectDocuments.success'),
+                        data.message || t('projectDocuments.folderDeletedSuccess'),
                         [
                             {
-                                text: 'OK',
+                                text: t('projectDocuments.ok'),
                                 onPress: () => {
                                     if (selectedFolder === folder.id) setSelectedFolder(null);
                                 }
@@ -698,8 +1073,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         ]
                     );
                 } else {
-                    const msg = data?.error || 'Failed to delete folder';
-                    Alert.alert('Error', msg);
+                    const msg = data?.error || t('projectDocuments.failedToDeleteFolder');
+                    Alert.alert(t('projectDocuments.error'), msg);
                 }
             } else {
                 await deleteFolder(folder.id, force);
@@ -712,18 +1087,18 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const data = e.response?.data;
             if (data?.hasContent) {
                 Alert.alert(
-                    'Folder Not Empty',
-                    `"${folder.name}" contains files or subfolders. How would you like to proceed?`,
+                    t('projectDocuments.folderNotEmpty'),
+                    t('projectDocuments.folderNotEmptyMessage', { name: folder.name }),
                     [
-                        { text: 'Cancel', style: 'cancel' },
+                        { text: t('projectDocuments.cancel'), style: 'cancel' },
                         {
-                            text: 'Move Contents',
+                            text: t('projectDocuments.moveContents'),
                             onPress: () => {
                                 const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
                                 const childFiles = docs.filter(p => String(p.folder_id) === String(folder.id));
 
                                 if (childFolders.length === 0 && childFiles.length === 0) {
-                                    Alert.alert("Info", "Folder is already empty");
+                                    Alert.alert(t('projectDocuments.info'), t('projectDocuments.folderAlreadyEmpty'));
                                     return;
                                 }
 
@@ -733,15 +1108,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             }
                         },
                         {
-                            text: 'Delete Everything',
+                            text: t('projectDocuments.deleteEverything'),
                             style: 'destructive',
                             onPress: () => handleDelete(folder, true)
                         }
                     ]
                 );
             } else {
-                const msg = data?.error || 'Failed to delete folder';
-                Alert.alert('Error', msg);
+                const msg = data?.error || t('projectDocuments.failedToDeleteFolder');
+                Alert.alert(t('projectDocuments.error'), msg);
             }
         } finally {
             setProcessing(null);
@@ -750,12 +1125,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const confirmDeleteFolder = (folder: any) => {
         Alert.alert(
-            'Delete Folder',
-            `Are you sure you want to delete "${folder.name}"?`,
+            t('projectDocuments.deleteFolder'),
+            t('projectDocuments.deleteFileConfirm', { name: folder.name }), // Reusing deleteFileConfirm as it's the same message
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('projectDocuments.cancel'), style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('projectDocuments.delete'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }
@@ -812,14 +1187,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 promises.push(bulkUpdateFiles({ ids: Array.from(selectedFiles), client_visible: visible }));
             }
             await Promise.all(promises);
-            Alert.alert("Success", "Visibility updated");
+            Alert.alert(t('projectDocuments.success'), t('projectDocuments.visibilityUpdated'));
             // Refresh
             const data = await getProjectFiles(project.id, 'document');
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
             clearSelection();
         } catch (e) {
-            Alert.alert("Error", "Failed to update visibility");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
         } finally {
             setProcessing(null);
         }
@@ -830,7 +1205,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             if (selectedFiles.size > 0) {
                 setProcessing('bulk_dnf');
                 await bulkUpdateFiles({ ids: Array.from(selectedFiles), do_not_follow: value });
-                Alert.alert("Success", "'Do Not Follow' status updated");
+                Alert.alert(t('projectDocuments.success'), t('projectDocuments.dnfStatusUpdated'));
                 // Refresh
                 const data = await getProjectFiles(project.id);
                 if (data.folderData) setFolders(data.folderData);
@@ -838,7 +1213,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 clearSelection();
             }
         } catch (e) {
-            Alert.alert("Error", "Failed to update 'Do Not Follow' status");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateDnf'));
         } finally {
             setProcessing(null);
         }
@@ -850,7 +1225,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const firstDoc = docs.find(d => d.id === firstId);
             if (firstDoc) handleShare(firstDoc);
         } else {
-            Alert.alert("Info", "Select at least one file to share");
+            Alert.alert(t('projectDocuments.info'), t('projectDocuments.selectAtLeastOneShare'));
         }
     };
 
@@ -861,13 +1236,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const link = user.role === 'client' ? links.clientLink : links.contributorLink;
             if (link) {
                 await Share.share({
-                    message: `Join ${project.name} on Apexis: ${link}`,
+                    message: t('projectDocuments.joinProjectMessage', { projectName: project.name, link }),
                 });
             } else {
-                Alert.alert("Info", "Share link not available");
+                Alert.alert(t('projectDocuments.info'), t('projectDocuments.shareLinkNotAvailable'));
             }
         } catch (error) {
-            Alert.alert("Error", "Failed to get share link");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToGetShareLink'));
         }
     };
 
@@ -901,7 +1276,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
                     mimeType: doc.file_type || 'application/pdf',
-                    dialogTitle: doc.file_name || 'Site Document'
+                    dialogTitle: doc.file_name || t('projectDocuments.document')
                 });
             } else {
                 await Share.share({
@@ -911,7 +1286,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             }
         } catch (e) {
             console.error('Share error:', e);
-            Alert.alert("Error", "Failed to share document");
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToShareDocument'));
         } finally {
             setProcessing(null);
         }
@@ -920,7 +1295,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // Unified View
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+            <ScrollView 
+                ref={mainScrollRef}
+                style={{ flex: 1 }} 
+                contentContainerStyle={{ padding: 14 }} 
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') ? (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity
@@ -928,14 +1308,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             style={{ flex: 1, height: 38, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                         >
                             <Feather name="upload" size={13} color="#fff" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>Upload Document</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: 'white' }}>{t('projectDocuments.uploadDocument')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => setShowCreateFolder(true)}
                             style={{ height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 }}
                         >
                             <Feather name="folder-plus" size={13} color={colors.text} />
-                            <Text style={{ fontSize: 12, color: colors.text }}>New Folder</Text>
+                            <Text style={{ fontSize: 12, color: colors.text }}>{t('projectDocuments.newFolder')}</Text>
                         </TouchableOpacity>
                     </View>
                 ) : null}
@@ -1003,7 +1383,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         }}
                     >
                         <Feather name="bar-chart-2" size={14} color={colors.primary} style={{ transform: [{ rotate: '90deg' }] }} />
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{sortBy}</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'capitalize' }}>{t(`projectDocuments.sortBy.${sortBy}`)}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -1020,7 +1400,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 ...(activeFolderTab === 'files' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
                             }}
                         >
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'files' ? colors.primary : colors.textMuted }}>Files ({sortedFolders.length + sortedDocs.length})</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'files' ? colors.primary : colors.textMuted }}>{t('projectDocuments.filesCount', { count: sortedFolders.length + sortedDocs.length })}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => setActiveFolderTab('rfis')}
@@ -1033,7 +1413,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 ...(activeFolderTab === 'rfis' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
                             }}
                         >
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>Linked RFIs ({linkedRFIs.length})</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>{t('projectDocuments.linkedRfisCount', { count: linkedRFIs.length })}</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -1082,7 +1462,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             </View>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Feather name="user" size={10} color={colors.textMuted} />
-                                                <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || 'Unassigned'}</Text>
+                                                <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || t('projectDocuments.unassigned')}</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -1092,7 +1472,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         ) : (
                             <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                                 <Feather name="link-2" size={32} color={colors.border} />
-                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>No RFIs linked to this folder</Text>
+                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>{t('projectDocuments.noRfisLinked')}</Text>
                             </View>
                         )}
                     </View>
@@ -1144,8 +1524,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{folder.name}</Text>
-                                        <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>{count} files{subcount > 0 ? ` · ${subcount} folders` : ''}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : folder.name}</Text>
+                                        <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
+                                            {subcount > 0 
+                                                ? t('projectDocuments.filesFoldersCount', { fileCount: count, folderCount: subcount })
+                                                : t('projectDocuments.filesOnlyCount', { count: count })}
+                                        </Text>
                                         {/* Folder Action Menu - Hidden for Clients */}
                                         {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                                             <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
@@ -1171,215 +1555,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         {!loading && currentFolders.length === 0 && visibleDocs.length === 0 && (
                             <View style={{ marginTop: 20, marginBottom: 10, alignItems: 'center' }}>
                                 <Feather name="folder" size={32} color={colors.border} />
-                                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>No folders or documents yet</Text>
+                                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>{t('projectDocuments.noFoldersDocs')}</Text>
                             </View>
                         )}
 
                         <View style={{ marginTop: sortedFolders.length > 0 ? 12 : 0 }}>
-                            {(() => {
-                                const renderDocItem = (doc: any) => {
-                                    const isSelected = selectedFiles.has(doc.id);
-                                    if (viewMode === 'grid') {
-                                        return (
-                                            <View
-                                                key={doc.id}
-                                                style={{
-                                                    width: '23.8%',
-                                                    aspectRatio: 1,
-                                                    backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
-                                                    borderRadius: 10,
-                                                    overflow: 'hidden',
-                                                    borderWidth: 1,
-                                                    borderColor: isSelected ? colors.primary : colors.border,
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    padding: 8,
-                                                    position: 'relative'
-                                                }}
-                                            >
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        if (isSelectionMode) toggleSelection('file', doc.id);
-                                                        else openDoc(doc);
-                                                    }}
-                                                    onLongPress={() => handleLongPress('file', doc.id)}
-                                                    style={{
-                                                        ...StyleSheet.absoluteFillObject,
-                                                        zIndex: 5,
-                                                    }}
-                                                />
-                                                <Feather name="file-text" size={32} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
-                                                {isSelected && (
-                                                    <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 30 }}>
-                                                        <Feather name="check" size={10} color="#fff" />
-                                                    </View>
-                                                )}
-                                                <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center', paddingHorizontal: 2 }}>{doc.file_name}</Text>
-                                                {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                                    <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 30 }}>
-                                                        <TouchableOpacity
-                                                            onPress={() => {
-                                                                setActiveActionFile(doc);
-                                                                setActionMenuVisible(true);
-                                                            }}
-                                                            style={{
-                                                                width: 24,
-                                                                height: 24,
-                                                                borderRadius: 12,
-                                                                backgroundColor: colors.surface,
-                                                                borderWidth: 1,
-                                                                borderColor: colors.border,
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                shadowColor: '#000',
-                                                                shadowOffset: { width: 0, height: 1 },
-                                                                shadowOpacity: isDark ? 0.3 : 0.1,
-                                                                shadowRadius: 1,
-                                                                elevation: 2
-                                                            }}
-                                                        >
-                                                            <Feather
-                                                                name="more-vertical"
-                                                                size={14}
-                                                                color={colors.text}
-                                                            />
-                                                        </TouchableOpacity>
-                                                    </View>
-                                                )}
-                                                {doc.do_not_follow && (
-                                                    <View style={{
-                                                        position: 'absolute',
-                                                        top: '30%',
-                                                        left: '20%',
-                                                        right: '20%',
-                                                        backgroundColor: 'rgba(239, 68, 68, 0.9)',
-                                                        borderRadius: 4,
-                                                        paddingHorizontal: 4,
-                                                        paddingVertical: 2,
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        zIndex: 20,
-                                                        transform: [{ rotate: '-10deg' }]
-                                                    }}>
-                                                        <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                        );
-                                    } else {
-                                        return (
-                                            <View
-                                                key={doc.id}
-                                                style={{
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    gap: 8,
-                                                    borderRadius: 10,
-                                                    backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.background,
-                                                    borderWidth: 1,
-                                                    borderColor: isSelected ? colors.primary : colors.border,
-                                                    padding: 10,
-                                                    position: 'relative',
-                                                    marginVertical: 4,
-                                                }}
-                                            >
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        if (isSelectionMode) toggleSelection('file', doc.id);
-                                                        else openDoc(doc);
-                                                    }}
-                                                    onLongPress={() => handleLongPress('file', doc.id)}
-                                                    style={{
-                                                        ...StyleSheet.absoluteFillObject,
-                                                        zIndex: 5,
-                                                    }}
-                                                />
-                                                <View
-                                                    style={{
-                                                        width: 34,
-                                                        height: 34,
-                                                        borderRadius: 8,
-                                                        backgroundColor: doc.file_type?.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                    }}
-                                                >
-                                                    <Feather name="file-text" size={16} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} />
-                                                </View>
-                                                {isSelected && (
-                                                    <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                                        <Feather name="check" size={10} color="#fff" />
-                                                    </View>
-                                                )}
-                                                <View style={{ flex: 1, marginRight: 4 }}>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                        <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text, flexShrink: 1 }}>{doc.file_name}</Text>
-                                                        {doc.do_not_follow && (
-                                                            <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                                                <Feather name="shield" size={8} color="#ef4444" />
-                                                                <Text style={{ fontSize: 7, fontWeight: '800', color: '#ef4444' }}>DNF</Text>
-                                                            </View>
-                                                        )}
-                                                    </View>
-                                                    <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
-                                                </View>
-                                                <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
-                                                    {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                                        <TouchableOpacity
-                                                            onPress={() => {
-                                                                setActiveActionFile(doc);
-                                                                setActionMenuVisible(true);
-                                                            }}
-                                                            style={{ padding: 4 }}
-                                                        >
-                                                            <Feather
-                                                                name="more-vertical"
-                                                                size={16}
-                                                                color={colors.textMuted}
-                                                            />
-                                                        </TouchableOpacity>
-                                                    )}
-                                                </View>
-                                            </View>
-                                        );
-                                    }
-                                };
-
-                                if (sortBy === 'newest' || sortBy === 'oldest') {
-                                    const groups = groupItemsByMonth(sortedDocs);
-                                    return groups.map((group) => (
-                                        <View key={group.title} style={{ marginBottom: 20 }}>
-                                            <View style={{
-                                                paddingVertical: 12,
-                                                backgroundColor: colors.background,
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between'
-                                            }}>
-                                                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{group.title}</Text>
-                                                <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.5 }} />
-                                            </View>
-                                            <View style={{
-                                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
-                                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
-                                                gap: viewMode === 'grid' ? 4 : 4
-                                            }}>
-                                                {group.data.map(renderDocItem)}
-                                            </View>
-                                        </View>
-                                    ));
-                                }
-
-                                return (
-                                    <View style={{
-                                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
-                                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
-                                        gap: viewMode === 'grid' ? 4 : 4
-                                    }}>
-                                        {sortedDocs.map(renderDocItem)}
-                                    </View>
-                                );
-                            })()}
+                            {renderDocuments()}
                         </View>
                     </>
                 )}
@@ -1507,7 +1688,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         }}>
                                             <ActivityIndicator size="large" color={colors.primary} />
                                             <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
-                                                {isExpoGo ? 'Optimizing View…' : 'Optimizing View…'}
+                                                {t('projectDocuments.optimizingView')}
                                             </Text>
                                         </View>
                                     )}
@@ -1526,7 +1707,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     />
                                 ) : (
                                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                        <Text style={{ color: '#fff' }}>Viewer not available in this environment</Text>
+                                        <Text style={{ color: '#fff' }}>{t('projectDocuments.viewerNotAvailable')}</Text>
                                     </View>
                                 )
                             )
@@ -1561,7 +1742,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         letterSpacing: 2,
                                         textAlign: 'center'
                                     }}>
-                                        Do Not Follow
+                                        {t('projectDocuments.doNotFollow')}
                                     </Text>
                                 </View>
                             </View>
@@ -1593,7 +1774,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         >
                             <View style={{ padding: 16 }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>💬 DISCUSSION ({docComments.length})</Text>
+                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>💬 {t('projectDocuments.discussion')} ({docComments.length})</Text>
                                     <TouchableOpacity onPress={() => setShowComments(false)} style={{ padding: 4 }}>
                                         <Feather name="chevron-down" size={18} color="#aaa" />
                                     </TouchableOpacity>
@@ -1609,15 +1790,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         keyboardShouldPersistTaps="handled"
                                     >
                                         {docComments.length === 0 && (
-                                            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>No comments yet. Start the conversation!</Text>
+                                            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
                                         )}
                                         {docComments.map((c: any) => (
                                             <View key={c.id} style={{ marginBottom: 12 }}>
                                                 <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
                                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || 'User'}</Text>
+                                                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || t('projectDocuments.user')}</Text>
                                                         <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                            <Text style={{ color: '#888', fontSize: 10 }}>↩ Reply</Text>
+                                                            <Text style={{ color: '#888', fontSize: 10 }}>↩ {t('projectDocuments.reply')}</Text>
                                                         </TouchableOpacity>
                                                     </View>
                                                     <Text style={{ color: '#eee', fontSize: 12, lineHeight: 18 }}>
@@ -1626,7 +1807,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 </View>
                                                 {c.replies?.map((r: any) => (
                                                     <View key={r.id} style={{ marginLeft: 16, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderLeftWidth: 2, borderLeftColor: colors.primary }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700', marginBottom: 2 }}>{r.user?.name || 'User'}</Text>
+                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700', marginBottom: 2 }}>{r.user?.name || t('projectDocuments.user')}</Text>
                                                         <Text style={{ color: '#ccc', fontSize: 11, lineHeight: 16 }}>
                                                             {renderCommentText(r.text)}
                                                         </Text>
@@ -1639,7 +1820,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
                                 {replyTo && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
-                                        <Text style={{ color: colors.primary, fontSize: 10 }}>Replying to comment</Text>
+                                        <Text style={{ color: colors.primary, fontSize: 10 }}>{t('projectDocuments.replyingTo')}</Text>
                                         <TouchableOpacity onPress={() => setReplyTo(null)}>
                                             <Feather name="x-circle" size={12} color="#888" />
                                         </TouchableOpacity>
@@ -1669,7 +1850,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     <TextInput
                                         value={commentText}
                                         onChangeText={handleInputChange}
-                                        placeholder="Add a comment…"
+                                        placeholder={t('projectDocuments.addCommentPlaceholder')}
                                         placeholderTextColor="#666"
                                         style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
                                     />
@@ -1701,8 +1882,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     }}>
                         <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
                             <ActivityIndicator size="large" color={colors.primary} />
-                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Preparing...</Text>
-                            <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file to share...</Text>
+                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.preparing')}</Text>
+                            <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
                         </View>
                     </View>
                 )}
@@ -1719,8 +1900,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 }}>
                     <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
                         <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Preparing...</Text>
-                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file to share...</Text>
+                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.preparing')}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
                     </View>
                 </View>
             )}
@@ -1735,8 +1916,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 }}>
                     <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
                         <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Opening Document</Text>
-                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Downloading file for preview...</Text>
+                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.openingDocument')}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingForPreview')}</Text>
                     </View>
                 </View>
             )}
@@ -1745,20 +1926,20 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             <Modal visible={showCreateFolder} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>New Folder</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectDocuments.newFolder')}</Text>
                         <TextInput
                             value={newFolderName}
                             onChangeText={setNewFolderName}
-                            placeholder="Folder name"
+                            placeholder={t('projectDocuments.folderNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectDocuments.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleCreateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Creating…' : 'Create'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectDocuments.creating') : t('projectDocuments.create')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1956,9 +2137,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         try {
                             setProcessing('unarchive');
                             await unarchiveFile(activeActionFile.id, selectedSubFolderId === 'root' ? null : selectedSubFolderId);
-                            Alert.alert("Success", "Document unarchived successfully");
+                            Alert.alert(t('projectDocuments.success'), t('projectDocuments.unarchiveSuccess'));
                         } catch (e) {
-                            Alert.alert("Error", "Failed to unarchive document");
+                            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUnarchive'));
                             throw e; // Rethrow to let dialog handle error state if needed
                         } finally {
                             setProcessing(null);
@@ -1970,9 +2151,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     if (!isUnarchiving && movingContentsOf) {
                         try {
                             await deleteFolder(movingContentsOf.id, false);
-                            Alert.alert("Success", `Folder "${movingContentsOf.name}" deleted after moving contents`);
+                            Alert.alert(t('projectDocuments.success'), t('projectDocuments.folderDeletedMovingContents', { name: movingContentsOf.name }));
                         } catch (err) {
-                            Alert.alert("Error", "Contents moved, but failed to delete empty folder");
+                            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToDeleteEmptyFolder'));
                         }
                     }
                     const data = await getProjectFiles(project.id, 'document');
@@ -1988,20 +2169,20 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             <Modal visible={showEditFolder} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename Folder</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectDocuments.renameFolder')}</Text>
                         <TextInput
                             value={editFolderName}
                             onChangeText={setEditFolderName}
-                            placeholder="Folder name"
+                            placeholder={t('projectDocuments.folderNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowEditFolder(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectDocuments.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleUpdateFolder} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectDocuments.updating') : t('projectDocuments.update')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -2012,20 +2193,20 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             <Modal visible={showRenameFile} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>Rename File</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectDocuments.renameFile')}</Text>
                         <TextInput
                             value={renamingFileName}
                             onChangeText={setRenamingFileName}
-                            placeholder="File name"
+                            placeholder={t('projectDocuments.fileNamePlaceholder')}
                             placeholderTextColor={colors.textMuted}
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => setShowRenameFile(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, color: colors.textMuted }}>Cancel</Text>
+                                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectDocuments.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleUpdateFile} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? 'Updating…' : 'Update'}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{submitting ? t('projectDocuments.updating') : t('projectDocuments.update')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

@@ -46,6 +46,7 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
   };
 
   const handleDownload = async (r: Report) => {
+    
     setDownloadingId(r.id);
     try {
       const projectName = (project?.name || 'Project').replace(/\s+/g, '_');
@@ -110,7 +111,7 @@ const ProjectDailyReports = ({ project, userRole }: Props) => {
       <div className="space-y-2">
         {reports.map(r => (
           <div key={r.id} className="rounded-lg bg-card border border-border overflow-hidden">
-            <div 
+            <div
               className="flex items-start gap-2.5 p-3 cursor-pointer hover:bg-muted/30 transition-colors"
               onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
             >

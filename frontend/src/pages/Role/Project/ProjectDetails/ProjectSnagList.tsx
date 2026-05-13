@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck } from 'lucide-react';
+import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getApiErrorMessage } from '@/helpers/apiError';
 import {
   Snag, SnagStatus, Assignee,
@@ -40,15 +41,16 @@ interface ProjectSnagListProps {
   compact?: boolean;
 }
 
-const STATUS_CONFIG: Record<SnagStatus, { icon: React.ElementType; bg: string; text: string; label: string }> = {
-  red: { icon: X, bg: 'bg-destructive', text: 'text-destructive-foreground', label: 'No Action Required' },
-  amber: { icon: Minus, bg: 'bg-amber-500', text: 'text-white', label: 'Waiting for Clearance' },
-  green: { icon: Check, bg: 'bg-green-600', text: 'text-white', label: 'Completed' },
+const STATUS_CONFIG: Record<SnagStatus, { icon: React.ElementType; bg: string; text: string; key: string }> = {
+  red: { icon: X, bg: 'bg-destructive', text: 'text-destructive-foreground', key: 'no_action_required' },
+  amber: { icon: Minus, bg: 'bg-amber-500', text: 'text-white', key: 'waiting_clearance' },
+  green: { icon: Check, bg: 'bg-green-600', text: 'text-white', key: 'completed_status' },
 };
 const STATUS_CYCLE: SnagStatus[] = ['amber', 'green', 'red'];
 
 const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { checkLimit } = useUsage();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,6 +61,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<'all' | SnagStatus>('all');
+  const [creatorFilter, setCreatorFilter] = useState<string>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
 
   // Form state
   const [newTitle, setNewTitle] = useState('');
@@ -94,7 +101,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       setSnags(snagData);
       setAssignees(assigneeData);
     } catch (e) {
-      toast.error('Failed to load snags');
+      toast.error(t('failed_load_snags'));
     } finally {
       setLoading(false);
     }
@@ -181,13 +188,13 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       setSnags(prev => prev.map(s => s.id === snag.id ? updated : s));
       setSelectedSnag(updated);
       
-      toast.success(`Status updated to ${STATUS_CONFIG[next].label}`);
+      toast.success(t('status_updated_to_msg').replace('{label}', t(STATUS_CONFIG[next].key)));
       setResponseComment(updated.response || '');
       setResponsePhotos([]);
       setResponsePhotoPreviews([]);
       setRemovedResponsePhotos([]);
     } catch (error) {
-      toast.error('Failed to update status');
+      toast.error(t('failed_update_status'));
     } finally {
       setSubmitting(false);
     }
@@ -198,7 +205,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
+    if (!file.type.startsWith('image/')) { toast.error(t('select_image_file_msg')); return; }
     setNewPhoto(file);
     const reader = new FileReader();
     reader.onload = () => setPhotoPreview(reader.result as string);
@@ -208,14 +215,14 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   // ── Add snag ────────────────────────────────────────────────────────────────
 
   const addSnag = async () => {
-    if (!newTitle.trim()) { toast.error('Title is required'); return; }
-    if (!newAssignee) { toast.error('Assignee is required'); return; }
-    if (!newPhoto) { toast.error('Photo is required'); return; }
+    if (!newTitle.trim()) { toast.error(t('title_required_msg')); return; }
+    if (!newAssignee) { toast.error(t('assignee_required_msg')); return; }
+    if (!newPhoto) { toast.error(t('photo_required_msg')); return; }
 
     if (!checkLimit('snags')) {
-      toast.error("Limit Reached: You have reached your snag limit. Please upgrade your plan to add more snags.", {
+      toast.error(t('snag_limit_msg'), {
         action: {
-          label: 'Upgrade',
+          label: t('upgrade_label'),
           onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
         },
         duration: 5000,
@@ -238,9 +245,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       setNewTitle(''); setNewDescription(''); setNewAssignee('');
       setNewPhoto(null); setPhotoPreview(null); setNewAudio(null); setAudioPreview(null);
       setShowAdd(false);
-      toast.success('Snag added');
+      toast.success(t('snag_added_msg'));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to add snag'));
+      toast.error(getApiErrorMessage(error, t('failed_add_snag')));
     } finally {
       setSubmitting(false);
     }
@@ -248,7 +255,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
   const handleUpdateSnag = async () => {
     if (!selectedSnag) return;
-    if (!newTitle.trim()) { toast.error('Title is required'); return; }
+    if (!newTitle.trim()) { toast.error(t('title_required_msg')); return; }
     
     setSubmitting(true);
     try {
@@ -267,9 +274,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       setAudioPreview(null);
       setRemoveExistingAudio(false);
       setIsEditing(false);
-      toast.success('Snag updated');
+      toast.success(t('snag_updated_msg'));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to update snag'));
+      toast.error(getApiErrorMessage(error, t('failed_update_snag')));
     } finally {
       setSubmitting(false);
     }
@@ -278,13 +285,20 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   // ── Delete ──────────────────────────────────────────────────────────────────
 
   const handleDelete = async (snag: Snag) => {
-    if (!confirm(`Delete "${snag.title}"?`)) return;
+    if (!confirm(t('confirm_delete_snag').replace('{title}', snag.title))) return;
     try {
       await deleteSnag(snag.id);
       setSnags(prev => prev.filter(s => s.id !== snag.id));
-      toast.success('Snag deleted');
-    } catch { toast.error('Failed to delete snag'); }
+      toast.success(t('snag_deleted_msg'));
+    } catch { toast.error(t('failed_delete_snag')); }
   };
+
+  const filteredSnags = snags.filter(s => {
+    const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
+    const matchesCreator = creatorFilter === 'all' || String(s.created_by) === creatorFilter;
+    const matchesAssignee = assigneeFilter === 'all' || String(s.assigned_to) === assigneeFilter;
+    return matchesStatus && matchesCreator && matchesAssignee;
+  });
 
   if (loading) return <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-accent" /></div>;
   if (!project) return null;
@@ -292,13 +306,80 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   return (
     <div className={cn(compact ? '' : 'mt-3')}>
       {!compact && (
-        <Button onClick={() => setShowAdd(true)} className="mb-3 bg-accent text-accent-foreground hover:bg-accent/90 text-xs h-9">
-          <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Snag
-        </Button>
+        <div className="flex flex-col gap-4 mb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-lg font-bold">{t('project_snags_title')}</h2>
+            <Button onClick={() => setShowAdd(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 text-xs h-9">
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> {t('add_snag_btn')}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-secondary/20 rounded-xl border border-border">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">{t('status_label')}</label>
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder={t('all_status')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('all_status')}</SelectItem>
+                  <SelectItem value="amber">{t('waiting_clearance')}</SelectItem>
+                  <SelectItem value="green">{t('completed_status')}</SelectItem>
+                  <SelectItem value="red">{t('no_action_required')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">{t('created_by_label')}</label>
+              <Select value={creatorFilter} onValueChange={setCreatorFilter}>
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder={t('all_creators')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('all_creators')}</SelectItem>
+                  {Array.from(new Set(snags.map(s => s.creator?.id))).filter(Boolean).map(id => {
+                    const name = snags.find(s => s.creator?.id === id)?.creator?.name;
+                    return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">{t('assigned_to_label')}</label>
+              <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder={t('all_assignees')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('all_assignees')}</SelectItem>
+                  {Array.from(new Set(snags.map(s => s.assignee?.id))).filter(Boolean).map(id => {
+                    const name = snags.find(s => s.assignee?.id === id)?.assignee?.name;
+                    return <SelectItem key={id} value={String(id)}>{name}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-end pb-0.5">
+              {(statusFilter !== 'all' || creatorFilter !== 'all' || assigneeFilter !== 'all') && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-[10px] h-8 text-muted-foreground hover:text-foreground"
+                  onClick={() => { setStatusFilter('all'); setCreatorFilter('all'); setAssigneeFilter('all'); }}
+                >
+                  {t('clear_all_btn')}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="space-y-2">
-        {snags.map((snag) => {
+        {filteredSnags.map((snag) => {
           const cfg = STATUS_CONFIG[snag.status];
           const Icon = cfg.icon;
           const photoUrl = snag.photoDownloadUrl || snag.photo_url;
@@ -320,7 +401,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     // Actually cycleStatus clears it anyway, so we just call it.
                     cycleStatus(snag);
                   } else {
-                    toast.error('Only the assigned person can update the status');
+                    toast.error(t('only_assignee_update_msg'));
                   }
                 }}
                 className={cn(
@@ -328,7 +409,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   cfg.bg,
                   String(snag.assigned_to) !== String(user?.id) && "opacity-60 cursor-not-allowed"
                 )}
-                title={String(snag.assigned_to) === String(user?.id) ? `Status: ${cfg.label} — click to change` : `Status: ${cfg.label}`}
+                title={String(snag.assigned_to) === String(user?.id) ? t('status_click_change_tip').replace('{label}', t(cfg.key)) : t('status_tip').replace('{label}', t(cfg.key))}
               >
                 <Icon className={cn('h-3.5 w-3.5', cfg.text)} />
               </button>
@@ -339,12 +420,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{snag.description}</p>
                 )}
                 <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground mt-0.5">
-                  <span>To: <span className="text-foreground font-medium">{snag.assignee?.name || '—'}</span></span>
-                  <span>By: <span className="text-foreground font-medium">{snag.creator?.name || '—'}</span></span>
-                  <span>· {cfg.label}</span>
+                  <span>{t('to_label')} <span className="text-foreground font-medium">{snag.assignee?.name || '—'}</span></span>
+                  <span>{t('by_label')} <span className="text-foreground font-medium">{snag.creator?.name || '—'}</span></span>
+                  <span>· {t(cfg.key)}</span>
                   {snag.seen_at && (
                     <span className="flex items-center gap-0.5 text-orange-500 font-bold uppercase tracking-tighter ml-1">
-                      <CheckCheck className="h-2.5 w-2.5" /> Seen
+                      <CheckCheck className="h-2.5 w-2.5" /> {t('seen_badge')}
                     </span>
                   )}
                 </div>
@@ -353,7 +434,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     <MessageSquare className="h-2.5 w-2.5 text-accent" />
                     <span className="truncate">{snag.response}</span>
                     {snag.responsePhotoUrls && snag.responsePhotoUrls.length > 0 && (
-                      <span className="text-accent font-bold ml-1">+{snag.responsePhotoUrls.length} photos</span>
+                      <span className="text-accent font-bold ml-1">+{t('photos_count_label').replace('{count}', String(snag.responsePhotoUrls.length))}</span>
                     )}
                   </div>
                 )}
@@ -378,9 +459,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
         })}
       </div>
 
-      {snags.length === 0 && (
-        <div className="text-center py-6">
-          <p className="text-xs text-muted-foreground">No snags yet</p>
+      {filteredSnags.length === 0 && (
+        <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl">
+          <CheckCircle2 className="h-10 w-10 mx-auto text-muted-foreground/30 mb-4" />
+          <p className="text-sm text-muted-foreground font-medium">{t('no_snags_found')}</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">{t('snag_filter_empty_desc')}</p>
         </div>
       )}
 
@@ -394,7 +477,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">{isEditing ? 'Edit Snag' : 'Add Snag'}</DialogTitle>
+            <DialogTitle className="text-sm">{isEditing ? t('edit_snag_title') : t('add_snag_title')}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3 py-1">
@@ -414,7 +497,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   onClick={() => fileInputRef.current?.click()}
                   className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] rounded-full px-2.5 py-1 hover:bg-black/80 transition-colors"
                 >
-                  Change
+                  {t('change_btn')}
                 </button>
               </div>
             ) : (
@@ -423,22 +506,22 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                 onClick={() => fileInputRef.current?.click()}
               >
                 <ImagePlus className="h-8 w-8 mb-2 text-muted-foreground/50" />
-                <p className="text-xs font-medium text-foreground">Click to attach photo</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Required — JPG, PNG, etc.</p>
+                <p className="text-xs font-medium text-foreground">{t('click_attach_photo')}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t('photo_format_hint')}</p>
               </div>
             )}
 
-            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Snag title *" maxLength={200} />
+            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder={t('snag_title_placeholder')} maxLength={200} />
             <Textarea
               value={newDescription}
               onChange={e => setNewDescription(e.target.value)}
-              placeholder="Description (optional)"
+              placeholder={t('description_optional')}
               className="min-h-[56px] text-xs"
               maxLength={500}
             />
 
             <Select value={newAssignee} onValueChange={setNewAssignee}>
-              <SelectTrigger className="text-xs"><SelectValue placeholder="Assign to... *" /></SelectTrigger>
+              <SelectTrigger className="text-xs"><SelectValue placeholder={t('assign_to_placeholder')} /></SelectTrigger>
               <SelectContent>
                 {assignees.map(a => (
                   <SelectItem key={a.id} value={String(a.id)}>
@@ -449,12 +532,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
             </Select>
 
             <div className="space-y-2">
-              <p className="text-[11px] font-medium text-muted-foreground">Voice Note</p>
+              <p className="text-[11px] font-medium text-muted-foreground">{t('voice_note_label')}</p>
               {audioPreview ? (
                 <div className="relative rounded-xl border border-border bg-card p-3 pr-10">
                   <div className="mb-2 flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-accent" />
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-accent">{t('voice_note_label')}</span>
                   </div>
                   <VoiceNotePlayer url={audioPreview} isMe={false} />
                   <button
@@ -468,7 +551,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                 <div className="relative rounded-xl border border-border bg-card p-3 pr-10">
                   <div className="mb-2 flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-accent" />
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-accent">{t('voice_note_label')}</span>
                   </div>
                   <VoiceNotePlayer url={selectedSnag!.audioDownloadUrl!} isMe={false} />
                   <button
@@ -491,9 +574,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowAdd(false); setIsEditing(false); setNewAudio(null); setAudioPreview(null); setRemoveExistingAudio(false); }} disabled={submitting}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowAdd(false); setIsEditing(false); setNewAudio(null); setAudioPreview(null); setRemoveExistingAudio(false); }} disabled={submitting}>{t('cancel')}</Button>
             <Button onClick={isEditing ? handleUpdateSnag : addSnag} disabled={submitting || !newTitle.trim() || (!isEditing && !newPhoto) || !newAssignee} className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (isEditing ? 'Save Changes' : 'Add Snag')}
+              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (isEditing ? t('save_changes') : t('add_snag_btn'))}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -507,7 +590,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
               <DialogHeader>
                 <div className="flex items-center justify-between mb-2 pr-8">
                   <div className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", STATUS_CONFIG[selectedSnag.status].bg, STATUS_CONFIG[selectedSnag.status].text)}>
-                    {STATUS_CONFIG[selectedSnag.status].label}
+                    {t(STATUS_CONFIG[selectedSnag.status].key)}
                   </div>
                   {(String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && !selectedSnag.response && (
                     <div className="flex items-center gap-2">
@@ -527,7 +610,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                             setIsEditing(true);
                           }}
                         >
-                          Edit
+                          {t('edit_btn')}
                         </Button>
 
                       <Button 
@@ -539,7 +622,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                           setSelectedSnag(null);
                         }}
                       >
-                        Delete
+                        {t('delete_btn')}
                       </Button>
                     </div>
                   )}
@@ -558,7 +641,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <div className="rounded-lg border border-border bg-card p-3">
                     <div className="mb-2 flex items-center gap-2">
                       <div className="h-2 w-2 rounded-full bg-accent" />
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-accent">Voice Note</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-accent">{t('voice_note_label')}</span>
                     </div>
                     <VoiceNotePlayer url={selectedSnag.audioDownloadUrl || selectedSnag.audio_url!} isMe={false} />
                   </div>
@@ -570,18 +653,18 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
                 <div className="grid grid-cols-2 gap-2 p-3 bg-secondary/20 rounded-lg border border-border text-[10px]">
                   <div>
-                    <p className="font-bold text-muted-foreground uppercase">Assigned To</p>
-                    <p className="font-medium">{selectedSnag.assignee?.name || 'Unassigned'}</p>
+                    <p className="font-bold text-muted-foreground uppercase">{t('assigned_to_label')}</p>
+                    <p className="font-medium">{selectedSnag.assignee?.name || t('unassigned_label')}</p>
                   </div>
                   <div>
-                    <p className="font-bold text-muted-foreground uppercase">Created By</p>
+                    <p className="font-bold text-muted-foreground uppercase">{t('created_by_label')}</p>
                     <p className="font-medium">{selectedSnag.creator?.name || '—'}</p>
                   </div>
                 </div>
 
                 {(selectedSnag.response || (selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
                   <div className="p-3 bg-accent/5 rounded-lg border border-accent/10">
-                    <p className="text-[10px] font-bold text-accent uppercase mb-1">Last Response</p>
+                    <p className="text-[10px] font-bold text-accent uppercase mb-1">{t('last_response_title')}</p>
                     {selectedSnag.response && <p className="text-xs">{selectedSnag.response}</p>}
                     {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
                       <div className="grid grid-cols-3 gap-2 mt-2">
@@ -590,7 +673,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                             <div key={i} className="col-span-3 p-3 rounded-lg border border-border bg-card relative group">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                                <span className="text-[9px] font-bold text-accent uppercase tracking-widest">Voice Response</span>
+                                <span className="text-[9px] font-bold text-accent uppercase tracking-widest">{t('voice_response_label')}</span>
                               </div>
                               <VoiceNotePlayer url={url} isMe={false} />
                               {String(selectedSnag.assigned_to) === String(user?.id) && (
@@ -641,7 +724,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                 {/* Respond Section */}
                 {String(selectedSnag.assigned_to) === String(user?.id) && (
                   <div className="pt-4 border-t border-border space-y-3">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Update Status & Respond</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('update_status_respond_title')}</p>
                     <div className="flex gap-2">
                       {STATUS_CYCLE.map(s => (
                         <Button 
@@ -651,12 +734,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                           className={cn("flex-1 text-[10px] h-8", selectedSnag.status === s && STATUS_CONFIG[s].bg && STATUS_CONFIG[s].text)}
                           onClick={() => cycleStatus(selectedSnag, s, responseComment, responsePhotos, removedResponsePhotos)}
                         >
-                          {STATUS_CONFIG[s].label.split(' ')[0]}
+                          {t(STATUS_CONFIG[s].key).split(' ')[0]}
                         </Button>
                       ))}
                     </div>
                     <Textarea 
-                      placeholder="Add a comment..." 
+                      placeholder={t('add_comment_placeholder')} 
                       className="text-xs min-h-[60px]" 
                       value={responseComment}
                       onChange={e => setResponseComment(e.target.value)}
@@ -671,7 +754,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                                 <div className="p-2 pr-8 flex flex-col gap-1">
                                   <div className="flex items-center gap-1.5 mb-1">
                                     <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                                    <span className="text-[8px] font-bold text-accent uppercase tracking-tighter">Voice Response</span>
+                                    <span className="text-[8px] font-bold text-accent uppercase tracking-tighter">{t('voice_response_label')}</span>
                                   </div>
                                   <VoiceNotePlayer url={src} isMe={false} />
                                 </div>
@@ -748,7 +831,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                       disabled={submitting || (responseComment === (selectedSnag.response || '') && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
                     >
                       {submitting ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <MessageSquare className="h-3 w-3 mr-2" />}
-                      Post Response
+                      {t('post_response_btn')}
                     </Button>
                   </div>
                 )}

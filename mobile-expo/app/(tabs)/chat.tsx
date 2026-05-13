@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, FlatList, TouchableOpacity, Platform, Image, RefreshControl, Animated } from 'react-native';
+import { View, FlatList, TouchableOpacity, Platform, Image, RefreshControl, Animated, Alert, AlertButton } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -8,7 +8,7 @@ import SecureAvatar from '@/components/shared/SecureAvatar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
-import { listRooms } from '@/services/chatService';
+import { listRooms, deleteRoom, removeRoomMember } from '@/services/chatService';
 import NewChatModal from '@/components/chat/NewChatModal';
 import { useSocket } from '@/contexts/SocketContext';
 import { useTour } from '@/contexts/TourContext';
@@ -37,9 +37,9 @@ export default function ChatListScreen() {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
                 <Feather name="lock" size={48} color={colors.textMuted} />
-                <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, marginTop: 16 }}>Access Denied</Text>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, marginTop: 16 }}>{t('chat.accessDenied')}</Text>
                 <Text style={{ fontSize: 16, color: colors.textMuted, textAlign: 'center', marginTop: 8 }}>
-                    Superadmins do not have access to the chat feature.
+                    {t('chat.superadminRestriction')}
                 </Text>
                 <TouchableOpacity
                     onPress={() => router.replace('/(tabs)')}
@@ -51,7 +51,7 @@ export default function ChatListScreen() {
                         borderRadius: 10
                     }}
                 >
-                    <Text style={{ color: '#fff', fontWeight: '700' }}>Back to Dashboard</Text>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>{t('chat.backToDashboard')}</Text>
                 </TouchableOpacity>
             </SafeAreaView>
         );
@@ -201,7 +201,7 @@ export default function ChatListScreen() {
             type: 'individual',
             updatedAt: new Date().toISOString(),
             room_members: [{ user: { id: 'u1', name: 'John' } }],
-            chat_messages: [{ text: 'The site report is ready for review.', createdAt: new Date().toISOString() }],
+            chat_messages: [{ text: t('chat.tourMessage1'), createdAt: new Date().toISOString() }],
             unread_count: 1
         },
         {
@@ -210,7 +210,7 @@ export default function ChatListScreen() {
             type: 'group',
             updatedAt: new Date().toISOString(),
             room_members: [{ user: { id: 'u2', name: 'Team' } }],
-            chat_messages: [{ text: '📷 Photo', type: 'image', createdAt: new Date().toISOString() }],
+            chat_messages: [{ text: t('chat.photo'), type: 'image', createdAt: new Date().toISOString() }],
             unread_count: 0
         }
     ];
@@ -220,7 +220,7 @@ export default function ChatListScreen() {
     const filteredChats = displayRooms
         .filter(c => {
             const otherMember = c.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id));
-            const name = c.name || otherMember?.user?.name || 'Chat';
+            const name = c.name || otherMember?.user?.name || t('chat.defaultChatName');
             return name.toLowerCase().includes(searchQuery.toLowerCase());
         })
         .sort((a, b) => {
@@ -231,18 +231,45 @@ export default function ChatListScreen() {
             return timeB - timeA;
         });
 
+    const handleDeleteChat = async (chat: any) => {
+        const isGroup = chat.type === 'group';
+        const title = isGroup ? "Leave Group" : "Delete Chat";
+        const msg = isGroup ? "Are you sure you want to leave this group?" : "Are you sure you want to delete this chat?";
+        
+        Alert.alert(title, msg, [
+            { text: "Cancel", style: "cancel" },
+            { 
+                text: isGroup ? "Leave" : "Delete", 
+                style: "destructive", 
+                onPress: async () => {
+                    try {
+                        if (isGroup) {
+                            await removeRoomMember(chat.id, user.id);
+                        } else {
+                            await deleteRoom(chat.id);
+                        }
+                        setRooms(prev => prev.filter(r => r.id !== chat.id));
+                    } catch (err) {
+                        console.error(err);
+                        Alert.alert("Error", "Failed to perform action");
+                    }
+                }
+            }
+        ] as AlertButton[]);
+    };
+
     const renderChatItem = ({ item }: { item: any }) => {
         const otherMember = item.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id));
-        const displayLabel = item.name || otherMember?.user?.name || 'Chat';
+        const displayLabel = item.name || otherMember?.user?.name || t('chat.defaultChatName');
         const displayAvatarKey = otherMember?.user?.profile_pic;
 
         const isOnline = otherMember?.user?.id && onlineUsers.has(String(otherMember.user.id));
         const lastMsg = item.chat_messages?.[0];
         const lastMsgText = lastMsg ? (
-            lastMsg.type === 'image' ? '📷 Photo' : 
-            lastMsg.type === 'file' ? '📄 File' : 
-            lastMsg.text || 'No message content'
-        ) : 'No messages yet';
+            lastMsg.type === 'image' ? t('chat.photo') : 
+            lastMsg.type === 'file' ? t('chat.file') : 
+            lastMsg.text || t('chat.noMessageContent')
+        ) : t('chat.noMessagesYet');
         const time = lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
         const unreadCount = item.unread_count || 0;
 
@@ -255,6 +282,8 @@ export default function ChatListScreen() {
                     setRooms(prev => prev.map(r => String(r.id) === String(item.id) ? { ...r, unread_count: 0 } : r));
                     router.push(`/chat/${item.id}`);
                 }}
+                onLongPress={() => handleDeleteChat(item)}
+                delayLongPress={500}
                 style={{
                     flexDirection: 'row',
                     padding: 14,
@@ -310,7 +339,7 @@ export default function ChatListScreen() {
                                         </View>
                                     ))}
                                     {otherMember.user.project_members.length > 1 && (
-                                        <Text style={{ fontSize: 7, color: colors.textMuted, fontWeight: '600' }}>+{otherMember.user.project_members.length - 1} more</Text>
+                                        <Text style={{ fontSize: 7, color: colors.textMuted, fontWeight: '600' }}>{t('chat.moreMembers', { count: otherMember.user.project_members.length - 1 })}</Text>
                                     )}
                                 </View>
                             )}
@@ -334,7 +363,7 @@ export default function ChatListScreen() {
                                 }}
                                 numberOfLines={1}
                             >
-                                {typingRooms[String(item.id)]} typing...
+                                {t('chat.typing', { userName: typingRooms[String(item.id)] })}
                             </Animated.Text>
                         ) : (
 
@@ -375,7 +404,7 @@ export default function ChatListScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
             {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>Chats</Text>
+                <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>{t('chat.chats')}</Text>
                 <View style={{ flexDirection: 'row', gap: 16 }}>
                     <TouchableOpacity onPress={() => setIsModalOpen(true)}>
                         <Feather name="plus-circle" size={22} color={colors.text} />
@@ -404,7 +433,7 @@ export default function ChatListScreen() {
                     <TextInput
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        placeholder="Search chats..."
+                        placeholder={t('chat.searchPlaceholder')}
                         placeholderTextColor={colors.textMuted}
                         style={{ flex: 1, color: colors.text, marginLeft: 10, fontSize: 15 }}
                     />
@@ -431,21 +460,21 @@ export default function ChatListScreen() {
                             <Feather name={searchQuery ? "search" : "message-square"} size={40} color={colors.border} />
                         </View>
                         <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-                            {loading ? 'Loading...' : searchQuery ? 'No Matches Found' : 'No Conversations'}
+                            {loading ? t('chat.loading') : searchQuery ? t('chat.noMatches') : t('chat.noConversations')}
                         </Text>
                         <Text style={{ color: colors.textMuted, marginTop: 8, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 }}>
                             {loading
-                                ? 'Fetching your messages...'
+                                ? t('chat.fetchingMessages')
                                 : searchQuery
-                                    ? `We couldn't find any chats matching "${searchQuery}"`
-                                    : "Start a conversation by clicking the plus icon above."}
+                                    ? t('chat.noMatchesFound', { query: searchQuery })
+                                    : t('chat.startConversation')}
                         </Text>
                         {searchQuery.length > 0 && (
                             <TouchableOpacity
                                 onPress={() => setSearchQuery('')}
                                 style={{ marginTop: 24, paddingVertical: 10, paddingHorizontal: 20, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
                             >
-                                <Text style={{ color: colors.primary, fontWeight: '600' }}>Clear Search</Text>
+                                <Text style={{ color: colors.primary, fontWeight: '600' }}>{t('chat.clearSearch')}</Text>
                             </TouchableOpacity>
                         )}
                     </View>

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProjects } from '@/services/projectService';
 import { getFolders, createFolder } from '@/services/folderService';
 import { uploadFile } from '@/services/fileService';
+import { getProjects, getProjectMembers } from '@/services/projectService';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, ChevronDown, MapPin, Tag, Camera } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, ChevronDown, MapPin, Tag, Camera, User } from 'lucide-react';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -16,9 +17,11 @@ import { createActivity } from '@/services/activityService';
 import CreateFolderDialog from '../Project/ProjectDetails/CreateFolderDialog';
 import { getApiErrorMessage } from '@/helpers/apiError';
 import { useUsage } from '@/contexts/UsageContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 function UploadInner() {
     const { user } = useAuth();
+    const { t } = useLanguage();
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -41,6 +44,8 @@ function UploadInner() {
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
     const [done, setDone] = useState(false);
     const [doneType, setDoneType] = useState<'documents' | 'photos'>('documents');
+    const [assignedTo, setAssignedTo] = useState<string | null>(null);
+    const [projectMembers, setProjectMembers] = useState<any[]>([]);
 
     const { usageData, checkLimit, refreshUsage } = useUsage();
 
@@ -121,6 +126,17 @@ function UploadInner() {
         };
         if (selectedProject) fetchFolders();
     }, [selectedProject, uploadType]);
+
+    useEffect(() => {
+        const fetchMembers = async () => {
+            if (!selectedProject) { setProjectMembers([]); return; }
+            try {
+                const data = await getProjectMembers(selectedProject);
+                setProjectMembers(data.members || []);
+            } catch (err) { console.error("Failed to load members", err); }
+        };
+        if (selectedProject) fetchMembers();
+    }, [selectedProject]);
 
     const importFolders = async () => {
         if (!selectedProject) return;
@@ -271,6 +287,7 @@ function UploadInner() {
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
                 }
+                if (assignedTo) formData.append('assigned_to', assignedTo);
                 formData.append('file', f);
                 return uploadFile(formData);
             }));
@@ -368,6 +385,7 @@ function UploadInner() {
                             {files.length > 0 ? `${files.length} file(s) selected — click to add more` : 'Click to select files (Max 20)'}
                         </p>
                         {files.length === 0 && <p className="text-xs text-muted-foreground mt-1">Documents, images, PDFs — type auto-detected</p>}
+                        <p className="text-[10px] text-muted-foreground mt-1">Max size: 100 MB</p>
                         {files.length > 0 && uploadType && (
                             <p className="text-xs text-accent mt-1">Detected as: {uploadType === 'photos' ? '📷 Photos' : '📄 Documents'}</p>
                         )}
@@ -443,6 +461,52 @@ function UploadInner() {
                             <Input placeholder="e.g., foundation, concrete" value={photoTags} onChange={(e) => setPhotoTags(e.target.value)} />
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ── Section 2.5: Assignee (documents only) ── */}
+            {uploadType === 'documents' && (
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border">
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold">{t('assign_to')}</p>
+                            <span className="text-xs text-muted-foreground">{t('optional')}</span>
+                        </div>
+                    </div>
+                    <div className="p-4">
+                        <Select
+                            value={assignedTo || 'unassigned'}
+                            onValueChange={(val) => setAssignedTo(val === 'unassigned' ? null : val)}
+                        >
+                            <SelectTrigger className="w-full h-12 rounded-xl border-border bg-surface">
+                                <SelectValue placeholder={t('selectAssignee')} />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border bg-card">
+                                <SelectItem value="unassigned" className="cursor-pointer hover:bg-accent/10 transition-colors">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center">
+                                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                                        </div>
+                                        <span className="text-sm">{t('unassigned')}</span>
+                                    </div>
+                                </SelectItem>
+                                {projectMembers.map((m) => (
+                                    <SelectItem key={m.user.id} value={String(m.user.id)} className="cursor-pointer hover:bg-accent/10 transition-colors">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center">
+                                                <span className="text-[10px] font-bold text-accent">{m.user.name.charAt(0).toUpperCase()}</span>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-medium">{m.user.name}</span>
+                                                <span className="text-[10px] text-muted-foreground">{m.role || 'Member'}</span>
+                                            </div>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-muted-foreground mt-2 px-1">{t('assigneeDescription')}</p>
+                    </div>
                 </div>
             )}
 

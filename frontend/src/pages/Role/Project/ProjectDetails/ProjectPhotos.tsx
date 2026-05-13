@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import FileViewer from '@/components/shared/FileViewer';
 import { formatFileSize } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProjectPhotosProps {
   project: Project;
@@ -33,6 +34,7 @@ interface ProjectPhotosProps {
 
 const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const router = useRouter();
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const [photos, setPhotos] = useState<any[]>([]);
   const [selectedFolder, setRawSelectedFolder] = useState<string | null>(
@@ -207,9 +209,9 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     try {
       await toggleFileVisibility(photo.id, !photo.client_visible);
       setPhotos((prev) => prev.map((p) => p.id === photo.id ? { ...p, client_visible: !photo.client_visible } : p));
-      toast.success(`Photo marked ${!photo.client_visible ? 'Visible' : 'Hidden'} for clients`);
+      toast.success(photo.client_visible ? t('photo_marked_hidden') : t('photo_marked_visible'));
     } catch (e) {
-      toast.error('Failed to toggle visibility');
+      toast.error(t('failed_toggle_visibility'));
     }
   };
 
@@ -217,9 +219,9 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     try {
       await toggleDoNotFollow(photo.id, !photo.do_not_follow);
       setPhotos((prev) => prev.map((p) => p.id === photo.id ? { ...p, do_not_follow: !photo.do_not_follow } : p));
-      toast.success(`Photo ${!photo.do_not_follow ? 'marked' : 'unmarked'} as 'Do Not Follow'`);
+      toast.success(photo.do_not_follow ? t('photo_unmarked_dnf') : t('photo_marked_dnf'));
     } catch (e) {
-      toast.error('Failed to toggle Do Not Follow');
+      toast.error(t('failed_toggle_dnf'));
     }
   };
 
@@ -229,20 +231,20 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     try {
       await toggleFolderVisibility(folder.id, !folder.client_visible);
       setFolders((prev) => prev.map((f) => f.id === folder.id ? { ...f, client_visible: !folder.client_visible } : f));
-      toast.success(`Folder marked ${!folder.client_visible ? 'Visible' : 'Hidden'} for clients`);
+      toast.success(folder.client_visible ? t('folder_marked_hidden') : t('folder_marked_visible'));
     } catch (err) {
-      toast.error('Failed to toggle visibility');
+      toast.error(t('failed_toggle_visibility'));
     }
   };
 
   const deletePhoto = async (photoId: number) => {
-    if (!confirm('Are you sure you want to delete this photo?')) return;
+    if (!confirm(t('confirm_delete_photo'))) return;
     try {
       await deleteFile(photoId);
       setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-      toast.success('Photo deleted');
+      toast.success(t('photo_deleted_msg'));
     } catch (error) {
-      toast.error('Failed to delete photo');
+      toast.error(t('failed_delete_photo'));
     }
   };
 
@@ -258,13 +260,13 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const handleCreateFolder = async (name: string) => {
     try {
       const res = await createFolder({ project_id: project.id, name, parent_id: selectedFolder, folder_type: 'photo' });
-      toast.success(`Folder "${name}" created`);
+      toast.success(t('folder_created_msg').replace('{name}', name));
       await importFolders(); // Refetch
       if (res.folder) {
         setSelectedFolder(String(res.folder.id));
       }
     } catch (e) {
-      toast.error("Failed to create folder");
+      toast.error(t('failed_create_folder'));
     }
   };
 
@@ -272,22 +274,22 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     if (!editFolder) return;
     try {
       await updateFolder(editFolder.id, { name: newName });
-      toast.success(`Folder renamed to "${newName}"`);
+      toast.success(t('folder_renamed_msg').replace('{name}', newName));
       await importFolders(); // Refetch
     } catch (e) {
-      toast.error("Failed to rename folder");
+      toast.error(t('failed_rename_folder'));
     }
   };
 
   const handleDeleteFolder = async (folder: any, e: React.MouseEvent, force: boolean = false) => {
     e?.stopPropagation();
     if (!force) {
-      if (!confirm(`Are you sure you want to delete folder "${folder.name}"?`)) return;
+      if (!confirm(t('confirm_delete_folder').replace('{name}', folder.name))) return;
     }
 
     try {
       await deleteFolder(folder.id, force);
-      toast.success(`Folder "${folder.name}" deleted`);
+      toast.success(t('folder_deleted_msg').replace('{name}', folder.name));
       setShowDeleteConflict(false);
       await importFolders(); // Refetch
     } catch (e: any) {
@@ -296,7 +298,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         setFolderToDelete(folder);
         setShowDeleteConflict(true);
       } else {
-        const msg = data?.error || "Failed to delete folder";
+        const msg = data?.error || t('failed_delete_folder');
         toast.error(msg);
       }
     }
@@ -315,7 +317,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     const childFiles = photos.filter(p => String(p.folder_id) === String(folderToDelete.id));
     
     if (childFolders.length === 0 && childFiles.length === 0) {
-      toast.info("Folder is already empty");
+      toast.info(t('folder_already_empty'));
       setShowDeleteConflict(false);
       return;
     }
@@ -369,11 +371,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         promises.push(bulkUpdateFiles({ ids: Array.from(selectedFiles), client_visible: visible }));
       }
       await Promise.all(promises);
-      toast.success(`Visibility updated for ${selectedFolders.size + selectedFiles.size} items`);
+      toast.success(t('visibility_updated_msg').replace('{count}', String(selectedFolders.size + selectedFiles.size)));
       importFolders();
       clearSelection();
     } catch (e) {
-      toast.error("Failed to update visibility");
+      toast.error(t('failed_toggle_visibility'));
     }
   };
 
@@ -383,7 +385,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       const firstPhoto = photos.find(p => p.id === firstId);
       if (firstPhoto) setShareItem(firstPhoto);
     } else {
-      toast.info("Select at least one photo to share");
+      toast.info(t('select_photo_share'));
     }
   };
 
@@ -396,14 +398,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             onClick={handleUpload}
             className="flex-1 h-9 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 text-xs font-semibold"
           >
-            <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload Photo
+            <Upload className="h-3.5 w-3.5 mr-1.5" /> {t('upload_photo_btn')}
           </Button>
           <Button
             onClick={() => setShowCreateFolder(true)}
             variant="outline"
             className="h-9 rounded-lg text-xs font-semibold"
           >
-            <FolderPlus className="h-3.5 w-3.5 mr-1.5" /> New Folder
+            <FolderPlus className="h-3.5 w-3.5 mr-1.5" /> {t('new_folder_btn')}
           </Button>
           <Button
             onClick={() => {
@@ -413,7 +415,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             variant={isSelectionMode ? "secondary" : "outline"}
             className="h-9 rounded-lg text-xs font-semibold px-3"
           >
-            {isSelectionMode ? 'Cancel' : 'Select'}
+            {isSelectionMode ? t('cancel') : t('select_btn')}
           </Button>
         </div>
       )}
@@ -453,14 +455,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             <button
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-card text-accent shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              title="Grid view"
+              title={t('grid_view_tip')}
             >
               <LayoutGrid className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-card text-accent shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              title="List view"
+              title={t('list_view_tip')}
             >
               <List className="h-3.5 w-3.5" />
             </button>
@@ -470,21 +472,21 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 text-[10px] font-semibold gap-1.5 text-muted-foreground bg-secondary/50">
-                Sort by: <span className="text-foreground capitalize">{sortBy}</span>
+                {t('sort_by_label')} <span className="text-foreground capitalize">{t(sortBy + '_label')}</span>
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuLabel className="text-[10px]">Sort Photos By</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-[10px]">{t('sort_photos_title')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setSortBy('name')} className="text-xs flex items-center justify-between">
-                Name {sortBy === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                {t('name_label')} {sortBy === 'name' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy('date')} className="text-xs flex items-center justify-between">
-                Date Modified {sortBy === 'date' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                {t('date_label')} {sortBy === 'date' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy('size')} className="text-xs flex items-center justify-between">
-                Size {sortBy === 'size' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                {t('size_label')} {sortBy === 'size' && <div className="h-1.5 w-1.5 rounded-full bg-accent" />}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -500,7 +502,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               activeFolderTab === 'files' ? "text-accent" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Photos & Folders
+            {t('photos_folders_tab')}
             {activeFolderTab === 'files' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
           <button
@@ -510,7 +512,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               activeFolderTab === 'rfi' ? "text-accent" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Linked RFIs
+            {t('linked_rfi_tab')}
             {activeFolderTab === 'rfi' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
         </div>
@@ -525,6 +527,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
           const isSelected = selectedFolders.has(folder.id);
+          const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation';
           return (
             <button
               key={folder.id}
@@ -542,7 +545,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     </button>
                   )}
                   {(user.role === 'admin' || user.role === 'superadmin') && (
-                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title="Move folder">
+                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('move_folder_tip')}>
                       <Move className="h-2.5 w-2.5 text-muted-foreground" />
                     </button>
                   )}
@@ -551,14 +554,17 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       <button 
                         onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
                         className="rounded-full p-1 hover:bg-secondary transition-colors" 
-                        title="Rename folder"
+                        title={t('rename_folder_tip')}
+                        disabled={isConfirmationFolder}
                       >
                         <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
                       <button 
                         onClick={(e) => handleDeleteFolder(folder, e)} 
                         className="rounded-full p-1 hover:bg-destructive/10 transition-colors" 
-                        title="Delete folder"
+                        title={t('delete_folder_tip')}
+                        
+                        disabled={isConfirmationFolder}
                       >
                         <Trash2 className="h-2.5 w-2.5 text-destructive" />
                       </button>
@@ -572,13 +578,13 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
                 </div>
               )}
-              <FolderIcon className="h-8 w-8 text-accent" />
-              <span className="text-[10px] font-medium text-foreground text-center leading-tight line-clamp-2 mt-1">
+              <FolderIcon className={`h-8 w-8 ${isConfirmationFolder ? 'text-orange-500' : 'text-accent'}`} />
+              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
                 {folder.name}
               </span>
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="text-[9px] text-muted-foreground mr-1">
-                  {folderPhotos.length} photos{subFolders.length > 0 ? `, ${subFolders.length} folder${subFolders.length === 1 ? '' : 's'}` : ''}
+                  {t('photos_count_label').replace('{count}', String(folderPhotos.length))}{subFolders.length > 0 ? `, ${t('folders_count_label').replace('{count}', String(subFolders.length))}` : ''}
                 </span>
               </div>
             </button>
@@ -639,7 +645,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   </div>
                   {photo.do_not_follow && (
                     <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
-                      <ShieldAlert className="h-2.5 w-2.5" /> DO NOT FOLLOW
+                      <ShieldAlert className="h-2.5 w-2.5" /> {t('do_not_follow_tag')}
                     </div>
                   )}
                 </div>
@@ -651,10 +657,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       </button>
                       {(user.role === 'admin' || user.role === 'superadmin') && (
                         <>
-                          <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title="Toggle client visibility">
+                          <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
                             {photo.client_visible !== false ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); togglePhotoDoNotFollow(photo); }} className="rounded-md p-1 hover:bg-secondary" title="Toggle Do Not Follow">
+                          <button onClick={(e) => { e.stopPropagation(); togglePhotoDoNotFollow(photo); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_dnf_tip')}>
                             <ShieldAlert className={`h-3.5 w-3.5 ${photo.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
                           </button>
                         </>
@@ -670,7 +676,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 </div>
                 {photo.do_not_follow && (
                   <div className="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-sm ml-1 shadow-sm uppercase tracking-tighter border border-white/20">
-                    DNF
+                    {t('dnf_tag')}
                   </div>
                 )}
 
@@ -719,7 +725,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     <button
                       onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
                       className="rounded-full p-1 hover:bg-secondary transition-colors"
-                      title={`Toggle client visibility (Currently: ${photo.client_visible !== false ? 'Visible' : 'Hidden'})`}
+                      title={t('toggle_client_vis_tip')}
                     >
                       {photo.client_visible !== false ? (
                         <Eye className="h-2.5 w-2.5 text-accent" />
@@ -732,7 +738,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     <button
                       onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
                       className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
-                      title="Delete photo"
+                      title={t('delete_photo_tip')}
                     >
                       <Trash2 className="h-2.5 w-2.5 text-destructive" />
                     </button>
@@ -741,7 +747,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               )}
               {photo.do_not_follow && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
-                  DNF
+                  {t('dnf_tag')}
                 </div>
               )}
 
@@ -766,7 +772,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         currentFolders.length === 0 && visiblePhotos.length === 0 && (
           <div className="mt-12 text-center">
             <Camera className="mx-auto h-8 w-8 text-muted-foreground/30" />
-            <p className="mt-1.5 text-xs text-muted-foreground">No folders or photos yet</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{t('no_photos_yet')}</p>
           </div>
         )
       }
@@ -791,7 +797,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
             <div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-4">
               <div className="text-[10px] font-semibold text-muted-foreground border-r border-border pr-4">
-                {selectedFolders.size + selectedFiles.size} selected
+                {t('items_selected').replace('{count}', String(selectedFolders.size + selectedFiles.size))}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -800,7 +806,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
                   onClick={handleBulkShare}
                 >
-                  <Share2 className="h-3.5 w-3.5 mr-1" /> Share
+                  <Share2 className="h-3.5 w-3.5 mr-1" /> {t('share_btn')}
                 </Button>
                 <Button
                   size="sm"
@@ -808,7 +814,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
                   onClick={handleBulkMove}
                 >
-                  <Move className="h-3.5 w-3.5 mr-1" /> Move
+                  <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
                 </Button>
                 {(user.role === 'admin' || user.role === 'superadmin') && (
                   <div className="flex items-center gap-1 border-l border-border pl-2">
@@ -818,7 +824,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       className="h-8 px-2 text-[10px] font-semibold text-accent"
                       onClick={() => handleBulkVisibility(true)}
                     >
-                      <Eye className="h-3.5 w-3.5 mr-1" /> Show
+                      <Eye className="h-3.5 w-3.5 mr-1" /> {t('show_btn')}
                     </Button>
                     <Button
                       size="sm"
@@ -826,7 +832,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
                       onClick={() => handleBulkVisibility(false)}
                     >
-                      <EyeOff className="h-3.5 w-3.5 mr-1" /> Hide
+                      <EyeOff className="h-3.5 w-3.5 mr-1" /> {t('hide_btn')}
                     </Button>
                   </div>
                 )}
@@ -834,7 +840,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               <button
                 onClick={clearSelection}
                 className="ml-2 text-muted-foreground hover:text-foreground p-1"
-                title="Clear selection"
+                title={t('clear_selection_tip')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -863,9 +869,9 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             // After moving contents, delete the original folder
             try {
               await deleteFolder(movingContentsOf.id, false);
-              toast.success(`Folder "${movingContentsOf.name}" deleted after moving contents`);
+              toast.success(t('folder_deleted_move_msg').replace('{name}', movingContentsOf.name));
             } catch (err) {
-              toast.error("Contents moved, but failed to delete empty folder");
+              toast.error(t('failed_delete_empty_folder'));
             }
           }
           importFolders();
@@ -882,11 +888,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               <div className="p-2 bg-destructive/10 rounded-full">
                 <AlertTriangle className="h-6 w-6" />
               </div>
-              <DialogTitle>Folder Not Empty</DialogTitle>
+              <DialogTitle>{t('folder_not_empty_title')}</DialogTitle>
             </div>
             <DialogDescription className="text-sm">
-              The folder <strong>{folderToDelete?.name}</strong> contains files or subfolders. 
-              How would you like to proceed?
+              {t('folder_not_empty_desc').replace('{name}', folderToDelete?.name || '')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-4">
@@ -897,8 +902,8 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             >
               <Trash2 className="h-4 w-4 mr-3" />
               <div className="text-left">
-                <p className="font-semibold">Delete Everything</p>
-                <p className="text-[10px] opacity-70">Permanently remove folder and all its contents</p>
+                <p className="font-semibold">{t('delete_everything_btn')}</p>
+                <p className="text-[10px] opacity-70">{t('delete_everything_desc')}</p>
               </div>
             </Button>
             <Button
@@ -908,14 +913,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             >
               <Move className="h-4 w-4 mr-3" />
               <div className="text-left">
-                <p className="font-semibold">Move Contents First</p>
-                <p className="text-[10px] opacity-70">Select another path for the items inside</p>
+                <p className="font-semibold">{t('move_contents_first_btn')}</p>
+                <p className="text-[10px] opacity-70">{t('move_contents_first_desc')}</p>
               </div>
             </Button>
           </div>
           <DialogFooter>
             <Button variant="ghost" className="text-xs" onClick={() => setShowDeleteConflict(false)}>
-              Cancel
+              {t('cancel')}
             </Button>
           </DialogFooter>
         </DialogContent>

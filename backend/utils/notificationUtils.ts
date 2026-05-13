@@ -2,6 +2,20 @@ import { notifications, users } from '../models/index.ts';
 import { messaging } from '../config/firebase.ts';
 import { getIO } from '../socket.ts';
 
+const ADMIN_DIRECT_PUSH_TYPES = new Set([
+    'chat',
+    'comment',
+    'direct',
+    'export_completed',
+    'file_assigned',
+    'group',
+    'group_creation',
+    'photo_comment',
+    'rfi_assigned',
+    'rfi_comment',
+    'snag_assigned',
+]);
+
 export const sendNotification = async ({
     userId,
     title,
@@ -32,9 +46,14 @@ export const sendNotification = async ({
 
         // 2. Fetch user for FCM token
         const user = await users.findByPk(userId);
+        const allowPushForMutedAdmin = !(
+            user?.role === 'admin' &&
+            user?.mute_general_notifications &&
+            !ADMIN_DIRECT_PUSH_TYPES.has(type)
+        );
 
         // 3. Push Notification (FCM) - Only if user has a token AND Firebase is initialized
-        if (user?.fcm_token && messaging) {
+        if (user?.fcm_token && messaging && allowPushForMutedAdmin) {
             try {
                 const response = await messaging.send({
                     notification: { title, body },

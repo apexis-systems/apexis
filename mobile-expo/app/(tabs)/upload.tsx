@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-    View, TouchableOpacity, ScrollView, Alert, Animated, Image, Modal, BackHandler, ActivityIndicator, KeyboardAvoidingView, Platform
+    View, TouchableOpacity, ScrollView, Alert, Animated, Image, Modal, BackHandler, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet,
+    Dimensions
 } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { useRouter, useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
@@ -15,6 +16,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Accelerometer } from 'expo-sensors';
 import Constants from 'expo-constants';
 import { parseApiError } from '@/helpers/apiError';
+import { useTranslation } from 'react-i18next';
 
 let DocumentScanner: any;
 try {
@@ -31,8 +33,21 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { uploadFileWithProgress, uploadScans } from '@/services/fileService';
 import { getProjects } from '@/services/projectService';
 import { getFolders, createFolder } from '@/services/folderService';
+import { getProjectMembers } from '@/services/projectService';
 import { createActivity } from '@/services/activityService';
 import { getActiveProjectContext } from '@/utils/projectSelection';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, {
+    useSharedValue,
+    useAnimatedProps,
+    useAnimatedStyle,
+    withTiming,
+    runOnJS
+} from 'react-native-reanimated';
+
+
+
+const AnimatedCameraView = Reanimated.createAnimatedComponent(CameraView);
 
 
 
@@ -50,7 +65,11 @@ interface FileProgress {
 type Mode = 'capture' | 'selection' | 'uploading' | 'done' | 'folder_photo' | 'folder_doc';
 
 
+const { width: SCREEN_W } = Dimensions.get('window');
+const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
+
 export default function UploadScreen() {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const router = useRouter();
     const navigation = useNavigation();
@@ -81,6 +100,8 @@ export default function UploadScreen() {
     const [folders, setFolders] = useState<any[]>([]);
     const [photoLocation, setPhotoLocation] = useState('');
     const [photoTags, setPhotoTags] = useState('');
+    const [assignedTo, setAssignedTo] = useState<string | null>(null);
+    const [projectMembers, setProjectMembers] = useState<any[]>([]);
 
     // State: Folder Browse (for nested selection)
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
@@ -91,6 +112,7 @@ export default function UploadScreen() {
     const [newFolderName, setNewFolderName] = useState('');
     const [creatingFolder, setCreatingFolder] = useState(false);
     const [isLoadingFolders, setIsLoadingFolders] = useState(false);
+    const [memberPickerVisible, setMemberPickerVisible] = useState(false);
 
     // State: Environment warnings
     const [hasWarnedScanner, setHasWarnedScanner] = useState(false);
@@ -101,6 +123,71 @@ export default function UploadScreen() {
 
     // Physical Orientation Tracking (to bypass iOS Orientation Lock)
     const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
+
+
+    //zoom 
+    const zoomShared = useSharedValue(0); // 0–1 for expo-camera
+    const startZoom = useSharedValue(0);
+    const MIN_ZOOM = Platform.OS === 'ios' ? 0.5 : 1.0;
+    const [zoomDisplay, setZoomDisplay] = useState(Platform.OS === 'ios' ? '0.5x' : '1.0x'); // live label
+    const [cameraZoom, setCameraZoom] = useState(0); // Standard React state for camera zoom prop
+
+    const zoomLabelOpacity = useSharedValue(0);
+    let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Max real-world zoom multiplier each platform supports
+    const MAX_ZOOM_FACTOR = Platform.OS === 'ios' ? 10 : 10;
+
+    // Converts 0-1 internal value → display string like "2.3x"
+    const toDisplayZoom = (val: number) => {
+        const factor = MIN_ZOOM + val * (MAX_ZOOM_FACTOR - MIN_ZOOM);
+        return `${factor.toFixed(1)}x`;
+    };
+
+    const showZoomLabel = (val: number) => {
+        // Rounding to 3 decimal places ensures Android stability
+        const roundedVal = Math.round(val * 1000) / 1000;
+        setZoomDisplay(toDisplayZoom(roundedVal));
+        setCameraZoom(roundedVal); // Directly update camera state
+        zoomLabelOpacity.value = withTiming(1, { duration: 80 });
+        if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
+        zoomHideTimer.current = setTimeout(() => {
+            zoomLabelOpacity.value = withTiming(0, { duration: 400 });
+        }, 1500);
+    };
+
+    const pinchGesture = React.useMemo(() =>
+        Gesture.Pinch()
+            .onStart(() => {
+                startZoom.value = zoomShared.value;
+            })
+            .onUpdate((event) => {
+                // Multiplicative zoom feels natural — same as native camera apps
+                const raw = startZoom.value + (event.scale - 1) * (1 / (MAX_ZOOM_FACTOR - MIN_ZOOM));
+                const clamped = Math.max(0, Math.min(1, raw));
+                zoomShared.value = clamped;
+                runOnJS(showZoomLabel)(clamped);
+            }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [zoomShared, startZoom]);
+
+    const animatedCameraProps = useAnimatedProps(() => ({
+        zoom: Math.max(0, Math.min(1, zoomShared.value)),
+    }));
+
+    const zoomLabelStyle = useAnimatedStyle(() => ({
+        opacity: zoomLabelOpacity.value,
+    }));
+
+    // Unified Manual Zoom Handler
+    const handleManualZoom = (factor: number) => {
+        const z = (factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
+        const clamped = Math.max(0, Math.min(1, z));
+        
+        // Sync everything immediately
+        zoomShared.value = clamped; 
+        showZoomLabel(clamped);
+    };
 
     useEffect(() => {
         let subscription: any;
@@ -202,9 +289,16 @@ export default function UploadScreen() {
     // Dynamic Tab Bar Visibility
     useLayoutEffect(() => {
         navigation.setOptions({
-            tabBarStyle: mode === 'capture' ? { display: 'none' } : undefined,
+            tabBarStyle: mode === 'capture' ? { display: 'none' } : {
+                backgroundColor: colors.surface,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+                paddingBottom: Platform.OS === 'android' ? insets.bottom + 4 : 20,
+                paddingTop: 8,
+                height: Platform.OS === 'android' ? 60 + insets.bottom : 82,
+            },
         });
-    }, [mode, navigation]);
+    }, [mode, navigation, colors, insets]);
 
     const fetchFolders = async () => {
         if (!selectedProject) { setFolders([]); return; }
@@ -221,7 +315,16 @@ export default function UploadScreen() {
 
     useEffect(() => {
         fetchFolders();
+        fetchMembers();
     }, [selectedProject, isDocMode]);
+
+    const fetchMembers = async () => {
+        if (!selectedProject) { setProjectMembers([]); return; }
+        try {
+            const data = await getProjectMembers(selectedProject);
+            setProjectMembers(data.members || []);
+        } catch (err) { console.error("fetchMembers Error", err); }
+    };
 
     // Auto-expand folder tree to show selected folder on initial load
     useEffect(() => {
@@ -237,7 +340,7 @@ export default function UploadScreen() {
     if (!user || user.role === 'client') {
         return (
             <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 12, color: colors.textMuted }}>Upload is not available for your role.</Text>
+                <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('upload.roleNotAllowed')}</Text>
             </SafeAreaView>
         );
     }
@@ -246,7 +349,7 @@ export default function UploadScreen() {
 
     const addToQueue = (newItems: FileProgress[]) => {
         if (fileQueue.length + newItems.length > 20) {
-            Alert.alert('Limit Reached', 'You can only select up to 20 files at once.');
+            Alert.alert(t('upload.limitReachedTitle'), t('upload.limitReachedMessage'));
             return;
         }
 
@@ -303,7 +406,7 @@ export default function UploadScreen() {
             addToQueue(queue);
         } catch (error) {
             console.error('Gallery Error:', error);
-            Alert.alert('Error', 'Failed to pick image from gallery.');
+            Alert.alert(t('upload.limitTitle'), t('upload.galleryError'));
         }
     };
 
@@ -358,12 +461,12 @@ export default function UploadScreen() {
         }
 
         Alert.alert(
-            "Select Source",
-            "Choose where to pick your documents from:",
+            t('upload.selectSource'),
+            t('upload.selectSourceMessage'),
             [
-                { text: "Gallery (Images as Scans)", onPress: pickFromGallery },
-                { text: "Files (PDFs/Docs)", onPress: pickDocument },
-                { text: "Cancel", style: "cancel" }
+                { text: t('upload.galleryAsScans'), onPress: pickFromGallery },
+                { text: t('upload.filesDocs'), onPress: pickDocument },
+                { text: t('upload.cancel'), style: "cancel" }
             ]
         );
     };
@@ -373,7 +476,7 @@ export default function UploadScreen() {
         const effectiveDocMode = forcedDocMode ?? isDocMode;
         if (!cameraRef.current || isProcessing) return;
         if (fileQueue.length >= 20) {
-            Alert.alert('Limit', 'Queue full');
+            Alert.alert(t('upload.limitTitle'), t('upload.queueFull'));
             return;
         }
 
@@ -444,7 +547,7 @@ export default function UploadScreen() {
 
         } catch (error: any) {
             console.error('Camera Error:', error);
-            Alert.alert('Camera Error', error?.message || 'Failed to capture photo');
+            Alert.alert(t('upload.cameraError'), error?.message || t('upload.failedCapture'));
         } finally {
             setIsProcessing(false);
         }
@@ -456,9 +559,9 @@ export default function UploadScreen() {
             if (!hasWarnedScanner) {
                 setHasWarnedScanner(true);
                 Alert.alert(
-                    "Native Scanner Unavailable",
-                    "Advanced document scanning (auto-edge detection) requires a Development Build. We will use the standard camera instead.",
-                    [{ text: "OK", onPress: () => capturePhoto(forcedDocMode) }]
+                    t('upload.scannerUnavailable'),
+                    t('upload.scannerUnavailableMessage'),
+                    [{ text: t('upload.ok'), onPress: () => capturePhoto(forcedDocMode) }]
                 );
             } else {
                 capturePhoto(forcedDocMode);
@@ -513,7 +616,7 @@ export default function UploadScreen() {
             }
         } catch (error) {
             console.error('Scan Error:', error);
-            Alert.alert('Scan Error', 'Failed to scan document');
+            Alert.alert(t('upload.scanError'), t('upload.failedScan'));
         }
     };
 
@@ -537,7 +640,7 @@ export default function UploadScreen() {
             }
         } catch (error) {
             console.error("Failed to create folder:", error);
-            Alert.alert("Error", "Failed to create folder");
+            Alert.alert(t('upload.limitTitle'), t('upload.failedCreateFolder'));
         } finally {
             setCreatingFolder(false);
         }
@@ -547,7 +650,7 @@ export default function UploadScreen() {
 
     const handleUpload = async () => {
         if (!selectedProject || !selectedFolder || selectedFolder === 'root' || fileQueue.length === 0) {
-            Alert.alert('Incomplete', 'Please select a specific destination folder. Uploading directly to the project root is not permitted.');
+            Alert.alert(t('upload.incompleteDestination'), t('upload.selectFolderMessage'));
             return;
         }
 
@@ -570,6 +673,7 @@ export default function UploadScreen() {
                 formData.append('file_name', `Scan_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
                 if (photoLocation) formData.append('location', photoLocation);
                 if (photoTags) formData.append('tags', photoTags);
+                if (assignedTo) formData.append('assigned_to', assignedTo);
                 formData.append('is_doc_mode', String(isDocMode));
                 formData.append('skipActivity', 'true');
 
@@ -595,8 +699,8 @@ export default function UploadScreen() {
                     await createActivity({
                         project_id: selectedProject!,
                         type: 'upload',
-                        description: `Uploaded ${itemsToUpload.length} documents`,
-                        metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'documents', fileId:res.file.id }) : undefined
+                        description: t('upload.uploadedDocuments', { count: itemsToUpload.length }),
+                        metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'documents', fileId: res.file.id }) : undefined
                     });
                 }
             } else {
@@ -612,6 +716,7 @@ export default function UploadScreen() {
                     formData.append('skipActivity', 'true');
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
+                    if (assignedTo) formData.append('assigned_to', assignedTo);
 
                     formData.append('file', {
                         uri: item.asset.uri,
@@ -657,7 +762,7 @@ export default function UploadScreen() {
                 await createActivity({
                     project_id: selectedProject!,
                     type: 'upload_photo',
-                    description: `Uploaded ${itemsToUpload.length} photos`,
+                    description: t('upload.uploadedPhotos', { count: itemsToUpload.length }),
                     metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: 'photos', fileId: fileId }) : undefined
                 });
             }
@@ -670,18 +775,18 @@ export default function UploadScreen() {
             let buttons: any = undefined;
             if (code === 'LIMIT_REACHED') {
                 buttons = [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Upgrade', onPress: () => router.push('/subscription') }
+                    { text: t('upload.cancel'), style: 'cancel' },
+                    { text: t('upload.upgrade'), onPress: () => router.push('/subscription') }
                 ];
             } else if (code === 'SUBSCRIPTION_LOCKED') {
                 buttons = [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Billing', onPress: () => router.push('/subscription') }
+                    { text: t('upload.cancel'), style: 'cancel' },
+                    { text: t('upload.billing'), onPress: () => router.push('/subscription') }
                 ];
             }
 
             Alert.alert(
-                code === 'LIMIT_REACHED' ? 'Limit Reached' : (code === 'SUBSCRIPTION_LOCKED' ? 'Subscription Locked' : 'Upload Failed'),
+                code === 'LIMIT_REACHED' ? t('upload.limitReachedTitle') : (code === 'SUBSCRIPTION_LOCKED' ? t('upload.subscriptionLocked') : t('upload.uploadFailed')),
                 message,
                 buttons
             );
@@ -746,11 +851,11 @@ export default function UploadScreen() {
 
                 if (fileQueue.length > 0) {
                     Alert.alert(
-                        'Discard?',
-                        'Are you sure you want to discard your selections?',
+                        t('upload.discardTitle'),
+                        t('upload.discardMessage'),
                         [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Discard', style: 'destructive', onPress: close }
+                            { text: t('upload.cancel'), style: 'cancel' },
+                            { text: t('upload.discard'), style: 'destructive', onPress: close }
                         ]
                     );
                 } else {
@@ -779,29 +884,67 @@ export default function UploadScreen() {
                         paddingHorizontal: 20, paddingVertical: 16,
                         backgroundColor: 'rgba(0,0,0,0.4)',
                     }}>
-                        <TouchableOpacity onPress={fileQueue.length > 0 ? () => Alert.alert('Discard?', 'Discard selections?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Discard', style: 'destructive', onPress: handleClose }]) : handleClose}>
+
+                        <TouchableOpacity onPress={fileQueue.length > 0 ? () => Alert.alert(t('upload.discardTitle'), t('upload.discardMessage'), [{ text: t('upload.cancel'), style: 'cancel' }, { text: t('upload.discard'), style: 'destructive', onPress: handleClose }]) : handleClose}>
                             <Feather name="x" size={24} color="#fff" />
                         </TouchableOpacity>
-                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{isDocMode ? 'Scan Documents' : 'Take Photos'}</Text>
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{isDocMode ? t('upload.scanDocuments') : t('upload.takePhotos')}</Text>
                         <View style={{ width: 24 }} />
                     </View>
 
                     {cameraPermission?.granted && isFocused ? (
-                        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-                            <View style={{ width: '100%', height: '70%', backgroundColor: '#111', overflow: 'hidden' }}>
-                                <CameraView
-                                    style={{ flex: 1 }}
-                                    facing="back"
-                                    ref={cameraRef}
-                                    ratio="4:3"
-                                />
+                        <View style={{ flex: 1, backgroundColor: '#000' }}>
+                            <View style={{ width: SCREEN_W, height: CAMERA_HEIGHT, backgroundColor: '#111', overflow: 'hidden', marginTop: Math.max(insets.top, 20) + 40, }}>
+                                <GestureDetector gesture={pinchGesture}>
+                                    <View collapsable={false} style={StyleSheet.absoluteFill}>
+                                        <CameraView
+                                            style={StyleSheet.absoluteFill}
+                                            facing="back"
+                                            ref={cameraRef}
+                                            ratio="4:3"
+                                            zoom={cameraZoom}
+                                        //animatedProps={animatedCameraProps}
+                                        />
+                                    </View>
+                                </GestureDetector>
+                                {/* Dynamic Zoom Indicator */}
+                                <Reanimated.View
+                                    pointerEvents="none"
+                                    style={[
+                                        zoomLabelStyle,
+                                        {
+                                            position: 'absolute',
+                                            bottom: 64,
+                                            alignSelf: 'center',
+                                            backgroundColor: 'rgba(0,0,0,0.55)',
+                                            paddingHorizontal: 14,
+                                            paddingVertical: 6,
+                                            borderRadius: 20,
+                                            zIndex: 30,
+                                        }
+                                    ]}
+                                >
+                                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{zoomDisplay}</Text>
+                                </Reanimated.View>
+                                {/* Direct Zoom Buttons */}
+                                <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
+                                    {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                        <TouchableOpacity
+                                            key={factor}
+                                            onPress={() => handleManualZoom(factor)}
+                                            style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                                        >
+                                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
                             </View>
                         </View>
                     ) : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                            <Text style={{ color: '#fff', marginBottom: 20 }}>Camera access needed</Text>
+                            <Text style={{ color: '#fff', marginBottom: 20 }}>{t('upload.cameraAccessNeeded')}</Text>
                             <TouchableOpacity onPress={requestCameraPermission} style={{ padding: 12, backgroundColor: colors.primary, borderRadius: 8 }}>
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Continue</Text>
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{t('upload.continue')}</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -838,7 +981,7 @@ export default function UploadScreen() {
                                 <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
                                     <Feather name={isDocMode ? "file-plus" : "image"} size={22} color="#fff" />
                                 </View>
-                                <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>{isDocMode ? 'Import' : 'Gallery'}</Text>
+                                <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>{isDocMode ? t('upload.import') : t('upload.gallery')}</Text>
                             </TouchableOpacity>
 
 
@@ -866,11 +1009,11 @@ export default function UploadScreen() {
 
                                     if (fileQueue.length > 0) {
                                         Alert.alert(
-                                            "Clear Queue?",
-                                            `Switching to ${!isDocMode ? 'Photo' : 'Scan'} mode will discard your current selections. Continue?`,
+                                            t('upload.clearQueueTitle'),
+                                            t('upload.clearQueueMessage', { mode: !isDocMode ? t('upload.photo') : t('upload.scan') }),
                                             [
-                                                { text: "Cancel", style: "cancel" },
-                                                { text: "Clear & Switch", style: "destructive", onPress: () => { setFileQueue([]); toggleMode(); } }
+                                                { text: t('upload.cancel'), style: "cancel" },
+                                                { text: t('upload.clearAndSwitch'), style: "destructive", onPress: () => { setFileQueue([]); toggleMode(); } }
                                             ]
                                         );
                                     } else {
@@ -882,9 +1025,10 @@ export default function UploadScreen() {
                                 <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
                                     <Feather name={isDocMode ? "camera" : "file"} size={22} color="#fff" />
                                 </View>
-                                <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>{isDocMode ? 'Photo' : 'Scan'}</Text>
+                                <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>{isDocMode ? t('upload.photo') : t('upload.scan')}</Text>
                             </TouchableOpacity>
                         </View>
+                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, textAlign: 'center', marginTop: 12 }}>Max size: 100 MB</Text>
                     </View>
                 </View>
 
@@ -897,7 +1041,7 @@ export default function UploadScreen() {
                             flexDirection: 'row', alignItems: 'center', gap: 10, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5
                         }}
                     >
-                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Next ({fileQueue.length})</Text>
+                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{t('upload.next', { count: fileQueue.length })}</Text>
                         <Feather name="arrow-right" size={20} color="#fff" />
                     </TouchableOpacity>
                 )}
@@ -931,7 +1075,7 @@ export default function UploadScreen() {
                             <Feather name="arrow-left" size={20} color={colors.text} />
                         </TouchableOpacity>
                         <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>
-                            {isDocMode ? 'Review & Upload' : 'Photo Destination'}
+                            {isDocMode ? t('upload.reviewAndUpload') : t('upload.photoDestination')}
                         </Text>
                         <View style={{ width: 40 }} />
                     </View>
@@ -941,7 +1085,7 @@ export default function UploadScreen() {
                         {mode === 'selection' && (
                             <View style={{ marginBottom: 28 }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                    <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>Selected {isDocMode ? 'Documents' : 'Photos'}</Text>
+                                    <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('upload.selectedDocuments', { type: isDocMode ? t('upload.typeDocs') : t('upload.typePhotos') })}</Text>
                                     <View style={{ backgroundColor: colors.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
                                         <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>{fileQueue.length}</Text>
                                     </View>
@@ -958,21 +1102,20 @@ export default function UploadScreen() {
                         )}
 
                         {isDocMode && mode === 'selection' && fileQueue.length > 1 && (
-
                             <View style={{ marginBottom: 24, backgroundColor: colors.surface, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 12, textTransform: 'uppercase' }}>Scan Grouping</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 12, textTransform: 'uppercase' }}>{t('upload.scanGrouping')}</Text>
                                 <View style={{ flexDirection: 'row', gap: 10 }}>
                                     <TouchableOpacity
                                         onPress={() => setScanMode('single')}
-                                        style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: scanMode === 'single' ? colors.primary : colors.border, backgroundColor: scanMode === 'single' ? colors.primary + '10' : 'transparent', alignItems: 'center', justifyContent: 'center' }}
+                                        style={{ flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: scanMode === 'single' ? colors.primary + '15' : colors.background, borderWidth: 1, borderColor: scanMode === 'single' ? colors.primary : colors.border }}
                                     >
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: scanMode === 'single' ? colors.primary : colors.text }}>Single PDF</Text>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: scanMode === 'single' ? colors.primary : colors.text }}>{t('upload.singlePdf')}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         onPress={() => setScanMode('separate')}
-                                        style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: scanMode === 'separate' ? colors.primary : colors.border, backgroundColor: scanMode === 'separate' ? colors.primary + '10' : 'transparent', alignItems: 'center', justifyContent: 'center' }}
+                                        style={{ flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: scanMode === 'separate' ? colors.primary + '15' : colors.background, borderWidth: 1, borderColor: scanMode === 'separate' ? colors.primary : colors.border }}
                                     >
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: scanMode === 'separate' ? colors.primary : colors.text }}>Separate PDFs</Text>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: scanMode === 'separate' ? colors.primary : colors.text }}>{t('upload.separatePdfs')}</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -985,7 +1128,7 @@ export default function UploadScreen() {
                                     <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
                                         <Feather name="briefcase" size={16} color={colors.primary} />
                                     </View>
-                                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>Select Project</Text>
+                                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{t('upload.selectProject')}</Text>
                                 </View>
 
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
@@ -1035,18 +1178,18 @@ export default function UploadScreen() {
                                         elevation: 2
                                     }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                                            <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                            <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
                                                 <Feather name="briefcase" size={20} color={colors.primary} />
                                             </View>
                                             <View style={{ gap: 2 }}>
-                                                <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Target Project</Text>
+                                                <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('upload.targetProject')}</Text>
                                                 <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
                                                     {projects.find(p => String(p.id) === String(selectedProject))?.name}
                                                 </Text>
                                             </View>
                                         </View>
                                         <TouchableOpacity onPress={() => setSelectedProject(null)} style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.primary + '10', borderRadius: 10 }}>
-                                            <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '800' }}>Change</Text>
+                                            <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '800' }}>{t('upload.change')}</Text>
                                         </TouchableOpacity>
                                     </View>
                                 )}
@@ -1055,11 +1198,11 @@ export default function UploadScreen() {
                                 <View style={{ gap: 16 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
-                                            {isDocMode ? 'Select Docs Folder' : 'Select Photo Folder'}
+                                            {isDocMode ? t('upload.selectDocsFolder') : t('upload.selectPhotoFolder')}
                                         </Text>
                                         <TouchableOpacity onPress={() => setShowCreateFolder(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 10, backgroundColor: colors.primary + '10', borderRadius: 20 }}>
                                             <Feather name="folder-plus" size={14} color={colors.primary} />
-                                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>New</Text>
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{t('upload.new')}</Text>
                                         </TouchableOpacity>
                                     </View>
 
@@ -1088,7 +1231,7 @@ export default function UploadScreen() {
                                         {isLoadingFolders ? (
                                             <View style={{ flex: 1, paddingVertical: 40, alignItems: 'center' }}>
                                                 <ActivityIndicator size="large" color={colors.primary} />
-                                                <Text style={{ marginTop: 12, color: colors.textMuted }}>Fetching folders...</Text>
+                                                <Text style={{ marginTop: 12, color: colors.textMuted }}>{t('upload.fetchingFolders')}</Text>
                                             </View>
                                         ) : (
                                             <>
@@ -1116,7 +1259,7 @@ export default function UploadScreen() {
                                                 ))}
                                                 {getFolderChildren(folderBrowseId).length === 0 && (
                                                     <View style={{ flex: 1, alignItems: 'center', paddingVertical: 20 }}>
-                                                        <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>No subfolders here.</Text>
+                                                        <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>{t('upload.noSubfolders')}</Text>
                                                     </View>
                                                 )}
                                             </>
@@ -1128,26 +1271,63 @@ export default function UploadScreen() {
                                 {mode === 'selection' && selectedFolder && (
                                     <View style={{ gap: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
                                         <View>
-                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 10 }}>Add Details</Text>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 10 }}>{t('upload.addDetails')}</Text>
                                             <View style={{ gap: 16 }}>
                                                 <View>
-                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 8, marginLeft: 4 }}>LOCATION</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 8, marginLeft: 4 }}>{t('upload.location')}</Text>
                                                     <TextInput
                                                         value={photoLocation} onChangeText={setPhotoLocation}
-                                                        placeholder="e.g., Block A, Level 1" placeholderTextColor={colors.textMuted}
+                                                        placeholder={t('upload.locationPlaceholder')} placeholderTextColor={colors.textMuted}
                                                         style={{ height: 50, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text }}
                                                     />
                                                 </View>
                                                 <View>
-                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 8, marginLeft: 4 }}>TAGS</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 8, marginLeft: 4 }}>{t('upload.tags')}</Text>
                                                     <TextInput
                                                         value={photoTags} onChangeText={setPhotoTags}
-                                                        placeholder="foundation, concrete" placeholderTextColor={colors.textMuted}
+                                                        placeholder={t('upload.tagsPlaceholder')} placeholderTextColor={colors.textMuted}
                                                         style={{ height: 50, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text }}
                                                     />
                                                 </View>
                                             </View>
                                         </View>
+                                    </View>
+                                )}
+
+                                {isDocMode && (
+                                    <View style={{ marginTop: 20 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                                                <Feather name="user" size={12} color={colors.primary} />
+                                            </View>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('upload.assignTo')}</Text>
+                                            <Text style={{ fontSize: 10, color: colors.textMuted, marginLeft: 4 }}>{t('upload.optional')}</Text>
+                                        </View>
+
+                                        <TouchableOpacity
+                                            onPress={() => setMemberPickerVisible(true)}
+                                            style={{
+                                                height: 50,
+                                                backgroundColor: colors.surface,
+                                                borderRadius: 14,
+                                                borderWidth: 1,
+                                                borderColor: colors.border,
+                                                paddingHorizontal: 16,
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between'
+                                            }}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary + '10', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Feather name="user" size={14} color={colors.primary} />
+                                                </View>
+                                                <Text style={{ fontSize: 14, color: assignedTo ? colors.text : colors.textMuted }}>
+                                                    {assignedTo ? projectMembers.find(m => String(m.user.id) === String(assignedTo))?.user?.name : t('upload.selectAssignee')}
+                                                </Text>
+                                            </View>
+                                            <Feather name="chevron-down" size={18} color={colors.textMuted} />
+                                        </TouchableOpacity>
                                     </View>
                                 )}
                             </View>
@@ -1189,9 +1369,10 @@ export default function UploadScreen() {
                                     <Feather name="upload-cloud" size={18} color="#fff" />
                                 </View>
                                 <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.5 }}>
-                                    {`Confirm & Upload ${fileQueue.length} ${isDocMode ? 'Doc' : 'Photo'}${fileQueue.length > 1 ? 's' : ''}`}
+                                    {t('upload.confirmAndUpload', { count: fileQueue.length, type: isDocMode ? (fileQueue.length > 1 ? t('upload.typeDocs') : t('upload.typeDoc')) : (fileQueue.length > 1 ? t('upload.typePhotos') : t('upload.typePhoto')) })}
                                 </Text>
                             </TouchableOpacity>
+                            <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: 'center', marginTop: 10, fontWeight: '600' }}>Max size: 100 MB</Text>
                         </View>
                     )}
 
@@ -1201,22 +1382,98 @@ export default function UploadScreen() {
                     <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
                         <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 24, elevation: 10 }}>
 
-                            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 8 }}>New Folder</Text>
-                            <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 10 }}>Creating in: {folderBrowseId ? browseBreadcrumbs[browseBreadcrumbs.length - 1]?.name : 'Root'}</Text>
+                            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 8 }}>{t('upload.newFolder')}</Text>
+                            <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 10 }}>{t('upload.creatingIn', { folder: folderBrowseId ? browseBreadcrumbs[browseBreadcrumbs.length - 1]?.name : t('upload.root') })}</Text>
                             <TextInput
-                                value={newFolderName} onChangeText={setNewFolderName} placeholder="Enter folder name..." placeholderTextColor={colors.textMuted} autoFocus
+                                value={newFolderName} onChangeText={setNewFolderName} placeholder={t('upload.enterFolderName')} placeholderTextColor={colors.textMuted} autoFocus
                                 style={{ height: 52, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text, marginBottom: 24 }}
                             />
                             <View style={{ flexDirection: 'row', gap: 12 }}>
                                 <TouchableOpacity onPress={() => setShowCreateFolder(false)} style={{ flex: 1, height: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ color: colors.textMuted, fontWeight: '700' }}>Cancel</Text>
+                                    <Text style={{ color: colors.textMuted, fontWeight: '700' }}>{t('upload.cancel')}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={handleCreateFolder} disabled={creatingFolder || !newFolderName.trim()} style={{ flex: 1, height: 50, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ color: '#fff', fontWeight: '800' }}>{creatingFolder ? 'Creating...' : 'Create'}</Text>
+                                    <Text style={{ color: '#fff', fontWeight: '800' }}>{creatingFolder ? t('upload.creating') : t('upload.create')}</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
                     </View>
+                </Modal>
+                {/* Assignee Picker Modal */}
+                <Modal
+                    visible={memberPickerVisible}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setMemberPickerVisible(false)}
+                >
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        onPress={() => setMemberPickerVisible(false)}
+                        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+                    >
+                        <View style={{ backgroundColor: colors.background, borderRadius: 24, width: '100%', maxWidth: 360, padding: 24, maxHeight: '80%', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                <View>
+                                    <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>{t('upload.selectAssignee')}</Text>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>{t('upload.assigneeDescription') || 'Assign this document to a project member'}</Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setMemberPickerVisible(false)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
+                                    <Feather name="x" size={20} color={colors.text} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setAssignedTo(null);
+                                        setMemberPickerVisible(false);
+                                    }}
+                                    style={{
+                                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                        paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4,
+                                        backgroundColor: !assignedTo ? colors.primary + '10' : 'transparent',
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: !assignedTo ? colors.primary : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
+                                            <Feather name="user-x" size={20} color={!assignedTo ? '#fff' : colors.textMuted} />
+                                        </View>
+                                        <Text style={{ fontSize: 15, fontWeight: !assignedTo ? '700' : '600', color: !assignedTo ? colors.primary : colors.text }}>{t('upload.unassigned')}</Text>
+                                    </View>
+                                    {!assignedTo && <Feather name="check-circle" size={20} color={colors.primary} />}
+                                </TouchableOpacity>
+
+                                {projectMembers.map((m) => {
+                                    const isSelected = String(assignedTo) === String(m.user.id);
+                                    return (
+                                        <TouchableOpacity
+                                            key={m.user.id}
+                                            onPress={() => {
+                                                setAssignedTo(String(m.user.id));
+                                                setMemberPickerVisible(false);
+                                            }}
+                                            style={{
+                                                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                                paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4,
+                                                backgroundColor: isSelected ? colors.primary + '10' : 'transparent',
+                                            }}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isSelected ? colors.primary : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
+                                                    <Text style={{ fontSize: 16, fontWeight: '800', color: isSelected ? '#fff' : colors.primary }}>{m.user.name.charAt(0).toUpperCase()}</Text>
+                                                </View>
+                                                <View>
+                                                    <Text style={{ fontSize: 15, fontWeight: isSelected ? '700' : '600', color: isSelected ? colors.primary : colors.text }}>{m.user.name}</Text>
+                                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 1 }}>{m.role || 'Member'}</Text>
+                                                </View>
+                                            </View>
+                                            {isSelected && <Feather name="check-circle" size={20} color={colors.primary} />}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                        </View>
+                    </TouchableOpacity>
                 </Modal>
             </SafeAreaView>
         );
@@ -1237,22 +1494,22 @@ export default function UploadScreen() {
                         <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: '#22c55e' + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
                             <Feather name="check" size={48} color="#22c55e" />
                         </View>
-                        <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text, marginBottom: 8 }}>Upload Complete!</Text>
-                        <Text style={{ fontSize: 15, color: colors.textMuted, textAlign: 'center', marginBottom: 24 }}>Successfully uploaded {doneCount} files.</Text>
+                        <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text, marginBottom: 8 }}>{t('upload.uploadComplete')}</Text>
+                        <Text style={{ fontSize: 15, color: colors.textMuted, textAlign: 'center', marginBottom: 24 }}>{t('upload.successfullyUploaded', { count: doneCount })}</Text>
 
                         {/* Moved Buttons to Top */}
                         <View style={{ gap: 12, width: '100%' }}>
                             <TouchableOpacity onPress={() => { setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
-                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>Start New Upload</Text>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>{t('upload.startNewUpload')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleClose} style={{ height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Back to Folder</Text>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('upload.backToFolder')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 ) : (
                     <View style={{ marginBottom: 32 }}>
-                        <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: 12 }}>Uploading {fileQueue.length} Files</Text>
+                        <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: 12 }}>{t('upload.uploadingFiles', { count: fileQueue.length })}</Text>
 
                         <View style={{ gap: 12 }}>
                             {/* Total Progress Bar */}
@@ -1269,8 +1526,8 @@ export default function UploadScreen() {
                                 <Text style={{ fontSize: 14, fontWeight: '700', color: colors.primary }}>{doneCount} of {fileQueue.length}</Text>
                                 <Text style={{ flex: 1, fontSize: 14, color: colors.textMuted }}>
                                     {fileQueue.some(f => f.status === 'error')
-                                        ? 'Some uploads failed. Please retry or cancel.'
-                                        : 'Please wait while your files are being uploaded'}
+                                        ? t('upload.failedRetryMessage')
+                                        : t('upload.pleaseWait')}
                                 </Text>
                             </View>
                         </View>
@@ -1289,9 +1546,9 @@ export default function UploadScreen() {
                                     )}
                                 </View>
                                 <View style={{ flex: 1, gap: 2 }}>
-                                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{item.asset.fileName || `File ${idx + 1}`}</Text>
+                                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{item.asset.fileName || t('upload.typeDoc')}</Text>
                                     <Text style={{ fontSize: 11, fontWeight: '600', color: item.status === 'error' ? '#ef4444' : colors.textMuted }}>
-                                        {item.status === 'done' ? 'Successfully Uploaded' : item.status === 'error' ? 'Upload Failed' : `${Math.round(item.progress)}% Uploaded`}
+                                        {item.status === 'done' ? t('upload.successUploaded') : item.status === 'error' ? t('upload.uploadFailed') : t('upload.progressUploaded', { progress: Math.round(item.progress) })}
                                     </Text>
                                 </View>
                                 {item.status === 'done' && <Feather name="check-circle" size={22} color="#22c55e" />}
@@ -1316,10 +1573,10 @@ export default function UploadScreen() {
                     {fileQueue.some((f: FileProgress) => f.status === 'error') ? (
                         <>
                             <TouchableOpacity onPress={handleUpload} style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 2 }}>
-                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>Retry Failed Uploads</Text>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>{t('upload.retryFailed')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => { setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Cancel & Clear</Text>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('upload.cancelAndClear')}</Text>
                             </TouchableOpacity>
                         </>
                     ) : null}

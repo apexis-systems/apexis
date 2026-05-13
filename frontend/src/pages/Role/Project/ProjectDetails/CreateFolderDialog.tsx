@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FolderPlus } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface CreateFolderDialogProps {
   open: boolean;
@@ -15,6 +16,7 @@ interface CreateFolderDialogProps {
 }
 
 const CreateFolderDialog = ({ open, onOpenChange, onCreateFolder, type }: CreateFolderDialogProps) => {
+  const { t } = useLanguage();
   const [folderName, setFolderName] = useState('');
 
   const handleCreate = () => {
@@ -31,18 +33,18 @@ const CreateFolderDialog = ({ open, onOpenChange, onCreateFolder, type }: Create
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <FolderPlus className="h-4 w-4 text-accent" />
-            Create New Folder
+            {t('create_folder_title')}
           </DialogTitle>
         </DialogHeader>
         <div className="py-3">
           <Label htmlFor="folderName" className="text-xs text-muted-foreground">
-            Folder name for {type}
+            {t('folder_name_label').replace('{type}', type)}
           </Label>
           <Input
             id="folderName"
             value={folderName}
             onChange={(e) => setFolderName(e.target.value)}
-            placeholder="Enter folder name"
+            placeholder={t('folder_name_placeholder')}
             className="mt-1.5 h-9 text-xs"
             autoFocus
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
@@ -54,14 +56,14 @@ const CreateFolderDialog = ({ open, onOpenChange, onCreateFolder, type }: Create
             onClick={() => onOpenChange(false)}
             className="h-8 text-xs"
           >
-            Cancel
+            {t('cancel')}
           </Button>
           <Button
             onClick={handleCreate}
             disabled={!folderName.trim()}
             className="h-8 bg-accent text-accent-foreground hover:bg-accent/90 text-xs"
           >
-            Create Folder
+            {t('create_folder_btn')}
           </Button>
         </DialogFooter>
       </DialogContent>
