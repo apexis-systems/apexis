@@ -241,8 +241,25 @@ export const getGrowthAnalytics = async (req: Request, res: Response) => {
         const userGrowthMonthly = await analyticsService.getUserGrowthData();
         const companyActivity = await analyticsService.getCompanyActivityData();
         const conversionOpportunities = await analyticsService.getConversionOpportunitiesData();
+
+        // Calculate SaaS Performance KPIs (Default to All Time)
+        const currentStats = (data as any).allTime;
+        const { totalUsers, paidSubscribers, freemiumUsers, conversionRate } = currentStats;
+        const saasPerformance = [
+            { label: "Free → Paid Rate", value: conversionRate.total || "0%", color: "bg-success" },
+            { label: "Trial Completion Rate", value: totalUsers.total > 0 ? ((freemiumUsers.total / totalUsers.total) * 100).toFixed(1) + "%" : "0%", color: "bg-primary" },
+            { label: "Churn Rate", value: (data as any).churnRate || "0%", color: "bg-destructive" }
+        ];
         
-        res.status(200).json({ ...data, revenueGrowth, productUsageData, userGrowthMonthly, companyActivity, conversionOpportunities });
+        res.status(200).json({ 
+            ...data, 
+            revenueGrowth, 
+            productUsageData, 
+            userGrowthMonthly, 
+            companyActivity, 
+            conversionOpportunities,
+            saasPerformance 
+        });
     } catch (error) {
         console.error("getGrowthAnalytics Error:", error);
         res.status(500).json({ error: "Internal server error" });

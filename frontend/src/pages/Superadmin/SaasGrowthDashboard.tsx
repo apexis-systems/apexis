@@ -144,11 +144,12 @@ const SaasGrowthDashboard = () => {
   const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
   const [loading, setLoading] = useState<boolean>(true);
   const [data, setData] = useState<any>(null);
-  const filters: { key: DateFilter; label: string }[] = [
+  const [timeRange, setTimeRange] = useState("allTime");
+  const timeRanges = [
     { key: "today", label: "Today" },
     { key: "7days", label: "7 Days" },
     { key: "30days", label: "30 Days" },
-    { key: "12months", label: "12 Months" },
+    { key: "allTime", label: "All Time" },
   ];
 
   useEffect(() => {
@@ -180,17 +181,65 @@ const SaasGrowthDashboard = () => {
   }
 
 
-  const dashboardStats = data?.metrics || {};
+  const dashboardStats = data?.[timeRange] || {};
 
   const executiveMetrics = [
-    { title: "Total Users", value: String(dashboardStats?.totalUsers), change: "+12.4%", changeType: "up", icon: Users },
-    { title: "Active Companies", value: String(dashboardStats?.activeCompanies), change: "+8.2%", changeType: "up", icon: Building2 },
-    { title: "Active Projects", value: String(dashboardStats?.activeProjects), change: "+15.7%", changeType: "up", icon: FolderKanban },
-    { title: "Freemium Users", value: String(dashboardStats?.freemiumUsers), change: "+6.1%", changeType: "up", icon: UserCheck },
-    { title: "Paid Subscribers", value: String(dashboardStats?.paidSubscribers), change: "+22.3%", changeType: "up", icon: CreditCard },
-    { title: "MRR", value: "₹" + String(dashboardStats?.mrr), change: "+18.5%", changeType: "up", icon: DollarSign },
-    { title: "ARR", value: "₹" + String(dashboardStats?.arr), change: "+18.5%", changeType: "up", icon: TrendingUp },
-    { title: "Conversion Rate", value: String(dashboardStats?.conversionRate), change: "+3.2%", changeType: "up", icon: Star },
+    { 
+      title: "Total Users", 
+      value: String(dashboardStats?.totalUsers?.total ?? 0), 
+      change: dashboardStats?.totalUsers?.text || "0%", 
+      changeType: dashboardStats?.totalUsers?.type || "neutral", 
+      icon: Users 
+    },
+    { 
+      title: "Active Companies", 
+      value: String(dashboardStats?.activeCompanies?.total ?? 0), 
+      change: dashboardStats?.activeCompanies?.text || "0%", 
+      changeType: dashboardStats?.activeCompanies?.type || "neutral", 
+      icon: Building2 
+    },
+    { 
+      title: "Active Projects", 
+      value: String(dashboardStats?.activeProjects?.total ?? 0), 
+      change: dashboardStats?.activeProjects?.text || "0%", 
+      changeType: dashboardStats?.activeProjects?.type || "neutral", 
+      icon: FolderKanban 
+    },
+    { 
+      title: "Freemium Users", 
+      value: String(dashboardStats?.freemiumUsers?.total ?? 0), 
+      change: dashboardStats?.freemiumUsers?.text || "0%", 
+      changeType: dashboardStats?.freemiumUsers?.type || "neutral", 
+      icon: UserCheck 
+    },
+    { 
+      title: "Paid Subscribers", 
+      value: String(dashboardStats?.paidSubscribers?.total ?? 0), 
+      change: dashboardStats?.paidSubscribers?.text || "0%", 
+      changeType: dashboardStats?.paidSubscribers?.type || "neutral", 
+      icon: CreditCard 
+    },
+    { 
+      title: "MRR", 
+      value: "₹" + Number(dashboardStats?.mrr?.total ?? 0).toLocaleString(), 
+      change: dashboardStats?.mrr?.text || "0%", 
+      changeType: dashboardStats?.mrr?.type || "neutral", 
+      icon: DollarSign 
+    },
+    { 
+      title: "ARR", 
+      value: "₹" + Number(dashboardStats?.arr?.total ?? 0).toLocaleString(), 
+      change: dashboardStats?.arr?.text || "0%", 
+      changeType: dashboardStats?.arr?.type || "neutral", 
+      icon: TrendingUp 
+    },
+    { 
+      title: "Conversion Rate", 
+      value: String(dashboardStats?.conversionRate?.total ?? "0%"), 
+      change: dashboardStats?.conversionRate?.text || "0%", 
+      changeType: dashboardStats?.conversionRate?.type || "neutral", 
+      icon: Star 
+    },
   ];
 
 
@@ -205,17 +254,19 @@ const SaasGrowthDashboard = () => {
             <h1 className="text-xl font-bold font-display text-foreground">SaaS Growth Dashboard</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Executive overview — platform health & growth</p>
           </div>
-          <div className="flex items-center gap-1 bg-card border border-border rounded p-0.5">
-            {filters.map((f) => (
+          <div className="flex items-center gap-1.5 rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-1 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)] mr-12">
+            {timeRanges.map((range) => (
               <button
-                key={f.key}
-                onClick={() => setDateFilter(f.key)}
-                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${dateFilter === f.key
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
+                key={range.key}
+                onClick={() => setTimeRange(range.key)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[11px] font-medium transition-all",
+                  timeRange === range.key
+                    ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                    : "text-[hsl(30_8%_45%)] hover:bg-[hsl(37_18%_91%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)]"
+                )}
               >
-                {f.label}
+                {range.label}
               </button>
             ))}
           </div>
@@ -333,9 +384,20 @@ const SaasGrowthDashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(214,20%,90%)" />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(215,10%,45%)" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: "hsl(215,10%,45%)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid hsl(214,20%,90%)" }} formatter={(v: any) => [`₹${Number(v).toLocaleString()}`, ""]} />
-                    <Area type="monotone" dataKey="standard" name="Standard ₹199" stroke="hsl(25,95%,53%)" strokeWidth={2} fill="url(#stdGrad)" stackId="1" />
-                    <Area type="monotone" dataKey="professional" name="Professional ₹299" stroke="#e98b06" strokeWidth={2} fill="url(#proGrad)" stackId="1" />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid hsl(214,20%,90%)" }} formatter={(v: any, name: any) => [`₹${Number(v).toLocaleString()}`, name]} />
+                    {(data?.planBreakdown || []).map((plan: any) => (
+                      <Area
+                        key={plan.name}
+                        type="monotone"
+                        dataKey={plan.name.toLowerCase()}
+                        name={plan.name}
+                        stroke={plan.color}
+                        fill={plan.color}
+                        fillOpacity={0.1}
+                        strokeWidth={2}
+                        stackId="1"
+                      />
+                    ))}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -367,7 +429,7 @@ const SaasGrowthDashboard = () => {
                 </div>
                 <div className="mt-3 pt-3 border-t border-border">
                   <div className="text-xs text-muted-foreground">ARPU</div>
-                  <div className="text-lg font-bold font-display text-card-foreground">₹261</div>
+                  <div className="text-lg font-bold font-display text-card-foreground">₹{(dashboardStats?.arpu || 0).toLocaleString()}</div>
                 </div>
               </div>
             </div>
@@ -497,10 +559,10 @@ const SaasGrowthDashboard = () => {
               <h3 className="text-sm font-semibold text-card-foreground mb-3">Revenue Snapshot</h3>
               <div className="space-y-3">
                 {[
-                  { label: "MRR", value: "₹4,12,800" },
-                  { label: "ARR", value: "₹49,53,600" },
-                  { label: "ARPU", value: "₹261" },
-                  { label: "MoM Growth", value: "+12.2%" },
+                  { label: "MRR", value: "₹" + Number(dashboardStats?.mrr?.total ?? 0).toLocaleString() },
+                  { label: "ARR", value: "₹" + Number(dashboardStats?.arr?.total ?? 0).toLocaleString() },
+                  { label: "ARPU", value: "₹" + Number(dashboardStats?.arpu ?? 0).toLocaleString() },
+                  { label: "MoM Growth", value: dashboardStats?.mrr?.text || "0%" },
                 ].map((m) => (
                   <div key={m.label} className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">{m.label}</span>
@@ -511,7 +573,7 @@ const SaasGrowthDashboard = () => {
             </div>
 
             {/* 8. Platform Activity Feed */}
-            <div className="bg-card rounded border border-border p-5">
+            {/* <div className="bg-card rounded border border-border p-5">
               <div className="flex items-center gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
                 <h3 className="text-sm font-semibold text-card-foreground">Platform Activity</h3>
@@ -527,18 +589,17 @@ const SaasGrowthDashboard = () => {
                   </div>
                 ))}
               </div>
-            </div>
+            </div> */}
 
             {/* Quick Stats */}
             <div className="bg-card rounded border border-border p-5">
               <h3 className="text-sm font-semibold text-card-foreground mb-3">Conversion Metrics</h3>
               <div className="space-y-3">
-                {[
-                  { label: "Free → Paid Rate", value: "32.8%", color: "bg-success" },
-                  { label: "Trial Completion Rate", value: "80.1%", color: "bg-primary" },
-                  { label: "Churn Rate", value: "2.4%", color: "bg-destructive" },
-                  { label: "Expansion Revenue", value: "+8.6%", color: "bg-chart-2" },
-                ].map((m) => (
+                {(data?.saasPerformance || [
+                  { label: "Free → Paid Rate", value: "0%", color: "bg-success" },
+                  { label: "Trial Completion Rate", value: "0%", color: "bg-primary" },
+                  { label: "Churn Rate", value: "0%", color: "bg-destructive" },
+                ]).map((m: any) => (
                   <div key={m.label}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-muted-foreground">{m.label}</span>
