@@ -10,7 +10,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { fetchSecureLogo } from '@/services/organizationService';
-import { updateUserProfilePic, updateUserName } from '@/services/userService';
+import { updateNotificationSettings, updateUserProfilePic, updateUserName } from '@/services/userService';
 import { getMyMemberships, switchContext } from '@/services/authService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -46,6 +46,7 @@ export default function ProfileScreen() {
     const [isEditingName, setIsEditingName] = useState(false);
     const [editNameValue, setEditNameValue] = useState('');
     const [nameLoading, setNameLoading] = useState(false);
+    const [notificationSettingsLoading, setNotificationSettingsLoading] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -235,6 +236,19 @@ export default function ProfileScreen() {
                 },
             },
         ]);
+    };
+
+    const handleToggleMuteNotifications = async (value: boolean) => {
+        if (notificationSettingsLoading) return;
+        setNotificationSettingsLoading(true);
+        try {
+            await updateNotificationSettings({ mute_general_notifications: value });
+            updateUser({ mute_general_notifications: value });
+        } catch (e) {
+            Alert.alert('Error', 'Failed to update notification preference');
+        } finally {
+            setNotificationSettingsLoading(false);
+        }
     };
 
 
@@ -507,6 +521,44 @@ export default function ProfileScreen() {
 
                         )}
                     </View>
+
+                    {user.role === 'admin' && (
+                        <View style={{ marginBottom: 24 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 12, marginLeft: 4, textTransform: 'uppercase' }}>
+                                {t('settings.notifications')}
+                            </Text>
+
+                            <View
+                                style={{
+                                    borderRadius: 16,
+                                    backgroundColor: colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    padding: 16,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 14,
+                                    opacity: notificationSettingsLoading ? 0.7 : 1
+                                }}
+                            >
+                                <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Feather name="bell-off" size={20} color={colors.text} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.muteNotifications')}</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.muteNotificationsSubtitle')}</Text>
+                                </View>
+
+                                <Switch
+                                    value={!!user.mute_general_notifications}
+                                    onValueChange={handleToggleMuteNotifications}
+                                    disabled={notificationSettingsLoading}
+                                    trackColor={{ false: colors.border, true: colors.primary }}
+                                    thumbColor={Platform.OS === 'ios' ? undefined : (user.mute_general_notifications ? '#fff' : '#f4f3f4')}
+                                />
+                            </View>
+                        </View>
+                    )}
 
                     {/* Security Group */}
                     {(user.email && require('@/constants/security').MARKETING_EMAILS.some((e: string) => e.toLowerCase() === user.email?.toLowerCase())) && (

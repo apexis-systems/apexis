@@ -293,7 +293,7 @@ export const me = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
         const dbUser = await users.findByPk(authUser.user_id, {
-            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'organization_id', 'profile_pic', 'diagnostic_data_permission']
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'organization_id', 'profile_pic', 'diagnostic_data_permission', 'mute_general_notifications']
         });
 
         if (!dbUser) return res.status(404).json({ error: "User not found" });

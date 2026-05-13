@@ -67,6 +67,9 @@
         },
         "settings": {
             "title": "Profile",
+            "notifications": "Notifications",
+            "muteNotifications": "Mute Notifications",
+            "muteNotificationsSubtitle": "When enabled, you only receive push notifications for assigned work, tags, and direct chat messages. General project alerts like uploads stay muted.",
             "companySettings": "Company Settings",
             "companySettingsSubtitle": "Manage logo and branding",
             "resourceUsage": "Resource Usage",
