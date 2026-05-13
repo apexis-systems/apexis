@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, FlatList, TouchableOpacity, Platform, Image, RefreshControl, Animated } from 'react-native';
+import { View, FlatList, TouchableOpacity, Platform, Image, RefreshControl, Animated, Alert, AlertButton } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -8,7 +8,7 @@ import SecureAvatar from '@/components/shared/SecureAvatar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
-import { listRooms } from '@/services/chatService';
+import { listRooms, deleteRoom, removeRoomMember } from '@/services/chatService';
 import NewChatModal from '@/components/chat/NewChatModal';
 import { useSocket } from '@/contexts/SocketContext';
 import { useTour } from '@/contexts/TourContext';
@@ -231,6 +231,33 @@ export default function ChatListScreen() {
             return timeB - timeA;
         });
 
+    const handleDeleteChat = async (chat: any) => {
+        const isGroup = chat.type === 'group';
+        const title = isGroup ? "Leave Group" : "Delete Chat";
+        const msg = isGroup ? "Are you sure you want to leave this group?" : "Are you sure you want to delete this chat?";
+        
+        Alert.alert(title, msg, [
+            { text: "Cancel", style: "cancel" },
+            { 
+                text: isGroup ? "Leave" : "Delete", 
+                style: "destructive", 
+                onPress: async () => {
+                    try {
+                        if (isGroup) {
+                            await removeRoomMember(chat.id, user.id);
+                        } else {
+                            await deleteRoom(chat.id);
+                        }
+                        setRooms(prev => prev.filter(r => r.id !== chat.id));
+                    } catch (err) {
+                        console.error(err);
+                        Alert.alert("Error", "Failed to perform action");
+                    }
+                }
+            }
+        ] as AlertButton[]);
+    };
+
     const renderChatItem = ({ item }: { item: any }) => {
         const otherMember = item.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id));
         const displayLabel = item.name || otherMember?.user?.name || t('chat.defaultChatName');
@@ -255,6 +282,8 @@ export default function ChatListScreen() {
                     setRooms(prev => prev.map(r => String(r.id) === String(item.id) ? { ...r, unread_count: 0 } : r));
                     router.push(`/chat/${item.id}`);
                 }}
+                onLongPress={() => handleDeleteChat(item)}
+                delayLongPress={500}
                 style={{
                     flexDirection: 'row',
                     padding: 14,

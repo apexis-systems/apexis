@@ -9,6 +9,10 @@ import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SecureAvatar from '@/components/shared/SecureAvatar';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MoreVertical, Trash2, LogOut } from 'lucide-react';
+import { deleteRoom, removeRoomMember } from '@/services/chatService';
+import { toast } from 'sonner';
 
 export default function ChatList() {
     const router = useRouter();
@@ -135,11 +139,18 @@ export default function ChatList() {
 
         socket.on('user-typing', handleTyping);
 
+        socket.on('room-updated', fetchRooms);
+        socket.on('members-added', fetchRooms);
+        socket.on('member-removed', fetchRooms);
+
         return () => {
             socket.off('new-message-global');
             socket.off('user-status-changed');
             socket.off('user-status-response');
             socket.off('user-typing');
+            socket.off('room-updated');
+            socket.off('members-added');
+            socket.off('member-removed');
             // Cleanup timeouts
             Object.values(typingTimeoutsRef.current).forEach((t) => clearTimeout(t));
         };
@@ -154,6 +165,26 @@ export default function ChatList() {
             const timeB = new Date(b.updatedAt || b.createdAt).getTime();
             return timeB - timeA;
         });
+
+    const handleDeleteChat = async (e: React.MouseEvent, chat: any) => {
+        e.stopPropagation();
+        const isGroup = chat.type === 'group';
+        const confirmMsg = isGroup ? "Leave this group?" : "Delete this chat?";
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            if (isGroup) {
+                await removeRoomMember(chat.id, authUser.id);
+            } else {
+                await deleteRoom(chat.id);
+            }
+            setRooms(prev => prev.filter(r => r.id !== chat.id));
+            toast.success(isGroup ? "Left group" : "Chat deleted");
+        } catch (err) {
+            console.error("Failed to delete chat", err);
+            toast.error("Failed to delete chat");
+        }
+    };
 
     if (loading) return <div className="p-6 text-center text-muted-foreground">{t('loading_chats')}</div>;
 
@@ -209,7 +240,7 @@ export default function ChatList() {
                                     setRooms(prev => prev.map(r => String(r.id) === String(chat.id) ? { ...r, unread_count: 0 } : r));
                                     router.push(`/${role}/chats/${chat.id}`);
                                 }}
-                                className={`w-full flex items-center gap-4 px-4 py-3.5 hover:bg-secondary/40 transition-colors text-left ${idx < sorted.length - 1 ? 'border-b border-border' : ''}`}
+                                className={`w-full flex items-center gap-4 px-4 py-3.5 hover:bg-secondary/40 transition-colors text-left group relative ${idx < sorted.length - 1 ? 'border-b border-border' : ''}`}
                             >
                                 {/* Avatar */}
                                 <div className="relative shrink-0">
@@ -291,6 +322,24 @@ export default function ChatList() {
                                         )}
                                     </div>
 
+                                </div>
+
+                                <div className="ml-2">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                                            <button className="p-1 rounded-full hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem 
+                                                onClick={e => handleDeleteChat(e, chat)} 
+                                                className="text-xs text-destructive focus:text-destructive cursor-pointer"
+                                            >
+                                                {isGroup ? <><LogOut className="h-3.5 w-3.5 mr-2" /> Leave Group</> : <><Trash2 className="h-3.5 w-3.5 mr-2" /> Delete Chat</>}
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </div>
                             </button>
                         );
