@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, FlatList, TouchableOpacity, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert, StatusBar, Keyboard, KeyboardAvoidingView, StyleSheet, Modal } from 'react-native';
+import { View, FlatList, TouchableOpacity, Platform, Image, ActivityIndicator, AppState, Animated, ScrollView, Alert, AlertButton, StatusBar, Keyboard, KeyboardAvoidingView, StyleSheet, Modal } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -8,7 +8,8 @@ import SecureAvatar from '@/components/shared/SecureAvatar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
-import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile, getChatProjects } from '@/services/chatService';
+import { getRoomMessages, sendChatMessage, markMessageSeen, listRooms, uploadChatFile, getChatProjects, updateRoom, addRoomMembers, removeRoomMember, updateChatMessage, deleteChatMessage } from '@/services/chatService';
+import { getChatUsers } from '@/services/userService';
 import { uploadConfirmationScreenshot } from '@/services/fileService';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -69,6 +70,12 @@ export default function ChatDetailScreen() {
     const [projectsList, setProjectsList] = useState<any[]>([]);
     const [loadingProjects, setLoadingProjects] = useState(false);
     const [selectingProject, setSelectingProject] = useState(false);
+    const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+    const [editingMessage, setEditingMessage] = useState<any>(null);
+    const [allUsers, setAllUsers] = useState<any[]>([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [isUpdatingRoom, setIsUpdatingRoom] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState('');
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
 
@@ -173,6 +180,42 @@ export default function ChatDetailScreen() {
 
 
 
+            socket.on('room-updated', ({ roomId: rid, name }: any) => {
+                if (String(rid) === String(id)) {
+                    setRoom((prev: any) => ({ ...prev, name }));
+                }
+            });
+
+            socket.on('members-added', ({ roomId: rid }: any) => {
+                if (String(rid) === String(id)) {
+                    listRooms().then(rooms => {
+                        const currentRoom = rooms.find((r: any) => String(r.id) === String(id));
+                        if (currentRoom) setRoom(currentRoom);
+                    });
+                }
+            });
+
+            socket.on('member-removed', ({ roomId: rid, userId: uid }: any) => {
+                if (String(rid) === String(id)) {
+                    if (String(uid) === String(user?.id)) {
+                        router.back();
+                    } else {
+                        setRoom((prev: any) => ({
+                            ...prev,
+                            room_members: prev.room_members.filter((m: any) => String(m.user?.id) !== String(uid))
+                        }));
+                    }
+                }
+            });
+
+            socket.on('message-updated', ({ messageId, text }: any) => {
+                setMessages(prev => prev.map(m => String(m.id) === String(messageId) ? { ...m, text } : m));
+            });
+
+            socket.on('message-deleted', ({ messageId }: any) => {
+                setMessages(prev => prev.filter(m => String(m.id) !== String(messageId)));
+            });
+
             socket.on('new-message', handleNewMessage);
             socket.on('message-seen-update', handleMessageSeen);
             socket.on('user-status-changed', handleStatusChange);
@@ -185,6 +228,11 @@ export default function ChatDetailScreen() {
                 socket.off('user-status-changed', handleStatusChange);
                 socket.off('user-status-response', handleStatusChange);
                 socket.off('user-typing', handleTyping);
+                socket.off('room-updated');
+                socket.off('members-added');
+                socket.off('member-removed');
+                socket.off('message-updated');
+                socket.off('message-deleted');
             };
         }
     }, [id, socket, user?.id]);
@@ -213,15 +261,17 @@ export default function ChatDetailScreen() {
     const isInitialLoadRef = useRef(true);
 
     useEffect(() => {
-        if (!loading && messages.length > 0 && isInitialLoadRef.current) {
-            // Give it a tiny bit of time to ensure layout is ready
-            const timer = setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: false });
+        if (!loading && messages.length > 0) {
+            // In an inverted list, offset 0 is the bottom (latest message)
+            if (isInitialLoadRef.current) {
+                flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
                 isInitialLoadRef.current = false;
-            }, 100);
-            return () => clearTimeout(timer);
+            } else {
+                // Scroll to latest message when new ones arrive
+                flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            }
         }
-    }, [loading, messages.length]);
+    }, [messages.length, loading]);
     // Removed room?.id from dependencies as it's for status check below
 
     // Active status check when room members are loaded
@@ -257,6 +307,11 @@ export default function ChatDetailScreen() {
     }, []);
 
     const handleSend = async (overrideFile?: any) => {
+        if (editingMessage && !overrideFile) {
+            handleUpdateMessage();
+            return;
+        }
+
         setIsSending(true);
         const fileToUpload = overrideFile || attachment;
         if (!message.trim() && !fileToUpload) {
@@ -314,7 +369,7 @@ export default function ChatDetailScreen() {
                     if (exists) {
                         return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
                     }
-                    return [...prev, res.message];
+                    return [res.message, ...prev];
                 });
             }
         } catch (error) {
@@ -478,16 +533,13 @@ export default function ChatDetailScreen() {
 
         setIsCapturing(true);
         try {
-            // ViewShot captures only its children, so the loader (which is outside) won't be captured.
             const uri = await viewShotRef.current.capture();
             setCapturedUri(uri);
 
             const initialProjectId = getActiveProjectId();
             if (initialProjectId) {
-                // If we have a clear project context, upload immediately
                 await handleProjectSelected(initialProjectId, uri);
             } else {
-                // Otherwise ask the user
                 setShowProjectPicker(true);
             }
         } catch (error) {
@@ -497,6 +549,92 @@ export default function ChatDetailScreen() {
             setIsCapturing(false);
         }
     }, [room, getActiveProjectId, handleProjectSelected]);
+
+    const handleUpdateMessage = async () => {
+        if (!editingMessage || !message.trim()) return;
+        try {
+            await updateChatMessage(editingMessage.id, message.trim());
+            setEditingMessage(null);
+            setMessage('');
+        } catch (err) {
+            Alert.alert('Error', 'Failed to edit message');
+        }
+    };
+
+    const handleDeleteMessage = async (messageId: number) => {
+        Alert.alert('Delete Message', 'Are you sure?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: async () => {
+                try {
+                    await deleteChatMessage(messageId);
+                } catch (err) {
+                    Alert.alert('Error', 'Failed to delete message');
+                }
+            }}
+        ]);
+    };
+
+    const handleUpdateRoomName = async (newName: string) => {
+        if (!newName.trim() || newName === room.name) return;
+        setIsUpdatingRoom(true);
+        try {
+            await updateRoom(id as string, { name: newName.trim() });
+        } catch (err) {
+            Alert.alert('Error', 'Failed to update group name');
+        } finally {
+            setIsUpdatingRoom(false);
+        }
+    };
+
+    const handleAddMember = async (uid: number) => {
+        try {
+            await addRoomMembers(id as string, [uid]);
+        } catch (err) {
+            Alert.alert('Error', 'Failed to add member');
+        }
+    };
+
+    const handleRemoveMember = async (uid: number) => {
+        Alert.alert('Remove Member', 'Are you sure?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Remove', style: 'destructive', onPress: async () => {
+                try {
+                    await removeRoomMember(id as string, uid);
+                } catch (err) {
+                    Alert.alert('Error', 'Failed to remove member');
+                }
+            }}
+        ]);
+    };
+
+    const handleLeaveRoom = async () => {
+        Alert.alert('Leave Group', 'Are you sure?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Leave', style: 'destructive', onPress: async () => {
+                try {
+                    if (user?.id) {
+                        await removeRoomMember(id as string, user.id);
+                        router.back();
+                    }
+                } catch (err) {
+                    Alert.alert('Error', 'Failed to leave group');
+                }
+            }}
+        ]);
+    };
+
+    useEffect(() => {
+        if (detailsModalVisible) {
+            setLoadingUsers(true);
+            getChatUsers().then(users => {
+                setAllUsers(users.filter((u: any) => u.id !== user?.id && u.role !== 'superadmin'));
+                setLoadingUsers(false);
+            }).catch(e => {
+                console.error(e);
+                setLoadingUsers(false);
+            });
+        }
+    }, [detailsModalVisible, user?.id]);
 
     const MessageItem = React.memo(({ item, isMe, time, setReplyTo, focusInput, scrollToMessage, setFullScreenImage, handleDownload, isDownloading, colors, isDark, playingAudioUri, setPlayingAudioUri, onLongPress }: any) => {
         const swipeableRef = useRef<any>(null);
@@ -711,18 +849,17 @@ export default function ChatDetailScreen() {
                 playingAudioUri={playingAudioUri}
                 setPlayingAudioUri={setPlayingAudioUri}
                 onLongPress={(msg: any) => {
-                    Alert.alert(
-                        'Confirmation',
-                        'Do you want to take this as a confirmation?',
-                        [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Take Screenshot', onPress: takeConfirmationScreenshot }
-                        ]
-                    );
+                    const options: AlertButton[] = [];
+                    if (isMe && msg.type === 'text') options.push({ text: 'Edit Message', onPress: () => { setEditingMessage(msg); setMessage(msg.text); inputRef.current?.focus(); } });
+                    if (isMe) options.push({ text: 'Delete Message', style: 'destructive', onPress: () => handleDeleteMessage(msg.id) });
+                    options.push({ text: 'Take as Confirmation', onPress: takeConfirmationScreenshot });
+                    options.push({ text: 'Cancel', style: 'cancel' });
+
+                    Alert.alert('Message Options', '', options);
                 }}
             />
         );
-    }, [user?.id, colors, isDark, isDownloading, scrollToMessage, handleDownload, playingAudioUri, takeConfirmationScreenshot]);
+    }, [user?.id, colors, isDark, isDownloading, scrollToMessage, handleDownload, playingAudioUri, takeConfirmationScreenshot, editingMessage, message]);
 
     return (
         <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -761,7 +898,10 @@ export default function ChatDetailScreen() {
                             )}
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={{ flex: 1, marginLeft: 10 }}>
+                        <TouchableOpacity 
+                            style={{ flex: 1, marginLeft: 10 }}
+                            onPress={() => setDetailsModalVisible(true)}
+                        >
                             <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }} numberOfLines={1}>
                                 {(room?.type === 'direct' ? room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name : room?.name) || 'Loading...'}
                             </Text>
@@ -772,12 +912,12 @@ export default function ChatDetailScreen() {
                             </Text>
                         </TouchableOpacity>
 
-
                         <View style={{ flexDirection: 'row', gap: 16, paddingRight: 8 }}>
                             {/* Call icons removed as requested */}
                         </View>
                     </View>
                 </SafeAreaView>
+
 
                 {/* Chat Area */}
                 <KeyboardAvoidingView
@@ -845,6 +985,28 @@ export default function ChatDetailScreen() {
                                         <Text style={{ fontSize: 11, color: colors.textMuted }}>{(attachment.size / 1024).toFixed(1)} KB</Text>
                                     </View>
                                     <TouchableOpacity onPress={() => setAttachment(null)} style={{ padding: 4 }}>
+                                        <Ionicons name="close-circle" size={24} color={colors.textMuted} />
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {editingMessage && (
+                                <View style={{ 
+                                    backgroundColor: colors.primary + '10', 
+                                    borderTopWidth: 1, 
+                                    borderTopColor: colors.border, 
+                                    padding: 12, 
+                                    borderLeftWidth: 4, 
+                                    borderLeftColor: colors.primary, 
+                                    flexDirection: 'row', 
+                                    alignItems: 'center', 
+                                    gap: 12 
+                                }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>Editing Message</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 13, color: colors.textMuted }}>{editingMessage.text}</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={() => { setEditingMessage(null); setMessage(''); }} style={{ padding: 4 }}>
                                         <Ionicons name="close-circle" size={24} color={colors.textMuted} />
                                     </TouchableOpacity>
                                 </View>
@@ -1107,6 +1269,204 @@ export default function ChatDetailScreen() {
                                     </View>
                                     <Text style={{ textAlign: 'center', fontSize: 15, fontWeight: '600', color: colors.text }}>No projects found</Text>
                                     <Text style={{ textAlign: 'center', fontSize: 13, color: colors.textMuted, marginTop: 4 }}>You are not a member of any projects.</Text>
+                                </View>
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Room Details Modal */}
+            <Modal
+                visible={detailsModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setDetailsModalVisible(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <TouchableOpacity 
+                        activeOpacity={1} 
+                        style={{ flex: 1 }} 
+                        onPress={() => setDetailsModalVisible(false)} 
+                    />
+                    <View style={{
+                        backgroundColor: colors.surface,
+                        borderTopLeftRadius: 32,
+                        borderTopRightRadius: 32,
+                        padding: 24,
+                        paddingBottom: Math.max(40, insets.bottom + 20),
+                        maxHeight: '90%'
+                    }}>
+                        <View style={{ width: 40, height: 5, backgroundColor: colors.border, borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
+                        
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                            <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text }}>
+                                {room?.type === 'group' ? 'Group Information' : 'User Profile'}
+                            </Text>
+                            <TouchableOpacity onPress={() => setDetailsModalVisible(false)} style={{ padding: 4 }}>
+                                <Feather name="x" size={24} color={colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {room?.type === 'direct' ? (
+                                <View style={{ alignItems: 'center', paddingBottom: 20 }}>
+                                    <SecureAvatar 
+                                        fileKey={room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.profile_pic}
+                                        name={room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name}
+                                        size={100}
+                                        style={{ marginBottom: 16 }}
+                                    />
+                                    <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text }}>
+                                        {room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name}
+                                    </Text>
+                                    <Text style={{ fontSize: 14, color: colors.primary, fontWeight: '700', textTransform: 'uppercase', marginTop: 4, letterSpacing: 1 }}>
+                                        {room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.role}
+                                    </Text>
+                                    <Text style={{ fontSize: 15, color: colors.textMuted, marginTop: 4 }}>
+                                        {room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.organization?.name}
+                                    </Text>
+
+                                    <View style={{ width: '100%', marginTop: 32, paddingTop: 24, borderTopWidth: 1, borderTopColor: colors.border }}>
+                                        <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 16 }}>Project Roles</Text>
+                                        <View style={{ gap: 12 }}>
+                                            {room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.project_members?.map((pm: any, idx: number) => (
+                                                <View key={idx} style={{ 
+                                                    flexDirection: 'row', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'space-between', 
+                                                    backgroundColor: colors.background, 
+                                                    padding: 14, 
+                                                    borderRadius: 16,
+                                                    borderWidth: 1,
+                                                    borderColor: colors.border
+                                                }}>
+                                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, flex: 1 }}>{pm.project?.name}</Text>
+                                                    <View style={{ backgroundColor: colors.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                                                        <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>{pm.role}</Text>
+                                                    </View>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={{ gap: 24 }}>
+                                    <View>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', marginBottom: 8, letterSpacing: 1 }}>Group Name</Text>
+                                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                                            <TextInput 
+                                                defaultValue={room?.name}
+                                                onEndEditing={(e) => handleUpdateRoomName(e.nativeEvent.text)}
+                                                style={{ 
+                                                    flex: 1, 
+                                                    backgroundColor: colors.background, 
+                                                    padding: 14, 
+                                                    borderRadius: 16, 
+                                                    color: colors.text, 
+                                                    fontSize: 16,
+                                                    borderWidth: 1,
+                                                    borderColor: colors.border
+                                                }}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    <View>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
+                                                Members ({room?.room_members?.length})
+                                            </Text>
+                                            <TouchableOpacity onPress={handleLeaveRoom}>
+                                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#ff4444' }}>Leave Group</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <View style={{ gap: 8 }}>
+                                            {room?.room_members?.map((member: any) => (
+                                                <View key={member.user?.id} style={{ 
+                                                    flexDirection: 'row', 
+                                                    alignItems: 'center', 
+                                                    gap: 12, 
+                                                    backgroundColor: colors.background, 
+                                                    padding: 10, 
+                                                    borderRadius: 16,
+                                                    borderWidth: 1,
+                                                    borderColor: colors.border
+                                                }}>
+                                                    <SecureAvatar 
+                                                        fileKey={member.user?.profile_pic}
+                                                        name={member.user?.name}
+                                                        size={40}
+                                                    />
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>
+                                                            {member.user?.name} {member.user?.id === user?.id && '(You)'}
+                                                        </Text>
+                                                        <Text style={{ fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', fontWeight: '600' }}>{member.user?.role}</Text>
+                                                    </View>
+                                                    {member.user?.id !== user?.id && (
+                                                        <TouchableOpacity onPress={() => handleRemoveMember(member.user?.id)} style={{ padding: 8 }}>
+                                                            <Feather name="x-circle" size={20} color="#ff4444" />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                            ))}
+                                        </View>
+                                    </View>
+                                    <View style={{ marginTop: 8, paddingTop: 24, borderTopWidth: 1, borderTopColor: colors.border }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', marginBottom: 12, letterSpacing: 1 }}>Add New Member</Text>
+                                        <TextInput 
+                                            placeholder="Search members to add..."
+                                            placeholderTextColor={colors.textMuted}
+                                            value={userSearchQuery}
+                                            onChangeText={setUserSearchQuery}
+                                            style={{
+                                                backgroundColor: colors.background,
+                                                padding: 12,
+                                                borderRadius: 16,
+                                                color: colors.text,
+                                                fontSize: 14,
+                                                marginBottom: 16,
+                                                borderWidth: 1,
+                                                borderColor: colors.border
+                                            }}
+                                        />
+                                        <View style={{ gap: 10 }}>
+                                            {loadingUsers ? (
+                                                <ActivityIndicator color={colors.primary} />
+                                            ) : (
+                                                allUsers
+                                                    .filter(u => !room?.room_members?.some((m: any) => m.user?.id === u.id))
+                                                    .filter(u => u.name.toLowerCase().includes(userSearchQuery.toLowerCase()))
+                                                    .slice(0, 5)
+                                                    .map(u => (
+                                                        <View key={u.id} style={{ 
+                                                            flexDirection: 'row', 
+                                                            alignItems: 'center', 
+                                                            justifyContent: 'space-between',
+                                                            backgroundColor: colors.background,
+                                                            padding: 12,
+                                                            borderRadius: 16,
+                                                            borderWidth: 1,
+                                                            borderColor: colors.border
+                                                        }}>
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>{u.name.charAt(0)}</Text>
+                                                                </View>
+                                                                <View>
+                                                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{u.name}</Text>
+                                                                    <Text style={{ fontSize: 10, color: colors.textMuted, textTransform: 'uppercase', fontWeight: '800' }}>{u.organization?.name}</Text>
+                                                                </View>
+                                                            </View>
+                                                            <TouchableOpacity onPress={() => handleAddMember(u.id)} style={{ padding: 8 }}>
+                                                                <Feather name="plus-circle" size={20} color={colors.primary} />
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    ))
+                                            )}
+                                        </View>
+                                    </View>
                                 </View>
                             )}
                         </ScrollView>

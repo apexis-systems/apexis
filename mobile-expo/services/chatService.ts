@@ -89,3 +89,63 @@ export const getChatProjects = async (roomId: string | number) => {
         throw error;
     }
 };
+
+export const updateRoom = async (roomId: string | number, data: { name: string }) => {
+    try {
+        const response = await PrivateAxios.patch(`/chats/${roomId}`, data);
+        return response.data;
+    } catch (error: any) {
+        console.error("updateRoom Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const addRoomMembers = async (roomId: string | number, memberIds: number[]) => {
+    try {
+        const response = await PrivateAxios.post(`/chats/${roomId}/members`, { memberIds });
+        return response.data;
+    } catch (error: any) {
+        console.error("addRoomMembers Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const removeRoomMember = async (roomId: string | number, userId: number | string) => {
+    try {
+        const response = await PrivateAxios.delete(`/chats/${roomId}/members/${userId}`);
+        return response.data;
+    } catch (error: any) {
+        console.error("removeRoomMember Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const deleteRoom = async (roomId: string | number) => {
+    try {
+        const response = await PrivateAxios.delete(`/chats/${roomId}`);
+        return response.data;
+    } catch (error: any) {
+        console.error("deleteRoom Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const updateChatMessage = async (messageId: number | string, text: string) => {
+    try {
+        const response = await PrivateAxios.patch(`/chats/message/${messageId}`, { text });
+        return response.data;
+    } catch (error: any) {
+        console.error("updateChatMessage Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const deleteChatMessage = async (messageId: number | string) => {
+    try {
+        const response = await PrivateAxios.delete(`/chats/message/${messageId}`);
+        return response.data;
+    } catch (error: any) {
+        console.error("deleteChatMessage Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
