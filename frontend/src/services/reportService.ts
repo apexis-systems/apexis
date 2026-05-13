@@ -51,10 +51,11 @@ export const triggerReport = async (projectId: string | number, type: 'daily' | 
     }
 };
 
-export const downloadReport = async (id: number, fileName?: string) => {
+export const downloadReport = async (id: number, fileName?: string, options: any = {}) => {
     try {
         const res = await PrivateAxios.get(`/reports/${id}/share`, {
-            responseType: 'blob'
+            responseType: 'blob',
+            params: options
         });
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a');

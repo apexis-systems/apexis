@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -66,6 +67,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // View Mode: 'grid' or 'list'
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
     const [sortBy, setSortBy] = useState<'name' | 'newest' | 'oldest' | 'size'>('name');
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const [monthOffsets, setMonthOffsets] = useState<{ [key: string]: number }>({});
+    const [tempMonth, setTempMonth] = useState('');
+    const [tempYear, setTempYear] = useState('');
 
     // Selection State
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -90,6 +95,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [folderMenuVisible, setFolderMenuVisible] = useState(false);
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
+    const mainScrollRef = useRef<ScrollView>(null);
 
     const [showRenameFile, setShowRenameFile] = useState(false);
     const [renamingFileId, setRenamingFileId] = useState<number | null>(null);
@@ -315,9 +321,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     }, [initialFileId, docs, selectedFolder, sortBy, user.role, router]);
 
 
-    const currentFolders = folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null'));
-    const currentFolderDocs = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
-    const visibleDocs = user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible !== false) : currentFolderDocs;
+    const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
+    const currentFolderDocs = useMemo(() => docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null')), [docs, selectedFolder]);
+    const visibleDocs = useMemo(() => user.role === 'client' ? currentFolderDocs.filter((d) => d.client_visible !== false) : currentFolderDocs, [currentFolderDocs, user.role]);
 
     const sortItems = (items: any[], type: 'folder' | 'file') => {
         return [...items].sort((a: any, b: any) => {
@@ -327,10 +333,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 return (nameA || '').localeCompare(nameB || '');
             }
             if (sortBy === 'newest') {
-                return new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime();
+                return new Date(b.createdAt || b.created_at || b.createdAt).getTime() - new Date(a.createdAt || a.created_at || a.createdAt).getTime();
             }
             if (sortBy === 'oldest') {
-                return new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime();
+                return new Date(a.createdAt || a.created_at || a.createdAt).getTime() - new Date(b.createdAt || b.created_at || b.createdAt).getTime();
             }
             if (sortBy === 'size') {
                 if (type === 'folder') return (a.name || '').localeCompare(b.name || '');
@@ -340,8 +346,50 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         });
     };
 
-    const sortedFolders = sortItems(currentFolders, 'folder');
-    const sortedDocs = sortItems(visibleDocs, 'file');
+    const sortedFolders = useMemo(() => sortItems(currentFolders, 'folder'), [currentFolders, sortBy]);
+    const sortedDocs = useMemo(() => sortItems(visibleDocs, 'file'), [visibleDocs, sortBy]);
+
+    const groups = useMemo(() => {
+        if (sortBy === 'newest' || sortBy === 'oldest') {
+            return groupItemsByMonth(sortedDocs, t);
+        }
+        return [];
+    }, [sortedDocs, sortBy, t]);
+
+    const availableMonthsByYear = useMemo(() => {
+        const map: Record<string, Set<string>> = {};
+        groups.forEach(g => {
+            const parts = g.title.split(' ');
+            const year = parts[parts.length - 1];
+            const month = parts.slice(0, parts.length - 1).join(' ');
+            if (!map[year]) map[year] = new Set();
+            map[year].add(month);
+        });
+        return map;
+    }, [groups]);
+
+    const availableYears = useMemo(() => Object.keys(availableMonthsByYear).sort((a, b) => b.localeCompare(a)), [availableMonthsByYear]);
+
+    const prevShowMonthPicker = useRef(false);
+    useEffect(() => {
+        prevShowMonthPicker.current = showMonthPicker;
+    }, [showMonthPicker]);
+
+    const allMonths = useMemo(() => [
+        t('months.january'), t('months.february'), t('months.march'), t('months.april'),
+        t('months.may'), t('months.june'), t('months.july'), t('months.august'),
+        t('months.september'), t('months.october'), t('months.november'), t('months.december')
+    ], [t]);
+
+    // Auto-correct month if year change makes it invalid
+    useEffect(() => {
+        if (showMonthPicker && tempYear && tempMonth && availableMonthsByYear[tempYear]) {
+            if (!availableMonthsByYear[tempYear].has(tempMonth)) {
+                const firstAvailable = Array.from(availableMonthsByYear[tempYear])[0];
+                if (firstAvailable) setTempMonth(firstAvailable);
+            }
+        }
+    }, [tempYear, availableMonthsByYear, showMonthPicker]);
 
     const renderDocItem = (doc: any) => {
         const isSelected = selectedFiles.has(doc.id);
@@ -521,28 +569,121 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const renderDocuments = () => {
         if (sortBy === 'newest' || sortBy === 'oldest') {
-            const groups = groupItemsByMonth(sortedDocs, t);
-            return groups.map((group) => (
-                <View key={group.title} style={{ marginBottom: 20 }}>
-                    <View style={{
-                        paddingVertical: 12,
-                        backgroundColor: colors.background,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{group.title}</Text>
-                        <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.5 }} />
-                    </View>
-                    <View style={{
-                        flexDirection: viewMode === 'grid' ? 'row' : 'column',
-                        flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
-                        gap: viewMode === 'grid' ? 4 : 4
-                    }}>
-                        {group.data.map(renderDocItem)}
-                    </View>
-                </View>
-            ));
+            const scrollToMonth = (title: string) => {
+                const offset = monthOffsets[title];
+                if (offset !== undefined) {
+                    mainScrollRef.current?.scrollTo({ y: offset, animated: true });
+                }
+                setShowMonthPicker(false);
+            };
+
+            return (
+                <>
+                    {groups.map((group) => (
+                        <View 
+                            key={group.title} 
+                            style={{ marginBottom: 20 }}
+                            onLayout={(e) => {
+                                const { y } = e.nativeEvent.layout;
+                                setMonthOffsets(prev => ({ ...prev, [group.title]: y }));
+                            }}
+                        >
+                            <TouchableOpacity
+                                onPress={() => {
+                                    const parts = group.title.split(' ');
+                                    setTempYear(parts[parts.length - 1]);
+                                    setTempMonth(parts.slice(0, parts.length - 1).join(' '));
+                                    setShowMonthPicker(true);
+                                }}
+                                style={{
+                                    paddingVertical: 12,
+                                    backgroundColor: 'transparent',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between'
+                                }}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{group.title}</Text>
+                                    <Feather name="chevron-down" size={12} color={colors.textMuted} style={{ marginLeft: 4, opacity: 0.7 }} />
+                                </View>
+                                <View style={{ height: 1, flex: 1, backgroundColor: colors.border, marginLeft: 12, opacity: 0.3 }} />
+                            </TouchableOpacity>
+                            <View style={{
+                                flexDirection: viewMode === 'grid' ? 'row' : 'column',
+                                flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                gap: viewMode === 'grid' ? 4 : 4
+                            }}>
+                                {group.data.map(renderDocItem)}
+                            </View>
+                        </View>
+                    ))}
+
+                    <Modal visible={showMonthPicker} transparent animationType="slide">
+                        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                            <View style={{ 
+                                backgroundColor: colors.surface, 
+                                borderTopLeftRadius: 24, 
+                                borderTopRightRadius: 24, 
+                                padding: 24, 
+                                paddingBottom: insets.bottom + 10,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: -4 },
+                                shadowOpacity: 0.1,
+                                shadowRadius: 10,
+                                elevation: 20
+                            }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                    <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
+                                        <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectDocuments.cancel')}</Text>
+                                    </TouchableOpacity>
+                                    <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>{t('projectDocuments.selectMonth')}</Text>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            const title = `${tempMonth} ${tempYear}`;
+                                            scrollToMonth(title);
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{t('projectDocuments.ok')}</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Picker
+                                        selectedValue={tempMonth}
+                                        style={{ flex: 1.2, height: 200 }}
+                                        itemStyle={{ fontSize: 18, color: colors.text }}
+                                        onValueChange={(itemValue) => setTempMonth(itemValue)}
+                                    >
+                                        {allMonths.map(m => {
+                                            const isAvailable = availableMonthsByYear[tempYear]?.has(m);
+                                            if (!isAvailable) return null;
+                                            return (
+                                                <Picker.Item 
+                                                    key={m} 
+                                                    label={m} 
+                                                    value={m} 
+                                                    color={colors.text} 
+                                                />
+                                            );
+                                        })}
+                                    </Picker>
+                                    <Picker
+                                        selectedValue={tempYear}
+                                        style={{ flex: 0.8, height: 200 }}
+                                        itemStyle={{ fontSize: 18, color: colors.text }}
+                                        onValueChange={(itemValue) => setTempYear(itemValue)}
+                                    >
+                                        {availableYears.map(y => (
+                                            <Picker.Item key={y} label={y} value={y} color={colors.text} />
+                                        ))}
+                                    </Picker>
+                                </View>
+                            </View>
+                        </View>
+                    </Modal>
+                </>
+            );
         }
 
         return (
@@ -1154,7 +1295,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // Unified View
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+            <ScrollView 
+                ref={mainScrollRef}
+                style={{ flex: 1 }} 
+                contentContainerStyle={{ padding: 14 }} 
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') ? (
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                         <TouchableOpacity

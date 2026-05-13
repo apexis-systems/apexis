@@ -1,5 +1,9 @@
 {
     "translation": {
+        "common": {
+            "cancel": "రద్దు చేయి",
+            "share": "భాగస్వామ్యం చేయండి"
+        },
         "Activity": "కార్యకలాపం",
         "All": "అన్నీ",
         "Action": "చర్య",
@@ -528,6 +532,10 @@
                 "resolved": "పరిష్కరించబడింది",
                 "noAction": "చర్య అవసరం లేదు",
                 "overdue": "గడువు ముగిసింది"
+            },
+            "shareOptions": {
+                "title": "ఎగుమతి ఎంపికలు",
+                "subtitle": "మీ నివేదికలో చేర్చడానికి విభాగాలను ఎంచుకోండి"
             }
         },
         "projectPhotos": {
@@ -592,9 +600,13 @@
                 "size": "పరిమాణం"
             },
             "folderDeletedMovingContents": "కంటెంట్‌లను తరలించిన తర్వాత ఫోల్డర్ \"{{name}}\" తొలగించబడింది",
-            "failedToDeleteEmptyFolder": "కంటెంట్‌లు తరలించబడ్డాయి, కానీ ఖాళీ ఫోల్డర్‌ను తొలగించడం విఫలమైంది"
+            "failedToDeleteEmptyFolder": "కంటెంట్‌లు తరలించబడ్డాయి, కానీ ఖాళీ ఫోల్డర్‌ను తొలగించడం విఫలమైంది",
+            "selectMonth": "నెల ఎంచుకోండి",
+            "photosCountLabel": "ఫోటోలు",
+            "close": "మూసివేయి"
         },
         "projectDocuments": {
+            "selectMonth": "నెల ఎంచుకోండి",
             "uploadDocument": "పత్రాన్ని అప్‌లోడ్ చేయండి",
             "newFolder": "కొత్త ఫోల్డర్",
             "renameFolder": "ఫోల్డర్ పేరు మార్చండి",

@@ -1,5 +1,9 @@
 {
     "translation": {
+        "common": {
+            "cancel": "रद्द करें",
+            "share": "साझा करें"
+        },
         "Activity": "गतिविधि",
         "All": "सभी",
         "Action": "कार्य",
@@ -528,6 +532,10 @@
                 "resolved": "समाधान हुआ",
                 "noAction": "कार्रवाई की आवश्यकता नहीं",
                 "overdue": "विलंबित"
+            },
+            "shareOptions": {
+                "title": "निर्यात विकल्प",
+                "subtitle": "अपनी रिपोर्ट में शामिल करने के लिए अनुभाग चुनें"
             }
         },
         "projectPhotos": {
@@ -592,9 +600,13 @@
                 "size": "आकार"
             },
             "folderDeletedMovingContents": "सामग्री स्थानांतरित करने के बाद फ़ोल्डर \"{{name}}\" हटा दिया गया",
-            "failedToDeleteEmptyFolder": "सामग्री स्थानांतरित कर दी गई, लेकिन खाली फ़ोल्डर हटाने में विफल"
+            "failedToDeleteEmptyFolder": "सामग्री स्थानांतरित कर दी गई, लेकिन खाली फ़ोल्डर हटाने में विफल",
+            "selectMonth": "महीना चुनें",
+            "photosCountLabel": "तस्वीरें",
+            "close": "बंद करें"
         },
         "projectDocuments": {
+            "selectMonth": "महीना चुनें",
             "uploadDocument": "दस्तावेज़ अपलोड करें",
             "newFolder": "नया फ़ोल्डर",
             "renameFolder": "फ़ोल्डर का नाम बदलें",

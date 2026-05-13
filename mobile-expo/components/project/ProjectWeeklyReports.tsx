@@ -1,4 +1,5 @@
-import { View, TouchableOpacity, ActivityIndicator, ScrollView, BackHandler, Alert } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, ScrollView, BackHandler, Alert, Modal } from 'react-native';
+
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTranslation } from "react-i18next";
@@ -28,6 +29,15 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [generating, setGenerating] = useState(false);
     const [sharingId, setSharingId] = useState<number | null>(null);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+    const [shareOptions, setShareOptions] = useState({
+        snag: true,
+        rfi: true,
+        photos: true,
+        files: true
+    });
+
 
 
     const fetchReports = async () => {
@@ -115,12 +125,33 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
         }
     };
 
-    const handleShare = async (report: Report) => {
+    const handleShare = (report: Report) => {
+        setSelectedReport(report);
+        setShowShareModal(true);
+    };
+
+    const confirmShare = async () => {
+        if (!selectedReport) return;
+        const report = selectedReport;
+        setShowShareModal(false);
+
         setSharingId(report.id);
         try {
             const token = await SecureStore.getItemAsync('token');
-            const url = await getReportShareUrl(report.id);
+            const baseUrl = await getReportShareUrl(report.id);
+
+            // Construct query parameters
+            const query = [
+                `snag=${shareOptions.snag}`,
+                `rfi=${shareOptions.rfi}`,
+                `photos=${shareOptions.photos}`,
+                `Files=${shareOptions.files}`
+            ].join('&');
+
+            const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${query}`;
+
             const pad = (n: number) => n.toString().padStart(2, '0');
+
             const s = new Date(report.period_start);
             const e = new Date(report.period_end);
             const startStr = `${pad(s.getDate())}-${pad(s.getMonth() + 1)}-${s.getFullYear()}`;
@@ -324,6 +355,60 @@ export default function ProjectWeeklyReports({ project, userRole }: Props) {
                 </View>
             )}
 
+
+            {/* Share Options Modal */}
+            <Modal
+                visible={showShareModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowShareModal(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                    <View style={{ width: '100%', maxWidth: 320, backgroundColor: colors.surface, borderRadius: 16, padding: 20, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 }}>{t('projectReports.shareOptions.title', 'Export Options')}</Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 20 }}>{t('projectReports.shareOptions.subtitle', 'Select sections to include in your report')}</Text>
+
+                        <View style={{ gap: 12, marginBottom: 24 }}>
+                            {[
+                                { key: 'snag', label: t('projectReports.weekly.snags', 'Snags'), icon: 'alert-circle' },
+                                { key: 'rfi', label: t('projectReports.weekly.rfis', 'RFIs'), icon: 'help-circle' },
+                                { key: 'photos', label: t('projectReports.weekly.photos', 'Photos'), icon: 'image' },
+                                { key: 'files', label: t('projectReports.weekly.docs', 'Files'), icon: 'file' },
+                            ].map((opt) => (
+                                <TouchableOpacity
+                                    key={opt.key}
+                                    onPress={() => setShareOptions(prev => ({ ...prev, [opt.key]: !prev[opt.key as keyof typeof prev] }))}
+                                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border + '40' }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <Feather name={opt.icon as any} size={16} color={colors.primary} />
+                                        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>{opt.label}</Text>
+                                    </View>
+                                    <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: shareOptions[opt.key as keyof typeof shareOptions] ? colors.primary : colors.border, justifyContent: 'center', paddingHorizontal: 2 }}>
+                                        <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff', transform: [{ translateX: shareOptions[opt.key as keyof typeof shareOptions] ? 18 : 0 }] }} />
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <TouchableOpacity
+                                onPress={() => setShowShareModal(false)}
+                                style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted }}>{t('common.cancel', 'Cancel')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={confirmShare}
+                                style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>{t('common.share', 'Share')}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </ScrollView>
     );
 }
+

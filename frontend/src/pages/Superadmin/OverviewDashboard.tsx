@@ -252,6 +252,7 @@ export default function OverviewDashboard() {
   const [data, setData] = useState<any>(null);
   const [activitiesList, setActivitiesList] = useState<any[]>([]);
   const [showAllUsage, setShowAllUsage] = useState(false);
+  const [timeRange, setTimeRange] = useState("allTime");
 
 
   useEffect(() => {
@@ -300,55 +301,56 @@ export default function OverviewDashboard() {
   }
 
   const dashboardStats = data?.stats || {};
+  const currentStats = (dashboardStats as any)[timeRange] || {};
   
   const metricsList = [
     {
       title: "Active Companies",
-      value: String(dashboardStats.activeCompanies || 0),
-      change: "+12%", 
-      changeType: "up" as const,
+      value: String(currentStats.activeCompanies?.total || 0),
+      change: currentStats.activeCompanies?.text || "0%", 
+      changeType: (currentStats.activeCompanies?.type || "neutral") as "up" | "down" | "neutral",
       icon: Building2,
-      sparkline: [12, 19, 28, 38, 52, 65, 78, dashboardStats.activeCompanies || 0],
+      sparkline: [12, 19, 28, 38, 52, 65, 78, currentStats.activeCompanies?.total || 0],
     },
     {
       title: "Active Projects",
-      value: String(dashboardStats.activeProjects || 0),
-      change: "+8%",
-      changeType: "up" as const,
+      value: String(currentStats.activeProjects?.total || 0),
+      change: currentStats.activeProjects?.text || "0%",
+      changeType: (currentStats.activeProjects?.type || "neutral") as "up" | "down" | "neutral",
       icon: FolderKanban,
-      sparkline: [28, 45, 72, 110, 148, 190, 220, dashboardStats.activeProjects || 0],
+      sparkline: [28, 45, 72, 110, 148, 190, 220, currentStats.activeProjects?.total || 0],
     },
     {
       title: "Total Users",
-      value: String(dashboardStats.totalUsers || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ","),
-      change: "+156",
-      changeType: "up" as const,
+      value: String(currentStats.totalUsers?.total || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ","),
+      change: currentStats.totalUsers?.text || "0%",
+      changeType: (currentStats.totalUsers?.type || "neutral") as "up" | "down" | "neutral",
       icon: Users,
-      sparkline: [180, 340, 560, 820, 1100, 1480, 1750, dashboardStats.totalUsers || 0],
+      sparkline: [180, 340, 560, 820, 1100, 1480, 1750, currentStats.totalUsers?.total || 0],
     },
     {
       title: "Daily Active Users",
-      value: String(dashboardStats.dailyActiveUsers || 0),
-      change: "+5.2%",
-      changeType: "up" as const,
+      value: String(currentStats.dailyActiveUsers?.total || 0),
+      change: currentStats.dailyActiveUsers?.text || "0%",
+      changeType: (currentStats.dailyActiveUsers?.type || "neutral") as "up" | "down" | "neutral",
       icon: Activity,
-      sparkline: [620, 680, 710, 760, 790, 820, 835, dashboardStats.dailyActiveUsers || 0],
+      sparkline: [620, 680, 710, 760, 790, 820, 835, currentStats.dailyActiveUsers?.total || 0],
     },
     {
       title: "Tasks Completed",
-      value: String(dashboardStats.tasksCompletedToday || 0),
-      change: "Today",
-      changeType: "neutral" as const,
+      value: String(currentStats.tasksCompletedToday?.total || 0),
+      change: currentStats.tasksCompletedToday?.text || "0%",
+      changeType: (currentStats.tasksCompletedToday?.type || "neutral") as "up" | "down" | "neutral",
       icon: CheckCircle,
-      sparkline: [280, 310, 295, 330, 315, 340, 325, dashboardStats.tasksCompletedToday || 0],
+      sparkline: [280, 310, 295, 330, 315, 340, 325, currentStats.tasksCompletedToday?.total || 0],
     },
     {
       title: "Messages Sent",
-      value: String(dashboardStats.messagesSentToday || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ","),
-      change: "+18%",
-      changeType: "up" as const,
+      value: String(currentStats.messagesSentToday?.total || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ","),
+      change: currentStats.messagesSentToday?.text || "0%",
+      changeType: (currentStats.messagesSentToday?.type || "neutral") as "up" | "down" | "neutral",
       icon: MessageSquare,
-      sparkline: [3200, 3800, 4100, 4500, 4200, 4800, 5100, dashboardStats.messagesSentToday || 0],
+      sparkline: [3200, 3800, 4100, 4500, 4200, 4800, 5100, currentStats.messagesSentToday?.total || 0],
     },
   ];
 
@@ -362,11 +364,35 @@ export default function OverviewDashboard() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className={cn("text-lg font-semibold", strongTextClass)}>Dashboard Overview</h1>
-        <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-          Real-time platform health & analytics
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className={cn("text-lg font-semibold", strongTextClass)}>Dashboard Overview</h1>
+          <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+            Real-time platform health & analytics
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-1.5 rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-1 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)] mr-12">
+          {[
+            { id: "today", label: "Today" },
+            { id: "7days", label: "7 Days" },
+            { id: "30days", label: "30 Days" },
+            { id: "allTime", label: "All Time" },
+          ].map((range) => (
+            <button
+              key={range.id}
+              onClick={() => setTimeRange(range.id)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-[11px] font-medium transition-all",
+                timeRange === range.id
+                  ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                  : "text-[hsl(30_8%_45%)] hover:bg-[hsl(37_18%_91%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)]"
+              )}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
@@ -569,7 +595,7 @@ export default function OverviewDashboard() {
             </div>
           </section>
 
-          <section id="project-health" className={scrollSectionClass}>
+          {/* <section id="project-health" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("project-health")}>
               <div className="mb-4 flex items-center gap-2">
                 <HeartPulse className="h-4 w-4 text-[hsl(24_95%_53%)]" />
@@ -638,7 +664,7 @@ export default function OverviewDashboard() {
                 </table>
               </div>
             </div>
-          </section>
+          </section> */}
 
           <section id="company-usage" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("company-usage")}>
@@ -710,7 +736,7 @@ export default function OverviewDashboard() {
         </div>
 
         <div className="space-y-4 xl:col-span-4">
-          <div className="rounded border border-[hsl(30_8%_20%)] bg-[hsl(30_10%_12%)] p-5 text-[hsl(38_20%_85%)] dark:border-[hsl(30_8%_16%)] dark:bg-[hsl(30_10%_8%)]">
+          {/* <div className="rounded border border-[hsl(30_8%_20%)] bg-[hsl(30_10%_12%)] p-5 text-[hsl(38_20%_85%)] dark:border-[hsl(30_8%_16%)] dark:bg-[hsl(30_10%_8%)]">
             <div className="mb-3 flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-[hsl(24_95%_53%)]" />
               <h3 className="text-sm font-semibold">Communication Shift Index</h3>
@@ -746,7 +772,7 @@ export default function OverviewDashboard() {
                 🔥 80% of team communication has shifted to Apexis
               </p>
             </div>
-          </div>
+          </div> */}
 
           <section id="live-activity" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("live-activity")}>
@@ -810,7 +836,7 @@ export default function OverviewDashboard() {
             </div>
           </section>
 
-          <section id="intelligence" className={scrollSectionClass}>
+          {/* <section id="intelligence" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("intelligence")}>
               <div className="mb-4 flex items-center gap-2">
                 <Brain className="h-4 w-4 text-[hsl(24_95%_53%)]" />
@@ -835,7 +861,7 @@ export default function OverviewDashboard() {
                 )})}
               </div>
             </div>
-          </section>
+          </section> */}
 
           <section id="feature-usage" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("feature-usage")}>
@@ -850,12 +876,12 @@ export default function OverviewDashboard() {
                   <div key={feature.name}>
                     <div className="mb-1 flex justify-between text-xs">
                       <span className={cn("font-medium", strongTextClass)}>{feature.name}</span>
-                      <span className="font-bold text-[hsl(24_95%_53%)]">{feature.usage}%</span>
+                      <span className="font-bold text-[hsl(24_95%_53%)]">{(feature.count || 0).toLocaleString()}</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-[hsl(37_18%_91%)] dark:bg-[hsl(30_6%_18%)]">
                       <div
                         className="h-full rounded-full bg-[hsl(24_95%_53%)] transition-all duration-500"
-                        style={{ width: `${feature.usage}%` }}
+                        style={{ width: `${feature.usage || 0}%` }}
                       />
                     </div>
                   </div>
@@ -864,7 +890,7 @@ export default function OverviewDashboard() {
             </div>
           </section>
 
-          <section id="system-health" className={scrollSectionClass}>
+          {/* <section id="system-health" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("system-health")}>
               <div className="mb-4 flex items-center gap-2">
                 <Monitor className="h-4 w-4 text-[hsl(24_95%_53%)]" />
@@ -903,9 +929,9 @@ export default function OverviewDashboard() {
                 ))}
               </div>
             </div>
-          </section>
+          </section> */}
 
-          <section id="user-behavior" className={scrollSectionClass}>
+          {/* <section id="user-behavior" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("user-behavior")}>
               <div className="mb-4 flex items-center gap-2">
                 <Users className="h-4 w-4 text-[hsl(24_95%_53%)]" />
@@ -959,7 +985,7 @@ export default function OverviewDashboard() {
                 ))}
               </div>
             </div>
-          </section>
+          </section> */}
 
           <section id="revenue" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("revenue")}>
@@ -977,7 +1003,7 @@ export default function OverviewDashboard() {
                   { label: "Trial Users", value: "200" },
                   { label: "MRR", value: `₹${(data?.revenue?.mrr || 0).toLocaleString()}` },
                   { label: "Conversion", value: `${data?.revenue?.conversionRate || 0}%` },
-                  { label: "Churn Rate", value: "3.2%" },
+                  { label: "Churn Rate", value: `${data?.revenue?.churnRate || 0}%` },
                 ].map((metric) => (
                   <div key={metric.label} className="rounded bg-[hsl(37_18%_91%/0.6)] p-2 dark:bg-[hsl(30_6%_18%)]">
                     <div className={cn("text-sm font-bold", strongTextClass)}>{metric.value}</div>
