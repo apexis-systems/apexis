@@ -245,16 +245,14 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
             });
         }
 
-        const [organization] = await organizations.findOrCreate({
-            where: { name: organization_name },
-            defaults: {
-                plan_id: plan.id,
-                plan_name: plan.name,
-                plan_price: plan.price,
-                plan_start_date: now,
-                plan_end_date: endDate,
-                storage_limit_mb: plan.storage_limit_mb
-            }
+        const organization = await organizations.create({
+            name: organization_name,
+            plan_id: plan.id,
+            plan_name: plan.name,
+            plan_price: plan.price,
+            plan_start_date: now,
+            plan_end_date: endDate,
+            storage_limit_mb: plan.storage_limit_mb
         });
 
         const adminCount = await users.count({
