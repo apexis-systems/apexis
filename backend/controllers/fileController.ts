@@ -89,11 +89,11 @@ export const confirmScreenshot = async (req: Request | any, res: Response) => {
             });
         }
 
-        // Find or create "Confirmation" folder
+        // Find or create "Confirmations" folder
         let folder = await folders.findOne({
             where: {
                 project_id,
-                name: { [Op.iLike]: 'Confirmation' },
+                name: { [Op.iLike]: 'Confirmations' },
                 folder_type: 'photo'
             }
         });
@@ -101,7 +101,7 @@ export const confirmScreenshot = async (req: Request | any, res: Response) => {
         if (!folder) {
             folder = await folders.create({
                 project_id,
-                name: 'Confirmation',
+                name: 'Confirmations',
                 client_visible: true,
                 folder_type: 'photo',
                 created_by: authUser.user_id
@@ -111,7 +111,7 @@ export const confirmScreenshot = async (req: Request | any, res: Response) => {
                 projectId: project_id,
                 userId: authUser.user_id,
                 type: 'edit',
-                description: `Created folder "Confirmation"`,
+                description: `Created folder "Confirmations"`,
                 metadata: { folderId: folder.id, type: 'photos' }
             });
         }

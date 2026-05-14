@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCheck } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCircle2, CheckCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -272,7 +272,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   };
 
   const handleCreateFolder = async (name: string) => {
-    if (name.toLowerCase() === 'archive') {
+    const lname = name.toLowerCase();
+    if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
       toast.error(t("archive_name_reserved"));
       return;
     }
@@ -290,7 +291,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
   const handleRenameFolder = async (newName: string) => {
     if (!editFolder) return;
-    if (newName.toLowerCase() === 'archive') {
+    const lname = newName.toLowerCase();
+    if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
       toast.error("The name 'Archive' is reserved for system use");
       return;
     }
@@ -575,6 +577,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           const folderDocs = docs.filter((d) => d.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
           const isSelected = selectedFolders.has(folder.id);
+          const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
           const isArchiveFolder = folder.name.toLowerCase() === 'archive';
           return (
             <button
@@ -603,7 +606,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
                         className="rounded-full p-1 hover:bg-secondary transition-colors" 
                         title={t('rename_folder_tip')}
-                        disabled={isArchiveFolder}
+                        disabled={isArchiveFolder || isConfirmationFolder}
                       >
                         <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
@@ -618,9 +621,15 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
                 </div>
               )}
-              <FolderIcon className={`h-8 w-8 ${isArchiveFolder ? 'text-amber-500' : 'text-accent'}`} />
-              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-amber-600' : 'text-foreground'}`}>
-                {folder.name}
+              {isArchiveFolder ? (
+                <Archive className="h-8 w-8 text-slate-500" />
+              ) : isConfirmationFolder ? (
+                <CheckCircle2 className="h-8 w-8 text-orange-500" />
+              ) : (
+                <FolderIcon className="h-8 w-8 text-accent" />
+              )}
+              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
+                {isConfirmationFolder ? "Confirmations" : folder.name}
               </span>
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="text-[9px] text-muted-foreground mr-1">
