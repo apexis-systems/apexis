@@ -305,38 +305,55 @@ export const getFeedbackData = async () => {
 };
 
 export const getFreemiumLeads = async () => {
-    // Trial users are users without an organization but have some activity
-    const trialUsers = await users.findAll({
-        where: { organization_id: null },
-        attributes: ['id', 'name', 'email', 'createdAt'],
-        limit: 20
+    // Fetch users who are part of an organization on the 'Free' (Freemium) plan
+    const freemiumUsers = await users.findAll({
+        where: { role: 'admin' },
+        include: [{
+            model: organizations,
+            where: { plan_name: 'Freemium' },
+            required: true,
+            attributes: ['id', 'name', 'plan_start_date', 'plan_end_date']
+        }],
+        attributes: ['id', 'name', 'email', 'phone_number', 'createdAt'],
+        order: [['createdAt', 'DESC']]
     });
 
-    return trialUsers.map((u: any) => {
-        const createdAt = new Date(u.createdAt);
-        const trialEnd = new Date(createdAt);
-        trialEnd.setDate(trialEnd.getDate() + 14);
-
+    return await Promise.all(freemiumUsers.map(async (u: any) => {
+        const org = u.organization;
         const now = new Date();
-        const diffTime = trialEnd.getTime() - now.getTime();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        // Fetch dynamic metrics for each lead
+        const [activityCount, recentActivity, transactionCount] = await Promise.all([
+            activities.count({ where: { user_id: u.id, createdAt: { [Op.gte]: thirtyDaysAgo } } }),
+            activities.count({ where: { user_id: u.id, createdAt: { [Op.gte]: sevenDaysAgo } } }),
+            transactions.count({ where: { organization_id: org?.id, payment_status: 'success' } })
+        ]);
+
+        const createdAt = new Date(u.createdAt);
+        const planStart = org?.plan_start_date ? new Date(org.plan_start_date) : createdAt;
+        const planEnd = org?.plan_end_date ? new Date(org.plan_end_date) : new Date(planStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+        const diffTime = planEnd.getTime() - now.getTime();
         const remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         return {
             id: u.id,
             name: u.name,
             email: u.email,
-            phone: "+91 0000000000",
-            company: "Individual / Startup",
+            phone: u.phone_number || "+91 0000000000",
+            company: org?.name || "Individual / Startup",
             installDate: u.createdAt,
-            trialStart: u.createdAt,
-            trialEnd: trialEnd.toISOString(),
+            trialStart: planStart.toISOString(),
+            trialEnd: planEnd.toISOString(),
             remaining: remaining > 0 ? remaining : 0,
-            daysUsed: 14 - (remaining > 0 ? remaining : 0),
-            activityScore: Math.floor(Math.random() * 100),
-            isActive: true,
-            converted: false
+            daysUsed: Math.max(0, Math.floor((now.getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24))),
+            activityScore: Math.min(100, Math.floor((activityCount / 30) * 100)), // 30+ activities in 30 days = 100 score
+            isActive: recentActivity > 0, // Active if any activity in last 7 days
+            converted: transactionCount > 0 // True if they've ever made a successful payment
         };
-    });
+    }));
 };
 
 export const getSaasGrowthAnalytics = async () => {
@@ -369,35 +386,35 @@ export const getSaasGrowthAnalytics = async () => {
             users.count(isAllTime ? {} : { where: { createdAt: { [Op.gte]: effectiveStartDate } } }),
             organizations.count(isAllTime ? {} : { where: { createdAt: { [Op.gte]: effectiveStartDate } } }),
             projects.count(isAllTime ? {} : { where: { createdAt: { [Op.gte]: effectiveStartDate } } }),
-            transactions.count({ 
-                where: { 
-                    payment_status: 'success', 
-                    created_at: isAllTime ? { [Op.gte]: new Date(0) } : { [Op.gte]: effectiveStartDate } 
-                }, 
-                col: 'user_id', distinct: true 
+            transactions.count({
+                where: {
+                    payment_status: 'success',
+                    created_at: isAllTime ? { [Op.gte]: new Date(0) } : { [Op.gte]: effectiveStartDate }
+                },
+                col: 'user_id', distinct: true
             }),
-            transactions.sum('payment_amount', { 
-                where: { 
-                    payment_status: 'success', 
-                    created_at: isAllTime ? { [Op.gte]: new Date(0) } : { [Op.gte]: effectiveStartDate } 
-                } 
+            transactions.sum('payment_amount', {
+                where: {
+                    payment_status: 'success',
+                    created_at: isAllTime ? { [Op.gte]: new Date(0) } : { [Op.gte]: effectiveStartDate }
+                }
             }),
 
             users.count({ where: { createdAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } }),
             organizations.count({ where: { createdAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } }),
             projects.count({ where: { createdAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } }),
-            transactions.count({ 
-                where: { 
-                    payment_status: 'success', 
-                    created_at: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } 
-                }, 
-                col: 'user_id', distinct: true 
+            transactions.count({
+                where: {
+                    payment_status: 'success',
+                    created_at: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] }
+                },
+                col: 'user_id', distinct: true
             }),
-            transactions.sum('payment_amount', { 
-                where: { 
-                    payment_status: 'success', 
-                    created_at: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } 
-                } 
+            transactions.sum('payment_amount', {
+                where: {
+                    payment_status: 'success',
+                    created_at: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] }
+                }
             })
         ]);
 
@@ -690,7 +707,7 @@ export const getPlatformInsights = async () => {
         features: [
             { name: "Chat", usage: calcPct(chatRoomCount), count: chatRoomCount },
             { name: "Snags", usage: calcPct(snagCount), count: snagCount },
-            { name: "Drawings", usage: calcPct(drawingCount), count: drawingCount },
+            { name: "Files", usage: calcPct(drawingCount), count: drawingCount },
             { name: "RFIs", usage: calcPct(rfiCount), count: rfiCount },
         ],
         insights: [
@@ -774,7 +791,7 @@ export const getCompanyUsageData = async () => {
 
     const companyUsage = await Promise.all(
         orgs.map(async (org: any) => {
-            const [projectCount, userCount, messageCount, snagCount, rfiCount] = await Promise.all([
+            const [projectCount, userCount, messageCount, snagCount, rfiCount, photoCount, pdfCount] = await Promise.all([
                 projects.count({ where: { organization_id: org.id } }),
                 users.count({ where: { organization_id: org.id } }),
                 chat_messages.count({
@@ -804,14 +821,37 @@ export const getCompanyUsageData = async () => {
                         },
                     ],
                 }),
+                files.count({
+                    include: [{
+                        model: projects,
+                        where: { organization_id: org.id },
+                        required: true
+                    }],
+                    where: {
+                        file_type: { [Op.like]: 'image/%' }
+                    }
+                }),
+                files.count({
+                    include: [{
+                        model: projects,
+                        where: { organization_id: org.id },
+                        required: true
+                    }],
+                    where: {
+                        file_type: 'application/pdf'
+                    }
+                })
             ]);
 
             return {
+                id: org.id,
                 name: org.name,
                 projects: projectCount,
                 users: userCount,
                 messages: messageCount,
                 tasks: snagCount + rfiCount,
+                photos: photoCount,
+                pdfs: pdfCount,
             };
         })
     );
@@ -826,11 +866,17 @@ export const getProductUsageData = async () => {
         d.setMonth(d.getMonth() - i);
         const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
 
-        const [projectCount, drawingCount, messageCount, releaseCount] = await Promise.all([
+        const [projectCount, photoCount, pdfCount, messageCount, releaseCount] = await Promise.all([
             projects.count({ where: { createdAt: { [Op.lte]: endOfMonth } } }),
             files.count({
                 where: {
                     file_type: { [Op.like]: 'image/%' },
+                    createdAt: { [Op.lte]: endOfMonth }
+                }
+            }),
+            files.count({
+                where: {
+                    file_type: 'application/pdf',
                     createdAt: { [Op.lte]: endOfMonth }
                 }
             }),
@@ -841,7 +887,8 @@ export const getProductUsageData = async () => {
         months.push({
             month: d.toLocaleString('default', { month: 'short' }),
             projects: projectCount,
-            drawings: drawingCount,
+            photos: photoCount,
+            pdfs: pdfCount,
             messages: messageCount,
             releases: releaseCount
         });
@@ -963,7 +1010,107 @@ export const getConversionOpportunitiesData = async () => {
         .sort((a: any, b: any) => (b.projects + b.drawings / 10) - (a.projects + a.drawings / 10))
         .slice(0, 10);
 };
+export const getOrganizationAnalyticsDetails = async (orgId: string | number) => {
+    const [org, orgProjects, orgUsers, orgActivities] = await Promise.all([
+        organizations.findByPk(orgId, {
+            include: [{ model: plans, as: 'plan' }]
+        }),
+        projects.findAll({
+            where: { organization_id: orgId }
+        }),
+        users.findAll({ where: { organization_id: orgId } }),
+        activities.findAll({
+            include: [{
+                model: projects,
+                as: 'project',
+                where: { organization_id: orgId },
+                required: true
+            }, {
+                model: users,
+                as: 'user',
+                attributes: ['name']
+            }],
+            order: [['createdAt', 'DESC']],
+            limit: 20
+        })
+    ]);
 
+    if (!org) return null;
 
+    const admin = orgUsers.find((u: any) => u.role === 'admin') || orgUsers.find((u: any) => u.is_primary) || orgUsers[0];
+    const projectStats = await Promise.all(orgProjects.map(async (project: any) => {
+        const [taskCount, fileCount, projectRooms] = await Promise.all([
+            snags.count({ where: { project_id: project.id } }),
+            files.count({ where: { project_id: project.id } }),
+            rooms.findAll({ where: { project_id: project.id }, attributes: ['id'] })
+        ]);
 
+        const roomIds = projectRooms.map((r: any) => r.id);
+        console.log(roomIds)
+        const messageCount = roomIds.length > 0
+            ? await chat_messages.count({ where: { room_id: { [Op.in]: roomIds } } })
+            : 0;
+
+        return {
+            id: project.id,
+            name: project.name,
+            tasks: taskCount,
+            messages: messageCount,
+            files: fileCount,
+            status: project.status,
+            createdAt: project.createdAt
+        };
+    }));
+
+    return {
+        organization: org,
+        admin: {
+            name: admin?.name || "N/A",
+            email: admin?.email || "N/A",
+            phone: (admin as any)?.phone_number || "N/A"
+        },
+        projects: projectStats,
+        activities: orgActivities.map((act: any) => {
+            const typeVerbs: Record<string, string> = {
+                upload: "uploaded a file",
+                upload_photo: "added a photo",
+                comment: "commented",
+                share: "shared a project",
+                edit: "edited",
+                delete: "deleted something"
+            };
+            const verb = typeVerbs[act.type] || act.type || "performed an action";
+            return {
+                icon: "Circle",
+                text: `${act.user?.name || 'User'} ${verb} in ${act.project?.name || 'a project'}`,
+                time: act.createdAt,
+                type: act.type
+            };
+        })
+    };
+};
+
+export const getAllUsersDetails = async () => {
+    const allUsers = await users.findAll({
+        where: {
+            role: { [Op.ne]: 'superadmin' }
+        },
+        include: [{
+            model: organizations,
+            attributes: ['name']
+        }],
+        order: [['createdAt', 'DESC']]
+    });
+
+    return allUsers.map((user: any) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone_number || "N/A",
+        orgName: user.organization?.name || "Independent",
+        role: user.role,
+        lastActive: user.updatedAt,
+        createdAt: user.createdAt
+    }));
+};
 

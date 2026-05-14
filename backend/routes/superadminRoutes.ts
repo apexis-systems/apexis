@@ -8,7 +8,9 @@ import {
     getDashboardOverview,
     getGrowthAnalytics,
     getRevenueMetrics,
-    getFreemiumLeadList
+    getFreemiumLeadList,
+    getOrganizationDetails,
+    getUsersList
 } from "../controllers/superadminController.ts";
 import { verifyToken, isSuperAdmin } from "../middleware/verifyToken.ts";
 
@@ -25,6 +27,8 @@ router.get("/dashboard/revenue", getRevenueMetrics);
 router.get("/dashboard/leads", getFreemiumLeadList);
 router.get("/teams", getSuperAdmins);
 router.get("/organizations", getOrganizations);
+router.get("/organizations/:id", getOrganizationDetails);
+router.get("/users", getUsersList);
 router.post("/invite", inviteSuperAdmin);
 router.delete("/teams/:id", deleteSuperAdmin);
 

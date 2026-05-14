@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Activity,
   AlertCircle,
@@ -39,8 +40,18 @@ import {
 } from "recharts";
 import { SUPERADMIN_SECTION_HIGHLIGHT_EVENT } from "@/components/superadmin/SuperadminSidebar";
 import { cn } from "@/lib/utils";
-import { getDashboardOverview } from "@/services/superadminService";
+import { getDashboardOverview, getOrganizationDetails } from "@/services/superadminService";
 import { useSocket } from "@/contexts/SocketContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Mail, Phone, ExternalLink, Calendar, Search, Filter, MoreHorizontal, LayoutGrid, List } from "lucide-react";
 
 const chartGridStroke = "hsl(214,20%,90%)";
 const chartTickColor = "hsl(215,10%,45%)";
@@ -172,6 +183,7 @@ function MetricCard({
   changeType,
   icon: Icon,
   sparkline,
+  onClick,
 }: {
   title: string;
   value: string;
@@ -179,6 +191,7 @@ function MetricCard({
   changeType: "up" | "down" | "neutral";
   icon: typeof Building2;
   sparkline: number[];
+  onClick?: () => void;
 }) {
   const max = Math.max(...sparkline);
   const min = Math.min(...sparkline);
@@ -190,7 +203,14 @@ function MetricCard({
     .join(" ");
 
   return (
-    <div className={cn(cardClass, "relative overflow-hidden p-4")}>
+    <div 
+      onClick={onClick}
+      className={cn(
+        cardClass, 
+        "relative overflow-hidden p-4 transition-all duration-300",
+        onClick && "cursor-pointer hover:border-[hsl(24_95%_53%/0.4)] hover:shadow-md hover:translate-y-[-2px] active:scale-[0.98]"
+      )}
+    >
       <div className="mb-2 flex items-center gap-2">
         <div className="flex h-7 w-7 items-center justify-center rounded bg-[hsl(24_95%_53%/0.1)]">
           <Icon className="h-3.5 w-3.5 text-[hsl(24_95%_53%)]" />
@@ -246,6 +266,7 @@ const activityColorMap: Record<string, string> = {
 };
 
 export default function OverviewDashboard() {
+  const router = useRouter();
   const highlightedSection = useHashScroll();
   const { socket, isConnected } = useSocket();
   const [loading, setLoading] = useState(true);
@@ -253,6 +274,10 @@ export default function OverviewDashboard() {
   const [activitiesList, setActivitiesList] = useState<any[]>([]);
   const [showAllUsage, setShowAllUsage] = useState(false);
   const [timeRange, setTimeRange] = useState("allTime");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [orgDetails, setOrgDetails] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
 
   useEffect(() => {
@@ -289,6 +314,20 @@ export default function OverviewDashboard() {
     }
   }, [socket, isConnected]);
 
+  const handleCompanyClick = async (companyId: string) => {
+    setSelectedCompanyId(companyId);
+    setIsModalOpen(true);
+    setLoadingDetails(true);
+    try {
+      const details = await getOrganizationDetails(companyId);
+      setOrgDetails(details);
+    } catch (error) {
+      console.error("Failed to fetch company details:", error);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
@@ -311,6 +350,7 @@ export default function OverviewDashboard() {
       changeType: (currentStats.activeCompanies?.type || "neutral") as "up" | "down" | "neutral",
       icon: Building2,
       sparkline: [12, 19, 28, 38, 52, 65, 78, currentStats.activeCompanies?.total || 0],
+      targetId: "company-usage"
     },
     {
       title: "Active Projects",
@@ -319,6 +359,7 @@ export default function OverviewDashboard() {
       changeType: (currentStats.activeProjects?.type || "neutral") as "up" | "down" | "neutral",
       icon: FolderKanban,
       sparkline: [28, 45, 72, 110, 148, 190, 220, currentStats.activeProjects?.total || 0],
+      targetId: "active-projects"
     },
     {
       title: "Total Users",
@@ -327,6 +368,7 @@ export default function OverviewDashboard() {
       changeType: (currentStats.totalUsers?.type || "neutral") as "up" | "down" | "neutral",
       icon: Users,
       sparkline: [180, 340, 560, 820, 1100, 1480, 1750, currentStats.totalUsers?.total || 0],
+      targetUrl: "/superadmin/users"
     },
     {
       title: "Daily Active Users",
@@ -396,8 +438,22 @@ export default function OverviewDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        {metricsList.map((metric) => (
-          <MetricCard key={metric.title} {...metric} />
+        {metricsList.map((metric: any) => (
+          <MetricCard 
+            key={metric.title} 
+            {...metric} 
+            onClick={metric.targetId || metric.targetUrl ? () => {
+              if (metric.targetUrl) {
+                router.push(metric.targetUrl);
+              } else if (metric.targetId) {
+                const element = document.getElementById(metric.targetId);
+                if (element) {
+                  element.scrollIntoView({ behavior: "smooth", block: "start" });
+                  window.location.hash = metric.targetId;
+                }
+              }
+            } : undefined}
+          />
         ))}
       </div>
 
@@ -466,7 +522,7 @@ export default function OverviewDashboard() {
                 {[
                   { label: "Tasks Completed", value: String(data?.stats.tasksCompletedToday || 0), sub: "Today" },
                   { label: "RFIs Pending", value: String(data?.stats.rfisPending || 0), sub: "Requires attention" },
-                  { label: "Photos Today", value: String(data?.stats.drawingsUploadedToday || 0), sub: "Last 24h" },
+                  { label: "Files Today", value: String(data?.stats.drawingsUploadedToday || 0), sub: "Last 24h" },
                   { label: "Total Files", value: String(data?.comms.filesBreakdown.reduce((acc: number, f: any) => acc + f.count, 0) || 0), sub: "Across all projects" },
                 ].map((metric) => (
                   <div key={metric.label} className="rounded bg-[hsl(37_18%_91%/0.6)] p-2.5 dark:bg-[hsl(30_6%_18%)]">
@@ -492,10 +548,11 @@ export default function OverviewDashboard() {
             </div>
           </section>
 
-          <div className={cardClass}>
-            <h3 className={cn("mb-4 text-sm font-semibold", strongTextClass)}>
-              Most Active Projects
-            </h3>
+          <section id="active-projects" className={scrollSectionClass}>
+            <div className={getHighlightedCardClass("active-projects")}>
+              <h3 className={cn("mb-4 text-sm font-semibold", strongTextClass)}>
+                Most Active Projects
+              </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -541,6 +598,7 @@ export default function OverviewDashboard() {
               </table>
             </div>
           </div>
+        </section>
 
           <section id="communication" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("communication")}>
@@ -695,8 +753,9 @@ export default function OverviewDashboard() {
                   <tbody>
                     {(showAllUsage ? (data?.companyUsage || []) : (data?.companyUsage || []).slice(0, 6)).map((company: any, index: number) => (
                       <tr
-                        key={company.name}
-                        className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
+                        key={company.id || company.name}
+                        onClick={() => handleCompanyClick(company.id)}
+                        className="border-b border-[hsl(35_15%_85%/0.5)] cursor-pointer transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
                         <td className={cn("py-2.5 font-medium", mutedTextClass)}>{index + 1}</td>
                         <td className={cn("py-2.5 font-medium", strongTextClass)}>{company.name}</td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.projects}</td>
@@ -732,7 +791,6 @@ export default function OverviewDashboard() {
               )}
             </div>
           </section>
-
         </div>
 
         <div className="space-y-4 xl:col-span-4">
@@ -774,7 +832,7 @@ export default function OverviewDashboard() {
             </div>
           </div> */}
 
-          <section id="live-activity" className={scrollSectionClass}>
+          {/* <section id="live-activity" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("live-activity")}>
               <div className="mb-4 flex items-center gap-2">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
@@ -805,7 +863,7 @@ export default function OverviewDashboard() {
                 )}
               </div>
             </div>
-          </section>
+          </section> */}
 
           <section id="alerts" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("alerts")}>
@@ -890,103 +948,6 @@ export default function OverviewDashboard() {
             </div>
           </section>
 
-          {/* <section id="system-health" className={scrollSectionClass}>
-            <div className={getHighlightedCardClass("system-health")}>
-              <div className="mb-4 flex items-center gap-2">
-                <Monitor className="h-4 w-4 text-[hsl(24_95%_53%)]" />
-                <div>
-                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
-                    System Health
-                  </h3>
-                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-                    Core uptime, performance, and storage indicators
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: "Server Uptime", value: data?.stats.systemHealth?.uptime || "99.9%", status: "good" },
-                  { label: "API Response Time", value: data?.stats.systemHealth?.responseTime || "150ms", status: "good" },
-                  { label: "File Storage Used", value: data?.stats.systemHealth?.storageUsed || "0 GB", status: "warning" },
-                  { label: "Failed Uploads", value: data?.stats.systemHealth?.failedUploads || "0.0%", status: "good" },
-                ].map((metric) => (
-                  <div
-                    key={metric.label}
-                    className="flex items-start gap-3 rounded bg-[hsl(37_18%_91%/0.55)] p-3 dark:bg-[hsl(30_6%_18%)]">
-                    {metric.status === "good" ? (
-                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                    )}
-                    <div>
-                      <p className={cn("text-lg font-bold", strongTextClass)}>{metric.value}</p>
-                      <p className={cn("text-[10px] font-medium uppercase tracking-[0.14em]", mutedTextClass)}>
-                        {metric.label}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section> */}
-
-          {/* <section id="user-behavior" className={scrollSectionClass}>
-            <div className={getHighlightedCardClass("user-behavior")}>
-              <div className="mb-4 flex items-center gap-2">
-                <Users className="h-4 w-4 text-[hsl(24_95%_53%)]" />
-                <div>
-                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
-                    User Behavior
-                  </h3>
-                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-                    Session patterns and the most-used surfaces across the platform
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-4 grid grid-cols-2 gap-3">
-                {[
-                  { label: "Avg Session Time", value: data?.stats.userBehavior?.avgSessionTime || "12 min" },
-                  { label: "Sessions Per Day", value: data?.stats.userBehavior?.sessionsPerDay || "3.5" },
-                ].map((metric) => (
-                  <div
-                    key={metric.label}
-                    className="rounded bg-[hsl(37_18%_91%/0.55)] p-3 dark:bg-[hsl(30_6%_18%)]">
-                    <p className={cn("text-2xl font-bold", strongTextClass)}>{metric.value}</p>
-                    <p className={cn("text-[10px] font-medium uppercase tracking-[0.14em]", mutedTextClass)}>
-                      {metric.label}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                <p className={cn("text-xs font-medium uppercase tracking-[0.14em]", mutedTextClass)}>
-                  Most Used Screens
-                </p>
-                {(data?.screenUsage || [
-                  { screen: "Chat", sessions: 42 },
-                  { screen: "Tasks", sessions: 28 },
-                  { screen: "Drawings", sessions: 18 },
-                  { screen: "RFIs", sessions: 8 },
-                  { screen: "Dashboard", sessions: 4 },
-                ]).map((screen: any) => (
-                  <div key={screen.screen} className="flex items-center gap-2">
-                    <span className={cn("w-20 text-xs font-medium", strongTextClass)}>{screen.screen}</span>
-                    <div className="h-4 flex-1 overflow-hidden rounded bg-[hsl(37_18%_91%)] dark:bg-[hsl(30_6%_18%)]">
-                      <div
-                        className="h-full rounded bg-[hsl(24_95%_53%)]"
-                        style={{ width: `${screen.sessions}%` }}
-                      />
-                    </div>
-                    <span className={cn("w-10 text-right text-xs", mutedTextClass)}>{screen.sessions}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section> */}
-
           <section id="revenue" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("revenue")}>
               <h3 className={cn("mb-1 text-sm font-semibold", strongTextClass)}>
@@ -1039,8 +1000,195 @@ export default function OverviewDashboard() {
               </ResponsiveContainer>
             </div>
           </section>
+
+          {/* <section id="system-health" className={scrollSectionClass}>
+            <div className={getHighlightedCardClass("system-health")}>
+              <div className="mb-4 flex items-center gap-2">
+                <Monitor className="h-4 w-4 text-[hsl(24_95%_53%)]" />
+                <div>
+                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                    System Health
+                  </h3>
+                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+                    Core uptime, performance, and storage indicators
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Server Uptime", value: data?.stats.systemHealth?.uptime || "99.9%", status: "good" },
+                  { label: "API Response Time", value: data?.stats.systemHealth?.responseTime || "150ms", status: "good" },
+                  { label: "File Storage Used", value: data?.stats.systemHealth?.storageUsed || "0 GB", status: "warning" },
+                  { label: "Failed Uploads", value: data?.stats.systemHealth?.failedUploads || "0.0%", status: "good" },
+                ].map((metric) => (
+                  <div
+                    key={metric.label}
+                    className="flex items-start gap-3 rounded bg-[hsl(37_18%_91%/0.55)] p-3 dark:bg-[hsl(30_6%_18%)]">
+                    {metric.status === "good" ? (
+                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    )}
+                    <div>
+                      <p className={cn("text-lg font-bold", strongTextClass)}>{metric.value}</p>
+                      <p className={cn("text-[10px] font-medium uppercase tracking-[0.14em]", mutedTextClass)}>
+                        {metric.label}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section> */}
         </div>
       </div>
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-[95vw] lg:max-w-[900px] xl:max-w-[1400px] max-h-[92vh] p-0 overflow-hidden bg-[hsl(39_30%_97%)] dark:bg-[hsl(30_8%_14%)] border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)] shadow-2xl">
+          <DialogHeader className="p-8 pb-4 border-b border-[hsl(35_15%_85%/0.5)] dark:border-[hsl(30_8%_22%/0.5)]">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-5">
+                <div className="h-14 w-14 rounded-2xl bg-[hsl(24_95%_53%/0.12)] flex items-center justify-center shadow-inner">
+                  <Building2 className="h-7 w-7 text-[hsl(24_95%_53%)]" />
+                </div>
+                <div>
+                  <DialogTitle className={cn("text-2xl font-bold tracking-tight", strongTextClass)}>
+                    {loadingDetails ? "Loading Details..." : orgDetails?.organization?.name}
+                  </DialogTitle>
+                  <DialogDescription className={cn("text-sm mt-1 flex items-center gap-2", mutedTextClass)}>
+                    <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Comprehensive organization analysis & platform metrics
+                  </DialogDescription>
+                </div>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="overflow-y-auto max-h-[calc(90vh-120px)] p-6 pt-2 space-y-6">
+            {loadingDetails ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <Activity className="h-10 w-10 animate-spin text-[hsl(24_95%_53%)]" />
+                <p className={cn("text-sm font-medium", mutedTextClass)}>Fetching real-time organization data...</p>
+              </div>
+            ) : (
+              <>
+                {/* Admin Contact Info */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {[
+                    { label: "Admin Name", value: orgDetails?.admin?.name, icon: Users, sub: "Primary Contact" },
+                    { label: "Email Address", value: orgDetails?.admin?.email, icon: Mail, sub: "Work Email" },
+                    { label: "Phone Number", value: orgDetails?.admin?.phone, icon: Phone, sub: "Contact Number" },
+                  ].map((card) => (
+                    <div key={card.label} className="group relative rounded-2xl border border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)] bg-white/60 dark:bg-white/5 p-5 transition-all hover:bg-white dark:hover:bg-white/10 hover:shadow-lg hover:border-[hsl(24_95%_53%/0.3)]">
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-xl bg-[hsl(24_95%_53%/0.1)] flex items-center justify-center text-[hsl(24_95%_53%)] group-hover:scale-110 transition-transform">
+                          <card.icon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-0.5">{card.label}</div>
+                          <div className={cn("text-base font-bold truncate", strongTextClass)} title={card.value}>{card.value}</div>
+                          <div className="text-[10px] opacity-40 font-medium mt-0.5">{card.sub}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Project Details */}
+                  <div className="lg:col-span-8 space-y-6">
+                    <div className="flex items-center justify-between px-1">
+                      <h4 className={cn("text-base font-bold flex items-center gap-3", strongTextClass)}>
+                        <FolderKanban className="h-5 w-5 text-[hsl(24_95%_53%)]" />
+                        Organization Projects
+                      </h4>
+                      <Badge variant="outline" className="px-3 py-1 bg-[hsl(24_95%_53%/0.05)] text-[hsl(24_95%_53%)] border-[hsl(24_95%_53%/0.2)]">
+                        {orgDetails?.projects?.length || 0} Total Projects
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {orgDetails?.projects?.map((project: any) => (
+                        <div key={project.id} className="group relative rounded-2xl border border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)] bg-white dark:bg-[hsl(30_8%_18%)] p-5 transition-all hover:shadow-xl hover:translate-y-[-2px] hover:border-[hsl(24_95%_53%/0.4)]">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="space-y-1.5 min-w-0">
+                              <h5 className={cn("text-base font-bold truncate", strongTextClass)}>{project.name}</h5>
+                              <div className="flex items-center gap-3 text-[11px] opacity-60">
+                                <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {new Date(project.createdAt).toLocaleDateString()}</span>
+                                {/* <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                                  project.status === 'Active' ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+                                )}>
+                                  {project.status || 'Active'}
+                                </span> */}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[hsl(35_15%_85%/0.4)] dark:border-[hsl(30_8%_22%/0.4)]">
+                             <div className="bg-[hsl(39_30%_97%)] dark:bg-black/20 rounded-lg p-2.5 text-center">
+                                <div className={cn("text-lg font-black", strongTextClass)}>{project.tasks}</div>
+                                <div className="text-[10px] uppercase opacity-50 font-black tracking-tighter">Total Tasks</div>
+                             </div>
+                             <div className="bg-[hsl(39_30%_97%)] dark:bg-black/20 rounded-lg p-2.5 text-center">
+                                <div className={cn("text-lg font-black", strongTextClass)}>{project.files}</div>
+                                <div className="text-[10px] uppercase opacity-50 font-black tracking-tighter">Files</div>
+                             </div>
+                          </div>
+                        </div>
+                      ))}
+                      {(!orgDetails?.projects || orgDetails.projects.length === 0) && (
+                        <div className="py-10 text-center border-2 border-dashed border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)] rounded-xl opacity-40">
+                           No projects found in this organization.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Live Activity */}
+                  <div className="lg:col-span-4 space-y-6">
+                    <div className="flex items-center justify-between px-1">
+                      <h4 className={cn("text-base font-bold flex items-center gap-3", strongTextClass)}>
+                         <div className="flex items-center justify-center h-5 w-5">
+                            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                         </div>
+                        Live Activity
+                      </h4>
+                      <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-tight">Real-time</Badge>
+                    </div>
+
+                    <div className="rounded-2xl border border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)] bg-white/40 dark:bg-black/20 overflow-hidden shadow-inner">
+                      <div className="max-h-[500px] overflow-y-auto p-6 space-y-6">
+                        {orgDetails?.activities?.map((activity: any, index: number) => (
+                          <div key={index} className="flex gap-4 relative group">
+                            {index !== orgDetails.activities.length - 1 && (
+                              <div className="absolute left-[9px] top-6 bottom-[-24px] w-[2px] bg-gradient-to-b from-[hsl(24_95%_53%/0.4)] to-transparent" />
+                            )}
+                            <div className="h-[20px] w-[20px] rounded-full bg-white dark:bg-[hsl(30_8%_14%)] border-2 border-[hsl(24_95%_53%)] flex items-center justify-center shrink-0 z-10 group-hover:scale-125 transition-transform">
+                              <div className="h-1.5 w-1.5 rounded-full bg-[hsl(24_95%_53%)]" />
+                            </div>
+                            <div className="space-y-1.5 flex-1 min-w-0">
+                              <p className={cn("text-xs leading-relaxed font-medium break-words", strongTextClass)}>{activity.text}</p>
+                              <p className="text-[10px] opacity-50 font-bold tracking-tight uppercase">{new Date(activity.time).toLocaleString()}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {(!orgDetails?.activities || orgDetails.activities.length === 0) && (
+                          <div className="py-24 text-center">
+                             <Activity className="h-10 w-10 mx-auto opacity-10 mb-3" />
+                             <p className="opacity-40 text-xs font-medium">No recent activity logged.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

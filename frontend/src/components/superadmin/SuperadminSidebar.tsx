@@ -62,7 +62,8 @@ export const superadminNavItems: SuperadminNavItem[] = [
   // { href: `${SUPERADMIN_DASHBOARD_PATH}#user-behavior`, label: "User Behavior", icon: Users, scrollTo: "user-behavior" },
   // { href: `${SUPERADMIN_DASHBOARD_PATH}#intelligence`, label: "Intelligence", icon: Brain, scrollTo: "intelligence" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#alerts`, label: "Alerts", icon: AlertTriangle, scrollTo: "alerts" },
-  { href: `${SUPERADMIN_DASHBOARD_PATH}#live-activity`, label: "Live Activity", icon: Activity, scrollTo: "live-activity" },
+  // { href: `${SUPERADMIN_DASHBOARD_PATH}#live-activity`, label: "Live Activity", icon: Activity, scrollTo: "live-activity" },
+  { href: "/superadmin/users", label: "Users", icon: Users },
   { href: "/superadmin/teams", label: "Teams", icon: ShieldCheck },
 ];
 

@@ -826,6 +826,97 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number) => {
     doc.text(pgText, pageWidth - m.right - pgW, textY, { lineBreak: false });
 };
 
+const drawUploadedPhotosSection = async (doc: any, uploadedPhotos: any[], left: number, r: number) => {
+    // Group photos by path
+    const groupedPhotos: Record<string, any[]> = {};
+    uploadedPhotos.forEach(photo => {
+        const path = photo.path || 'Root';
+        if (!groupedPhotos[path]) groupedPhotos[path] = [];
+        groupedPhotos[path].push(photo);
+    });
+
+    const gridCols = 3;
+    const gapX = 10;
+    const gapY = 30; 
+    const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
+    const imgH = imgW * 0.85;
+
+    for (const [folderPath, photos] of Object.entries(groupedPhotos)) {
+        // Check if we need a new page for the heading
+        if (doc.y > 650) {
+            doc.addPage();
+            doc.y = 85;
+        }
+
+        // Folder Heading
+        doc.moveDown(0.5);
+        doc.save()
+           .font('Helvetica-Bold')
+           .fontSize(8)
+           .fillColor(BRAND.ink)
+           .text(folderPath.toUpperCase(), left, doc.y, { underline: true })
+           .restore();
+        doc.moveDown(0.5);
+
+        let currentX = left;
+        let startY = doc.y;
+        let col = 0;
+
+        for (let i = 0; i < photos.length; i++) {
+            const photo = photos[i];
+
+            // Page break logic
+            if (startY + imgH > 750) {
+                doc.addPage();
+                doc.y = 85;
+                startY = doc.y;
+                currentX = left;
+                col = 0;
+                
+                // Re-print heading on new page if photos continue
+                doc.save()
+                   .font('Helvetica-Bold')
+                   .fontSize(7)
+                   .fillColor(BRAND.muted)
+                   .text(`${folderPath.toUpperCase()} (CONTINUED)`, left, doc.y)
+                   .restore();
+                doc.moveDown(0.5);
+                startY = doc.y;
+            }
+
+            try {
+                const imgBuffer = await fetchS3Buffer(photo.key);
+                doc.image(imgBuffer, currentX, startY, {
+                    fit: [imgW, imgH],
+                    align: 'center',
+                    valign: 'center'
+                });
+                const fileName = photo.key.split('/').pop() || 'image.jpg';
+                doc.font('Helvetica').fontSize(4).fillColor(BRAND.muted).text(fileName, currentX, startY + imgH + 3, { width: imgW, align: 'center' });
+            } catch (e) {
+                doc.rect(currentX, startY, imgW, imgH).stroke();
+                doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });
+            }
+
+            col++;
+            if (col === gridCols) {
+                col = 0;
+                currentX = left;
+                startY += imgH + gapY;
+                doc.y = startY;
+            } else {
+                currentX += imgW + gapX;
+            }
+        }
+        
+        if (col !== 0) {
+            startY += imgH + gapY;
+        }
+        doc.y = startY;
+        doc.moveDown(0.5);
+    }
+};
+
 
 /** --- DAILY REPORT RENDERER --- */
 
@@ -948,71 +1039,14 @@ export const generateDailyReportPDF = async (report: any, options: { includeSnag
             ], snagRows);
         }
 
-        // 5. Uploaded Photos
         const uploadedPhotos = summary.uploaded_photos || [];
         if (includePhotos && uploadedPhotos.length > 0) {
-            // Start Section 5 on a new page to ensure the 6-photo grid covers the page
             doc.addPage();
             doc.y = 85;
-
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('UPLOADED PHOTOS', left, doc.y).restore();
-
             doc.moveDown(1);
 
-            const gridCols = 3;
-            const gridRows = 4;
-            const photosPerPage = gridCols * gridRows;
-            const gapX = 10;
-            const gapY = 25;
-
-            const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.85;
-
-            let currentX = left;
-            let startY = doc.y;
-
-            for (let i = 0; i < uploadedPhotos.length; i++) {
-                const photo = uploadedPhotos[i];
-
-                if (i > 0 && i % photosPerPage === 0) {
-                    doc.addPage();
-                    doc.y = 85;
-                    startY = doc.y;
-                    currentX = left;
-                }
-
-                try {
-                    const imgBuffer = await fetchS3Buffer(photo.key);
-                    // Use 'fit' to prevent stretching and maintain aspect ratio
-                    doc.image(imgBuffer, currentX, startY, {
-                        fit: [imgW, imgH],
-                        align: 'center',
-                        valign: 'center'
-                    });
-
-                    // Draw path below image
-                    doc.font('Helvetica').fontSize(4.5).fillColor(BRAND.muted).text(
-                        photo.path,
-                        currentX,
-                        startY + imgH + 4,
-                        { width: imgW, align: 'center', lineBreak: false }
-                    );
-                } catch (e) {
-                    console.error("Failed to draw photo in report", e);
-                    doc.rect(currentX, startY, imgW, imgH).stroke();
-                    doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });
-                }
-
-                // Move to next column
-                if ((i + 1) % gridCols === 0) {
-                    currentX = left;
-                    startY += imgH + gapY;
-                    doc.y = startY;
-                } else {
-                    currentX += imgW + gapX;
-                }
-            }
-            doc.y = startY + (uploadedPhotos.length % gridCols !== 0 ? imgH + gapY : 0);
+            await drawUploadedPhotosSection(doc, uploadedPhotos, left, r);
         }
 
         // Finalize Headers & Footers
@@ -1160,76 +1194,16 @@ export const generateWeeklyReportPDF = async (report: any, options: { includeSna
         }
 
         // 6. Uploaded Photos
-        const summary = (report.summary || {}) as any;
-        const uploadedPhotos = summary.uploaded_photos || [];
+        const summary_weekly = (report.summary || {}) as any;
+        const uploadedPhotos = summary_weekly.uploaded_photos || [];
         if (includePhotos && uploadedPhotos.length > 0) {
             doc.addPage();
             doc.y = 85;
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('UPLOADED PHOTOS', left, doc.y).restore();
-
             doc.moveDown(1);
-            const gridCols = 3;
-            const gridRows = 4;
-            const photosPerPage = gridCols * gridRows;
-            const gapX = 10;
-            const gapY = 25;
-            const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.85;
 
-            let currentX = left;
-            let startY = doc.y;
-            for (let i = 0; i < uploadedPhotos.length; i++) {
-                const photo = uploadedPhotos[i];
-                if (i > 0 && i % photosPerPage === 0) {
-                    doc.addPage();
-                    doc.y = 85;
-                    startY = doc.y;
-                    currentX = left;
-                }
-                try {
-                    const imgBuffer = await fetchS3Buffer(photo.key);
-                    // Use 'fit' to prevent stretching and maintain aspect ratio
-                    doc.image(imgBuffer, currentX, startY, {
-                        fit: [imgW, imgH],
-                        align: 'center',
-                        valign: 'center'
-                    });
-                    doc.font('Helvetica').fontSize(4.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
-                } catch (e) {
-                    doc.rect(currentX, startY, imgW, imgH).stroke();
-                    doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });
-                }
-                if ((i + 1) % gridCols === 0) {
-                    currentX = left;
-                    startY += imgH + gapY;
-                    doc.y = startY;
-                } else {
-                    currentX += imgW + gapX;
-                }
-            }
-            doc.y = startY + (uploadedPhotos.length % gridCols !== 0 ? imgH + gapY : 0);
+            await drawUploadedPhotosSection(doc, uploadedPhotos, left, r);
         }
-
-        // // --- PAGE 2 ---
-        // doc.addPage();
-        // drawBrandedHeader(doc, 'Weekly Project Report', 'RECORD · REPORT · RELEASE', true);
-
-        // // Section 5 - Key Decisions
-        // const decisions = [
-        //     'Basement parking layout finalized with 142 car spaces',
-        //     'Lift shaft location approved at Grid C-4',
-        //     'Electrical routing revised per MEP coordination',
-        //     'Facade material changed to ACP cladding (approved by client)'
-        // ];
-        // drawBulletBox(doc, 'Section 5 — Key Decisions Taken This Week', decisions, BRAND.tableRowAlt);
-
-        // // Section 6 - Risks
-        // const risks = [
-        //     'Structural inputs pending from consultant — 3 days overdue',
-        //     'Facade material approval awaited from client',
-        //     'Landscape drawings delayed — impacting Phase 2 timeline'
-        // ];
-        // drawBulletBox(doc, 'Section 6 — Risks / Attention Items', risks, '#fef9c3', true);
 
         // Finalize Headers & Footers
         const range = doc.bufferedPageRange();
@@ -1382,77 +1356,16 @@ export const generateMonthlyReportPDF = async (report: any, options: { includeSn
         }
 
         // 6. Uploaded Photos
-        const summary = (report.summary || {}) as any;
-        const uploadedPhotos = summary.uploaded_photos || [];
+        const summary_monthly = (report.summary || {}) as any;
+        const uploadedPhotos = summary_monthly.uploaded_photos || [];
         if (includePhotos && uploadedPhotos.length > 0) {
             doc.addPage();
             doc.y = 85;
             doc.save().font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('UPLOADED PHOTOS', left, doc.y).restore();
-
             doc.moveDown(1);
-            const gridCols = 3;
-            const gridRows = 4;
-            const photosPerPage = gridCols * gridRows;
-            const gapX = 10;
-            const gapY = 25;
-            const imgW = (r - left - (gridCols - 1) * gapX) / gridCols;
-            const imgH = imgW * 0.85;
 
-            let currentX = left;
-            let startY = doc.y;
-            for (let i = 0; i < uploadedPhotos.length; i++) {
-                const photo = uploadedPhotos[i];
-                if (i > 0 && i % photosPerPage === 0) {
-                    doc.addPage();
-                    doc.y = 85;
-                    startY = doc.y;
-                    currentX = left;
-                }
-                try {
-                    const imgBuffer = await fetchS3Buffer(photo.key);
-                    // Use 'fit' to prevent stretching and maintain aspect ratio
-                    doc.image(imgBuffer, currentX, startY, {
-                        fit: [imgW, imgH],
-                        align: 'center',
-                        valign: 'center'
-                    });
-                    doc.font('Helvetica').fontSize(4.5).fillColor(BRAND.muted).text(photo.path, currentX, startY + imgH + 4, { width: imgW, align: 'center', lineBreak: false });
-                } catch (e) {
-                    doc.rect(currentX, startY, imgW, imgH).stroke();
-                    doc.fontSize(8).text('Image Error', currentX, startY + (imgH / 2), { width: imgW, align: 'center' });
-                }
-                if ((i + 1) % gridCols === 0) {
-                    currentX = left;
-                    startY += imgH + gapY;
-                    doc.y = startY;
-                } else {
-                    currentX += imgW + gapX;
-                }
-            }
-            doc.y = startY + (uploadedPhotos.length % gridCols !== 0 ? imgH + gapY : 0);
+            await drawUploadedPhotosSection(doc, uploadedPhotos, left, r);
         }
-
-
-        // // Section 7 - Key Decisions
-        // const decisions = [
-        //     'Basement parking layout finalized with 142 car spaces',
-        //     'Lift shaft location approved at Grid C-4',
-        //     'Electrical routing revised per MEP coordination',
-        //     'Facade material changed to ACP cladding (approved by client)',
-        //     'Landscape contractor shortlisted — final selection next month'
-        // ];
-        // drawBulletBox(doc, 'Section 7 — Key Decisions Taken This Month', decisions, BRAND.tableRowAlt);
-
-        // // Section 8 - Risks
-        // const risks = [
-        //     'Structural inputs pending from consultant — 3 days overdue',
-        //     'Facade material approval awaited from client',
-        //     'Landscape drawings delayed — impacting Phase 2 timeline',
-        //     'Plumbing riser conflict with structural beam at Level 4',
-        //     'Budget variance of 3.2% on MEP scope — review required'
-        // ];
-        // drawBulletBox(doc, 'Section 8 — Risks / Attention Items', risks, '#fef9c3', true);
-
 
         // Finalize Headers & Footers
         const range = doc.bufferedPageRange();
@@ -1466,6 +1379,7 @@ export const generateMonthlyReportPDF = async (report: any, options: { includeSn
         doc.end();
     });
 };
+
 
 export const generateSingleReportPDF = async (
     reportId: number,
