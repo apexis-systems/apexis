@@ -1,5 +1,5 @@
-import OverviewDashboard from "@/pages/Superadmin/OverviewDashboard";
+import CEODashboard from "@/pages/CEO/CEODashboard";
 
-export default function SuperadminDashboardPage() {
-  return <OverviewDashboard />;
+export default function CEODashboardPage() {
+  return <CEODashboard />;
 }
