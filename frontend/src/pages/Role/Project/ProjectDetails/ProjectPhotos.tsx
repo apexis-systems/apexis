@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, CheckCircle2, Archive } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 
@@ -527,7 +527,8 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
           const subFolders = folders.filter((f) => f.parent_id === folder.id);
           const isSelected = selectedFolders.has(folder.id);
-          const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation';
+          const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
+          const isArchiveFolder = folder.name.toLowerCase() === 'archive';
           return (
             <button
               key={folder.id}
@@ -578,9 +579,15 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
                 </div>
               )}
-              <FolderIcon className={`h-8 w-8 ${isConfirmationFolder ? 'text-orange-500' : 'text-accent'}`} />
-              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
-                {folder.name}
+              {isArchiveFolder ? (
+                <Archive className="h-8 w-8 text-slate-500" />
+              ) : isConfirmationFolder ? (
+                <CheckCircle2 className="h-8 w-8 text-orange-500" />
+              ) : (
+                <FolderIcon className="h-8 w-8 text-accent" />
+              )}
+              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
+                {isConfirmationFolder ? "Confirmations" : folder.name}
               </span>
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="text-[9px] text-muted-foreground mr-1">
