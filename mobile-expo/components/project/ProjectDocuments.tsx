@@ -1484,6 +1484,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                                 const isSelected = selectedFolders.has(folder.id);
                                 const isArchiveFolder = folder.name.toLowerCase() === 'archive';
+                                const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
                                 return (
                                     <View
                                         key={folder.id}
@@ -1517,14 +1518,18 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             }}
                                         />
                                         <View style={{ marginBottom: 8 }}>
-                                            <Feather name={isArchiveFolder ? "archive" : "folder"} size={36} color={isArchiveFolder ? '#64748b' : colors.primary} />
+                                            <Feather 
+                                                name={isArchiveFolder ? "archive" : (isConfirmationFolder ? "check-circle" : "folder")} 
+                                                size={isConfirmationFolder ? 32 : 36} 
+                                                color={isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : colors.primary)} 
+                                            />
                                         </View>
                                         {isSelected && (
                                             <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: colors.primary, borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : colors.text, textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : folder.name}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : colors.text), textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : (isConfirmationFolder ? "Confirmations" : folder.name)}</Text>
                                         <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                             {subcount > 0 
                                                 ? t('projectDocuments.filesFoldersCount', { fileCount: count, folderCount: subcount })
