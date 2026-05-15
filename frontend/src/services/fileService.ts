@@ -112,3 +112,13 @@ export const markFileSeen = async (fileId: string | number) => {
         throw error;
     }
 };
+
+export const unarchiveFile = async (fileId: string | number, folderId?: string | number | null) => {
+    try {
+        const response = await PrivateAxios.put(`/files/${fileId}/unarchive`, { folder_id: folderId ?? null });
+        return response.data;
+    } catch (error) {
+        console.error("unarchiveFile Error", error);
+        throw error;
+    }
+};

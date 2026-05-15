@@ -489,40 +489,39 @@ export const deleteFile = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "File not found" });
         }
 
+        // 0. Protection: Cannot delete files in protected folders (Confirmations, Archive)
+        if (file.folder_id) {
+            const folder = await folders.findByPk(file.folder_id, { transaction: t });
+            if (folder) {
+                const folderNameLower = folder.name.toLowerCase();
+                if (
+                    (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
+                    (folder.folder_type === 'document' && folderNameLower === 'archive')
+                ) {
+                    await t.rollback();
+                    return res.status(403).json({ error: "Forbidden: Files in system folders cannot be deleted" });
+                }
+            }
+        }
+
         // ONLY the original uploader can delete individual files
         if (String(file.created_by) !== String(authUser.user_id)) {
             await t.rollback();
             return res.status(403).json({ error: "Unauthorized: only the original uploader can delete this file" });
         }
 
-        const command = new DeleteObjectCommand({
-            Bucket: BUCKET_NAME,
-            Key: file.file_url
-        });
-
-        await s3Client.send(command);
-
         await logActivity({
             projectId: file.project_id,
             userId: authUser.user_id,
             type: 'delete',
-            description: `Deleted ${file.file_name}`,
+            description: `Moved ${file.file_name} to trash`,
             metadata: { fileId: file.id, type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
         });
 
         await file.destroy({ transaction: t });
 
-        // Update organization storage usage (decrement)
-        if (file.file_size_mb > 0) {
-            await organizations.decrement('storage_used_mb', {
-                by: file.file_size_mb,
-                where: { id: authUser.organization_id },
-                transaction: t
-            });
-        }
-
         await t.commit();
-        res.status(200).json({ message: "File deleted successfully" });
+        res.status(200).json({ message: "File moved to trash successfully" });
     } catch (error) {
         await t.rollback();
         console.error("Delete File Error:", error);
@@ -1097,25 +1096,59 @@ export const archiveFile = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Forbidden: Only Admins or project contributors can archive this file" });
         }
 
-        // 1. Find or create the "Archive" folder for this project
-        let archiveFolder = await folders.findOne({
-            where: {
-                project_id: file.project_id,
-                name: { [Op.iLike]: 'Archive' },
-                folder_type: 'document',
-                parent_id: null
-            }
-        });
+        // 1. Find or create the "Archive" folder
+        const isPhoto = file.file_type?.startsWith('image/');
+        let archiveFolder;
 
-        if (!archiveFolder) {
-            archiveFolder = await folders.create({
-                project_id: file.project_id,
-                name: "Archive",
-                client_visible: false, // Internal by default
-                parent_id: null,
-                created_by: authUser.user_id,
-                folder_type: 'document'
+        if (isPhoto) {
+            // Check if it's in a folder named Confirmations
+            let parentId = null;
+            if (file.folder_id) {
+                const currentFolder = await folders.findByPk(file.folder_id);
+                if (currentFolder && (currentFolder.name.toLowerCase() === 'confirmation' || currentFolder.name.toLowerCase() === 'confirmations')) {
+                    parentId = currentFolder.id;
+                }
+            }
+
+            archiveFolder = await folders.findOne({
+                where: {
+                    project_id: file.project_id,
+                    name: { [Op.iLike]: 'Archive' },
+                    folder_type: 'photo',
+                    parent_id: parentId
+                }
             });
+
+            if (!archiveFolder) {
+                archiveFolder = await folders.create({
+                    project_id: file.project_id,
+                    name: "Archive",
+                    client_visible: false,
+                    parent_id: parentId,
+                    created_by: authId,
+                    folder_type: 'photo'
+                });
+            }
+        } else {
+            archiveFolder = await folders.findOne({
+                where: {
+                    project_id: file.project_id,
+                    name: { [Op.iLike]: 'Archive' },
+                    folder_type: 'document',
+                    parent_id: null
+                }
+            });
+
+            if (!archiveFolder) {
+                archiveFolder = await folders.create({
+                    project_id: file.project_id,
+                    name: "Archive",
+                    client_visible: false,
+                    parent_id: null,
+                    created_by: authId,
+                    folder_type: 'document'
+                });
+            }
         }
 
         // 2. Update file: move to archive folder and set do_not_follow = true
@@ -1126,10 +1159,10 @@ export const archiveFile = async (req: Request, res: Response) => {
 
         await logActivity({
             projectId: file.project_id,
-            userId: authUser.user_id,
+            userId: authId,
             type: 'edit',
-            description: `Archived document "${oldFileName}" (Set to Do Not Follow)`,
-            metadata: { fileId: file.id, folderId: archiveFolder.id, type: 'documents' }
+            description: `Archived ${isPhoto ? 'photo' : 'document'} "${oldFileName}" (Set to Do Not Follow)`,
+            metadata: { fileId: file.id, folderId: archiveFolder.id, type: isPhoto ? 'photos' : 'documents' }
         });
 
         res.status(200).json({
@@ -1171,9 +1204,33 @@ export const unarchiveFile = async (req: Request, res: Response) => {
         }
 
         const oldFileName = file.file_name;
+        const isPhoto = file.file_type?.startsWith('image/');
 
-        // 1. Update file: move to target folder and reset do_not_follow = false
-        file.folder_id = (folder_id === '' || folder_id === 'root' || folder_id === null) ? null : folder_id;
+        // Smart destination: for photos inside a Confirmations/Archive folder,
+        // automatically return them to the parent Confirmations folder.
+        let resolvedFolderId: number | null = (folder_id === '' || folder_id === 'root' || folder_id === null || folder_id === undefined) ? null : Number(folder_id);
+
+        if (isPhoto && file.folder_id) {
+            const currentArchiveFolder = await folders.findByPk(file.folder_id);
+            if (
+                currentArchiveFolder &&
+                currentArchiveFolder.name.toLowerCase() === 'archive' &&
+                currentArchiveFolder.parent_id
+            ) {
+                // The archive folder has a parent — check if that parent is a Confirmations folder
+                const parentFolder = await folders.findByPk(currentArchiveFolder.parent_id);
+                if (
+                    parentFolder &&
+                    (parentFolder.name.toLowerCase() === 'confirmation' || parentFolder.name.toLowerCase() === 'confirmations')
+                ) {
+                    // Return photo to its original Confirmations folder
+                    resolvedFolderId = parentFolder.id;
+                }
+            }
+        }
+
+        // 1. Update file: move to resolved folder and reset do_not_follow = false
+        file.folder_id = resolvedFolderId;
         file.do_not_follow = false;
         await file.save({ fields: ['folder_id', 'do_not_follow'] });
 
@@ -1187,8 +1244,8 @@ export const unarchiveFile = async (req: Request, res: Response) => {
             projectId: file.project_id,
             userId: authUser.user_id,
             type: 'edit',
-            description: `Unarchived document "${oldFileName}" to ${targetFolderName}`,
-            metadata: { fileId: file.id, folderId: file.folder_id, type: 'documents' }
+            description: `Unarchived ${isPhoto ? 'photo' : 'document'} "${oldFileName}" to ${targetFolderName}`,
+            metadata: { fileId: file.id, folderId: file.folder_id, type: isPhoto ? 'photos' : 'documents' }
         });
 
         res.status(200).json({

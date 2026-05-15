@@ -14,7 +14,7 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow } from '@/services/fileService';
+import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, archiveFile, unarchiveFile } from '@/services/fileService';
 
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
@@ -243,8 +243,28 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       await deleteFile(photoId);
       setPhotos((prev) => prev.filter((p) => p.id !== photoId));
       toast.success(t('photo_deleted_msg'));
-    } catch (error) {
-      toast.error(t('failed_delete_photo'));
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('failed_delete_photo'));
+    }
+  };
+
+  const handleArchivePhoto = async (photoId: number) => {
+    try {
+      await archiveFile(photoId);
+      toast.success(t('photo_archived_success'));
+      importFolders();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('failed_to_archive_photo'));
+    }
+  };
+
+  const handleUnarchivePhoto = async (photoId: number) => {
+    try {
+      await unarchiveFile(photoId, null);
+      toast.success(t('photo_unarchived_success') || 'Photo unarchived successfully');
+      await importFolders();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('failed_to_unarchive_photo') || 'Failed to unarchive photo');
     }
   };
 
@@ -258,6 +278,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   };
 
   const handleCreateFolder = async (name: string) => {
+    const lname = name.toLowerCase();
+    if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
+      toast.error(t("archive_name_reserved") || "The name 'Archive' or 'Confirmations' is reserved for system use");
+      return;
+    }
     try {
       const res = await createFolder({ project_id: project.id, name, parent_id: selectedFolder, folder_type: 'photo' });
       toast.success(t('folder_created_msg').replace('{name}', name));
@@ -272,6 +297,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
 
   const handleRenameFolder = async (newName: string) => {
     if (!editFolder) return;
+    const lname = newName.toLowerCase();
+    if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
+      toast.error(t("archive_name_reserved") || "The name 'Archive' or 'Confirmations' is reserved for system use");
+      return;
+    }
     try {
       await updateFolder(editFolder.id, { name: newName });
       toast.success(t('folder_renamed_msg').replace('{name}', newName));
@@ -538,7 +568,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               }}
               className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
             >
-              {!isSelectionMode && (
+              {!isSelectionMode && !isConfirmationFolder && !isArchiveFolder && (
                 <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
                   {(user.role === 'admin' || user.role === 'superadmin') && (
                     <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
@@ -556,7 +586,6 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
                         className="rounded-full p-1 hover:bg-secondary transition-colors" 
                         title={t('rename_folder_tip')}
-                        disabled={isConfirmationFolder}
                       >
                         <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
@@ -564,8 +593,6 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         onClick={(e) => handleDeleteFolder(folder, e)} 
                         className="rounded-full p-1 hover:bg-destructive/10 transition-colors" 
                         title={t('delete_folder_tip')}
-                        
-                        disabled={isConfirmationFolder}
                       >
                         <Trash2 className="h-2.5 w-2.5 text-destructive" />
                       </button>
@@ -580,9 +607,9 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 </div>
               )}
               {isArchiveFolder ? (
-                <Archive className="h-8 w-8 text-slate-500" />
+                <Archive className="h-8 w-8 text-slate-400" />
               ) : isConfirmationFolder ? (
-                <CheckCircle2 className="h-8 w-8 text-orange-500" />
+                <CheckCircle2 className="h-8 w-8 text-orange-400" />
               ) : (
                 <FolderIcon className="h-8 w-8 text-accent" />
               )}
@@ -673,10 +700,22 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         </>
                       )}
 
-                      {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
-                        <button onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }} className="rounded-md p-1 hover:bg-destructive/10">
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </button>
+                      {(user.role === 'admin' || user.role === 'superadmin' || String(photo.created_by) === String(user.id)) && (
+                        <>
+                          {currentFolder?.name.toLowerCase().includes('archive') ? (
+                            <button onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-blue-500/10" title={t('unarchive_photo_tip') || 'Unarchive photo'}>
+                              <Archive className="h-3.5 w-3.5 text-blue-500" />
+                            </button>
+                          ) : currentFolder?.name.toLowerCase().includes('confirmation') ? (
+                            <button onClick={(e) => { e.stopPropagation(); handleArchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title={t('archive_photo_tip')}>
+                              <Archive className="h-3.5 w-3.5 text-amber-600" />
+                            </button>
+                          ) : (
+                            <button onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }} className="rounded-md p-1 hover:bg-destructive/10">
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </button>
+                          )}
+                        </>
                       )}
                     </>
                   )}
@@ -741,14 +780,34 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       )}
                     </button>
                   )}
-                  {(String(photo.created_by) === String(user.id) || String(photo.creator?.id) === String(user.id)) && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
-                      className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
-                      title={t('delete_photo_tip')}
-                    >
-                      <Trash2 className="h-2.5 w-2.5 text-destructive" />
-                    </button>
+                  {(user.role === 'admin' || user.role === 'superadmin' || String(photo.created_by) === String(user.id)) && (
+                    <>
+                      {currentFolder?.name.toLowerCase().includes('archive') ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }}
+                          className="rounded-full p-1 hover:bg-blue-500/10 transition-colors"
+                          title={t('unarchive_photo_tip') || 'Unarchive photo'}
+                        >
+                          <Archive className="h-2.5 w-2.5 text-blue-500" />
+                        </button>
+                      ) : currentFolder?.name.toLowerCase().includes('confirmation') ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleArchivePhoto(photo.id); }}
+                          className="rounded-full p-1 hover:bg-amber-500/10 transition-colors"
+                          title={t('archive_photo_tip')}
+                        >
+                          <Archive className="h-2.5 w-2.5 text-amber-600" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
+                          className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
+                          title={t('delete_photo_tip')}
+                        >
+                          <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -815,14 +874,16 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                 >
                   <Share2 className="h-3.5 w-3.5 mr-1" /> {t('share_btn')}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
-                  onClick={handleBulkMove}
-                >
-                  <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
-                </Button>
+                {!currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive') && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
+                    onClick={handleBulkMove}
+                  >
+                    <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
+                  </Button>
+                )}
                 {(user.role === 'admin' || user.role === 'superadmin') && (
                   <div className="flex items-center gap-1 border-l border-border pl-2">
                     <Button

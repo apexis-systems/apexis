@@ -1,8 +1,9 @@
 import cron from 'node-cron';
 import { generateAllReports } from './controllers/reportController.ts';
-import { rfis, projects } from './models/index.ts';
+import { rfis } from './models/index.ts';
 import { Op } from 'sequelize';
 import { getIO } from './socket.ts';
+import { purgeExpiredTrashItems } from './services/trashService.ts';
 
 export const startCronJobs = () => {
     // Daily report — every day at 08:00 PM IST (which is 02:30 PM UTC)
@@ -70,41 +71,17 @@ export const startCronJobs = () => {
         }
     });
     
-    // Project Trash Purge — Every day at Midnight UTC (05:30 AM IST)
+    // Trash Purge — Every day at Midnight UTC (05:30 AM IST)
     cron.schedule('0 0 * * *', async () => {
-        console.log('[cron] Purging projects in trash for > 30 days...');
+        console.log('[cron] Purging trash items older than 30 days...');
         try {
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-            // Find soft-deleted projects older than 30 days
-            const trashedProjects = await projects.findAll({
-                where: {
-                    deletedAt: { [Op.lte]: thirtyDaysAgo }
-                },
-                paranoid: false,
-                attributes: ['id', 'organization_id']
-            });
-
-            if (trashedProjects.length > 0) {
-                console.log(`[cron] Found ${trashedProjects.length} projects to purge.`);
-                const { permanentlyDeleteProject } = await import('./services/projectService.ts');
-                
-                for (const project of trashedProjects) {
-                    try {
-                        await permanentlyDeleteProject(project.id, project.organization_id);
-                        console.log(`[cron] Purged project ID: ${project.id}`);
-                    } catch (err) {
-                        console.error(`[cron] Failed to purge project ${project.id}:`, err);
-                    }
-                }
-            }
+            await purgeExpiredTrashItems();
         } catch (err) {
-            console.error('[cron] Project trash purge error:', err);
+            console.error('[cron] Trash purge error:', err);
         }
     });
 
     console.log('[cron] Scheduled for 20:00 IST: daily (everyday), weekly (Sunday), monthly (last day)');
-    console.log('[cron] Scheduled for 00:00 UTC: Project Trash Purge (30 days)');
+    console.log('[cron] Scheduled for 00:00 UTC: Trash Purge (30 days)');
 
 };

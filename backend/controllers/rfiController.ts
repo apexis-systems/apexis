@@ -609,12 +609,12 @@ export const deleteRFI = async (req: Request, res: Response) => {
             projectId: rfi.project_id,
             userId: authUser.user_id,
             type: 'edit',
-            description: `Deleted RFI "${rfi.title}"`,
+            description: `Moved RFI "${rfi.title}" to trash`,
             metadata: { rfiId: id, type: 'rfi' },
             skipNotifications: true
         });
 
-        res.json({ message: 'RFI deleted successfully' });
+        res.json({ message: 'RFI moved to trash successfully' });
     } catch (err) {
         console.error('deleteRFI error:', err);
         res.status(500).json({ error: 'Internal server error' });

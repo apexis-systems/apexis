@@ -93,6 +93,12 @@ export default function MobileMoveToFolderDialog({
         return folders
             .filter(f => String(f.parent_id ?? 'null') === String(parentId ?? 'null'))
             .map(folder => {
+                const folderNameLower = folder.name.toLowerCase();
+                const isProtected = folderNameLower === 'archive' || folderNameLower === 'confirmation' || folderNameLower === 'confirmations';
+                
+                // Don't show protected folders in the target selection
+                if (isProtected) return null;
+
                 // If moving a folder, don't allow moving it into itself or its children
                 if (item?.type === 'folder' && String(item.id) === String(folder.id)) return null;
                 if (selectedItems?.folders.some(id => String(id) === String(folder.id))) return null;

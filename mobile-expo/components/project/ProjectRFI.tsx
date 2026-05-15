@@ -684,7 +684,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       [
         { text: t('projectRfi.cancel'), style: 'cancel' },
         {
-          text: t('projectRfi.delete'),
+          text: t('projectWorkspace.moveToTrash'),
           style: 'destructive',
           onPress: async () => {
             try {

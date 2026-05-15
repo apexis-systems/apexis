@@ -70,6 +70,7 @@ export default (sequelize: Sequelize) => {
         {
             tableName: "files",
             timestamps: true,
+            paranoid: true,
         }
     );
 
