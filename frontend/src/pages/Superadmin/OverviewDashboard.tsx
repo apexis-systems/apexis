@@ -522,8 +522,8 @@ export default function OverviewDashboard() {
                 {[
                   { label: "Tasks Completed", value: String(data?.stats.tasksCompletedToday || 0), sub: "Today" },
                   { label: "RFIs Pending", value: String(data?.stats.rfisPending || 0), sub: "Requires attention" },
-                  { label: "Files Today", value: String(data?.stats.drawingsUploadedToday || 0), sub: "Last 24h" },
-                  { label: "Total Files", value: String(data?.comms.filesBreakdown.reduce((acc: number, f: any) => acc + f.count, 0) || 0), sub: "Across all projects" },
+                  { label: "Documents", value: String(data?.features.find((f: any) => f.name === "Documents")?.count || 0), sub: "Across all projects" },
+                  { label: "Photos", value: String(data?.features.find((f: any) => f.name === "Photos")?.count || 0), sub: "Across all projects" },
                 ].map((metric) => (
                   <div key={metric.label} className="rounded bg-[hsl(37_18%_91%/0.6)] p-2.5 dark:bg-[hsl(30_6%_18%)]">
                     <div className={cn("text-lg font-bold", strongTextClass)}>{metric.value}</div>
@@ -640,7 +640,7 @@ export default function OverviewDashboard() {
                 </div>
                 {(data?.comms.filesBreakdown || []).map((file: any) => (
                   <div key={file.type} className="flex items-center gap-3">
-                    <span className={cn("w-16 text-xs font-medium", strongTextClass)}>{file.type}</span>
+                    <span className={cn("w-16 text-xs font-medium", strongTextClass)}>{file.type === "PDFs" ? "Documents" : file.type}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-[hsl(37_18%_91%)] dark:bg-[hsl(30_6%_18%)]">
                       <div className="h-full rounded-full bg-[hsl(24_95%_53%)]" style={{ width: `${(file.count / (data?.comms.filesBreakdown.reduce((acc: number, f: any) => acc + f.count, 0) || 1)) * 100}%` }} />
                     </div>
