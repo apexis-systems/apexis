@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform, KeyboardAvoidingView, RefreshControl, Switch } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator, Platform, KeyboardAvoidingView, RefreshControl, Switch, Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 
@@ -110,7 +110,7 @@ export default function ProfileScreen() {
 
     // const groupMembershipsByOrganization = (items: any[]) => {
     //     const organizationMap = new Map<number | string, any>();
-    
+
     //     items.forEach((membership) => {
     //         const organizationId = membership.organization_id ?? membership.project?.organization_id ?? 'unknown';
     //         const organizationName = membership.organization?.name || membership.project?.organization?.name || 'Organization';
@@ -461,12 +461,12 @@ export default function ProfileScreen() {
                             <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
                                 <Feather name="smartphone" size={20} color={colors.text} />
                             </View>
-                             <View style={{ flex: 1 }}>
-                                 <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.linkedDevices')}</Text>
-                                 <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.linkedDevicesSubtitle')}</Text>
-                             </View>
-                             <Feather name="chevron-right" size={18} color={colors.textMuted} />
-                         </TouchableOpacity>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.linkedDevices')}</Text>
+                                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.linkedDevicesSubtitle')}</Text>
+                            </View>
+                            <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                        </TouchableOpacity>
 
 
                         {(user.role === 'admin' || user.role === 'superadmin') && (
@@ -486,12 +486,12 @@ export default function ProfileScreen() {
                                 <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
                                     <Feather name="lock" size={20} color={colors.text} />
                                 </View>
-                                 <View style={{ flex: 1 }}>
-                                     <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.changePassword')}</Text>
-                                     <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.changePasswordSubtitle')}</Text>
-                                 </View>
-                                 <Feather name="chevron-right" size={18} color={colors.textMuted} />
-                             </TouchableOpacity>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.changePassword')}</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.changePasswordSubtitle')}</Text>
+                                </View>
+                                <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                            </TouchableOpacity>
 
                         )}
 
@@ -512,12 +512,12 @@ export default function ProfileScreen() {
                                 <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
                                     <Feather name="trash-2" size={20} color="#ef4444" />
                                 </View>
-                                 <View style={{ flex: 1 }}>
-                                     <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.trashManagement')}</Text>
-                                     <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.trashManagementSubtitle')}</Text>
-                                 </View>
-                                 <Feather name="chevron-right" size={18} color={colors.textMuted} />
-                             </TouchableOpacity>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.trashManagement')}</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.trashManagementSubtitle')}</Text>
+                                </View>
+                                <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                            </TouchableOpacity>
 
                         )}
                     </View>
@@ -580,10 +580,10 @@ export default function ProfileScreen() {
                                 <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
                                     <Feather name="shield" size={20} color={colors.text} />
                                 </View>
-                                 <View style={{ flex: 1 }}>
-                                     <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.screenCaptureProtection')}</Text>
-                                     <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.screenCaptureProtectionSubtitle')}</Text>
-                                 </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.screenCaptureProtection')}</Text>
+                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.screenCaptureProtectionSubtitle')}</Text>
+                                </View>
 
                                 <Switch
                                     value={isScreenCaptureProtected}
@@ -612,8 +612,33 @@ export default function ProfileScreen() {
                             backgroundColor: 'rgba(239,68,68,0.05)'
                         }}
                     >
-                         <Feather name="log-out" size={18} color="#ef4444" />
+                        <Feather name="log-out" size={18} color="#ef4444" />
                         <Text style={{ fontSize: 15, color: '#ef4444', fontWeight: '700' }}>{t('settings.signOut')}</Text>
+                    </TouchableOpacity>
+
+
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => Linking.openURL('https://rhinonlabs.com')}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginTop: 20,
+                            marginBottom: 10,
+                            opacity: 0.6
+                        }}
+                    >
+                        <Text style={{ fontSize: 11, color: colors.textMuted, letterSpacing: 0.3 }}>Developed by </Text>
+                        <Image
+                            source={require('@/assets/images/rhinon_tech.png')}
+                            style={{
+                                width: 69,
+                                height: 25,
+                                resizeMode: 'contain',
+                                marginLeft: 2
+                            }}
+                        />
                     </TouchableOpacity>
 
                 </ScrollView>

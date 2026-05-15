@@ -235,3 +235,13 @@ export const updateDiagnosticPermission = async (permission: boolean) => {
         throw error;
     }
 };
+
+export const logout = async () => {
+    try {
+        const response = await PrivateAxios.post('/auth/logout');
+        return response.data;
+    } catch (error: any) {
+        console.error("logout Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { organizations, projects, folders, users } from "../models/index.ts";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
+import { sendNotification } from "../utils/notificationUtils.ts";
 
 export const getOrgOverview = async (req: Request, res: Response) => {
     try {
@@ -288,6 +289,56 @@ export const getUsersList = async (req: Request, res: Response) => {
         res.status(200).json(users);
     } catch (error) {
         console.error("getUsersList Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const sendBroadcastNotification = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { title, description } = req.body;
+
+        if (!authUser || authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
+        }
+
+        if (!title || !description) {
+            return res.status(400).json({ error: "Title and description are required" });
+        }
+
+        // Fetch all active users
+        const allUsers = await users.findAll({
+            attributes: ['id']
+        });
+
+        if (allUsers.length === 0) {
+            return res.status(200).json({ message: "No users found to notify" });
+        }
+
+        // Send notification to each user
+        // Note: For large numbers of users, this should be a background job
+        const notificationPromises = allUsers.map((user: any) => 
+            sendNotification({
+                userId: user.id,
+                title,
+                body: description,
+                type: 'broadcast',
+                data: { 
+                    sentBy: authUser.user_id,
+                    isBroadcast: true
+                }
+            })
+        );
+
+        await Promise.all(notificationPromises);
+
+        res.status(200).json({ 
+            message: "Broadcast sent successfully", 
+            count: allUsers.length 
+        });
+
+    } catch (error) {
+        console.error("Send Broadcast Notification Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

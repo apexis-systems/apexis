@@ -14,7 +14,8 @@ import {
     completePublicSignup,
     getMyMemberships,
     switchContext,
-    updateDiagnosticPermission
+    updateDiagnosticPermission,
+    logout
 } from "../controllers/authController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
@@ -24,6 +25,7 @@ const router = Router();
 router.post("/superadmin/login", superadminLogin);
 router.post("/admin/login", adminLogin);
 router.post("/project/login", projectLogin);
+router.post("/logout", verifyToken, logout);
 
 // Current User Profile
 router.get("/me", verifyToken, me);
