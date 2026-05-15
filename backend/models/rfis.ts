@@ -71,6 +71,7 @@ export default (sequelize: Sequelize) => {
         {
             tableName: "rfis",
             timestamps: true,
+            paranoid: true,
         }
     );
 

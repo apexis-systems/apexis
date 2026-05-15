@@ -18,10 +18,10 @@ export const permanentlyDeleteProject = async (projectId: number, organizationId
         }
 
         // 1. Fetch Assets for S3 Cleanup & Storage Stats
-        const projectFiles = await files.findAll({ where: { project_id: projectId }, transaction: t });
-        const projectManuals = await manuals.findAll({ where: { project_id: projectId }, transaction: t });
-        const projectSnags = await snags.findAll({ where: { project_id: projectId }, transaction: t });
-        const projectRFIs = await rfis.findAll({ where: { project_id: projectId }, transaction: t });
+        const projectFiles = await files.findAll({ where: { project_id: projectId }, transaction: t, paranoid: false });
+        const projectManuals = await manuals.findAll({ where: { project_id: projectId }, transaction: t, paranoid: false });
+        const projectSnags = await snags.findAll({ where: { project_id: projectId }, transaction: t, paranoid: false });
+        const projectRFIs = await rfis.findAll({ where: { project_id: projectId }, transaction: t, paranoid: false });
         const projectRooms = await rooms.findAll({ where: { project_id: projectId }, transaction: t });
         const roomIds = projectRooms.map((r: any) => r.id);
         const fileIds = projectFiles.map((f: any) => f.id);
@@ -45,6 +45,18 @@ export const permanentlyDeleteProject = async (projectId: number, organizationId
                     await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: snag.photo_url }));
                 } catch (s3Err) { console.error(`S3 deletion failed for snag ${snag.id}:`, s3Err); }
             }
+            if (snag.audio_url) {
+                try {
+                    await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: snag.audio_url }));
+                } catch (s3Err) { console.error(`S3 deletion failed for snag audio ${snag.id}:`, s3Err); }
+            }
+            if (Array.isArray(snag.response_photos)) {
+                for (const photo of snag.response_photos) {
+                    try {
+                        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: photo }));
+                    } catch (s3Err) { console.error(`S3 deletion failed for snag response photo in snag ${snag.id}:`, s3Err); }
+                }
+            }
         }
 
         for (const rfi of projectRFIs) {
@@ -55,20 +67,27 @@ export const permanentlyDeleteProject = async (projectId: number, organizationId
                     } catch (s3Err) { console.error(`S3 deletion failed for RFI photo in RFI ${rfi.id}:`, s3Err); }
                 }
             }
+            if (rfi.response_photos && Array.isArray(rfi.response_photos)) {
+                for (const photo of rfi.response_photos) {
+                    try {
+                        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: photo }));
+                    } catch (s3Err) { console.error(`S3 deletion failed for RFI response photo in RFI ${rfi.id}:`, s3Err); }
+                }
+            }
         }
 
         // --- Database Cleanup ---
         if (fileIds.length > 0) {
             await comments.destroy({ where: { file_id: { [Op.in]: fileIds } }, transaction: t });
         }
-        await files.destroy({ where: { project_id: projectId }, transaction: t });
-        await manuals.destroy({ where: { project_id: projectId }, transaction: t });
-        await snags.destroy({ where: { project_id: projectId }, transaction: t });
-        await rfis.destroy({ where: { project_id: projectId }, transaction: t });
+        await files.destroy({ where: { project_id: projectId }, force: true, transaction: t });
+        await manuals.destroy({ where: { project_id: projectId }, force: true, transaction: t });
+        await snags.destroy({ where: { project_id: projectId }, force: true, transaction: t });
+        await rfis.destroy({ where: { project_id: projectId }, force: true, transaction: t });
         await activities.destroy({ where: { project_id: projectId }, transaction: t });
         await notifications.destroy({ where: { project_id: projectId }, transaction: t });
         await reports.destroy({ where: { project_id: projectId }, transaction: t });
-        await folders.destroy({ where: { project_id: projectId }, transaction: t });
+        await folders.destroy({ where: { project_id: projectId }, force: true, transaction: t });
 
         if (roomIds.length > 0) {
             await chat_messages.destroy({ where: { room_id: { [Op.in]: roomIds } }, transaction: t });

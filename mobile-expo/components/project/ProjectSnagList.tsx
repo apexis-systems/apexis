@@ -409,7 +409,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         Alert.alert(t('projectSnags.deleteConfirmTitle') as string, t('projectSnags.deleteConfirmDesc', { title: snagTitle }) as string, [
             { text: t('projectSnags.cancel') as string, style: "cancel" },
             {
-                text: t('projectSnags.delete') as string,
+                text: t('projectWorkspace.moveToTrash') as string,
                 style: "destructive",
                 onPress: async () => {
                     try {
@@ -1636,4 +1636,3 @@ const cameraStyles = StyleSheet.create({
         marginTop: 5,
     },
 });
-

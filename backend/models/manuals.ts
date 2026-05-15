@@ -41,6 +41,7 @@ export default (sequelize: Sequelize) => {
         {
             tableName: "manuals",
             timestamps: true,
+            paranoid: true,
         }
     );
 
