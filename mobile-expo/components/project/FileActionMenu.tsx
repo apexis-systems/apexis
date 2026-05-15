@@ -92,7 +92,7 @@ export default function FileActionMenu({
                                     </TouchableOpacity>
                                 )}
 
-                                {(isAdmin || !isAdmin) && ( // Both Admin and potentially others can manage visibility
+                                {isAdmin && ( // Only admin can manage visibility
                                     <TouchableOpacity 
                                         style={[styles.option, isProcessing && { opacity: 0.5 }]} 
                                         onPress={() => { !isProcessing && onHideUnhide(); }}

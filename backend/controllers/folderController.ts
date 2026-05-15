@@ -230,6 +230,15 @@ export const updateFolder = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "The name 'Confirmations' is reserved for system use in photos" });
         }
 
+        // Restriction: Prevent renaming the protected folders themselves
+        const folderNameLower = folder.name.toLowerCase();
+        if (
+            (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
+            (folder.folder_type === 'document' && folderNameLower === 'archive')
+        ) {
+            return res.status(400).json({ error: `The folder '${folder.name}' is a system folder and cannot be renamed` });
+        }
+
         // Authorization: Admins or Project Contributors
         if (authUser.role !== "admin" && authUser.role !== "contributor") {
             return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can rename folders" });
@@ -282,6 +291,16 @@ export const deleteFolder = async (req: Request, res: Response) => {
         if (!folder) {
             await t.rollback();
             return res.status(404).json({ error: "Folder not found" });
+        }
+
+        // Restriction: Prevent deletion of protected folders
+        const folderNameLower = folder.name.toLowerCase();
+        if (
+            (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
+            (folder.folder_type === 'document' && folderNameLower === 'archive')
+        ) {
+            await t.rollback();
+            return res.status(400).json({ error: `The folder '${folder.name}' is a system folder and cannot be deleted` });
         }
 
         // Authorization: Admins or Project Contributors

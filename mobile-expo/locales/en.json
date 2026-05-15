@@ -602,7 +602,13 @@
             "failedToDeleteEmptyFolder": "Contents moved, but failed to delete empty folder",
             "selectMonth": "Select Month",
             "photosCountLabel": "Photos",
-            "close": "Close"
+            "close": "Close",
+            "archive": "Archive",
+            "unarchive": "Unarchive",
+            "archivePhotoConfirm": "Archive \"{{name}}\"? It will be moved to the Archive folder.",
+            "unarchivePhotoConfirm": "Unarchive \"{{name}}\"? Select a folder to move it to.",
+            "failedToArchive": "Failed to archive photo",
+            "failedToUnarchive": "Failed to unarchive photo"
         },
         "projectDocuments": {
             "selectMonth": "Select Month",
