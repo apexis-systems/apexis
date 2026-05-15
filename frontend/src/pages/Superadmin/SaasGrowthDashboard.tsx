@@ -117,16 +117,16 @@ const tableCellClass =
 // ];
 
 
-const activityFeed = [
-  { icon: UserPlus, text: "Coastal Builders signed up for Apexis", time: "1 min ago", color: "text-chart-2" },
-  { icon: FolderKanban, text: "New project 'Marina Heights' created by Metro Builders", time: "3 min ago", color: "text-primary" },
-  { icon: Upload, text: "32 drawings uploaded – Skyline Phase 3", time: "8 min ago", color: "text-chart-3" },
-  { icon: CreditCard, text: "ARC Architects upgraded to Professional ₹299", time: "15 min ago", color: "text-success" },
-  { icon: Camera, text: "Site progress photos posted – Greenfield Homes", time: "22 min ago", color: "text-primary" },
-  { icon: CheckCircle, text: "48 tasks completed today across 12 projects", time: "30 min ago", color: "text-chart-3" },
-  { icon: MessageSquare, text: "Team discussion started on structural specs – Prime Dev", time: "45 min ago", color: "text-chart-2" },
-  { icon: AlertCircle, text: "RFI raised for waterproofing details – Coastal Builders", time: "1 hr ago", color: "text-warning" },
-];
+// const activityFeed = [
+//   { icon: UserPlus, text: "Coastal Builders signed up for Apexis", time: "1 min ago", color: "text-chart-2" },
+//   { icon: FolderKanban, text: "New project 'Marina Heights' created by Metro Builders", time: "3 min ago", color: "text-primary" },
+//   { icon: Upload, text: "32 drawings uploaded – Skyline Phase 3", time: "8 min ago", color: "text-chart-3" },
+//   { icon: CreditCard, text: "ARC Architects upgraded to Professional ₹299", time: "15 min ago", color: "text-success" },
+//   { icon: Camera, text: "Site progress photos posted – Greenfield Homes", time: "22 min ago", color: "text-primary" },
+//   { icon: CheckCircle, text: "48 tasks completed today across 12 projects", time: "30 min ago", color: "text-chart-3" },
+//   { icon: MessageSquare, text: "Team discussion started on structural specs – Prime Dev", time: "45 min ago", color: "text-chart-2" },
+//   { icon: AlertCircle, text: "RFI raised for waterproofing details – Coastal Builders", time: "1 hr ago", color: "text-warning" },
+// ];
 
 // ── Components ─────────────────────────────────────────
 
@@ -441,11 +441,12 @@ const SaasGrowthDashboard = () => {
               <div className="grid grid-cols-6 gap-2 mb-4">
                 {[
                   { label: "Projects", value: data?.productUsageData?.[5]?.projects || 0 },
-                  { label: "Drawings", value: data?.productUsageData?.[5]?.drawings || 0 },
+                  { label: "Photos", value: data?.productUsageData?.[5]?.photos || 0 },
+                  { label: "PDFs", value: data?.productUsageData?.[5]?.pdfs || 0 },
                   { label: "Messages", value: data?.productUsageData?.[5]?.messages || 0 },
                   // { label: "Documents", value: data?.productUsageData?.[5]?.releases || 0 },
-                  { label: "Users", value: data?.metrics?.totalUsers || 0 },
-                  { label: "Companies", value: data?.metrics?.activeCompanies || 0 },
+                  { label: "Users", value: data?.allTime?.totalUsers?.total || 0 },
+                  { label: "Companies", value: data?.allTime?.activeCompanies?.total || 0 },
                 ].map((m: any) => (
                   <div key={m.label} className="bg-muted/50 rounded p-2.5">
                     <div className="text-sm font-bold font-display text-card-foreground">{m.value.toLocaleString()}</div>
@@ -462,8 +463,9 @@ const SaasGrowthDashboard = () => {
                   <YAxis tick={{ fontSize: 10, fill: "hsl(215,10%,45%)" }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid hsl(214,20%,90%)" }} />
                   <Line type="monotone" dataKey="projects" name="Projects" stroke="hsl(25,95%,53%)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="drawings" name="Drawings" stroke="hsl(217,91%,60%)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="releases" name="Releases" stroke="hsl(160,84%,39%)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="photos" name="Photos" stroke="hsl(217,91%,60%)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="pdfs" name="PDFs" stroke="hsl(160,84%,39%)" strokeWidth={2} dot={false} />
+                  {/* <Line type="monotone" dataKey="releases" name="Releases" stroke="hsl(37,18%,60%)" strokeWidth={2} dot={false} /> */}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -477,8 +479,8 @@ const SaasGrowthDashboard = () => {
                   <TableRow>
                     <TableHead className="text-xs">Company</TableHead>
                     <TableHead className="text-xs">Projects</TableHead>
-                    <TableHead className="text-xs">Team</TableHead>
-                    <TableHead className="text-xs">Drawings</TableHead>
+                    <TableHead className="text-xs">Photos</TableHead>
+                    <TableHead className="text-xs">PDFs</TableHead>
                     <TableHead className="text-xs">Messages</TableHead>
                     <TableHead className="text-xs">Last Active</TableHead>
                     <TableHead className="text-xs">Plan</TableHead>
@@ -491,7 +493,8 @@ const SaasGrowthDashboard = () => {
                       <TableCell className="text-xs font-medium text-card-foreground">{c.name}</TableCell>
                       <TableCell className="text-xs">{c.projects}</TableCell>
                       <TableCell className="text-xs">{c.team}</TableCell>
-                      <TableCell className="text-xs">{c.drawings}</TableCell>
+                      <TableCell className="text-xs font-bold text-primary">{c.photos}</TableCell>
+                      <TableCell className="text-xs font-bold text-info">{c.pdfs}</TableCell>
                       <TableCell className="text-xs">{c.messages.toLocaleString()}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{c.lastActive}</TableCell>
                       <TableCell>

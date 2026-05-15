@@ -37,7 +37,7 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
         setLoading(true); // Start loading immediately when the URI changes
         dismissY.value = 0;
         dismissScale.value = 1;
-        
+
         // Safety timeout to prevent stuck loader
         const timer = setTimeout(() => {
             setLoading(false);

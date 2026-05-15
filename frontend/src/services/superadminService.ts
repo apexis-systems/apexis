@@ -112,3 +112,23 @@ export const getRevenueAnalytics = async () => {
         throw error;
     }
 };
+
+export const getOrganizationDetails = async (id: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/superadmin/organizations/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error("getOrganizationDetails Error", error);
+        throw error;
+    }
+};
+
+export const getAllUsers = async () => {
+    try {
+        const response = await PrivateAxios.get('/superadmin/users');
+        return response.data;
+    } catch (error) {
+        console.error("getAllUsers Error", error);
+        throw error;
+    }
+};

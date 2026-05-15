@@ -265,3 +265,29 @@ export const getGrowthAnalytics = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const getOrganizationDetails = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const details = await analyticsService.getOrganizationAnalyticsDetails(id as string);
+        
+        if (!details) {
+            return res.status(404).json({ error: "Organization not found" });
+        }
+        
+        res.status(200).json(details);
+    } catch (error) {
+        console.error("getOrganizationDetails Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getUsersList = async (req: Request, res: Response) => {
+    try {
+        const users = await analyticsService.getAllUsersDetails();
+        res.status(200).json(users);
+    } catch (error) {
+        console.error("getUsersList Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

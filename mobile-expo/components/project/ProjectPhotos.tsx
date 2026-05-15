@@ -1310,11 +1310,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                                                     <Modal visible={showMonthPicker} transparent animationType="slide">
                                                         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                                                            <View style={{ 
-                                                                backgroundColor: colors.surface, 
-                                                                borderTopLeftRadius: 24, 
-                                                                borderTopRightRadius: 24, 
-                                                                padding: 24, 
+                                                            <View style={{
+                                                                backgroundColor: colors.surface,
+                                                                borderTopLeftRadius: 24,
+                                                                borderTopRightRadius: 24,
+                                                                padding: 24,
                                                                 paddingBottom: insets.bottom + 10,
                                                                 shadowColor: '#000',
                                                                 shadowOffset: { width: 0, height: -4 },
@@ -1327,7 +1327,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                         <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectPhotos.cancel')}</Text>
                                                                     </TouchableOpacity>
                                                                     <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>{t('projectPhotos.selectMonth')}</Text>
-                                                                    <TouchableOpacity 
+                                                                    <TouchableOpacity
                                                                         onPress={() => {
                                                                             const title = `${tempMonth} ${tempYear}`;
                                                                             scrollToMonth(title);
@@ -1349,11 +1349,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                             // Only render items that are available to prevent invalid selection
                                                                             if (!isAvailable) return null;
                                                                             return (
-                                                                                <Picker.Item 
-                                                                                    key={m} 
-                                                                                    label={m} 
-                                                                                    value={m} 
-                                                                                    color={colors.text} 
+                                                                                <Picker.Item
+                                                                                    key={m}
+                                                                                    label={m}
+                                                                                    value={m}
+                                                                                    color={colors.text}
                                                                                 />
                                                                             );
                                                                         })}
