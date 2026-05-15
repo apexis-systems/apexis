@@ -324,58 +324,27 @@ export const deleteFolder = async (req: Request, res: Response) => {
         const fileCount = await files.count({ where: { folder_id: folderId }, transaction: t });
         const subfolderCount = await folders.count({ where: { parent_id: folderId }, transaction: t });
 
-        let totalSizeDeletedMb = 0;
-
         if (fileCount > 0 || subfolderCount > 0) {
             if (!forceDelete) {
                 await t.rollback();
                 return res.status(400).json({ error: "Cannot delete a folder that is not empty", hasContent: true });
             }
 
-            // Recursive deletion logic
+            // Soft-delete all descendants so the folder can be restored with its original tree.
             const deleteRecursively = async (fId: any) => {
-                // Get all files in this folder
                 const folderFiles = await files.findAll({ where: { folder_id: fId }, transaction: t });
                 for (const file of folderFiles) {
-                    try {
-                        // Delete from S3
-                        const command = new DeleteObjectCommand({
-                            Bucket: BUCKET_NAME,
-                            Key: file.file_url
-                        });
-                        await s3Client.send(command);
-                    } catch (s3Err) {
-                        console.error(`Failed to delete S3 object for file ${file.id}:`, s3Err);
-                    }
-                    totalSizeDeletedMb += (file.file_size_mb || 0);
                     await file.destroy({ transaction: t });
                 }
 
-                // Get all subfolders
                 const subfoldersList = await folders.findAll({ where: { parent_id: fId }, transaction: t });
                 for (const sub of subfoldersList) {
                     await deleteRecursively(sub.id);
-                }
-                
-                // Finally delete the folder itself (except the root target which is handled at the end)
-                if (fId !== folderId) {
-                    await folders.destroy({ where: { id: fId }, transaction: t });
+                    await sub.destroy({ transaction: t });
                 }
             };
 
             await deleteRecursively(folderId);
-        }
-
-        // Update organization storage usage
-        if (totalSizeDeletedMb > 0) {
-            const project = await projects.findByPk(folder.project_id, { transaction: t });
-            if (project) {
-                await organizations.decrement('storage_used_mb', {
-                    by: totalSizeDeletedMb,
-                    where: { id: project.organization_id },
-                    transaction: t
-                });
-            }
         }
 
         const folderName = folder.name;
@@ -386,12 +355,12 @@ export const deleteFolder = async (req: Request, res: Response) => {
             projectId: project_id,
             userId: authUser.user_id,
             type: 'edit',
-            description: `Deleted folder "${folderName}" ${forceDelete ? '(recursively)' : ''}`,
+            description: `Moved folder "${folderName}" to trash ${forceDelete ? '(with contents)' : ''}`,
             metadata: { folderId: folder.id, type: folder.folder_type === 'photo' ? 'photos' : 'documents' }
         });
 
         await t.commit();
-        res.status(200).json({ message: "Folder deleted successfully" });
+        res.status(200).json({ message: "Folder moved to trash successfully" });
     } catch (error) {
         await t.rollback();
         console.error("Delete Folder Error:", error);

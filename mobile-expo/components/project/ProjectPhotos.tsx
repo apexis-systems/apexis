@@ -509,7 +509,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         Alert.alert(t('projectPhotos.delete'), t('projectPhotos.removePhotoConfirm', { name: photo.file_name }), [
             { text: t('projectPhotos.cancel'), style: 'cancel' },
             {
-                text: t('projectPhotos.delete'), style: 'destructive',
+                text: t('projectPhotos.moveToTrash'), style: 'destructive',
                 onPress: async () => {
                     try {
                         await deleteFile(photo.id);
@@ -704,19 +704,49 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const handleDelete = async (folder: any, force = false) => {
         try {
             setProcessing('delete_folder');
-            const data = await deleteFolder(folder.id);
-            if (data.success) {
-                setFolders(folders.filter((f) => f.id !== folder.id));
-                setFolderMenuVisible(false);
+            const data = await deleteFolder(folder.id, force);
+            setFolders(folders.filter((f) => f.id !== folder.id));
+            setFolderMenuVisible(false);
+            Alert.alert(
+                t('projectPhotos.success'),
+                data?.message || t('projectPhotos.folderDeletedSuccess'),
+                [
+                    {
+                        text: t('projectPhotos.ok'),
+                        onPress: () => {
+                            if (selectedFolder === folder.id) setSelectedFolder(null);
+                        }
+                    }
+                ]
+            );
+        } catch (e: any) {
+            const data = e.response?.data;
+            if (data?.hasContent) {
                 Alert.alert(
-                    t('projectPhotos.success'),
-                    data.message || t('projectPhotos.folderDeletedSuccess'),
+                    t('projectPhotos.folderNotEmpty'),
+                    t('projectPhotos.folderNotEmptyMessage', { name: folder.name }),
                     [
+                        { text: t('projectPhotos.cancel'), style: 'cancel' },
                         {
-                            text: t('projectPhotos.ok'),
+                            text: t('projectPhotos.moveContents'),
                             onPress: () => {
-                                if (selectedFolder === folder.id) setSelectedFolder(null);
+                                const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
+                                const childFiles = photos.filter(p => String(p.folder_id) === String(folder.id));
+
+                                if (childFolders.length === 0 && childFiles.length === 0) {
+                                    Alert.alert(t('projectPhotos.info'), t('projectPhotos.folderAlreadyEmpty'));
+                                    return;
+                                }
+
+                                setMovingContentsOf(folder);
+                                setMovingItem(null);
+                                setShowMoveDialog(true);
                             }
+                        },
+                        {
+                            text: t('projectPhotos.deleteEverything'),
+                            style: 'destructive',
+                            onPress: () => handleDelete(folder, true)
                         }
                     ]
                 );
@@ -736,7 +766,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             [
                 { text: t('projectPhotos.cancel'), style: 'cancel' },
                 {
-                    text: t('projectPhotos.delete'),
+                    text: t('projectPhotos.moveToTrash'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }

@@ -61,6 +61,7 @@ export default (sequelize: Sequelize) => {
         {
             tableName: "snags",
             timestamps: true,
+            paranoid: true,
         }
     );
 

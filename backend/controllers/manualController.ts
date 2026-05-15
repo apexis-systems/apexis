@@ -97,18 +97,8 @@ export const deleteManual = async (req: Request, res: Response) => {
         if (!['admin', 'superadmin'].includes(authUser.role) && (record as any).uploaded_by !== authUser.user_id)
             return res.status(403).json({ error: 'Forbidden' });
 
-        const sizeToFree = Number((record as any).file_size_mb || 0);
         await record.destroy();
-
-        if (sizeToFree > 0) {
-            const org = await organizations.findByPk(authUser.organization_id);
-            if (org) {
-                const current = Number((org as any).storage_used_mb || 0);
-                await org.update({ storage_used_mb: Math.max(0, current - sizeToFree) });
-            }
-        }
-
-        res.json({ message: 'Deleted' });
+        res.json({ message: 'Moved to trash' });
     } catch (err) {
         console.error('deleteManual:', err);
         res.status(500).json({ error: 'Internal server error' });

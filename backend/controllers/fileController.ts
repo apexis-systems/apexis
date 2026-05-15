@@ -510,34 +510,18 @@ export const deleteFile = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Unauthorized: only the original uploader can delete this file" });
         }
 
-        const command = new DeleteObjectCommand({
-            Bucket: BUCKET_NAME,
-            Key: file.file_url
-        });
-
-        await s3Client.send(command);
-
         await logActivity({
             projectId: file.project_id,
             userId: authUser.user_id,
             type: 'delete',
-            description: `Deleted ${file.file_name}`,
+            description: `Moved ${file.file_name} to trash`,
             metadata: { fileId: file.id, type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
         });
 
         await file.destroy({ transaction: t });
 
-        // Update organization storage usage (decrement)
-        if (file.file_size_mb > 0) {
-            await organizations.decrement('storage_used_mb', {
-                by: file.file_size_mb,
-                where: { id: authUser.organization_id },
-                transaction: t
-            });
-        }
-
         await t.commit();
-        res.status(200).json({ message: "File deleted successfully" });
+        res.status(200).json({ message: "File moved to trash successfully" });
     } catch (error) {
         await t.rollback();
         console.error("Delete File Error:", error);

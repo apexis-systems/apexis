@@ -28,6 +28,7 @@ import analyticsRoutes from "./routes/analyticsRoutes.ts";
 import subscriptionRoutes from "./routes/subscriptionRoutes.ts";
 import systemRoutes from "./routes/systemRoutes.ts";
 import searchRoutes from "./routes/searchRoutes.ts";
+import trashRoutes from "./routes/trashRoutes.ts";
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -75,6 +76,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/system", systemRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/trash", trashRoutes);
 
 // Global Error Handler
 app.use((err: any, req: Request, res: Response, next: any) => {

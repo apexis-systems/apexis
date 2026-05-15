@@ -869,7 +869,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             [
                 { text: t('projectDocuments.cancel'), style: "cancel" },
                 {
-                    text: t('projectDocuments.delete'),
+                    text: t('projectDocuments.moveToTrash'),
                     style: "destructive",
                     onPress: async () => {
                         try {
@@ -1056,35 +1056,25 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleDelete = async (folder: any, force = false) => {
         try {
-            if (force) {
-                setProcessing('delete_folder');
-                const data = await deleteFolder(folder.id);
-                if (data.success) {
-                    setFolders(folders.filter((f) => f.id !== folder.id));
-                    setFolderMenuVisible(false);
-                    Alert.alert(
-                        t('projectDocuments.success'),
-                        data.message || t('projectDocuments.folderDeletedSuccess'),
-                        [
-                            {
-                                text: t('projectDocuments.ok'),
-                                onPress: () => {
-                                    if (selectedFolder === folder.id) setSelectedFolder(null);
-                                }
-                            }
-                        ]
-                    );
-                } else {
-                    const msg = data?.error || t('projectDocuments.failedToDeleteFolder');
-                    Alert.alert(t('projectDocuments.error'), msg);
-                }
-            } else {
-                await deleteFolder(folder.id, force);
-                setFolders(prev => prev.filter(f => f.id !== folder.id));
-                if (selectedFolder === String(folder.id)) {
-                    setSelectedFolder(folder.parent_id ? String(folder.parent_id) : null);
-                }
+            setProcessing('delete_folder');
+            const data = await deleteFolder(folder.id, force);
+            setFolders(prev => prev.filter(f => f.id !== folder.id));
+            setFolderMenuVisible(false);
+            if (selectedFolder === String(folder.id)) {
+                setSelectedFolder(folder.parent_id ? String(folder.parent_id) : null);
             }
+            Alert.alert(
+                t('projectDocuments.success'),
+                data?.message || t('projectDocuments.folderDeletedSuccess'),
+                [
+                    {
+                        text: t('projectDocuments.ok'),
+                        onPress: () => {
+                            if (selectedFolder === folder.id) setSelectedFolder(null);
+                        }
+                    }
+                ]
+            );
         } catch (e: any) {
             const data = e.response?.data;
             if (data?.hasContent) {
@@ -1128,11 +1118,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const confirmDeleteFolder = (folder: any) => {
         Alert.alert(
             t('projectDocuments.deleteFolder'),
-            t('projectDocuments.deleteFileConfirm', { name: folder.name }), // Reusing deleteFileConfirm as it's the same message
+            t('projectDocuments.deleteFolderConfirm', { name: folder.name }),
             [
                 { text: t('projectDocuments.cancel'), style: 'cancel' },
                 {
-                    text: t('projectDocuments.delete'),
+                    text: t('projectDocuments.moveToTrash'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }
@@ -2257,4 +2247,3 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         </View>
     );
 }
-
