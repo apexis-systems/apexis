@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, RotateCw } from 'lucide-react';
@@ -27,6 +27,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const [downloading, setDownloading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const viewerRef = useRef<HTMLDivElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -46,6 +47,10 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   }, [open, initialIndex]);
 
   const currentFile = files[currentIndex];
+  const isImage = currentFile?.file_type?.toLowerCase().includes('image') || 
+                  ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
+  const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') || 
+                currentFile?.file_name?.toLowerCase().endsWith('.pdf');
 
   // Mark as seen if assigned to current user
   useEffect(() => {
@@ -76,6 +81,38 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, goNext, goPrev, onOpenChange]);
+
+  const zoomRef = useRef(zoom);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+
+  // Handle Mouse Wheel Zoom
+  useEffect(() => {
+    if (!open) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Check if we are interacting with the viewer or its children
+      const isOverViewer = viewerRef.current?.contains(e.target as Node);
+      if (!isOverViewer) return;
+      
+      if (!isImage && !isPdf) return;
+
+      // Stop the browser from zooming/scrolling the page
+      e.preventDefault();
+      e.stopPropagation();
+
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      const currentZoom = zoomRef.current;
+      const newZoom = Math.min(Math.max(currentZoom + delta, 1), 5);
+      
+      if (newZoom !== currentZoom) {
+        setZoom(newZoom);
+        if (newZoom <= 1) setPan({ x: 0, y: 0 });
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+    return () => window.removeEventListener('wheel', handleWheel, { capture: true });
+  }, [open, isImage, isPdf]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'N/A';
@@ -116,9 +153,6 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
 
 
   if (!currentFile) return null;
-
-  const isImage = currentFile.file_type?.startsWith('image/');
-  const isPdf = currentFile.file_type?.includes('pdf');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -248,6 +282,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
 
             {/* Actual Viewer Area */}
             <div 
+              ref={viewerRef}
               className="flex-1 w-full min-h-0 flex items-center justify-center relative overflow-hidden"
               onMouseDown={(e) => { 
                 if (zoom > 1) {
@@ -297,11 +332,16 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                 </div>
               ) : isPdf ? (
                 <div 
-                  className="w-full h-full flex items-center justify-center p-4 md:p-8"
+                  className="w-full h-full flex items-center justify-center p-4 md:p-8 transition-transform duration-75"
+                  style={{ 
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                  }}
                 >
                   <iframe
                     src={`${currentFile.downloadUrl}#toolbar=0`}
-                    className="w-full h-full border-none bg-white rounded-xl shadow-2xl z-10"
+                    className="w-full h-full border-none bg-white rounded-xl shadow-2xl z-10 pointer-events-auto"
+                    style={{ pointerEvents: zoom > 1 ? 'none' : 'auto' }}
                     title={currentFile.file_name}
                   />
                 </div>

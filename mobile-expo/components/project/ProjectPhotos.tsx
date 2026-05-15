@@ -1035,6 +1035,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         const subcount = folders.filter((f) => f.parent_id === folder.id).length;
                                         const isSelected = selectedFolders.has(folder.id);
                                         const isArchiveFolder = folder.name.toLowerCase() === 'archive';
+                                        const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
                                         return (
                                             <View
                                                 key={folder.id}
@@ -1069,9 +1070,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 />
                                                 <View style={{ marginBottom: 8 }}>
                                                     <Feather
-                                                        name={isArchiveFolder ? "archive" : (folder.name.toLowerCase() === 'confirmation' ? "check-circle" : "folder")}
-                                                        size={folder.name.toLowerCase() === 'confirmation' ? 32 : 36}
-                                                        color={isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.primary)}
+                                                        name={isArchiveFolder ? "archive" : (isConfirmationFolder ? "check-circle" : "folder")}
+                                                        size={isConfirmationFolder ? 32 : 36}
+                                                        color={isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : colors.primary)}
                                                     />
                                                 </View>
                                                 {isSelected && (
@@ -1079,7 +1080,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <Feather name="check" size={10} color="#fff" />
                                                     </View>
                                                 )}
-                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (folder.name.toLowerCase() === 'confirmation' ? '#f97316' : colors.text), textAlign: 'center' }}>{folder.name}</Text>
+                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : colors.text), textAlign: 'center' }}>{isConfirmationFolder ? "Confirmations" : folder.name}</Text>
                                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                                     {subcount > 0
                                                         ? t('projectPhotos.photosFoldersCount', { photoCount: count, folderCount: subcount })
@@ -1309,11 +1310,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                                                     <Modal visible={showMonthPicker} transparent animationType="slide">
                                                         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                                                            <View style={{ 
-                                                                backgroundColor: colors.surface, 
-                                                                borderTopLeftRadius: 24, 
-                                                                borderTopRightRadius: 24, 
-                                                                padding: 24, 
+                                                            <View style={{
+                                                                backgroundColor: colors.surface,
+                                                                borderTopLeftRadius: 24,
+                                                                borderTopRightRadius: 24,
+                                                                padding: 24,
                                                                 paddingBottom: insets.bottom + 10,
                                                                 shadowColor: '#000',
                                                                 shadowOffset: { width: 0, height: -4 },
@@ -1326,7 +1327,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                         <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectPhotos.cancel')}</Text>
                                                                     </TouchableOpacity>
                                                                     <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>{t('projectPhotos.selectMonth')}</Text>
-                                                                    <TouchableOpacity 
+                                                                    <TouchableOpacity
                                                                         onPress={() => {
                                                                             const title = `${tempMonth} ${tempYear}`;
                                                                             scrollToMonth(title);
@@ -1348,11 +1349,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                             // Only render items that are available to prevent invalid selection
                                                                             if (!isAvailable) return null;
                                                                             return (
-                                                                                <Picker.Item 
-                                                                                    key={m} 
-                                                                                    label={m} 
-                                                                                    value={m} 
-                                                                                    color={colors.text} 
+                                                                                <Picker.Item
+                                                                                    key={m}
+                                                                                    label={m}
+                                                                                    value={m}
+                                                                                    color={colors.text}
                                                                                 />
                                                                             );
                                                                         })}
@@ -1457,7 +1458,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         onPress={() => {
                                             const folderId = Array.from(selectedFolders)[0];
                                             const folder = folders.find(f => f.id === folderId);
-                                            const isConfirmation = folder?.name.toLowerCase() === 'confirmation';
+                                            const isConfirmation = folder?.name.toLowerCase() === 'confirmation' || folder?.name.toLowerCase() === 'confirmations';
                                             if (folder && !isConfirmation) {
                                                 setEditingFolderId(folder.id);
                                                 setEditFolderName(folder.name);
@@ -1465,7 +1466,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             }
                                         }}
                                         style={{ padding: 4, opacity: Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation') ? 0.5 : 1 }}
-                                        disabled={processing !== null || Array.from(selectedFolders).some(id => folders.find(f => f.id === id)?.name.toLowerCase() === 'confirmation')}
+                                        disabled={processing !== null || Array.from(selectedFolders).some(id => {
+                                            const f = folders.find(f => f.id === id);
+                                            return f?.name.toLowerCase() === 'confirmation' || f?.name.toLowerCase() === 'confirmations';
+                                        })}
                                     >
                                         <Feather name="edit-2" size={18} color={colors.primary} />
                                     </TouchableOpacity>

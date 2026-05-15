@@ -74,17 +74,17 @@ export default function FolderActionMenu({
                                 {isAdmin && (
                                     <>
                                         <TouchableOpacity 
-                                            style={[styles.option, (isProcessing || folderName.toLowerCase() === 'confirmation') && { opacity: 0.5 }]} 
-                                            onPress={() => { !isProcessing && folderName.toLowerCase() !== 'confirmation' && onRename(); onClose(); }}
-                                            disabled={isProcessing || folderName.toLowerCase() === 'confirmation'}
+                                            style={[styles.option, (isProcessing || folderName.toLowerCase() === 'confirmation' || folderName.toLowerCase() === 'confirmations') && { opacity: 0.5 }]} 
+                                            onPress={() => { !isProcessing && folderName.toLowerCase() !== 'confirmation' && folderName.toLowerCase() !== 'confirmations' && onRename(); onClose(); }}
+                                            disabled={isProcessing || folderName.toLowerCase() === 'confirmation' || folderName.toLowerCase() === 'confirmations'}
                                         >
                                             <Feather name="edit-2" size={18} color={colors.primary} />
                                             <Text style={[styles.optionText, { color: colors.text }]}>Rename Folder</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity 
-                                            style={[styles.option, styles.deleteOption, (isProcessing || folderName.toLowerCase() === 'confirmation') && { opacity: 0.5 }]} 
-                                            onPress={() => { !isProcessing && folderName.toLowerCase() !== 'confirmation' && onDelete(); onClose(); }}
-                                            disabled={isProcessing || folderName.toLowerCase() === 'confirmation'}
+                                            style={[styles.option, styles.deleteOption, (isProcessing || folderName.toLowerCase() === 'confirmation' || folderName.toLowerCase() === 'confirmations') && { opacity: 0.5 }]} 
+                                            onPress={() => { !isProcessing && folderName.toLowerCase() !== 'confirmation' && folderName.toLowerCase() !== 'confirmations' && onDelete(); onClose(); }}
+                                            disabled={isProcessing || folderName.toLowerCase() === 'confirmation' || folderName.toLowerCase() === 'confirmations'}
                                         >
                                             <Feather name="trash-2" size={18} color="#ef4444" />
                                             <Text style={[styles.optionText, { color: "#ef4444" }]}>Delete Folder</Text>
