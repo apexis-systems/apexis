@@ -33,33 +33,48 @@ export const checkLimit = (type: LimitType) => {
       let activeOrgId = authUser?.organization_id;
 
       if (!activeOrgId) {
-        const role = authUser.role;
-
-        if (role === "admin" || role === "superadmin") {
-          // Admins do not carry a project_id in their token.
-          // Resolve their organization directly from the users table.
-          const dbUser = await users.findByPk(authUser.user_id, {
+        // 1. Try to resolve from the user's active project context in the token (common for contributors)
+        if (authUser?.project_id) {
+          const project = await projects.findByPk(authUser.project_id, {
             attributes: ["organization_id"],
           });
-          activeOrgId = dbUser?.organization_id ?? null;
-        } else {
-          // Contributors and clients always operate inside a specific project.
-          // Resolve the org from the project referenced in the request.
-          const projectId =
-            req.body.project_id ||
-            req.params.project_id ||
-            req.params.id ||
-            req.query.project_id;
+          activeOrgId = project?.organization_id;
+        }
+
+        // 2. If still missing (e.g. admin or token lacks project_id), resolve from the request
+        if (!activeOrgId) {
+          let projectId =
+            req.body?.project_id ||
+            req.query?.project_id ||
+            req.body?.projectId;
+
+          // Special case for handover exports where project ID is in the URL path
+          if (!projectId && type === "export_handover") {
+            projectId = req.params?.id;
+          }
+
           if (projectId) {
             const project = await projects.findByPk(projectId, {
               attributes: ["organization_id"],
             });
-            activeOrgId = project?.organization_id ?? null;
+            activeOrgId = project?.organization_id;
           }
+        }
+
+        // 3. Last fallback: if it's an admin, check their primary organization
+        if (!activeOrgId && (authUser?.role === "admin" || authUser?.role === "superadmin")) {
+          const dbUser = await users.findByPk(authUser.user_id, {
+            attributes: ["organization_id"],
+          });
+          activeOrgId = dbUser?.organization_id;
         }
       }
 
       if (!activeOrgId) {
+        console.warn(
+          `[checkLimit] Missing organization context for user ${authUser?.user_id} (role: ${authUser?.role}). Type: ${type}, Query:`,
+          req.query,
+        );
         return res
           .status(401)
           .json({ error: "Unauthorized: Missing organization context" });
@@ -140,7 +155,7 @@ export const checkLimit = (type: LimitType) => {
           return next(); // Storage check is sum-based
 
         case "member":
-          const requestedRole = req.body.role;
+          const requestedRole = req.body?.role;
           if (requestedRole === "contributor") {
             currentUsage = await users.count({
               where: { organization_id: org.id, role: "contributor" },
