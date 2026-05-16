@@ -19,19 +19,49 @@ export function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // If user tries to access login/signup while already logged in
-    // Exception: Allow invitation/onboarding routes so they can complete account setup or switch
-    const isInviteOrOnboarding = pathname === '/auth/invite' || pathname === '/auth/superadmin-onboarding' || pathname === '/auth/login-redirect';
+    const token_project = request.cookies.get('token_project')?.value;
+    const token_superadmin = request.cookies.get('token_superadmin')?.value;
 
-    if (isAuthRoute && token && !isInviteOrOnboarding) {
+    const isSuperAdminPath = pathname.startsWith('/superadmin');
+    const isProjectPath = pathname.startsWith('/admin') || pathname.startsWith('/contributor') || pathname.startsWith('/client');
+    const isRoot = pathname === '/';
+
+    // 1. Handle SuperAdmin Paths
+    if (isSuperAdminPath) {
+        if (!token_superadmin) {
+            return NextResponse.redirect(new URL('/auth/login', request.url));
+        }
+        if (token !== token_superadmin) {
+            const response = NextResponse.redirect(request.url);
+            response.cookies.set('token', token_superadmin, { path: '/', maxAge: 60 * 60 * 24 * 30 });
+            return response;
+        }
+    }
+
+    // 2. Handle Project Paths or Root
+    if (isProjectPath || isRoot) {
+        if (!token_project) {
+            return NextResponse.redirect(new URL('/login', request.url));
+        }
+        if (token !== token_project) {
+            const response = NextResponse.redirect(request.url);
+            response.cookies.set('token', token_project, { path: '/', maxAge: 60 * 60 * 24 * 30 });
+            return response;
+        }
+    }
+
+    // 3. Handle Auth Route Redirection (if logged in, don't show login pages)
+    const isSuperAdminLogin = pathname === '/auth/login';
+    const isProjectLogin = pathname === '/login';
+
+    if (isProjectLogin && token_project) {
         return NextResponse.redirect(new URL('/', request.url));
     }
-
-    // If user tries to access protected routes without a token
-    if (!token && !isAuthRoute && pathname !== '/') {
-        return NextResponse.redirect(new URL('/login', request.url));
+    if (isSuperAdminLogin && token_superadmin) {
+        return NextResponse.redirect(new URL('/superadmin/dashboard', request.url));
     }
 
+    // 4. Default Allow
     return NextResponse.next();
 }
 

@@ -37,9 +37,9 @@ export interface SuperadminNavItem {
 
 type SuperadminAccessUser =
   | {
-      is_primary?: boolean | null;
-      isPrimaryAdmin?: boolean | null;
-    }
+    is_primary?: boolean | null;
+    isPrimaryAdmin?: boolean | null;
+  }
   | null
   | undefined;
 
@@ -97,7 +97,7 @@ export default function SuperadminSidebar() {
   }, [pathname]);
 
   const handleLogout = () => {
-    logout();
+    logout('superadmin');
     router.replace("/auth/login");
   };
 

@@ -48,7 +48,7 @@ const Login = () => {
                 socket.on('qr-authorized', async (data: { token: string; user?: unknown }) => {
                     if (data?.token) {
                         localStorage.setItem('qrSessionId', sessionId);
-                        const user = await login(data.token);
+                        const user = await login(data.token, 'project');
                         if (user?.role) {
                             router.push(`/${user.role}/dashboard`);
                             return;
