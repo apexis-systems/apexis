@@ -24,17 +24,37 @@ export const checkLimit = (type: LimitType) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const authUser = req.user;
+
+      // Guard: if verifyToken didn't populate req.user, reject early
+      if (!authUser) {
+        return res.status(401).json({ error: "Unauthorized: Missing or invalid token" });
+      }
+
       let activeOrgId = authUser?.organization_id;
 
-      // If organization_id is missing from the token, try to resolve it from the project context
-      // This supports users who switch to a role globally (where org_id might be null) 
-      // but are acting on a specific project.
       if (!activeOrgId) {
-        const projectId = req.body.project_id || req.params.id || req.query.project_id;
-        if (projectId) {
-          const project = await projects.findByPk(projectId, { attributes: ["organization_id"] });
-          if (project) {
-            activeOrgId = project.organization_id;
+        const role = authUser.role;
+
+        if (role === "admin" || role === "superadmin") {
+          // Admins do not carry a project_id in their token.
+          // Resolve their organization directly from the users table.
+          const dbUser = await users.findByPk(authUser.user_id, {
+            attributes: ["organization_id"],
+          });
+          activeOrgId = dbUser?.organization_id ?? null;
+        } else {
+          // Contributors and clients always operate inside a specific project.
+          // Resolve the org from the project referenced in the request.
+          const projectId =
+            req.body.project_id ||
+            req.params.project_id ||
+            req.params.id ||
+            req.query.project_id;
+          if (projectId) {
+            const project = await projects.findByPk(projectId, {
+              attributes: ["organization_id"],
+            });
+            activeOrgId = project?.organization_id ?? null;
           }
         }
       }

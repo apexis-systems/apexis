@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { rfis, users, activities, projects, project_members, folders, sequelize, Sequelize } from '../models/index.ts';
+import { rfis, users, activities, projects, project_members, folders, sequelize } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
 import { logActivity } from "../utils/activityUtils.ts";
 import { addWatermark } from '../utils/watermark.ts';
@@ -751,11 +751,9 @@ export const getFolderRFIs = async (req: Request, res: Response) => {
         const folder = await folders.findByPk(folder_id);
         if (!folder) return res.status(404).json({ error: 'Folder not found' });
 
+        // PostgreSQL JSONB containment: folder_ids @> '[fid]'
         const data = await rfis.findAll({
-            where: sequelize.where(
-                Sequelize.fn('JSON_CONTAINS', Sequelize.col('folder_ids'), Sequelize.literal(`'${fid}'`)),
-                1
-            ),
+            where: sequelize.literal(`"rfis"."folder_ids" @> '[${fid}]'`),
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
                 { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },
@@ -767,23 +765,6 @@ export const getFolderRFIs = async (req: Request, res: Response) => {
         res.json({ rfis: result });
     } catch (err) {
         console.error('getFolderRFIs error:', err);
-        // Fallback for non-MySQL or if JSON_CONTAINS fails
-        try {
-            const data = await rfis.findAll({
-                include: [
-                    { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
-                    { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },
-                ],
-                order: [['createdAt', 'DESC']],
-            });
-            const filtered = data.filter((r:any) => {
-                const ids = r.folder_ids;
-                return Array.isArray(ids) && ids.map(Number).includes(fid);
-            });
-            const result = await Promise.all(filtered.map(withPresignedUrls));
-            res.json({ rfis: result });
-        } catch (e2) {
-            res.status(500).json({ error: 'Internal server error' });
-        }
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
