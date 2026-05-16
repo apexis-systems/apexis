@@ -40,6 +40,7 @@ export default (sequelize: Sequelize) => {
         {
             tableName: "folders",
             timestamps: true,
+            paranoid: true,
         }
     );
 

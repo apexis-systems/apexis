@@ -869,7 +869,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             [
                 { text: t('projectDocuments.cancel'), style: "cancel" },
                 {
-                    text: t('projectDocuments.delete'),
+                    text: t('projectDocuments.moveToTrash'),
                     style: "destructive",
                     onPress: async () => {
                         try {
@@ -1010,8 +1010,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
-        if (newFolderName.trim().toLowerCase() === 'archive') {
-            Alert.alert(t('projectDocuments.error'), t('projectDocuments.reservedNameArchive'));
+        const lname = newFolderName.trim().toLowerCase();
+        if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
+            Alert.alert(t('projectDocuments.error'), "The name '" + newFolderName.trim() + "' is reserved for system use");
             return;
         }
         setSubmitting(true);
@@ -1034,8 +1035,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleUpdateFolder = async () => {
         if (!editFolderName.trim() || !editingFolderId) return;
-        if (editFolderName.trim().toLowerCase() === 'archive') {
-            Alert.alert(t('projectDocuments.error'), t('projectDocuments.reservedNameArchive'));
+        const lname = editFolderName.trim().toLowerCase();
+        if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
+            Alert.alert(t('projectDocuments.error'), "The name '" + editFolderName.trim() + "' is reserved for system use");
             return;
         }
         setSubmitting(true);
@@ -1054,35 +1056,25 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleDelete = async (folder: any, force = false) => {
         try {
-            if (force) {
-                setProcessing('delete_folder');
-                const data = await deleteFolder(folder.id);
-                if (data.success) {
-                    setFolders(folders.filter((f) => f.id !== folder.id));
-                    setFolderMenuVisible(false);
-                    Alert.alert(
-                        t('projectDocuments.success'),
-                        data.message || t('projectDocuments.folderDeletedSuccess'),
-                        [
-                            {
-                                text: t('projectDocuments.ok'),
-                                onPress: () => {
-                                    if (selectedFolder === folder.id) setSelectedFolder(null);
-                                }
-                            }
-                        ]
-                    );
-                } else {
-                    const msg = data?.error || t('projectDocuments.failedToDeleteFolder');
-                    Alert.alert(t('projectDocuments.error'), msg);
-                }
-            } else {
-                await deleteFolder(folder.id, force);
-                setFolders(prev => prev.filter(f => f.id !== folder.id));
-                if (selectedFolder === String(folder.id)) {
-                    setSelectedFolder(folder.parent_id ? String(folder.parent_id) : null);
-                }
+            setProcessing('delete_folder');
+            const data = await deleteFolder(folder.id, force);
+            setFolders(prev => prev.filter(f => f.id !== folder.id));
+            setFolderMenuVisible(false);
+            if (selectedFolder === String(folder.id)) {
+                setSelectedFolder(folder.parent_id ? String(folder.parent_id) : null);
             }
+            Alert.alert(
+                t('projectDocuments.success'),
+                data?.message || t('projectDocuments.folderDeletedSuccess'),
+                [
+                    {
+                        text: t('projectDocuments.ok'),
+                        onPress: () => {
+                            if (selectedFolder === folder.id) setSelectedFolder(null);
+                        }
+                    }
+                ]
+            );
         } catch (e: any) {
             const data = e.response?.data;
             if (data?.hasContent) {
@@ -1126,11 +1118,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const confirmDeleteFolder = (folder: any) => {
         Alert.alert(
             t('projectDocuments.deleteFolder'),
-            t('projectDocuments.deleteFileConfirm', { name: folder.name }), // Reusing deleteFileConfirm as it's the same message
+            t('projectDocuments.deleteFolderConfirm', { name: folder.name }),
             [
                 { text: t('projectDocuments.cancel'), style: 'cancel' },
                 {
-                    text: t('projectDocuments.delete'),
+                    text: t('projectDocuments.moveToTrash'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }
@@ -1519,9 +1511,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         />
                                         <View style={{ marginBottom: 8 }}>
                                             <Feather 
-                                                name={isArchiveFolder ? "archive" : (isConfirmationFolder ? "check-circle" : "folder")} 
+                                                name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : "folder"}
                                                 size={isConfirmationFolder ? 32 : 36} 
-                                                color={isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : colors.primary)} 
+                                                color={isArchiveFolder ? '#94a3b8' : (isConfirmationFolder ? '#fb923c' : colors.primary)} 
                                             />
                                         </View>
                                         {isSelected && (
@@ -1538,18 +1530,20 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         {/* Folder Action Menu - Hidden for Clients */}
                                         {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                                             <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        setActiveActionFolder(folder);
-                                                        setFolderMenuVisible(true);
-                                                    }}
-                                                >
-                                                    <Feather
-                                                        name="more-vertical"
-                                                        size={14}
-                                                        color={colors.textMuted}
-                                                    />
-                                                </TouchableOpacity>
+                                                {!isConfirmationFolder && !isArchiveFolder && (
+                                                    <TouchableOpacity
+                                                        onPress={() => {
+                                                            setActiveActionFolder(folder);
+                                                            setFolderMenuVisible(true);
+                                                        }}
+                                                    >
+                                                        <Feather
+                                                            name="more-vertical"
+                                                            size={14}
+                                                            color={colors.textMuted}
+                                                        />
+                                                    </TouchableOpacity>
+                                                )}
                                             </View>
                                         )}
                                     </View>
@@ -2101,7 +2095,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 )}
 
                                 {/* Move Option - Admin only for folders, Admin/Contributor for files */}
-                                {((selectedFolders.size > 0 && (user.role === 'admin' || user.role === 'superadmin')) || (selectedFiles.size > 0)) && (
+                                {((selectedFolders.size > 0 && (user.role === 'admin' || user.role === 'superadmin')) || (selectedFiles.size > 0)) && !currentFolder?.name.toLowerCase().includes('archive') && (
                                     <TouchableOpacity
                                         onPress={() => {
                                             setMovingItem(null);
@@ -2231,9 +2225,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={activeActionFile?.do_not_follow === true}
                 canDelete={false} // Disable delete in Docs
-                showArchive={true}
+                showArchive={!currentFolder?.name.toLowerCase().includes('archive')}
                 isArchived={folders.find(f => f.id === activeActionFile?.folder_id)?.name.toLowerCase() === 'archive'}
-                canRename={['admin', 'superadmin', 'contributor'].includes(user.role)}
+                canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('archive')}
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
                 fileName={activeActionFile?.file_name || ''}
                 processingAction={processing}
@@ -2253,4 +2247,3 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         </View>
     );
 }
-

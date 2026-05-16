@@ -9,7 +9,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile } from '@/services/fileService';
 import { getMemberForTag, getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
@@ -509,7 +509,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         Alert.alert(t('projectPhotos.delete'), t('projectPhotos.removePhotoConfirm', { name: photo.file_name }), [
             { text: t('projectPhotos.cancel'), style: 'cancel' },
             {
-                text: t('projectPhotos.delete'), style: 'destructive',
+                text: t('projectPhotos.moveToTrash'), style: 'destructive',
                 onPress: async () => {
                     try {
                         await deleteFile(photo.id);
@@ -593,6 +593,46 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         );
     };
 
+    const handleArchiveFile = async (file: any) => {
+        if (!file?.id) return;
+        Alert.alert(t('projectPhotos.archive'), t('projectPhotos.archivePhotoConfirm', { name: file.file_name }), [
+            { text: t('projectPhotos.cancel'), style: 'cancel' },
+            {
+                text: t('projectPhotos.archive'), style: 'default',
+                onPress: async () => {
+                    try {
+                        setProcessing('archive');
+                        await archiveFile(file.id);
+                        await loadFiles(true);
+                        setActionMenuVisible(false);
+                        if (viewerOpen) closeViewer();
+                    } catch { Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToArchive')); }
+                    finally { setProcessing(null); }
+                }
+            }
+        ]);
+    };
+
+    const handleUnarchivePhoto = async (file: any) => {
+        if (!file?.id) return;
+        Alert.alert(t('projectPhotos.unarchive'), t('projectPhotos.unarchivePhotoConfirm', { name: file.file_name }), [
+            { text: t('projectPhotos.cancel'), style: 'cancel' },
+            {
+                text: t('projectPhotos.unarchive'), style: 'default',
+                onPress: async () => {
+                    try {
+                        setProcessing('unarchive');
+                        await unarchiveFile(file.id, null);
+                        await loadFiles(true);
+                        setActionMenuVisible(false);
+                        if (viewerOpen) closeViewer();
+                    } catch { Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToUnarchive')); }
+                    finally { setProcessing(null); }
+                }
+            }
+        ]);
+    };
+
     const handleRenameFileAction = (file: any) => {
         setRenamingFileId(file.id);
         setRenamingFileName(file.file_name);
@@ -618,6 +658,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
+        const lname = newFolderName.trim().toLowerCase();
+        if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
+            Alert.alert("Error", "The name '" + newFolderName.trim() + "' is reserved for system use");
+            return;
+        }
         setSubmitting(true);
         try {
             await createFolder({
@@ -637,6 +682,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const handleUpdateFolder = async () => {
         if (!editFolderName.trim() || !editingFolderId) return;
+        const lname = editFolderName.trim().toLowerCase();
+        if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
+            Alert.alert("Error", "The name '" + editFolderName.trim() + "' is reserved for system use");
+            return;
+        }
         setSubmitting(true);
         try {
             await updateFolder(editingFolderId, { name: editFolderName.trim() });
@@ -654,19 +704,49 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const handleDelete = async (folder: any, force = false) => {
         try {
             setProcessing('delete_folder');
-            const data = await deleteFolder(folder.id);
-            if (data.success) {
-                setFolders(folders.filter((f) => f.id !== folder.id));
-                setFolderMenuVisible(false);
+            const data = await deleteFolder(folder.id, force);
+            setFolders(folders.filter((f) => f.id !== folder.id));
+            setFolderMenuVisible(false);
+            Alert.alert(
+                t('projectPhotos.success'),
+                data?.message || t('projectPhotos.folderDeletedSuccess'),
+                [
+                    {
+                        text: t('projectPhotos.ok'),
+                        onPress: () => {
+                            if (selectedFolder === folder.id) setSelectedFolder(null);
+                        }
+                    }
+                ]
+            );
+        } catch (e: any) {
+            const data = e.response?.data;
+            if (data?.hasContent) {
                 Alert.alert(
-                    t('projectPhotos.success'),
-                    data.message || t('projectPhotos.folderDeletedSuccess'),
+                    t('projectPhotos.folderNotEmpty'),
+                    t('projectPhotos.folderNotEmptyMessage', { name: folder.name }),
                     [
+                        { text: t('projectPhotos.cancel'), style: 'cancel' },
                         {
-                            text: t('projectPhotos.ok'),
+                            text: t('projectPhotos.moveContents'),
                             onPress: () => {
-                                if (selectedFolder === folder.id) setSelectedFolder(null);
+                                const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
+                                const childFiles = photos.filter(p => String(p.folder_id) === String(folder.id));
+
+                                if (childFolders.length === 0 && childFiles.length === 0) {
+                                    Alert.alert(t('projectPhotos.info'), t('projectPhotos.folderAlreadyEmpty'));
+                                    return;
+                                }
+
+                                setMovingContentsOf(folder);
+                                setMovingItem(null);
+                                setShowMoveDialog(true);
                             }
+                        },
+                        {
+                            text: t('projectPhotos.deleteEverything'),
+                            style: 'destructive',
+                            onPress: () => handleDelete(folder, true)
                         }
                     ]
                 );
@@ -686,7 +766,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             [
                 { text: t('projectPhotos.cancel'), style: 'cancel' },
                 {
-                    text: t('projectPhotos.delete'),
+                    text: t('projectPhotos.moveToTrash'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }
@@ -1070,9 +1150,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 />
                                                 <View style={{ marginBottom: 8 }}>
                                                     <Feather
-                                                        name={isArchiveFolder ? "archive" : (isConfirmationFolder ? "check-circle" : "folder")}
+                                                        name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : "folder"}
                                                         size={isConfirmationFolder ? 32 : 36}
-                                                        color={isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : colors.primary)}
+                                                        color={isArchiveFolder ? '#94a3b8' : (isConfirmationFolder ? '#fb923c' : colors.primary)}
                                                     />
                                                 </View>
                                                 {isSelected && (
@@ -1090,18 +1170,20 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 {/* Folder Action Menu - Hidden for Clients */}
                                                 {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                                                     <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                                        <TouchableOpacity
-                                                            onPress={() => {
-                                                                setActiveActionFolder(folder);
-                                                                setFolderMenuVisible(true);
-                                                            }}
-                                                        >
-                                                            <Feather
-                                                                name="more-vertical"
-                                                                size={14}
-                                                                color={colors.textMuted}
-                                                            />
-                                                        </TouchableOpacity>
+                                                        {!isConfirmationFolder && !isArchiveFolder && (
+                                                            <TouchableOpacity
+                                                                onPress={() => {
+                                                                    setActiveActionFolder(folder);
+                                                                    setFolderMenuVisible(true);
+                                                                }}
+                                                            >
+                                                                <Feather
+                                                                    name="more-vertical"
+                                                                    size={14}
+                                                                    color={colors.textMuted}
+                                                                />
+                                                            </TouchableOpacity>
+                                                        )}
                                                     </View>
                                                 )}
                                             </View>
@@ -1636,10 +1718,22 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             : <Feather name="download" size={20} color={colors.primary} />
                                         }
                                     </TouchableOpacity>
-                                    {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
-                                        <TouchableOpacity onPress={handleDeletePhoto} style={{ padding: 8 }}>
-                                            <Feather name="trash-2" size={20} color="#ef4444" />
-                                        </TouchableOpacity>
+                                    {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id) || user.role === 'admin' || user.role === 'superadmin') && (
+                                        <>
+                                            {currentFolder?.name.toLowerCase().includes('archive') ? (
+                                                <TouchableOpacity onPress={() => handleUnarchivePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }}>
+                                                    <Feather name="archive" size={20} color="#3b82f6" />
+                                                </TouchableOpacity>
+                                            ) : currentFolder?.name.toLowerCase().includes('confirmation') ? (
+                                                <TouchableOpacity onPress={() => handleArchiveFile(sortedPhotos[viewerIndex])} style={{ padding: 8 }}>
+                                                    <Feather name="archive" size={20} color="#f59e0b" />
+                                                </TouchableOpacity>
+                                            ) : (
+                                                <TouchableOpacity onPress={handleDeletePhoto} style={{ padding: 8 }}>
+                                                    <Feather name="trash-2" size={20} color="#ef4444" />
+                                                </TouchableOpacity>
+                                            )}
+                                        </>
                                     )}
                                 </View>
                             </View>
@@ -1849,9 +1943,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={false}
-                canDelete={activeActionFile && (String(activeActionFile.created_by) === String(user.id))}
-                canRename={['admin', 'superadmin', 'contributor'].includes(user.role)}
+                canDelete={activeActionFile && (String(activeActionFile.created_by) === String(user.id) || user.role === 'admin' || user.role === 'superadmin') && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
+                canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
                 onRename={() => handleRenameFileAction(activeActionFile)}
+                onArchive={() => handleArchiveFile(activeActionFile)}
+                onUnarchive={() => handleUnarchivePhoto(activeActionFile)}
+                showArchive={currentFolder?.name.toLowerCase().includes('confirmation')}
+                isArchived={currentFolder?.name.toLowerCase().includes('archive')}
                 fileName={activeActionFile?.file_name || ''}
                 processingAction={processing}
             />

@@ -184,61 +184,61 @@ const SaasGrowthDashboard = () => {
   const dashboardStats = data?.[timeRange] || {};
 
   const executiveMetrics = [
-    { 
-      title: "Total Users", 
-      value: String(dashboardStats?.totalUsers?.total ?? 0), 
-      change: dashboardStats?.totalUsers?.text || "0%", 
-      changeType: dashboardStats?.totalUsers?.type || "neutral", 
-      icon: Users 
+    {
+      title: "Total Users",
+      value: String(dashboardStats?.totalUsers?.total ?? 0),
+      change: dashboardStats?.totalUsers?.text || "0%",
+      changeType: dashboardStats?.totalUsers?.type || "neutral",
+      icon: Users
     },
-    { 
-      title: "Active Companies", 
-      value: String(dashboardStats?.activeCompanies?.total ?? 0), 
-      change: dashboardStats?.activeCompanies?.text || "0%", 
-      changeType: dashboardStats?.activeCompanies?.type || "neutral", 
-      icon: Building2 
+    {
+      title: "Active Companies",
+      value: String(dashboardStats?.activeCompanies?.total ?? 0),
+      change: dashboardStats?.activeCompanies?.text || "0%",
+      changeType: dashboardStats?.activeCompanies?.type || "neutral",
+      icon: Building2
     },
-    { 
-      title: "Active Projects", 
-      value: String(dashboardStats?.activeProjects?.total ?? 0), 
-      change: dashboardStats?.activeProjects?.text || "0%", 
-      changeType: dashboardStats?.activeProjects?.type || "neutral", 
-      icon: FolderKanban 
+    {
+      title: "Active Projects",
+      value: String(dashboardStats?.activeProjects?.total ?? 0),
+      change: dashboardStats?.activeProjects?.text || "0%",
+      changeType: dashboardStats?.activeProjects?.type || "neutral",
+      icon: FolderKanban
     },
-    { 
-      title: "Freemium Users", 
-      value: String(dashboardStats?.freemiumUsers?.total ?? 0), 
-      change: dashboardStats?.freemiumUsers?.text || "0%", 
-      changeType: dashboardStats?.freemiumUsers?.type || "neutral", 
-      icon: UserCheck 
+    {
+      title: "Freemium Users",
+      value: String(dashboardStats?.freemiumUsers?.total ?? 0),
+      change: dashboardStats?.freemiumUsers?.text || "0%",
+      changeType: dashboardStats?.freemiumUsers?.type || "neutral",
+      icon: UserCheck
     },
-    { 
-      title: "Paid Subscribers", 
-      value: String(dashboardStats?.paidSubscribers?.total ?? 0), 
-      change: dashboardStats?.paidSubscribers?.text || "0%", 
-      changeType: dashboardStats?.paidSubscribers?.type || "neutral", 
-      icon: CreditCard 
+    {
+      title: "Paid Subscribers",
+      value: String(dashboardStats?.paidSubscribers?.total ?? 0),
+      change: dashboardStats?.paidSubscribers?.text || "0%",
+      changeType: dashboardStats?.paidSubscribers?.type || "neutral",
+      icon: CreditCard
     },
-    { 
-      title: "MRR", 
-      value: "₹" + Number(dashboardStats?.mrr?.total ?? 0).toLocaleString(), 
-      change: dashboardStats?.mrr?.text || "0%", 
-      changeType: dashboardStats?.mrr?.type || "neutral", 
-      icon: DollarSign 
+    {
+      title: "MRR",
+      value: "₹" + Number(dashboardStats?.mrr?.total ?? 0).toLocaleString(),
+      change: dashboardStats?.mrr?.text || "0%",
+      changeType: dashboardStats?.mrr?.type || "neutral",
+      icon: DollarSign
     },
-    { 
-      title: "ARR", 
-      value: "₹" + Number(dashboardStats?.arr?.total ?? 0).toLocaleString(), 
-      change: dashboardStats?.arr?.text || "0%", 
-      changeType: dashboardStats?.arr?.type || "neutral", 
-      icon: TrendingUp 
+    {
+      title: "ARR",
+      value: "₹" + Number(dashboardStats?.arr?.total ?? 0).toLocaleString(),
+      change: dashboardStats?.arr?.text || "0%",
+      changeType: dashboardStats?.arr?.type || "neutral",
+      icon: TrendingUp
     },
-    { 
-      title: "Conversion Rate", 
-      value: String(dashboardStats?.conversionRate?.total ?? "0%"), 
-      change: dashboardStats?.conversionRate?.text || "0%", 
-      changeType: dashboardStats?.conversionRate?.type || "neutral", 
-      icon: Star 
+    {
+      title: "Conversion Rate",
+      value: String(dashboardStats?.conversionRate?.total ?? "0%"),
+      change: dashboardStats?.conversionRate?.text || "0%",
+      changeType: dashboardStats?.conversionRate?.type || "neutral",
+      icon: Star
     },
   ];
 
@@ -442,7 +442,7 @@ const SaasGrowthDashboard = () => {
                 {[
                   { label: "Projects", value: data?.productUsageData?.[5]?.projects || 0 },
                   { label: "Photos", value: data?.productUsageData?.[5]?.photos || 0 },
-                  { label: "PDFs", value: data?.productUsageData?.[5]?.pdfs || 0 },
+                  { label: "Documents", value: data?.productUsageData?.[5]?.pdfs || 0 },
                   { label: "Messages", value: data?.productUsageData?.[5]?.messages || 0 },
                   // { label: "Documents", value: data?.productUsageData?.[5]?.releases || 0 },
                   { label: "Users", value: data?.allTime?.totalUsers?.total || 0 },
@@ -479,8 +479,9 @@ const SaasGrowthDashboard = () => {
                   <TableRow>
                     <TableHead className="text-xs">Company</TableHead>
                     <TableHead className="text-xs">Projects</TableHead>
+                    <TableHead className="text-xs">Users</TableHead>
                     <TableHead className="text-xs">Photos</TableHead>
-                    <TableHead className="text-xs">PDFs</TableHead>
+                    <TableHead className="text-xs">Documents</TableHead>
                     <TableHead className="text-xs">Messages</TableHead>
                     <TableHead className="text-xs">Last Active</TableHead>
                     <TableHead className="text-xs">Plan</TableHead>
@@ -493,8 +494,8 @@ const SaasGrowthDashboard = () => {
                       <TableCell className="text-xs font-medium text-card-foreground">{c.name}</TableCell>
                       <TableCell className="text-xs">{c.projects}</TableCell>
                       <TableCell className="text-xs">{c.team}</TableCell>
-                      <TableCell className="text-xs font-bold text-primary">{c.photos}</TableCell>
-                      <TableCell className="text-xs font-bold text-info">{c.pdfs}</TableCell>
+                      <TableCell className="text-xs ">{c.photos}</TableCell>
+                      <TableCell className="text-xs ">{c.documents}</TableCell>
                       <TableCell className="text-xs">{c.messages.toLocaleString()}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{c.lastActive}</TableCell>
                       <TableCell>
@@ -519,7 +520,7 @@ const SaasGrowthDashboard = () => {
                     <TableHead className="text-xs">Email</TableHead>
                     <TableHead className="text-xs">Phone</TableHead>
                     <TableHead className="text-xs">Projects</TableHead>
-                    <TableHead className="text-xs">Drawings</TableHead>
+                    <TableHead className="text-xs">Files</TableHead>
                     <TableHead className="text-xs">Team</TableHead>
                     <TableHead className="text-xs">Days Left</TableHead>
                     <TableHead className="text-xs">Activity</TableHead>

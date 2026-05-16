@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { fileURLToPath } from "node:url";
 import redis from "../config/redis.ts";
-import { users, organizations, plans } from "../models/index.ts";
+import { users, organizations, plans, projects, folders } from "../models/index.ts";
 import { Op } from "sequelize";
 import { sendEmail } from "../utils/email.ts";
 import { buildAdminOtpEmail, buildSuperadminOtpEmail } from "../utils/emailTemplates.ts";
@@ -298,6 +298,68 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
         }
 
         const newUser = user; // for downstream consistency
+
+        // --- Create Template Project ---
+        try {
+            const generateCode = () => crypto.randomBytes(3).toString("hex").toUpperCase();
+            const projectStartDate = new Date();
+            const projectEndDate = new Date();
+            projectEndDate.setFullYear(projectStartDate.getFullYear() + 1);
+
+            const templateProject = await projects.create({
+                organization_id: organization.id,
+                name: "Sample Project",
+                description: "A template project to get you started",
+                start_date: projectStartDate,
+                end_date: projectEndDate,
+                contributor_code: generateCode(),
+                client_code: generateCode(),
+                created_by: newUser.id,
+            });
+
+            // Create default folders
+            const folderNames = [
+                "3D images", "Architectural", "Automation",
+                "Brick marking", "Carpentry", "Electrical", "Fabrication",
+                "Flooring", "HVAC", "Interiors", "Landscape",
+                "Permit", "Plumbing", "Structural"
+            ];
+
+            const folderCreationTasks: any[] = [];
+            folderNames.forEach((folderName) => {
+                // Photo folders
+                folderCreationTasks.push(folders.create({
+                    project_id: templateProject.id,
+                    name: folderName,
+                    created_by: newUser.id,
+                    client_visible: true,
+                    folder_type: "photo",
+                }));
+                // Document folders
+                folderCreationTasks.push(folders.create({
+                    project_id: templateProject.id,
+                    name: folderName,
+                    created_by: newUser.id,
+                    client_visible: true,
+                    folder_type: "document",
+                }));
+            });
+
+            // Extra SOPs folder for Documents only
+            folderCreationTasks.push(folders.create({
+                project_id: templateProject.id,
+                name: "SOPs",
+                created_by: newUser.id,
+                client_visible: true,
+                folder_type: "document",
+            }));
+
+            await Promise.all(folderCreationTasks);
+        } catch (templateError) {
+            console.error("Template Project Creation Error:", templateError);
+            // We do not fail the whole onboarding if template creation fails
+        }
+        // --- End Template Project ---
 
         await redis.del(redisKey);
 

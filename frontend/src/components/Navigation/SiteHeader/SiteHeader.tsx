@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, Sun, Moon, LogOut, HelpCircle, MessageSquarePlus, MessageSquare, X, Shield, Briefcase, Loader2, User, Folder, FileText, Camera, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Bell, Search, Sun, Moon, LogOut, HelpCircle, MessageSquarePlus, MessageSquare, X, Shield, Loader2, User, Folder, FileText, Camera, AlertTriangle, RefreshCw, Briefcase } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -92,7 +92,7 @@ const SiteHeader = () => {
   }, []);
 
   const handleLogout = () => {
-    if (logout) logout();
+    if (logout) logout('project');
     if (setMode) setMode(null);
     router.push('/');
   };
@@ -259,7 +259,7 @@ const SiteHeader = () => {
                           ))}
                         </div>
                       )}
-                      
+
                       {searchResults.snags?.length > 0 && (
                         <div className="mb-4">
                           <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Snags</div>
@@ -344,7 +344,7 @@ const SiteHeader = () => {
               <MessageSquarePlus className="h-4 w-4 text-muted-foreground" />
             </button>
             <LanguageSelector />
-            
+
             {/* Global Role Switcher */}
             {user && (
               <div className="flex items-center gap-1.5 px-2 mr-2 border-x border-border">
@@ -377,8 +377,8 @@ const SiteHeader = () => {
                       }}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all border",
-                        isActive 
-                          ? "bg-primary text-primary-foreground border-primary" 
+                        isActive
+                          ? "bg-primary text-primary-foreground border-primary"
                           : "bg-secondary/50 text-muted-foreground border-transparent hover:border-border hover:bg-secondary"
                       )}
                       disabled={!!isSwitching}
@@ -415,9 +415,9 @@ const SiteHeader = () => {
                   className="text-right cursor-pointer hover:opacity-80 transition-opacity"
                 >
                   <div className="text-xs font-semibold text-foreground">{user.name}</div>
-                  <div className="text-[10px] text-muted-foreground">{user.email || user.phone_number || user.role}</div>
+                  <div className="text-[10px] text-muted-foreground truncate max-w-[120px]">{user.email || user.phone_number || user.role}</div>
                 </button>
-                <button onClick={handleLogout} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
+                <button onClick={handleLogout} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors" title="Logout">
                   <LogOut className="h-4 w-4 text-muted-foreground" />
                 </button>
               </div>

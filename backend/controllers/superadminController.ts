@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { organizations, projects, folders, users } from "../models/index.ts";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/email.ts";
+import { sendNotification } from "../utils/notificationUtils.ts";
 
 export const getOrgOverview = async (req: Request, res: Response) => {
     try {
@@ -96,14 +97,17 @@ export const inviteSuperAdmin = async (req: Request, res: Response) => {
 
         // Check if user already exists
         let user = await users.findOne({ where: { email } });
-        
+
         if (user) {
             // If they already exist, we can promote them to superadmin
-            if (user.role === 'superadmin') {
-                return res.status(400).json({ error: "User is already a SuperAdmin" });
-            }
+            // if (user.role === 'superadmin') {
+            //     return res.status(400).json({ error: "User is already a SuperAdmin" });
+            // } else {
+                return res.status(400).json({ error: `User is already exist as ${user.role}, use different email` });
+            // }
             // Promotion logic: Update role to superadmin
-            await user.update({ role: 'superadmin', organization_id: null });
+            // await user.update({ role: 'superadmin', organization_id: null });
+
         } else {
             // Create pending user
             user = await users.create({
@@ -196,7 +200,7 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
         const revenueTrend = await analyticsService.getRevenueGrowthData();
         const alerts = await analyticsService.getPlatformAlerts();
         const companyUsage = await analyticsService.getCompanyUsageData();
-        
+
         res.status(200).json({ stats, growth, activity, comms, topProjects, feed, revenue, revenueTrend, alerts, companyUsage, ...insightsData });
     } catch (error) {
         console.error("getDashboardOverview Error:", error);
@@ -210,12 +214,12 @@ export const getRevenueMetrics = async (req: Request, res: Response) => {
         const churnData = await analyticsService.getChurnAndRetentionMetrics();
         const revenueTrend = await analyticsService.getRevenueGrowthData();
         const feedbackData = await analyticsService.getFeedbackData();
-        
-        res.status(200).json({ 
-            ...data, 
-            ...churnData, 
+
+        res.status(200).json({
+            ...data,
+            ...churnData,
             revenueTrend,
-            feedbackData 
+            feedbackData
         });
     } catch (error) {
         console.error("getRevenueMetrics Error:", error);
@@ -250,15 +254,15 @@ export const getGrowthAnalytics = async (req: Request, res: Response) => {
             { label: "Trial Completion Rate", value: totalUsers.total > 0 ? ((freemiumUsers.total / totalUsers.total) * 100).toFixed(1) + "%" : "0%", color: "bg-primary" },
             { label: "Churn Rate", value: (data as any).churnRate || "0%", color: "bg-destructive" }
         ];
-        
-        res.status(200).json({ 
-            ...data, 
-            revenueGrowth, 
-            productUsageData, 
-            userGrowthMonthly, 
-            companyActivity, 
+
+        res.status(200).json({
+            ...data,
+            revenueGrowth,
+            productUsageData,
+            userGrowthMonthly,
+            companyActivity,
             conversionOpportunities,
-            saasPerformance 
+            saasPerformance
         });
     } catch (error) {
         console.error("getGrowthAnalytics Error:", error);
@@ -270,11 +274,11 @@ export const getOrganizationDetails = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const details = await analyticsService.getOrganizationAnalyticsDetails(id as string);
-        
+
         if (!details) {
             return res.status(404).json({ error: "Organization not found" });
         }
-        
+
         res.status(200).json(details);
     } catch (error) {
         console.error("getOrganizationDetails Error:", error);
@@ -288,6 +292,56 @@ export const getUsersList = async (req: Request, res: Response) => {
         res.status(200).json(users);
     } catch (error) {
         console.error("getUsersList Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const sendBroadcastNotification = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { title, description } = req.body;
+
+        if (!authUser || authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
+        }
+
+        if (!title || !description) {
+            return res.status(400).json({ error: "Title and description are required" });
+        }
+
+        // Fetch all active users
+        const allUsers = await users.findAll({
+            attributes: ['id']
+        });
+
+        if (allUsers.length === 0) {
+            return res.status(200).json({ message: "No users found to notify" });
+        }
+
+        // Send notification to each user
+        // Note: For large numbers of users, this should be a background job
+        const notificationPromises = allUsers.map((user: any) =>
+            sendNotification({
+                userId: user.id,
+                title,
+                body: description,
+                type: 'broadcast',
+                data: {
+                    sentBy: authUser.user_id,
+                    isBroadcast: true
+                }
+            })
+        );
+
+        await Promise.all(notificationPromises);
+
+        res.status(200).json({
+            message: "Broadcast sent successfully",
+            count: allUsers.length
+        });
+
+    } catch (error) {
+        console.error("Send Broadcast Notification Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

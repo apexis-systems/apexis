@@ -100,7 +100,7 @@ export default function ProjectManuals({ project }: Props) {
     // ── Delete ─────────────────────────────────────────────────────────────────
 
     const handleDelete = (item: Manual) => {
-        Alert.alert('Delete', `Remove "${item.file_name}"?`, [
+        Alert.alert('Delete', `"${item.file_name}" will be moved to Trash and can be recovered later from Settings for 30 days.`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete', style: 'destructive',

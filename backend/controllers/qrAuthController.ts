@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { redisClient } from '../utils/redisObject.ts';
+import redisClient from '../config/redis.ts';
 import jwt from 'jsonwebtoken';
 import { getIO } from '../socket.ts';
 

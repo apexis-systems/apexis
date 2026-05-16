@@ -159,8 +159,8 @@ export const projectLogin = async (req: Request, res: Response) => {
 
         if (existingMembership) {
             if (existingMembership.role !== roleForCode) {
-                return res.status(400).json({ 
-                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join with a different role.` 
+                return res.status(400).json({
+                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join with a different role.`
                 });
             }
             // If they are already a member with the SAME role, we proceed to login (token generation)
@@ -209,7 +209,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                         data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
-                
+
                 // Emit socket event to refresh project stats (counts) in real-time
                 try {
                     getIO().to(`project-${project.id}`).emit('project-stats-updated', { projectId: String(project.id) });
@@ -222,12 +222,12 @@ export const projectLogin = async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            { 
-                user_id: user.id, 
-                name: user.name, 
+            {
+                user_id: user.id,
+                name: user.name,
                 role: roleForCode, // Use the role associated with the login code
                 organization_id: project.organization_id, // Active org context
-                project_id: project.id 
+                project_id: project.id
             },
             process.env.JWT_SECRET || "default_secret",
             { expiresIn: "30d" }
@@ -240,8 +240,8 @@ export const projectLogin = async (req: Request, res: Response) => {
             await user.update({ fcm_token: fcmToken });
         }
 
-        res.status(200).json({ 
-            token, 
+        res.status(200).json({
+            token,
             user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: roleForCode },
             isPendingName: user.name === "New User" || !user.name || user.name.trim() === ""
         });
@@ -462,8 +462,8 @@ export const completePublicSignup = async (req: Request, res: Response) => {
 
         if (existingMembership) {
             if (existingMembership.role !== decoded.role) {
-                return res.status(400).json({ 
-                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join as a ${decoded.role}.` 
+                return res.status(400).json({
+                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join as a ${decoded.role}.`
                 });
             }
             // Already a member with the same role, proceed to success (no duplicate needed)
@@ -512,7 +512,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                         data: { projectId: String(project.id), type: 'overview' }
                     });
                 }
-                
+
                 // Emit socket event to refresh project stats (counts) in real-time
                 try {
                     getIO().to(`project-${project.id}`).emit('project-stats-updated', { projectId: String(project.id) });
@@ -534,7 +534,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
 export const forgotPasswordRequestOtp = async (req: Request, res: Response) => {
     try {
         const { email, phone, role } = req.body;
-        
+
         const normalizedEmail = email ? email.toLowerCase() : null;
         const normalizedPhone = phone ? normalizePhone(phone) : null;
 
@@ -558,7 +558,7 @@ export const forgotPasswordRequestOtp = async (req: Request, res: Response) => {
         const otpHash = await bcrypt.hash(otp, 10);
 
         const identifier = normalizedEmail || normalizedPhone;
-        
+
         if (normalizedPhone && !normalizedEmail && !isIndianPhone(normalizedPhone)) {
             return res.status(400).json({ error: "Phone OTP is currently only available for Indian numbers (+91)." });
         }
@@ -623,7 +623,7 @@ export const resetPassword = async (req: Request, res: Response) => {
         const decoded: any = jwt.verify(resetToken, process.env.JWT_SECRET || "default_secret");
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
-        
+
         const updateWhere: any = {};
         if (decoded.email) updateWhere.email = decoded.email;
         if (decoded.phone) updateWhere.phone_number = decoded.phone;
@@ -664,11 +664,11 @@ export const getMyMemberships = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
         const dbUser = await users.findByPk(authUser.user_id, { attributes: ['id', 'role', 'organization_id'] });
-        
+
         const memberships = await project_members.findAll({
             where: { user_id: authUser.user_id },
-            include: [{ 
-                model: projects, 
+            include: [{
+                model: projects,
                 required: true,
                 attributes: ['id', 'name', 'organization_id'],
                 include: [{ model: organizations, attributes: ['name'] }]
@@ -815,8 +815,8 @@ export const switchContext = async (req: Request, res: Response) => {
             { expiresIn: "30d" }
         );
 
-        res.status(200).json({ 
-            token, 
+        res.status(200).json({
+            token,
             user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: normalizedRole }
         });
     } catch (error) {
@@ -842,6 +842,20 @@ export const updateDiagnosticPermission = async (req: Request, res: Response) =>
         res.status(200).json({ message: "Diagnostic permission updated successfully" });
     } catch (error) {
         console.error("Update Diagnostic Permission Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const logout = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        await users.update({ fcm_token: null }, { where: { id: authUser.user_id } });
+
+        res.status(200).json({ message: "Logged out successfully" });
+    } catch (error) {
+        console.error("Logout Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

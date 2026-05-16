@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,13 @@ const SuperAdminLogin = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const { user, login } = auth || {};
+
+    useEffect(() => {
+        if (user?.role === 'superadmin') {
+            router.push('/superadmin/dashboard');
+        }
+    }, [user, router]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

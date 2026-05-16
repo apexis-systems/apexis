@@ -467,12 +467,12 @@ export const deleteSnag = async (req: Request, res: Response) => {
       projectId: snag.project_id,
       userId: authUser.user_id,
       type: "edit",
-      description: `Deleted snag "${snag.title}"`,
+      description: `Moved snag "${snag.title}" to trash`,
       metadata: { snagId: id, type: 'snags' },
       skipNotifications: true
     });
 
-    res.json({ message: "Deleted" });
+    res.json({ message: "Moved to trash" });
   } catch (err) {
     console.error("deleteSnag error:", err);
     res.status(500).json({ error: "Internal server error" });

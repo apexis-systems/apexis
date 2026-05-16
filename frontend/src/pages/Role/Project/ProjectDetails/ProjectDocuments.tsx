@@ -588,7 +588,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               }}
               className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
             >
-              {!isSelectionMode && (
+              {!isSelectionMode && !isArchiveFolder && !isConfirmationFolder && (
                 <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
                   {(user.role === 'admin' || user.role === 'superadmin') && (
                     <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
@@ -606,11 +606,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
                         className="rounded-full p-1 hover:bg-secondary transition-colors" 
                         title={t('rename_folder_tip')}
-                        disabled={isArchiveFolder || isConfirmationFolder}
                       >
                         <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
-                      {/* No Delete for folders in Docs section */}
                     </>
                   )}
                 </div>
@@ -622,9 +620,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 </div>
               )}
               {isArchiveFolder ? (
-                <Archive className="h-8 w-8 text-slate-500" />
+                <Archive className="h-8 w-8 text-slate-400" />
               ) : isConfirmationFolder ? (
-                <CheckCircle2 className="h-8 w-8 text-orange-500" />
+                <CheckCircle2 className="h-8 w-8 text-orange-400" />
               ) : (
                 <FolderIcon className="h-8 w-8 text-accent" />
               )}
@@ -703,7 +701,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('share_link_tip')}>
                             <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
-                          {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                          {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
                             <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('rename_file_tip')}>
                               <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                             </button>
@@ -718,7 +716,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                               </button>
                             </>
                           )}
-                          {(user.role === 'admin' || user.role === 'superadmin') && (
+                          {(user.role === 'admin' || user.role === 'superadmin') && !currentFolder?.name.toLowerCase().includes('archive') && (
                             <button
                               onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
                               className="rounded-full p-1 hover:bg-secondary transition-colors"
@@ -727,7 +725,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                               <Move className="h-2.5 w-2.5 text-muted-foreground" />
                             </button>
                           )}
-                          {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
+                          {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && !currentFolder?.name.toLowerCase().includes('archive') && (
                             <button
                               onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }}
                               className="rounded-full p-1 hover:bg-amber-500/10 transition-colors"
@@ -801,13 +799,15 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-md p-1 hover:bg-secondary">
                         <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
-                        className="rounded-md p-1 hover:bg-secondary"
-                        title={t('move_file_tip')}
-                      >
-                        <Move className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
+                      {!currentFolder?.name.toLowerCase().includes('archive') && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
+                          className="rounded-md p-1 hover:bg-secondary"
+                          title={t('move_file_tip')}
+                        >
+                          <Move className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      )}
                       {(user.role === 'admin' || user.role === 'superadmin') && (
                         <>
                           <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
@@ -822,12 +822,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           </button>
                         </>
                       )}
-                      {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                      {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
                         <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('rename_file_tip')}>
                           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       )}
-                       {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && (
+                      {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && !currentFolder?.name.toLowerCase().includes('archive') && (
                         <button onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title={t('archive_file_tip')}>
                           <Archive className="h-3.5 w-3.5 text-amber-600" />
                         </button>
@@ -891,14 +891,16 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 >
                   <Share2 className="h-3.5 w-3.5 mr-1" /> {t('share_btn')}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
-                  onClick={handleBulkMove}
-                >
-                  <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
-                </Button>
+                {!currentFolder?.name.toLowerCase().includes('archive') && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-[10px] font-semibold hover:text-accent"
+                    onClick={handleBulkMove}
+                  >
+                    <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
+                  </Button>
+                )}
                 {(user.role === 'admin' || user.role === 'superadmin') && (
                   <div className="flex items-center gap-1 border-l border-border pl-2">
                     <Button
