@@ -3,11 +3,23 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Default to localhost fallback if env var is missing
-const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+const redisHost = process.env.REDIS_HOST || 'localhost';
+const redisPort = process.env.REDIS_PORT || '6379';
+const redisUrl = process.env.REDIS_URL || `redis://${redisHost}:${redisPort}`;
 
 const redis = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
+    retryStrategy: (times) => {
+        // Wait up to 2 seconds between reconnects to allow DNS time to propagate
+        return Math.min(times * 100, 2000); 
+    },
+    reconnectOnError: (err) => {
+        if (err.message.includes('READONLY')) {
+            console.log('Redis READONLY error detected, forcing reconnect...');
+            return 2; 
+        }
+        return false;
+    }
 });
 
 redis.on("error", (err) => {
