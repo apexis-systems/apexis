@@ -32,64 +32,60 @@ const calcGrowth = (current: number, previous: number) => {
 
 export const getDashboardOverviewStats = async () => {
     const now = new Date();
-
-    // Rolling windows:
-    // Today: now to 24h ago
-    // 7 Days: now to 7d ago
-    // 30 Days: now to 30d ago
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-    const fetchRangeStats = async (startDate: Date, prevStartDate: Date, isAllTime: boolean = false) => {
-        const effectiveStartDate = isAllTime ? new Date(0) : startDate;
-        const effectivePrevEndDate = isAllTime ? thirtyDaysAgo : startDate;
-        const effectivePrevStartDate = isAllTime ? new Date(0) : prevStartDate;
+    // Fetch CURRENT TOTALS (Total till now)
+    const [
+        totalCompanies,
+        totalProjects,
+        totalUsers,
+        totalMessages,
+        totalSnags,
+        totalDAU
+    ] = await Promise.all([
+        organizations.count(),
+        projects.count(),
+        users.count(),
+        chat_messages.count(),
+        snags.count({ where: { status: "green" } }),
+        activities.count({ col: 'user_id', distinct: true })
+    ]);
 
+    const fetchRangeStats = async (comparisonDate: Date, isAllTime: boolean = false) => {
+        // For All Time, previous is always 0 because we started from 0
         const [
-            totalCompanies,
-            totalProjects,
-            totalUsers,
-            currentMessages,
-            currentSnags,
-            currentDAU,
+            prevCompanies,
+            prevProjects,
+            prevUsers,
             prevMessages,
             prevSnags,
             prevDAU
-        ] = await Promise.all([
-            organizations.count(),
-            projects.count(),
-            users.count(),
-            chat_messages.count({ where: { createdAt: { [Op.gte]: effectiveStartDate } } }),
-            snags.count({ where: { status: "green", updatedAt: { [Op.gte]: effectiveStartDate } } }),
-            activities.count({ col: 'user_id', distinct: true, where: { createdAt: { [Op.gte]: effectiveStartDate } } }),
-            chat_messages.count({ where: { createdAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } }),
-            snags.count({ where: { status: "green", updatedAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } }),
-            activities.count({ col: 'user_id', distinct: true, where: { createdAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } })
+        ] = isAllTime ? [0, 0, 0, 0, 0, 0] : await Promise.all([
+            organizations.count({ where: { createdAt: { [Op.lt]: comparisonDate } } }),
+            projects.count({ where: { createdAt: { [Op.lt]: comparisonDate } } }),
+            users.count({ where: { createdAt: { [Op.lt]: comparisonDate } } }),
+            chat_messages.count({ where: { createdAt: { [Op.lt]: comparisonDate } } }),
+            snags.count({ where: { status: "green", updatedAt: { [Op.lt]: comparisonDate } } }),
+            activities.count({ col: 'user_id', distinct: true, where: { createdAt: { [Op.lt]: comparisonDate } } })
         ]);
 
-        const prevTotalCompanies = await organizations.count({ where: { createdAt: { [Op.lt]: effectivePrevEndDate } } });
-        const prevTotalProjects = await projects.count({ where: { createdAt: { [Op.lt]: effectivePrevEndDate } } });
-        const prevTotalUsers = await users.count({ where: { createdAt: { [Op.lt]: effectivePrevEndDate } } });
-
         return {
-            activeCompanies: { total: totalCompanies, ...calcGrowth(totalCompanies, prevTotalCompanies) },
-            activeProjects: { total: totalProjects, ...calcGrowth(totalProjects, prevTotalProjects) },
-            totalUsers: { total: totalUsers, ...calcGrowth(totalUsers, prevTotalUsers) },
-            dailyActiveUsers: { total: currentDAU, ...calcGrowth(currentDAU, prevDAU) },
-            tasksCompletedToday: { total: currentSnags, ...calcGrowth(currentSnags, prevSnags) },
-            messagesSentToday: { total: currentMessages, ...calcGrowth(currentMessages, prevMessages) },
+            activeCompanies: { total: totalCompanies, ...calcGrowth(totalCompanies, prevCompanies) },
+            activeProjects: { total: totalProjects, ...calcGrowth(totalProjects, prevProjects) },
+            totalUsers: { total: totalUsers, ...calcGrowth(totalUsers, prevUsers) },
+            dailyActiveUsers: { total: totalDAU, ...calcGrowth(totalDAU, prevDAU) },
+            tasksCompletedToday: { total: totalSnags, ...calcGrowth(totalSnags, prevSnags) },
+            messagesSentToday: { total: totalMessages, ...calcGrowth(totalMessages, prevMessages) },
         };
     };
 
     const [todayRange, sevenDays, thirtyDays, allTime] = await Promise.all([
-        fetchRangeStats(oneDayAgo, twoDaysAgo, false),
-        fetchRangeStats(sevenDaysAgo, fourteenDaysAgo, false),
-        fetchRangeStats(thirtyDaysAgo, sixtyDaysAgo, false),
-        fetchRangeStats(new Date(0), thirtyDaysAgo, true)
+        fetchRangeStats(oneDayAgo),
+        fetchRangeStats(sevenDaysAgo),
+        fetchRangeStats(thirtyDaysAgo),
+        fetchRangeStats(new Date(0), true)
     ]);
 
     return {
@@ -359,104 +355,52 @@ export const getFreemiumLeads = async () => {
 export const getSaasGrowthAnalytics = async () => {
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-    const fetchRangeMetrics = async (startDate: Date, prevStartDate: Date, isAllTime: boolean = false) => {
-        const effectiveStartDate = isAllTime ? new Date(0) : startDate;
-        const effectivePrevEndDate = isAllTime ? thirtyDaysAgo : startDate;
-        const effectivePrevStartDate = isAllTime ? new Date(0) : prevStartDate;
+    // Fetch CURRENT TOTALS (Total till now)
+    const [
+        totalUsers,
+        totalCompanies,
+        totalProjects,
+        totalPaid,
+        totalRevenue
+    ] = await Promise.all([
+        users.count(),
+        organizations.count(),
+        projects.count(),
+        transactions.count({ where: { payment_status: 'success' }, col: 'user_id', distinct: true }),
+        transactions.sum('payment_amount', { where: { payment_status: 'success' } })
+    ]);
 
-        // For All Time, we show CUMULATIVE totals. For others, we show delta in that period.
+    const currentRevenue = Number(totalRevenue || 0);
+    const currentFree = totalUsers - totalPaid;
+    const currentConv = totalUsers > 0 ? (totalPaid / totalUsers) * 100 : 0;
+
+    const fetchRangeMetrics = async (comparisonDate: Date, isAllTime: boolean = false) => {
         const [
-            totalUsers,
-            activeCompanies,
-            activeProjects,
-            paidSubscribers,
-            mrr,
             prevUsers,
             prevCompanies,
             prevProjects,
             prevPaid,
-            prevMrr
-        ] = await Promise.all([
-            users.count(isAllTime ? {} : { where: { createdAt: { [Op.gte]: effectiveStartDate } } }),
-            organizations.count(isAllTime ? {} : { where: { createdAt: { [Op.gte]: effectiveStartDate } } }),
-            projects.count(isAllTime ? {} : { where: { createdAt: { [Op.gte]: effectiveStartDate } } }),
-            transactions.count({
-                where: {
-                    payment_status: 'success',
-                    created_at: isAllTime ? { [Op.gte]: new Date(0) } : { [Op.gte]: effectiveStartDate }
-                },
-                col: 'user_id', distinct: true
-            }),
-            transactions.sum('payment_amount', {
-                where: {
-                    payment_status: 'success',
-                    created_at: isAllTime ? { [Op.gte]: new Date(0) } : { [Op.gte]: effectiveStartDate }
-                }
-            }),
-
-            users.count({ where: { createdAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } }),
-            organizations.count({ where: { createdAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } }),
-            projects.count({ where: { createdAt: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] } } }),
-            transactions.count({
-                where: {
-                    payment_status: 'success',
-                    created_at: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] }
-                },
-                col: 'user_id', distinct: true
-            }),
-            transactions.sum('payment_amount', {
-                where: {
-                    payment_status: 'success',
-                    created_at: { [Op.between]: [effectivePrevStartDate, effectivePrevEndDate] }
-                }
-            })
+            prevRevenue
+        ] = isAllTime ? [0, 0, 0, 0, 0] : await Promise.all([
+            users.count({ where: { createdAt: { [Op.lt]: comparisonDate } } }),
+            organizations.count({ where: { createdAt: { [Op.lt]: comparisonDate } } }),
+            projects.count({ where: { createdAt: { [Op.lt]: comparisonDate } } }),
+            transactions.count({ where: { payment_status: 'success', created_at: { [Op.lt]: comparisonDate } }, col: 'user_id', distinct: true }),
+            transactions.sum('payment_amount', { where: { payment_status: 'success', created_at: { [Op.lt]: comparisonDate } } })
         ]);
 
-        const currentRevenue = Number(mrr || 0);
-        const previousRevenue = Number(prevMrr || 0);
-
-        // For All Time growth, we compare current totals vs totals 30 days ago
-        if (isAllTime) {
-            const prevTotalUsers = await users.count({ where: { createdAt: { [Op.lt]: thirtyDaysAgo } } });
-            const prevTotalCompanies = await organizations.count({ where: { createdAt: { [Op.lt]: thirtyDaysAgo } } });
-            const prevTotalProjects = await projects.count({ where: { createdAt: { [Op.lt]: thirtyDaysAgo } } });
-            const prevTotalPaid = await transactions.count({ where: { payment_status: 'success', created_at: { [Op.lt]: thirtyDaysAgo } }, col: 'user_id', distinct: true });
-            const prevTotalRevenue = await transactions.sum('payment_amount', { where: { payment_status: 'success', created_at: { [Op.lt]: thirtyDaysAgo } } }) || 0;
-
-            const currentFree = totalUsers - paidSubscribers;
-            const prevFree = prevTotalUsers - prevTotalPaid;
-            const currentConv = totalUsers > 0 ? (paidSubscribers / totalUsers) * 100 : 0;
-            const prevConv = prevTotalUsers > 0 ? (prevTotalPaid / prevTotalUsers) * 100 : 0;
-
-            return {
-                totalUsers: { total: totalUsers, ...calcGrowth(totalUsers, prevTotalUsers) },
-                activeCompanies: { total: activeCompanies, ...calcGrowth(activeCompanies, prevTotalCompanies) },
-                activeProjects: { total: activeProjects, ...calcGrowth(activeProjects, prevTotalProjects) },
-                paidSubscribers: { total: paidSubscribers, ...calcGrowth(paidSubscribers, prevTotalPaid) },
-                mrr: { total: currentRevenue, ...calcGrowth(currentRevenue, Number(prevTotalRevenue)) },
-                arr: { total: currentRevenue * 12, ...calcGrowth(currentRevenue, Number(prevTotalRevenue)) },
-                freemiumUsers: { total: currentFree, ...calcGrowth(currentFree, prevFree) },
-                arpu: totalUsers > 0 ? (currentRevenue / totalUsers).toFixed(0) : 0,
-                conversionRate: { total: currentConv.toFixed(1) + "%", ...calcGrowth(currentConv, prevConv) }
-            };
-        }
-
-        const currentFree = totalUsers - paidSubscribers;
+        const previousRevenue = Number(prevRevenue || 0);
         const prevFree = prevUsers - prevPaid;
-        const currentConv = totalUsers > 0 ? (paidSubscribers / totalUsers) * 100 : 0;
         const prevConv = prevUsers > 0 ? (prevPaid / prevUsers) * 100 : 0;
 
         return {
             totalUsers: { total: totalUsers, ...calcGrowth(totalUsers, prevUsers) },
-            activeCompanies: { total: activeCompanies, ...calcGrowth(activeCompanies, prevCompanies) },
-            activeProjects: { total: activeProjects, ...calcGrowth(activeProjects, prevProjects) },
-            paidSubscribers: { total: paidSubscribers, ...calcGrowth(paidSubscribers, prevPaid) },
+            activeCompanies: { total: totalCompanies, ...calcGrowth(totalCompanies, prevCompanies) },
+            activeProjects: { total: totalProjects, ...calcGrowth(totalProjects, prevProjects) },
+            paidSubscribers: { total: totalPaid, ...calcGrowth(totalPaid, prevPaid) },
             mrr: { total: currentRevenue, ...calcGrowth(currentRevenue, previousRevenue) },
             arr: { total: currentRevenue * 12, ...calcGrowth(currentRevenue, previousRevenue) },
             freemiumUsers: { total: currentFree, ...calcGrowth(currentFree, prevFree) },
@@ -465,25 +409,21 @@ export const getSaasGrowthAnalytics = async () => {
         };
     };
 
-    const [today, sevenDays, thirtyDays, allTime, plansList] = await Promise.all([
-        fetchRangeMetrics(oneDayAgo, twoDaysAgo),
-        fetchRangeMetrics(sevenDaysAgo, fourteenDaysAgo),
-        fetchRangeMetrics(thirtyDaysAgo, sixtyDaysAgo),
-        fetchRangeMetrics(new Date(0), thirtyDaysAgo, true),
+    const [todayStats, sevenDaysStats, thirtyDaysStats, allTimeStats, plansList] = await Promise.all([
+        fetchRangeMetrics(oneDayAgo),
+        fetchRangeMetrics(sevenDaysAgo),
+        fetchRangeMetrics(thirtyDaysAgo),
+        fetchRangeMetrics(new Date(0), true),
         plans.findAll()
     ]);
 
-    // Use All Time for general context like Funnel and Plan Breakdown
-    const totalUsers = allTime.totalUsers.total;
-    const paidSubscribers = allTime.paidSubscribers.total;
-    const mrr = allTime.mrr.total;
 
-    // Funnel
+    // Use All Time Stats for general context like Funnel and Plan Breakdown
     const funnel = [
         { stage: "Signed Up", value: totalUsers, pct: 100 },
         { stage: "Started Trial", value: Math.floor(totalUsers * 0.8), pct: 80.1 },
         { stage: "Actively Using", value: Math.floor(totalUsers * 0.52), pct: 52.1 },
-        { stage: "Converted to Paid", value: paidSubscribers, pct: ((paidSubscribers / totalUsers) * 100).toFixed(1) },
+        { stage: "Converted to Paid", value: totalPaid, pct: ((totalPaid / totalUsers) * 100).toFixed(1) },
     ];
 
     // Plan breakdown
@@ -530,10 +470,10 @@ export const getSaasGrowthAnalytics = async () => {
     }
 
     return {
-        today,
-        "7days": sevenDays,
-        "30days": thirtyDays,
-        allTime,
+        today: todayStats,
+        "7days": sevenDaysStats,
+        "30days": thirtyDaysStats,
+        allTime: allTimeStats,
         funnel,
         planBreakdown: planCounts,
         dailyGrowth,
@@ -693,21 +633,23 @@ export const getGlobalActivityFeed = async () => {
 };
 
 export const getPlatformInsights = async () => {
-    const [rfiCount, snagCount, drawingCount, chatRoomCount] = await Promise.all([
+    const [rfiCount, snagCount, photoCount, documentCount, chatRoomCount] = await Promise.all([
         rfis.count().catch(() => 0),
         snags.count().catch(() => 0),
-        files.count().catch(() => 0),
+        files.count({ where: { file_type: { [Op.like]: 'image/%' } } }).catch(() => 0),
+        files.count({ where: { file_type: 'application/pdf' } }).catch(() => 0),
         rooms.count().catch(() => 0)
     ]);
 
-    const totalUsage = rfiCount + snagCount + drawingCount + chatRoomCount;
+    const totalUsage = rfiCount + snagCount + photoCount + documentCount + chatRoomCount;
     const calcPct = (count: number) => totalUsage > 0 ? Number(((count / totalUsage) * 100).toFixed(1)) : 0;
 
     return {
         features: [
             { name: "Chat", usage: calcPct(chatRoomCount), count: chatRoomCount },
             { name: "Snags", usage: calcPct(snagCount), count: snagCount },
-            { name: "Files", usage: calcPct(drawingCount), count: drawingCount },
+            { name: "Photos", usage: calcPct(photoCount), count: photoCount },
+            { name: "Documents", usage: calcPct(documentCount), count: documentCount },
             { name: "RFIs", usage: calcPct(rfiCount), count: rfiCount },
         ],
         insights: [
@@ -935,7 +877,7 @@ export const getCompanyActivityData = async () => {
     });
 
     const activity = await Promise.all(orgs.map(async (org: any) => {
-        const [projectCount, userCount, messageCount, drawingCount, lastAct] = await Promise.all([
+        const [projectCount, userCount, messageCount, photoCount, documentCount, lastAct] = await Promise.all([
             projects.count({ where: { organization_id: org.id } }),
             users.count({ where: { organization_id: org.id } }),
             chat_messages.count({
@@ -944,6 +886,10 @@ export const getCompanyActivityData = async () => {
             files.count({
                 include: [{ model: projects, where: { organization_id: org.id }, required: true }],
                 where: { file_type: { [Op.like]: 'image/%' } }
+            }),
+            files.count({
+                include: [{ model: projects, where: { organization_id: org.id }, required: true }],
+                where: { file_type: 'application/pdf' }
             }),
             activities.findOne({
                 include: [{ model: projects, where: { organization_id: org.id }, required: true }],
@@ -955,15 +901,17 @@ export const getCompanyActivityData = async () => {
             name: org.name,
             projects: projectCount,
             team: userCount,
-            drawings: drawingCount,
+            photos: photoCount,
+            documents: documentCount,
             messages: messageCount,
             lastActive: lastAct ? formatRelativeTime(lastAct.createdAt) : "Never",
+            lastActiveRaw: lastAct ? new Date(lastAct.createdAt).getTime() : 0,
             plan: org.plan?.name || "Free"
         };
     }));
 
-    // Sort by most active (projects + messages)
-    return activity.sort((a: any, b: any) => (b.projects + b.messages) - (a.projects + a.messages)).slice(0, 10);
+    // Sort by most recent active
+    return activity.sort((a: any, b: any) => b.lastActiveRaw - a.lastActiveRaw).slice(0, 10);
 };
 
 export const getConversionOpportunitiesData = async () => {
@@ -975,7 +923,6 @@ export const getConversionOpportunitiesData = async () => {
             projects.count({ where: { organization_id: org.id } }),
             files.count({
                 include: [{ model: projects, where: { organization_id: org.id } }],
-                where: { file_type: { [Op.like]: 'image/%' } }
             }),
             users.count({ where: { organization_id: org.id } }),
             users.findOne({

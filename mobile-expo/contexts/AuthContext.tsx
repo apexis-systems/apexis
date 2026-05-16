@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, UserRole } from '@/types';
 import * as SecureStore from 'expo-secure-store';
-import { getMe, revokeAllWebSessions } from '@/services/authService';
+import { getMe, revokeAllWebSessions, logout as logoutApi } from '@/services/authService';
 
 interface AuthContextType {
     user: User | null;
@@ -49,7 +49,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const logout = useCallback(async () => {
         try {
-            // Attempt to revoke all web sessions before clearing local state
+            // 1. Clear server-side session (removes FCM token)
+            await logoutApi().catch(err => console.warn("Failed to logout from server:", err));
+
+            // 2. Attempt to revoke all web sessions before clearing local state
             await revokeAllWebSessions().catch(err => console.warn("Failed to revoke web sessions on logout:", err));
         } catch (e) {
             // Silently fail if revocation fails, we still want to log out locally

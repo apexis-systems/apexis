@@ -15,6 +15,7 @@ import {
   IndianRupee,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   MessageSquare,
   Monitor,
   Rocket,
@@ -64,6 +65,7 @@ export const superadminNavItems: SuperadminNavItem[] = [
   { href: `${SUPERADMIN_DASHBOARD_PATH}#alerts`, label: "Alerts", icon: AlertTriangle, scrollTo: "alerts" },
   // { href: `${SUPERADMIN_DASHBOARD_PATH}#live-activity`, label: "Live Activity", icon: Activity, scrollTo: "live-activity" },
   { href: "/superadmin/users", label: "Users", icon: Users },
+  { href: "/superadmin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/superadmin/teams", label: "Teams", icon: ShieldCheck },
 ];
 

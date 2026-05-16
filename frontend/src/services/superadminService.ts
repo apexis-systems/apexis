@@ -132,3 +132,13 @@ export const getAllUsers = async () => {
         throw error;
     }
 };
+
+export const sendBroadcast = async (title: string, description: string) => {
+    try {
+        const response = await PrivateAxios.post('/superadmin/broadcast', { title, description });
+        return response.data;
+    } catch (error) {
+        console.error("sendBroadcast Error", error);
+        throw error;
+    }
+};

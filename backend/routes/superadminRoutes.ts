@@ -10,7 +10,8 @@ import {
     getRevenueMetrics,
     getFreemiumLeadList,
     getOrganizationDetails,
-    getUsersList
+    getUsersList,
+    sendBroadcastNotification
 } from "../controllers/superadminController.ts";
 import { verifyToken, isSuperAdmin } from "../middleware/verifyToken.ts";
 
@@ -29,6 +30,7 @@ router.get("/teams", getSuperAdmins);
 router.get("/organizations", getOrganizations);
 router.get("/organizations/:id", getOrganizationDetails);
 router.get("/users", getUsersList);
+router.post("/broadcast", sendBroadcastNotification);
 router.post("/invite", inviteSuperAdmin);
 router.delete("/teams/:id", deleteSuperAdmin);
 

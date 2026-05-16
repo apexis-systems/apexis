@@ -20,12 +20,22 @@ const sectionIds = ["overview", "growth", "activity", "communication", "health",
 
 const CEODashboard = () => {
   const [activeSection, setActiveSection] = useState("overview");
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const [dark, setDark] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const refs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
+    setMounted(true);
+    setDark(document.documentElement.classList.contains("dark"));
+  }, []);
+
+  useEffect(() => {
+    if (mounted) {
+      document.documentElement.classList.toggle("dark", dark);
+    }
+  }, [dark, mounted]);
+
+  if (!mounted) return null;
 
   const handleNavigate = (section: string) => {
     setActiveSection(section);
