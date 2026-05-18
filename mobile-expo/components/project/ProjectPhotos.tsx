@@ -829,10 +829,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             return;
         }
 
-        const filesArray = Array.from(selectedFiles).map(id => photos.find(p => p.id === id)).filter(Boolean);
+        const filesArray = Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean);
         const inProtectedFolder = filesArray.some(file => {
             if (file.folder_id) {
-                const folder = folders.find(f => f.id === file.folder_id);
+                const folder = folders.find(f => String(f.id) === String(file.folder_id));
                 if (folder) {
                     const folderNameLower = folder.name.toLowerCase();
                     return (
@@ -946,7 +946,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
 
     const handleSharePhoto = async (photo?: any) => {
-        const photoToShare = photo || (selectedFiles.size > 0 ? photos.find(p => p.id === Array.from(selectedFiles)[0]) : null);
+        const photoToShare = photo || (selectedFiles.size > 0 ? photos.find(p => String(p.id) === String(Array.from(selectedFiles)[0])) : null);
         if (!photoToShare) return;
 
         try {
@@ -1651,7 +1651,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         }
                                     } else if (selectedFiles.size > 0 && selectedFolders.size === 0) {
                                         // File delete option (single or multiple) - only show if all selected files were uploaded by the current user
-                                        const filesArray = Array.from(selectedFiles).map(id => photos.find(p => p.id === id)).filter(Boolean);
+                                        const filesArray = Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean);
                                         const allOwned = filesArray.every(file => String(file.created_by) === String(user.id));
                                         if (allOwned) {
                                             return (

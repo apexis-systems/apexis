@@ -412,7 +412,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const handleBulkShare = () => {
     if (selectedFiles.size > 0) {
       const firstId = Array.from(selectedFiles)[0];
-      const firstPhoto = photos.find(p => p.id === firstId);
+      const firstPhoto = photos.find(p => String(p.id) === String(firstId));
       if (firstPhoto) setShareItem(firstPhoto);
     } else {
       toast.info(t('select_photo_share'));
@@ -425,10 +425,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       return;
     }
 
-    const filesArray = Array.from(selectedFiles).map(id => photos.find(p => p.id === id)).filter(Boolean);
+    const filesArray = Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean);
     const inProtectedFolder = filesArray.some(file => {
       if (file.folder_id) {
-        const folder = folders.find(f => f.id === file.folder_id);
+        const folder = folders.find(f => String(f.id) === String(file.folder_id));
         if (folder) {
           const folderNameLower = folder.name.toLowerCase();
           return (
@@ -932,7 +932,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
                   </Button>
                 )}
-                {selectedFiles.size > 0 && Array.from(selectedFiles).map(id => photos.find(p => p.id === id)).filter(Boolean).every(file => String(file.created_by) === String(user.id)) && (
+                 {selectedFiles.size > 0 && Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean).every(file => String(file.created_by) === String(user.id)) && (
                   <Button
                     size="sm"
                     variant="ghost"
