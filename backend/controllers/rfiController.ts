@@ -751,9 +751,9 @@ export const getFolderRFIs = async (req: Request, res: Response) => {
         const folder = await folders.findByPk(folder_id);
         if (!folder) return res.status(404).json({ error: 'Folder not found' });
 
-        // PostgreSQL JSONB containment: folder_ids @> '[fid]'
+        // PostgreSQL JSONB containment: folder_ids::jsonb @> '[fid]'
         const data = await rfis.findAll({
-            where: sequelize.literal(`"rfis"."folder_ids" @> '[${fid}]'`),
+            where: sequelize.literal(`"rfis"."folder_ids"::jsonb @> '[${fid}]'`),
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
                 { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },

@@ -9,7 +9,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getProjectFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile } from '@/services/fileService';
 import { getMemberForTag, getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
@@ -823,6 +823,75 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     };
 
+    const handleBulkDelete = async () => {
+        if (selectedFiles.size === 0) {
+            Alert.alert(t('projectPhotos.info'), t('projectPhotos.selectAtLeastOne') || 'Please select at least one photo');
+            return;
+        }
+
+        const filesArray = Array.from(selectedFiles).map(id => photos.find(p => p.id === id)).filter(Boolean);
+        const inProtectedFolder = filesArray.some(file => {
+            if (file.folder_id) {
+                const folder = folders.find(f => f.id === file.folder_id);
+                if (folder) {
+                    const folderNameLower = folder.name.toLowerCase();
+                    return (
+                        (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
+                        (folder.folder_type === 'document' && folderNameLower === 'archive')
+                    );
+                }
+            }
+            return false;
+        });
+
+        if (inProtectedFolder) {
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.protectedFolderDeleteError') || "Files in system folders (Archive/Confirmations) cannot be deleted.");
+            return;
+        }
+
+        const unauthorized = filesArray.some(file => {
+            const isAdmin = user.role === 'admin' || user.role === 'superadmin';
+            return !isAdmin && String(file.created_by) !== String(user.id);
+        });
+
+        if (unauthorized) {
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.unauthorizedDeleteError') || "You can only delete photos that you originally uploaded.");
+            return;
+        }
+
+        const confirmMsg = selectedFiles.size === 1
+            ? t('projectPhotos.deletePhotoConfirm')
+            : (t('projectPhotos.removePhotosConfirm', { count: selectedFiles.size }) || `Move these ${selectedFiles.size} photos to Trash? They can be recovered later from Settings for 30 days.`);
+
+        const alertTitle = selectedFiles.size === 1
+            ? (t('projectPhotos.deletePhoto') || 'Delete Photo')
+            : (t('projectPhotos.deletePhotos') || 'Delete Photos');
+
+        Alert.alert(
+            alertTitle,
+            confirmMsg,
+            [
+                { text: t('projectPhotos.cancel'), style: 'cancel' },
+                {
+                    text: t('projectPhotos.moveToTrash') || 'Move to Trash', style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setProcessing('delete');
+                            await bulkDeleteFiles(Array.from(selectedFiles));
+                            setPhotos((prev) => prev.filter((p) => !selectedFiles.has(p.id)));
+                            clearSelection();
+                        } catch (e: any) {
+                            const errorMsg = e.response?.data?.error || t('projectPhotos.failedToDeletePhoto');
+                            Alert.alert(t('projectPhotos.error'), errorMsg);
+                        } finally {
+                            setProcessing(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handleBulkShare = async () => {
         if (selectedFiles.size > 0) {
             const firstId = Array.from(selectedFiles)[0];
@@ -1581,25 +1650,21 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 </TouchableOpacity>
                                             );
                                         }
-                                    } else if (selectedFiles.size === 1 && selectedFolders.size === 0) {
-                                        // File delete ONLY for uploader
-                                        const fileId = Array.from(selectedFiles)[0];
-                                        const file = photos.find(p => p.id === fileId);
-                                        if (file && (String(file.created_by) === String(user.id))) {
-                                            return (
-                                                <TouchableOpacity
-                                                    onPress={() => handleDeleteFile(file)}
-                                                    style={{ padding: 4 }}
-                                                    disabled={processing !== null}
-                                                >
-                                                    {processing === 'delete' ? (
-                                                        <ActivityIndicator size="small" color="#ef4444" />
-                                                    ) : (
-                                                        <Feather name="trash-2" size={18} color="#ef4444" />
-                                                    )}
-                                                </TouchableOpacity>
-                                            );
-                                        }
+                                    } else if (selectedFiles.size > 0 && selectedFolders.size === 0) {
+                                        // File delete option (single or multiple)
+                                        return (
+                                            <TouchableOpacity
+                                                onPress={handleBulkDelete}
+                                                style={{ padding: 4 }}
+                                                disabled={processing !== null}
+                                            >
+                                                {processing === 'delete' ? (
+                                                    <ActivityIndicator size="small" color="#ef4444" />
+                                                ) : (
+                                                    <Feather name="trash-2" size={18} color="#ef4444" />
+                                                )}
+                                            </TouchableOpacity>
+                                        );
                                     }
                                     return null;
                                 })()}
