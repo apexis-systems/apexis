@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Megaphone, Send, Loader2, CheckCircle2 } from "lucide-react";
+import { Megaphone, Send, Loader2, CheckCircle2, Save } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { sendBroadcast } from "@/services/superadminService";
+import { sendBroadcast, getSystemConfig, updateSystemConfig } from "@/services/superadminService";
 
 const cardClass = "rounded-xl border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-5 shadow-[0_1px_0_rgba(0,0,0,0.03)] dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)] backdrop-blur-xl";
 const strongTextClass = "text-[hsl(30_10%_15%)] dark:text-[hsl(38_20%_90%)]";
@@ -20,6 +20,42 @@ export default function BroadcastPage() {
   const [description, setDescription] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [sentCount, setSentCount] = useState<number | null>(null);
+
+  const [minAppVersion, setMinAppVersion] = useState("");
+  const [isUpdatingVersion, setIsUpdatingVersion] = useState(false);
+
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const config = await getSystemConfig();
+        if (config && config.minAppVersion) {
+          setMinAppVersion(config.minAppVersion);
+        }
+      } catch (error) {
+        console.error("Failed to fetch system version:", error);
+      }
+    };
+    fetchVersion();
+  }, []);
+
+  const handleUpdateVersion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!minAppVersion.trim()) {
+      toast.error("Please enter a valid version string");
+      return;
+    }
+    
+    setIsUpdatingVersion(true);
+    try {
+      await updateSystemConfig(minAppVersion);
+      toast.success("Minimum app version updated successfully!");
+    } catch (error: any) {
+      console.error("Failed to update version:", error);
+      toast.error(error.message || "Failed to update version");
+    } finally {
+      setIsUpdatingVersion(false);
+    }
+  };
 
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,6 +141,46 @@ export default function BroadcastPage() {
                     <>
                       <Send className="mr-2 h-5 w-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
                       Send to All Users
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className={cardClass}>
+            <CardHeader className="px-0 pt-0">
+              <CardTitle className={strongTextClass}>Minimum App Version Control</CardTitle>
+              <CardDescription className={mutedTextClass}>
+                Define the minimum mobile app version required. Users running older versions will be prompted to update.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="px-0 pb-0">
+              <form onSubmit={handleUpdateVersion} className="space-y-4">
+                <div className="space-y-2">
+                  <label className={`text-sm font-medium ${strongTextClass}`}>Minimum Version Code</label>
+                  <Input
+                    placeholder="e.g., 1.0.0"
+                    value={minAppVersion}
+                    onChange={(e) => setMinAppVersion(e.target.value)}
+                    className="bg-white/50 dark:bg-zinc-950/50 border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)] text-[hsl(30_10%_15%)] dark:text-white focus:ring-primary h-12"
+                  />
+                </div>
+                
+                <Button 
+                  type="submit" 
+                  disabled={isUpdatingVersion}
+                  className="w-full h-12 text-lg font-semibold group relative overflow-hidden bg-primary hover:bg-primary/90 text-white"
+                >
+                  {isUpdatingVersion ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Updating Version...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-5 w-5 transition-transform" />
+                      Save Minimum Version
                     </>
                   )}
                 </Button>

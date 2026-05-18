@@ -110,38 +110,36 @@ export const triggerReport = async (req: Request, res: Response) => {
 
 export const generateReport = async (projectId: number, type: 'daily' | 'weekly' | 'monthly', skipIfExists: boolean = false) => {
 
-    // IST = UTC+5:30. Shift now into IST so calendar day boundaries align with India time.
+    // IST = UTC+5:30. Shift now into IST so calendar day boundaries align with India time in UTC methods.
     const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
     const nowUTC = new Date();
     const nowIST = new Date(nowUTC.getTime() + IST_OFFSET_MS);
 
-    let periodStartIST: Date;
-    let periodEndIST: Date = new Date(nowIST);
-    periodEndIST.setHours(23, 59, 59, 999);
+    let periodStartIST = new Date(nowIST.getTime());
+    let periodEndIST = new Date(nowIST.getTime());
 
     if (type === 'daily') {
-        periodStartIST = new Date(nowIST);
-        periodStartIST.setHours(0, 0, 0, 0);
+        // Daily: Start of today in IST to end of today in IST
+        periodStartIST.setUTCHours(0, 0, 0, 0);
+        periodEndIST.setUTCHours(23, 59, 59, 999);
     } else if (type === 'weekly') {
-        // ALWAYS Current Week's Monday–Sunday window (7 days)
-        // Regardless of when triggered, it shows the Monday to Sunday of the active week.
-        periodStartIST = new Date(nowIST);
-        const day = periodStartIST.getDay(); // 0 (Sun) to 6 (Sat)
-        // If today is Sunday (0), we go back 6 days to Monday. Otherwise, go back (day - 1) days.
+        // ALWAYS Current Week's Monday–Sunday window (7 days) in IST
+        const day = periodStartIST.getUTCDay(); // 0 (Sun) to 6 (Sat) in IST
         const diffToMonday = day === 0 ? 6 : day - 1;
-        periodStartIST.setDate(periodStartIST.getDate() - diffToMonday);
-        periodStartIST.setHours(0, 0, 0, 0);
+        
+        periodStartIST.setUTCDate(periodStartIST.getUTCDate() - diffToMonday);
+        periodStartIST.setUTCHours(0, 0, 0, 0);
 
-        periodEndIST = new Date(periodStartIST);
-        periodEndIST.setDate(periodEndIST.getDate() + 6);
-        periodEndIST.setHours(23, 59, 59, 999);
+        periodEndIST = new Date(periodStartIST.getTime());
+        periodEndIST.setUTCDate(periodEndIST.getUTCDate() + 6);
+        periodEndIST.setUTCHours(23, 59, 59, 999);
     } else {
-        // Monthly: Start from 1st of the current month
-        periodStartIST = new Date(nowIST);
-        periodStartIST.setDate(1);
-        periodStartIST.setHours(0, 0, 0, 0);
-    }
+        // Monthly: Start from 1st of the current month in IST to end of today in IST
+        periodStartIST.setUTCDate(1);
+        periodStartIST.setUTCHours(0, 0, 0, 0);
 
+        periodEndIST.setUTCHours(23, 59, 59, 999);
+    }
 
     // Convert IST boundaries back to UTC for DB queries
     const periodStart = new Date(periodStartIST.getTime() - IST_OFFSET_MS);

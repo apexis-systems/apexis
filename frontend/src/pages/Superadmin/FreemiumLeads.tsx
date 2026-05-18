@@ -8,6 +8,7 @@ import {
   Mail,
   MessageSquare,
   Phone,
+  RefreshCw,
   Search,
   Users,
 } from "lucide-react";
@@ -104,6 +105,19 @@ export default function FreemiumLeads() {
   const [expiryFilter, setExpiryFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [leadsList, setLeadsList] = useState<Lead[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await getFreemiumLeads();
+      setLeadsList(response.leads || []);
+    } catch (error) {
+      console.error("Failed to fetch leads:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     const fetchLeads = async () => {
@@ -142,12 +156,14 @@ export default function FreemiumLeads() {
     });
   }, [activeFilter, expiryFilter, search, statusFilter, leadsList]);
 
-  if (loading) {
+  if (loading || isRefreshing) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <div className="flex flex-col items-center gap-2">
           <Clock className="h-8 w-8 animate-spin text-[hsl(24_95%_53%)]" />
-          <p className={cn("text-sm font-medium", mutedTextClass)}>Loading lead intelligence...</p>
+          <p className={cn("text-sm font-medium", mutedTextClass)}>
+            {isRefreshing ? "Refreshing lead intelligence..." : "Loading lead intelligence..."}
+          </p>
         </div>
       </div>
     );
@@ -169,11 +185,34 @@ export default function FreemiumLeads() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className={cn("text-xl font-bold", strongTextClass)}>Freemium Leads</h1>
-        <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-          Track & convert free trial users into paid subscribers
-        </p>
+
+      <div className="flex flex-row justify-between">
+
+
+        <div>
+          <h1 className={cn("text-xl font-bold", strongTextClass)}>Freemium Leads</h1>
+          <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+            Track & convert free trial users into paid subscribers
+          </p>
+        </div>
+
+        <div className="mr-20 flex justify-center items-center">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] text-[hsl(30_8%_45%)] transition-all duration-300 hover:bg-[hsl(37_18%_91%)] hover:text-[hsl(24_95%_53%)] hover:border-[hsl(24_95%_53%/0.35)] active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)] dark:hover:text-[hsl(24_95%_53%)] dark:hover:border-[hsl(24_95%_53%/0.35)]"
+            )}
+            title="Refresh Leads"
+          >
+            <RefreshCw
+              className={cn(
+                "h-3.5 w-3.5 transition-transform duration-500",
+                isRefreshing && "animate-spin text-[hsl(24_95%_53%)]"
+              )}
+            />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
