@@ -571,9 +571,8 @@ export const bulkDeleteFiles = async (req: Request, res: Response) => {
                 }
             }
 
-            // ONLY the original uploader or admin/superadmin can delete
-            const isAdmin = authUser.role === 'admin' || authUser.role === 'superadmin';
-            if (!isAdmin && String(file.created_by) !== String(authUser.user_id)) {
+            // ONLY the original uploader can delete
+            if (String(file.created_by) !== String(authUser.user_id)) {
                 await t.rollback();
                 return res.status(403).json({ error: `Unauthorized: Only the original uploader can delete file "${file.file_name}"` });
             }

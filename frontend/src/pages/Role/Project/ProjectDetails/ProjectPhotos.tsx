@@ -446,8 +446,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     }
 
     const unauthorized = filesArray.some(file => {
-      const isAdmin = user.role === 'admin' || user.role === 'superadmin';
-      return !isAdmin && String(file.created_by) !== String(user.id);
+      return String(file.created_by) !== String(user.id);
     });
 
     if (unauthorized) {
@@ -749,7 +748,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         </>
                       )}
 
-                      {(user.role === 'admin' || user.role === 'superadmin' || String(photo.created_by) === String(user.id)) && (
+                      {(String(photo.created_by) === String(user.id)) && (
                         <>
                           {currentFolder?.name.toLowerCase().includes('archive') ? (
                             <button onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-blue-500/10" title={t('unarchive_photo_tip') || 'Unarchive photo'}>
@@ -829,7 +828,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       )}
                     </button>
                   )}
-                  {(user.role === 'admin' || user.role === 'superadmin' || String(photo.created_by) === String(user.id)) && (
+                  {(String(photo.created_by) === String(user.id)) && (
                     <>
                       {currentFolder?.name.toLowerCase().includes('archive') ? (
                         <button
@@ -933,7 +932,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
                   </Button>
                 )}
-                {selectedFiles.size > 0 && (
+                {selectedFiles.size > 0 && Array.from(selectedFiles).map(id => photos.find(p => p.id === id)).filter(Boolean).every(file => String(file.created_by) === String(user.id)) && (
                   <Button
                     size="sm"
                     variant="ghost"

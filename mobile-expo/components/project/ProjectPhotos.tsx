@@ -850,8 +850,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
 
         const unauthorized = filesArray.some(file => {
-            const isAdmin = user.role === 'admin' || user.role === 'superadmin';
-            return !isAdmin && String(file.created_by) !== String(user.id);
+            return String(file.created_by) !== String(user.id);
         });
 
         if (unauthorized) {
@@ -1651,20 +1650,24 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             );
                                         }
                                     } else if (selectedFiles.size > 0 && selectedFolders.size === 0) {
-                                        // File delete option (single or multiple)
-                                        return (
-                                            <TouchableOpacity
-                                                onPress={handleBulkDelete}
-                                                style={{ padding: 4 }}
-                                                disabled={processing !== null}
-                                            >
-                                                {processing === 'delete' ? (
-                                                    <ActivityIndicator size="small" color="#ef4444" />
-                                                ) : (
-                                                    <Feather name="trash-2" size={18} color="#ef4444" />
-                                                )}
-                                            </TouchableOpacity>
-                                        );
+                                        // File delete option (single or multiple) - only show if all selected files were uploaded by the current user
+                                        const filesArray = Array.from(selectedFiles).map(id => photos.find(p => p.id === id)).filter(Boolean);
+                                        const allOwned = filesArray.every(file => String(file.created_by) === String(user.id));
+                                        if (allOwned) {
+                                            return (
+                                                <TouchableOpacity
+                                                    onPress={handleBulkDelete}
+                                                    style={{ padding: 4 }}
+                                                    disabled={processing !== null}
+                                                >
+                                                    {processing === 'delete' ? (
+                                                        <ActivityIndicator size="small" color="#ef4444" />
+                                                    ) : (
+                                                        <Feather name="trash-2" size={18} color="#ef4444" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            );
+                                        }
                                     }
                                     return null;
                                 })()}
@@ -1783,7 +1786,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             : <Feather name="download" size={20} color={colors.primary} />
                                         }
                                     </TouchableOpacity>
-                                    {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id) || user.role === 'admin' || user.role === 'superadmin') && (
+                                    {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
                                         <>
                                             {currentFolder?.name.toLowerCase().includes('archive') ? (
                                                 <TouchableOpacity onPress={() => handleUnarchivePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }}>
@@ -2008,7 +2011,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={false}
-                canDelete={activeActionFile && (String(activeActionFile.created_by) === String(user.id) || user.role === 'admin' || user.role === 'superadmin') && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
+                canDelete={activeActionFile && String(activeActionFile.created_by) === String(user.id) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
                 canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
                 onRename={() => handleRenameFileAction(activeActionFile)}
                 onArchive={() => handleArchiveFile(activeActionFile)}
