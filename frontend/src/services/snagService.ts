@@ -21,6 +21,8 @@ export interface Snag {
     response_photos?: string[];
     createdAt: string;
     seen_at?: string | null;
+    folder_ids?: number[];
+    linked_folders?: { id: number; name: string; folder_type: string }[];
 }
 
 export interface Assignee {
@@ -68,4 +70,9 @@ export const getAssignees = async (projectId: number | string): Promise<Assignee
 export const markSnagSeen = async (id: number): Promise<{ seen_at: string }> => {
     const res = await PrivateAxios.patch(`/snags/${id}/seen`);
     return res.data;
+};
+
+export const getFolderSnags = async (folderId: string | number): Promise<Snag[]> => {
+    const res = await PrivateAxios.get(`/snags/folder/${folderId}`);
+    return res.data.snags;
 };

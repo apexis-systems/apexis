@@ -21,6 +21,8 @@ export interface Snag {
     responsePhotoUrls?: string[];
     response_photos?: string[] | null;
     seen_at?: string | null;
+    folder_ids?: number[];
+    linked_folders?: any[];
 }
 
 export interface Assignee {
@@ -101,6 +103,16 @@ export const markSnagSeen = async (id: number): Promise<{ seen_at: string }> => 
         return res.data;
     } catch (error) {
         console.error("markSnagSeen Error", error);
+        throw error;
+    }
+};
+
+export const getFolderSnags = async (folderId: string | number): Promise<Snag[]> => {
+    try {
+        const res = await PrivateAxios.get(`/snags/folder/${folderId}`);
+        return res.data.snags || [];
+    } catch (error) {
+        console.error("getFolderSnags Error", error);
         throw error;
     }
 };

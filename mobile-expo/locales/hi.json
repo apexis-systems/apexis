@@ -330,6 +330,8 @@
             "shareInviteMessage": "आपको Apexis पर प्रोजेक्ट \"{{projectName}}\" को \"{{role}}\" के रूप में एक्सेस करने के लिए आमंत्रित किया गया है।\n\nअपने प्रोजेक्ट में सुरक्षित रूप से लॉगिन करने के लिए नीचे दिए गए लिंक पर क्लिक करें:\n{{url}}"
         },
         "projectSnags": {
+            "successTitle": "सफलता",
+            "by": "द्वारा",
             "status": {
                 "waiting": "अनुमति की प्रतीक्षा है",
                 "completed": "पूरा हुआ",
@@ -590,6 +592,7 @@
             "failedToGetShareLink": "साझा करने का लिंक प्राप्त करने में विफल",
             "photosCount": "फ़ोटो ({{count}})",
             "linkedRfisCount": "लिंक किए गए RFI ({{count}})",
+            "linkedItemsCount": "लिंक किए गए RFI और स्नैग ({{count}})",
             "unassigned": "असाइन नहीं किया गया",
             "noRfisLinked": "इस फ़ोल्डर से कोई RFI लिंक नहीं है",
             "photosFoldersCount": "{{photoCount}} फ़ोटो · {{folderCount}} फ़ोल्डर",
@@ -684,6 +687,7 @@
             "noFoldersDocs": "अभी तक कोई फ़ोल्डर या दस्तावेज़ नहीं है",
             "filesCount": "फ़ाइलें ({{count}})",
             "linkedRfisCount": "लिंक किए गए RFI ({{count}})",
+            "linkedItemsCount": "लिंक किए गए RFI और स्नैग ({{count}})",
             "unassigned": "असाइन नहीं किया गया",
             "noRfisLinked": "इस फ़ोल्डर से कोई RFI लिंक नहीं है",
             "sortBy": {
