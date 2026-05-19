@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { getFolders } from '@/services/folderService';
-import { Folder as FolderIcon, ChevronRight, Check, Loader2 } from 'lucide-react';
+import { getFolders, createFolder } from '@/services/folderService';
+import { Folder as FolderIcon, ChevronRight, Check, Loader2, FolderPlus, ArrowLeft, FolderMinus } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -19,15 +19,21 @@ interface FolderPickerDialogProps {
 
 const FolderPickerDialog = ({
     open = false,
-    onOpenChange = () => {},
+    onOpenChange = () => { },
     project = null,
     selectedFolderIds = [],
-    onSelect = () => {},
+    onSelect = () => { },
     submitting = false
 }: FolderPickerDialogProps) => {
     const [folders, setFolders] = useState<any[]>([]);
     const [type, setType] = useState<'document' | 'photo'>('document');
     const [currentSelected, setCurrentSelected] = useState<(string | number)[]>(selectedFolderIds || []);
+    const [currentParentId, setCurrentParentId] = useState<string | null>(null);
+
+    // New folder creation states
+    const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+    const [submittingFolder, setSubmittingFolder] = useState(false);
 
     useEffect(() => {
         if (open && project?.id) {
@@ -58,43 +64,84 @@ const FolderPickerDialog = ({
         });
     };
 
-    const renderFolderTree = (parentId: string | null = null, depth = 0) => {
-        return folders
-            .filter(f => String(f.parent_id ?? 'null') === String(parentId ?? 'null'))
-            .map(folder => {
-                const isSelected = currentSelected.includes(folder.id);
-                return (
-                    <div key={folder.id}>
-                        <button
-                            onClick={() => toggleFolder(folder.id)}
-                            className={cn(
-                                "w-full flex items-center justify-between p-2 rounded-md transition-colors text-xs mb-1",
-                                isSelected ? 'bg-accent/10 border border-accent/50' : 'hover:bg-secondary border border-transparent'
-                            )}
-                            style={{ paddingLeft: `${depth * 16 + 8}px` }}
-                        >
-                            <div className="flex items-center gap-2 truncate">
-                                <FolderIcon className={cn("h-3.5 w-3.5", isSelected ? 'text-accent' : 'text-muted-foreground')} />
-                                <span className={cn("truncate", isSelected && "font-semibold")}>{folder.name}</span>
-                            </div>
-                            {isSelected && <Check className="h-3 w-3 text-accent shrink-0" />}
-                        </button>
-                        {renderFolderTree(folder.id, depth + 1)}
-                    </div>
-                );
+    const submitNewFolder = async () => {
+        if (!newFolderName.trim() || !project?.id) return;
+        setSubmittingFolder(true);
+        try {
+            const res = await createFolder({
+                project_id: String(project.id),
+                name: newFolderName.trim(),
+                parent_id: currentParentId,
+                folder_type: type
             });
+            await fetchFolders();
+            // Automatically select newly created folder
+            if (res?.id) {
+                setCurrentSelected(prev => [...prev, res.id]);
+            }
+            setShowNewFolderModal(false);
+            setNewFolderName('');
+        } catch (err) {
+            toast.error("Failed to create folder");
+        } finally {
+            setSubmittingFolder(false);
+        }
+    };
+
+    const getValidFolders = () => {
+        return folders.filter(f => {
+            const nameLower = f.name.toLowerCase();
+            return nameLower !== 'archive' && nameLower !== 'confirmation' && nameLower !== 'confirmations';
+        });
+    };
+
+    const getFoldersInCurrentLevel = () => {
+        const valid = getValidFolders();
+        return valid.filter(f => String(f.parent_id ?? 'null') === String(currentParentId ?? 'null'));
+    };
+
+    const getBreadcrumbs = () => {
+        const label = type === 'document' ? 'Documents' : 'Photos';
+        if (currentParentId === null) return label;
+        const path: string[] = [];
+        let current = folders.find(f => String(f.id) === String(currentParentId));
+        while (current) {
+            path.unshift(current.name);
+            current = folders.find(f => String(f.id) === String(current.parent_id));
+        }
+        return label + " > " + path.join(" > ");
+    };
+
+    const goUp = () => {
+        if (currentParentId === null) return;
+        const currentFolderObj = folders.find(f => String(f.id) === String(currentParentId));
+        const parentId = currentFolderObj ? (currentFolderObj.parent_id ?? null) : null;
+        setCurrentParentId(parentId);
+    };
+
+    const handleTabChange = (newType: 'document' | 'photo') => {
+        setType(newType);
+        setCurrentParentId(null);
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[450px]">
-                <DialogHeader>
-                    <DialogTitle>Link RFI to Folders</DialogTitle>
+        <Dialog open={open} onOpenChange={(val) => {
+            onOpenChange(val);
+            if (!val) {
+                setCurrentParentId(null);
+                setShowNewFolderModal(false);
+                setNewFolderName('');
+            }
+        }}>
+            <DialogContent className="sm:max-w-[450px] overflow-hidden">
+                <DialogHeader className="flex flex-row items-center justify-between border-b pb-3">
+                    <DialogTitle className="text-sm font-semibold">Link RFI or Snag to Folders</DialogTitle>
                 </DialogHeader>
-                
-                <div className="flex gap-2 p-1 bg-secondary/50 rounded-lg mb-4">
-                    <button 
-                        onClick={() => setType('document')}
+
+                {/* Tabs */}
+                <div className="flex gap-2 p-1 bg-secondary/50 rounded-lg">
+                    <button
+                        onClick={() => handleTabChange('document')}
                         className={cn(
                             "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
                             type === 'document' ? "bg-background shadow-sm text-accent" : "text-muted-foreground hover:text-foreground"
@@ -102,8 +149,8 @@ const FolderPickerDialog = ({
                     >
                         Documents
                     </button>
-                    <button 
-                        onClick={() => setType('photo')}
+                    <button
+                        onClick={() => handleTabChange('photo')}
                         className={cn(
                             "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
                             type === 'photo' ? "bg-background shadow-sm text-accent" : "text-muted-foreground hover:text-foreground"
@@ -113,34 +160,136 @@ const FolderPickerDialog = ({
                     </button>
                 </div>
 
-                <div className="max-h-[350px] overflow-y-auto pr-2 no-scrollbar">
-                    {folders?.length === 0 ? (
-                        <div className="py-12 text-center text-muted-foreground text-xs italic">
-                            No {type} folders found
+                <div className="max-h-[320px] overflow-y-auto py-1 space-y-3 pr-1">
+                    {/* Breadcrumbs */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted rounded-lg text-[10px] text-muted-foreground font-semibold truncate">
+                        <FolderIcon className="h-3 w-3" />
+                        <span>{getBreadcrumbs()}</span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2.5">
+                        {currentParentId !== null && (
+                            <button
+                                onClick={goUp}
+                                className="flex flex-col items-center justify-center p-3 rounded-xl border border-dashed border-border hover:bg-muted transition-colors aspect-square text-center gap-1.5"
+                            >
+                                <ArrowLeft className="h-5 w-5 text-primary" />
+                                <span className="text-[10px] font-semibold text-muted-foreground leading-tight">
+                                    Go Up
+                                </span>
+                            </button>
+                        )}
+
+                        {getFoldersInCurrentLevel().map(folder => {
+                            const isSelected = currentSelected.includes(folder.id);
+                            return (
+                                <div
+                                    key={folder.id}
+                                    className={cn(
+                                        "relative flex flex-col items-center justify-center p-3 rounded-xl border border-border bg-card hover:bg-muted transition-colors aspect-square text-center gap-1.5 group cursor-pointer",
+                                        isSelected && "border-accent bg-accent/5"
+                                    )}
+                                    onClick={() => {
+                                        setCurrentParentId(folder.id);
+                                    }}
+                                >
+                                    {/* Corner checkbox overlay */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Avoid entering folder when toggling checkbox
+                                            toggleFolder(folder.id);
+                                        }}
+                                        className="absolute top-1.5 right-1.5 p-0.5 rounded-full hover:bg-muted/80 z-10"
+                                    >
+                                        {isSelected ? (
+                                            <Check className="h-3.5 w-3.5 text-accent stroke-[3px]" />
+                                        ) : (
+                                            <div className="h-3 w-3 rounded-full border-2 border-muted-foreground/40 group-hover:border-muted-foreground" />
+                                        )}
+                                    </button>
+
+                                    <FolderIcon className={cn("h-5 w-5 text-primary group-hover:scale-105 transition-transform", isSelected && "text-accent")} />
+                                    <span className="text-[10px] font-semibold leading-tight max-h-[24px] overflow-hidden text-ellipsis line-clamp-2 px-1">
+                                        {folder.name}
+                                    </span>
+                                </div>
+                            );
+                        })}
+
+                        <button
+                            onClick={() => setShowNewFolderModal(true)}
+                            className="flex flex-col items-center justify-center p-3 rounded-xl border border-dashed border-border hover:bg-muted transition-colors aspect-square text-center gap-1.5"
+                        >
+                            <FolderPlus className="h-5 w-5 text-primary" />
+                            <span className="text-[10px] font-semibold text-muted-foreground leading-tight">
+                                New Folder
+                            </span>
+                        </button>
+                    </div>
+
+                    {getFoldersInCurrentLevel().length === 0 && currentParentId !== null && (
+                        <div className="flex flex-col items-center justify-center py-6 gap-2">
+                            <FolderMinus className="h-8 w-8 text-muted-foreground/30" />
+                            <span className="text-[10px] font-semibold text-muted-foreground">
+                                This folder is empty
+                            </span>
                         </div>
-                    ) : (
-                        renderFolderTree(null)
                     )}
                 </div>
 
-                <div className="pt-4 border-t border-border">
-                    <p className="text-[10px] text-muted-foreground font-medium mb-2">
+                <div className="pt-2 border-t border-border flex items-center justify-between">
+                    <p className="text-[10px] text-muted-foreground font-medium">
                         {currentSelected?.length || 0} folder(s) selected
                     </p>
                 </div>
 
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} size="sm" disabled={submitting}>Cancel</Button>
-                    <Button 
-                        onClick={() => onSelect(currentSelected)} 
+                <DialogFooter className="flex gap-2">
+                    <Button variant="ghost" onClick={() => onOpenChange(false)} size="sm" disabled={submitting} className="text-xs">Cancel</Button>
+                    <Button
+                        onClick={() => onSelect(currentSelected)}
                         size="sm"
                         disabled={submitting}
-                        className="bg-accent text-accent-foreground hover:bg-accent/90"
+                        className="bg-accent text-accent-foreground hover:bg-accent/90 text-xs"
                     >
                         {submitting && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
                         Done
                     </Button>
                 </DialogFooter>
+
+                {/* Create Folder Overlay */}
+                {showNewFolderModal && (
+                    <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+                        <div className="bg-card w-full border border-border rounded-xl p-4 shadow-lg space-y-4">
+                            <h3 className="font-semibold text-sm">Create New Folder</h3>
+                            <input
+                                type="text"
+                                value={newFolderName}
+                                onChange={(e) => setNewFolderName(e.target.value)}
+                                placeholder="Folder Name"
+                                className="w-full text-xs p-2.5 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                                autoFocus
+                            />
+                            <div className="flex gap-2.5">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => { setShowNewFolderModal(false); setNewFolderName(''); }}
+                                    size="sm"
+                                    className="flex-1 text-xs"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={submitNewFolder}
+                                    disabled={submittingFolder || !newFolderName.trim()}
+                                    size="sm"
+                                    className="flex-1 text-xs"
+                                >
+                                    {submittingFolder ? 'Creating...' : 'Create'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
     );

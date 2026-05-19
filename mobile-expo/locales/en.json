@@ -389,7 +389,8 @@
             "submitResponse": "Submit Response",
             "noMessagesYet": "No messages yet",
             "sendMessage": "Send message",
-            "failedToSendMessage": "Failed to send message"
+            "failedToSendMessage": "Failed to send message",
+            "linkedFolders": "Linked Folders"
         },
         "months": {
             "january": "January",
@@ -515,7 +516,9 @@
                 "failedGenerate": "Failed to generate this week's report",
                 "featureRestricted": "Feature Restricted",
                 "limitReached": "Limit Reached",
-                "error": "Error"
+                "error": "Error",
+                "success": "Success",
+                "regenerateSuccess": "Weekly report regenerated successfully"
             },
             "monthly": {
                 "title": "Monthly Report",
@@ -523,7 +526,8 @@
                 "generating": "Generating...",
                 "noReports": "No monthly reports yet",
                 "autoGenerateHint": "Reports are auto-generated at the end of every month",
-                "failedGenerate": "Failed to generate monthly report"
+                "failedGenerate": "Failed to generate monthly report",
+                "regenerateSuccess": "Monthly report regenerated successfully"
             },
             "daily": {
                 "title": "Daily Report",
@@ -531,7 +535,8 @@
                 "generating": "Generating...",
                 "noReports": "No daily reports yet",
                 "autoGenerateHint": "Reports are auto-generated daily at 11:59 PM",
-                "failedGenerate": "Failed to generate today's report"
+                "failedGenerate": "Failed to generate today's report",
+                "regenerateSuccess": "Daily report regenerated successfully"
             },
             "status": {
                 "waiting": "Waiting for Clearance",

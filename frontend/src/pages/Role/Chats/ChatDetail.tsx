@@ -23,6 +23,56 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 
+const formatHeaderDate = (date: Date, t: (key: string) => string) => {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const isSameDay = (d1: Date, d2: Date) => {
+        return d1.getFullYear() === d2.getFullYear() &&
+               d1.getMonth() === d2.getMonth() &&
+               d1.getDate() === d2.getDate();
+    };
+
+    if (isSameDay(date, today)) {
+        return t('today');
+    } else if (isSameDay(date, yesterday)) {
+        return t('yesterday');
+    } else {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        const dayOfWeek = days[date.getDay()];
+        const dayOfMonth = date.getDate();
+        const month = months[date.getMonth()];
+        const year = date.getFullYear();
+        
+        const currentYear = today.getFullYear();
+        if (year !== currentYear) {
+            return `${dayOfWeek}, ${dayOfMonth} ${month} ${year}`;
+        }
+        return `${dayOfWeek}, ${dayOfMonth} ${month}`;
+    }
+};
+
+const groupMessagesByDate = (msgs: any[], t: (key: string) => string) => {
+    const groups: { dateLabel: string; messages: any[] }[] = [];
+    
+    msgs.forEach(msg => {
+        const date = msg.createdAt ? new Date(msg.createdAt) : new Date();
+        const label = formatHeaderDate(date, t);
+        
+        let group = groups.find(g => g.dateLabel === label);
+        if (!group) {
+            group = { dateLabel: label, messages: [] };
+            groups.push(group);
+        }
+        group.messages.push(msg);
+    });
+    
+    return groups;
+};
+
 export default function ChatDetail() {
     const router = useRouter();
     const params = useParams();
@@ -103,7 +153,7 @@ export default function ChatDetail() {
             const response = await PrivateAxios.get(`/chats/download/${messageId}`, {
                 responseType: 'blob'
             });
-            
+
             const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = blobUrl;
@@ -119,17 +169,17 @@ export default function ChatDetail() {
 
     const getActiveProjectId = () => {
         if (room?.project_id) return room.project_id;
-        
+
         // Fallback: If it's a direct chat, see if the users share exactly one project
         if (room?.room_members && room.room_members.length >= 2) {
-            const memberProjects = room.room_members.map((m: any) => 
+            const memberProjects = room.room_members.map((m: any) =>
                 m.user?.project_members?.map((pm: any) => pm.project_id) || []
             );
-            
-            const intersection = memberProjects.reduce((a: any[], b: any[]) => 
+
+            const intersection = memberProjects.reduce((a: any[], b: any[]) =>
                 a.filter(x => b.includes(x))
             );
-            
+
             if (intersection.length === 1) return intersection[0];
         }
         return null;
@@ -137,7 +187,7 @@ export default function ChatDetail() {
 
     const takeConfirmationScreenshot = async () => {
         if (!chatContainerRef.current) return;
-        
+
         setIsCapturing(true);
         try {
             // Use html-to-image with filter to hide the loader from capture
@@ -148,7 +198,7 @@ export default function ChatDetail() {
                 filter: (node) => {
                     const el = node as HTMLElement;
                     if (el.id === 'capture-loader-overlay') return false;
-                    
+
                     // Exclude external images to prevent strict CORS policies from failing the screenshot
                     if (el.tagName === 'IMG') {
                         const img = el as HTMLImageElement;
@@ -159,7 +209,7 @@ export default function ChatDetail() {
                     return true;
                 }
             });
-            
+
             const blob = await (await fetch(dataUrl)).blob();
             setCapturedBlob(blob);
 
@@ -425,7 +475,7 @@ export default function ChatDetail() {
                 roomId,
                 type: fileData ? (
                     fileData.file_type.startsWith('image/') ? 'image' :
-                    fileData.file_type.startsWith('audio/') ? 'audio' : 'file'
+                        fileData.file_type.startsWith('audio/') ? 'audio' : 'file'
                 ) : 'text',
                 file_url: fileData?.file_url,
                 file_name: fileData?.file_name,
@@ -434,7 +484,7 @@ export default function ChatDetail() {
                 parent_id: replyTo?.id ? Number(replyTo.id) : null
             };
             if (tempText) payload.text = tempText;
-            
+
             console.log("[CHAT] Sending payload:", payload);
             setReplyTo(null);
 
@@ -474,7 +524,7 @@ export default function ChatDetail() {
         setMessage(prev => prev + emoji);
         // setShowEmojiPicker(false);
     };
- 
+
     const scrollToMessage = (messageId: number) => {
         const element = document.getElementById(`msg-${messageId}`);
         if (element) {
@@ -585,7 +635,7 @@ export default function ChatDetail() {
                     <ChevronLeft className="h-5 w-5" />
                 </button>
 
-                <div 
+                <div
                     className="flex flex-1 items-center gap-3 cursor-pointer hover:bg-secondary/30 transition-colors p-1 rounded-lg min-w-0"
                     onClick={() => setShowRoomDetails(true)}
                 >
@@ -632,134 +682,145 @@ export default function ChatDetail() {
                     <div className="flex-1 min-h-0 shrink-0 pointer-events-none" />
 
                     <div ref={bottomRef} />
-                    {messages.map(msg => {
-                        const isMe = msg.sender_id === user?.id;
-                        const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    {groupMessagesByDate(messages, t).map(group => (
+                        <div key={group.dateLabel} className="flex flex-col-reverse space-y-2 space-y-reverse shrink-0">
+                            {group.messages.map(msg => {
+                                const isMe = msg.sender_id === user?.id;
+                                const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                        return (
-                            <div key={msg.id} id={`msg-${msg.id}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} transition-colors duration-500 rounded-2xl`}>
-                                <div
-                                    className={`max-w-[75%] px-3.5 py-2.5 shadow-sm ${isMe
-                                        ? 'bg-accent text-white rounded-2xl rounded-br-sm'
-                                        : 'bg-card text-foreground border border-border rounded-2xl rounded-bl-sm'
-                                        }`}
-                                >
-                                    {!isMe && (
-                                        <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || t('user_fallback')}</p>
-                                    )}
-
-                                    {(msg.parent || msg.parent_id) && (
-                                        <div 
-                                            onClick={() => scrollToMessage(msg.parent_id || (msg.parent as any)?.id)}
-                                            className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10 border-white/40' : 'bg-secondary/50'}`}
+                                return (
+                                    <div key={msg.id} id={`msg-${msg.id}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} transition-colors duration-500 rounded-2xl`}>
+                                        <div
+                                            className={`max-w-[75%] px-3.5 py-2.5 shadow-sm ${isMe
+                                                ? 'bg-accent text-white rounded-2xl rounded-br-sm'
+                                                : 'bg-card text-foreground border border-border rounded-2xl rounded-bl-sm'
+                                                }`}
                                         >
-                                            <p className={`font-bold mb-0.5 truncate ${isMe ? 'text-white' : 'text-accent'}`}>
-                                                {msg.parent?.sender?.name || t('user_fallback')}
-                                            </p>
-                                            <p className={`opacity-80 line-clamp-1 italic ${isMe ? 'text-white/90' : 'text-foreground/70'}`}>
-                                                {msg.parent ? (
-                                                    (msg.parent.type === 'audio' || msg.parent.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : msg.parent.type === 'image' ? `📷 ${t('photo_message')}` : msg.parent.type === 'file' ? `📄 ${t('file_message')}` : msg.parent.text || t('message_fallback')
-                                                ) : t('replied_to_message')}
-                                            </p>
-                                        </div>
-                                    )}
+                                            {!isMe && (
+                                                <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || t('user_fallback')}</p>
+                                            )}
 
-                                    {msg.type === 'image' && msg.downloadUrl && (
-                                        <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20 relative group cursor-pointer" onClick={() => { setViewPhoto(msg.downloadUrl); setViewPhotoName(msg.file_name || 'image.jpg'); setViewPhotoId(msg.id); }}>
-                                            <img
-                                                src={msg.downloadUrl}
-                                                alt={msg.file_name}
-                                                className="max-w-full h-auto block"
-                                            />
-                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <ZoomIn className="h-6 w-6 text-white" />
-                                            </div>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDownload(msg.id, msg.file_name || 'image.jpg');
-                                                }}
-                                                className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
-                                            >
-                                                <Download className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    )}
+                                            {(msg.parent || msg.parent_id) && (
+                                                <div
+                                                    onClick={() => scrollToMessage(msg.parent_id || (msg.parent as any)?.id)}
+                                                    className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10 border-white/40' : 'bg-secondary/50'}`}
+                                                >
+                                                    <p className={`font-bold mb-0.5 truncate ${isMe ? 'text-white' : 'text-accent'}`}>
+                                                        {msg.parent?.sender?.name || t('user_fallback')}
+                                                    </p>
+                                                    <p className={`opacity-80 line-clamp-1 italic ${isMe ? 'text-white/90' : 'text-foreground/70'}`}>
+                                                        {msg.parent ? (
+                                                            (msg.parent.type === 'audio' || msg.parent.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : msg.parent.type === 'image' ? `📷 ${t('photo_message')}` : msg.parent.type === 'file' ? `📄 ${t('file_message')}` : msg.parent.text || t('message_fallback')
+                                                        ) : t('replied_to_message')}
+                                                    </p>
+                                                </div>
+                                            )}
 
-                                    {(msg.type === 'audio' || msg.file_type?.startsWith('audio/')) && msg.downloadUrl && (
-                                        <div className="mb-2">
-                                            <VoiceNotePlayer url={msg.downloadUrl} isMe={isMe} />
-                                        </div>
-                                    )}
+                                            {msg.type === 'image' && msg.downloadUrl && (
+                                                <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20 relative group cursor-pointer" onClick={() => { setViewPhoto(msg.downloadUrl); setViewPhotoName(msg.file_name || 'image.jpg'); setViewPhotoId(msg.id); }}>
+                                                    <img
+                                                        src={msg.downloadUrl}
+                                                        alt={msg.file_name}
+                                                        className="max-w-[400px] h-auto block"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <ZoomIn className="h-6 w-6 text-white" />
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDownload(msg.id, msg.file_name || 'image.jpg');
+                                                        }}
+                                                        className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                                                    >
+                                                        <Download className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                            )}
 
-                                    {msg.type === 'file' && !msg.file_type?.startsWith('audio/') && msg.downloadUrl && (
-                                        <div className={`p-2 mb-2 rounded-lg flex items-center gap-3 ${isMe ? 'bg-white/10' : 'bg-secondary/50'}`}>
-                                            <FileText className="h-8 w-8 text-accent" />
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">{msg.file_name}</p>
-                                                <p className="text-[10px] opacity-70">{msg.file_size || '0 KB'}</p>
-                                            </div>
-                                            <button
-                                                onClick={() => handleDownload(msg.id, msg.file_name || 'file')}
-                                                className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
-                                            >
-                                                <Download className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    )}
+                                            {(msg.type === 'audio' || msg.file_type?.startsWith('audio/')) && msg.downloadUrl && (
+                                                <div className="mb-2">
+                                                    <VoiceNotePlayer url={msg.downloadUrl} isMe={isMe} />
+                                                </div>
+                                            )}
 
-                                    {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
-                                    <div className={`flex items-center gap-1 mt-1 justify-end`}>
-                                        <span className={`text-[10px] ${isMe ? 'text-orange-100' : 'text-muted-foreground'}`}>
-                                            {time}
-                                        </span>
-                                        {isMe && (
-                                            <div className="flex items-center">
-                                                {msg.seen ? (
-                                                    <CheckCheck className="w-3.5 h-3.5 text-green-400" />
-                                                ) : (
-                                                    <Check className="w-3.5 h-3.5 text-orange-100 opacity-70" />
-                                                )}
-                                            </div>
-                                        )}
-                                        <button 
-                                            onClick={() => {
-                                                setReplyTo(msg);
-                                                inputRef.current?.focus();
-                                            }}
-                                            className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}
-                                            title="Reply"
-                                        >
-                                            <CornerUpLeft className="h-3 w-3" />
-                                        </button>
+                                            {msg.type === 'file' && !msg.file_type?.startsWith('audio/') && msg.downloadUrl && (
+                                                <div className={`p-2 mb-2 rounded-lg flex items-center gap-3 ${isMe ? 'bg-white/10' : 'bg-secondary/50'}`}>
+                                                    <FileText className="h-8 w-8 text-accent" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium truncate">{msg.file_name}</p>
+                                                        <p className="text-[10px] opacity-70">{msg.file_size || '0 KB'}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleDownload(msg.id, msg.file_name || 'file')}
+                                                        className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
+                                                    >
+                                                        <Download className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                            )}
 
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <button className={`p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}>
-                                                    <MoreVertical className="h-3 w-3" />
-                                                </button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={takeConfirmationScreenshot} className="text-xs cursor-pointer">
-                                                    Confirm as Confirmation
-                                                </DropdownMenuItem>
-                                                {isMe && msg.type === 'text' && (
-                                                    <DropdownMenuItem onClick={() => { setEditingMessage(msg); setMessage(msg.text); setReplyTo(null); setTimeout(() => inputRef.current?.focus(), 100); }} className="text-xs cursor-pointer">
-                                                        <Edit2 className="h-3 w-3 mr-2" /> Edit
-                                                    </DropdownMenuItem>
-                                                )}
+                                            {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
+                                            <div className={`flex items-center gap-1 mt-1 justify-end`}>
+                                                <span className={`text-[10px] ${isMe ? 'text-orange-100' : 'text-muted-foreground'}`}>
+                                                    {time}
+                                                </span>
                                                 {isMe && (
-                                                    <DropdownMenuItem onClick={() => handleDeleteMessage(msg.id)} className="text-xs cursor-pointer text-destructive focus:text-destructive">
-                                                        <Trash2 className="h-3 w-3 mr-2" /> Delete
-                                                    </DropdownMenuItem>
+                                                    <div className="flex items-center">
+                                                        {msg.seen ? (
+                                                            <CheckCheck className="w-3.5 h-3.5 text-green-400" />
+                                                        ) : (
+                                                            <Check className="w-3.5 h-3.5 text-orange-100 opacity-70" />
+                                                        )}
+                                                    </div>
                                                 )}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                                <button
+                                                    onClick={() => {
+                                                        setReplyTo(msg);
+                                                        inputRef.current?.focus();
+                                                    }}
+                                                    className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}
+                                                    title="Reply"
+                                                >
+                                                    <CornerUpLeft className="h-3 w-3" />
+                                                </button>
+
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <button className={`p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}>
+                                                            <MoreVertical className="h-3 w-3" />
+                                                        </button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={takeConfirmationScreenshot} className="text-xs cursor-pointer">
+                                                            Confirm as Confirmation
+                                                        </DropdownMenuItem>
+                                                        {isMe && msg.type === 'text' && (
+                                                            <DropdownMenuItem onClick={() => { setEditingMessage(msg); setMessage(msg.text); setReplyTo(null); setTimeout(() => inputRef.current?.focus(), 100); }} className="text-xs cursor-pointer">
+                                                                <Edit2 className="h-3 w-3 mr-2" /> Edit
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {isMe && (
+                                                            <DropdownMenuItem onClick={() => handleDeleteMessage(msg.id)} className="text-xs cursor-pointer text-destructive focus:text-destructive">
+                                                                <Trash2 className="h-3 w-3 mr-2" /> Delete
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
+                                );
+                            })}
+
+                            {/* Sticky Date Header */}
+                            <div className="sticky top-2 z-10 flex justify-center my-2 pointer-events-none">
+                                <span className="bg-card/90 backdrop-blur-md text-muted-foreground text-[11px] font-medium px-2.5 py-1 rounded-md shadow-sm border border-border/60 select-none">
+                                    {group.dateLabel}
+                                </span>
                             </div>
-                        );
-                    })}
+                        </div>
+                    ))}
                 </div>
 
                 {/* Floating Typing Indicator */}
@@ -843,7 +904,7 @@ export default function ChatDetail() {
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold text-accent">{replyTo.sender?.name || t('user_fallback')}</p>
                             <p className="text-sm text-foreground truncate opacity-80">
-                                { (replyTo.type === 'audio' || replyTo.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : replyTo.type === 'image' ? `📷 ${t('photo_message')}` : replyTo.type === 'file' ? `📄 ${t('file_message')}` : replyTo.text || t('message_fallback')}
+                                {(replyTo.type === 'audio' || replyTo.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : replyTo.type === 'image' ? `📷 ${t('photo_message')}` : replyTo.type === 'file' ? `📄 ${t('file_message')}` : replyTo.text || t('message_fallback')}
                             </p>
                         </div>
                         <button
@@ -904,7 +965,7 @@ export default function ChatDetail() {
                     )}
 
                     {(!message.trim() && !selectedFile) || isRecordingVoice ? (
-                        <VoiceNoteRecorder 
+                        <VoiceNoteRecorder
                             onRecordingStateChange={setIsRecordingVoice}
                             onSend={(file) => handleSend(file)}
                         />
@@ -941,7 +1002,7 @@ export default function ChatDetail() {
                     <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-thin">
                         {room?.type === 'direct' ? (
                             <div className="flex flex-col items-center text-center space-y-4">
-                                <SecureAvatar 
+                                <SecureAvatar
                                     fileKey={room?.room_members?.find((m: any) => m.user?.id !== user?.id)?.user?.profile_pic}
                                     name={room?.room_members?.find((m: any) => m.user?.id !== user?.id)?.user?.name}
                                     size="h-24 w-24"
@@ -972,8 +1033,8 @@ export default function ChatDetail() {
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Group Name</label>
                                     <div className="flex gap-2">
-                                        <Input 
-                                            defaultValue={room?.name} 
+                                        <Input
+                                            defaultValue={room?.name}
                                             onBlur={e => handleUpdateRoomName(e.target.value)}
                                             onKeyDown={e => e.key === 'Enter' && handleUpdateRoomName(e.currentTarget.value)}
                                             className="bg-secondary/20"
@@ -984,7 +1045,7 @@ export default function ChatDetail() {
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Members ({room?.room_members?.length})</label>
-                                        <button 
+                                        <button
                                             onClick={handleLeaveRoom}
                                             className="text-xs font-bold text-destructive hover:underline flex items-center gap-1"
                                         >
@@ -994,7 +1055,7 @@ export default function ChatDetail() {
                                     <div className="space-y-2">
                                         {room?.room_members?.map((member: any) => (
                                             <div key={member.user?.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary/20 transition-colors">
-                                                <SecureAvatar 
+                                                <SecureAvatar
                                                     fileKey={member.user?.profile_pic}
                                                     name={member.user?.name}
                                                     size="h-8 w-8"
@@ -1015,8 +1076,8 @@ export default function ChatDetail() {
 
                                 <div className="space-y-3 pt-4 border-t border-border">
                                     <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Add New Member</label>
-                                    <Input 
-                                        placeholder="Search members to add..." 
+                                    <Input
+                                        placeholder="Search members to add..."
                                         value={userSearchQuery}
                                         onChange={e => setUserSearchQuery(e.target.value)}
                                         className="bg-secondary/10"
@@ -1040,7 +1101,7 @@ export default function ChatDetail() {
                                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{u.organization?.name}</span>
                                                             </div>
                                                         </div>
-                                                        <button 
+                                                        <button
                                                             onClick={() => handleAddMember(u.id)}
                                                             className="p-1.5 rounded-full hover:bg-primary hover:text-white transition-all text-primary"
                                                         >
@@ -1067,10 +1128,10 @@ export default function ChatDetail() {
 
             {/* Photo Viewer */}
             <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
-                <DialogContent className="max-w-4xl p-2 no-scrollbar">
+                <DialogContent className="max-w-[90vw] md:max-w-6xl lg:max-w-6xl w-full p-2 no-scrollbar">
                     {viewPhoto && (
                         <div className="relative flex flex-col items-center">
-                            <img src={viewPhoto} alt="Preview" className="max-w-full max-h-[85vh] rounded-lg" />
+                            <img src={viewPhoto} alt="Preview" className="max-w-full max-h-[90vh] object-contain rounded-lg" />
                         </div>
                     )}
                 </DialogContent>

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { FileText, Calendar, Loader2, Image, ClipboardList, ChevronDown, ChevronUp, FileCheck, Download, BarChart3 } from 'lucide-react';
+import { FileText, Calendar, Loader2, Image, ClipboardList, ChevronDown, ChevronUp, FileCheck, Download, BarChart3, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getReports, Report, triggerReport, downloadReport } from '@/services/reportService';
+import { getReports, Report, triggerReport, downloadReport, regenerateReport } from '@/services/reportService';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getApiErrorMessage } from '@/helpers/apiError';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [generating, setGenerating] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [options, setOptions] = useState({
@@ -30,6 +31,19 @@ const ProjectReports = ({ project, userRole }: Props) => {
     photos: true,
     files: true
   });
+
+  const handleRegenerate = async (reportId: number) => {
+    setRegeneratingId(reportId);
+    try {
+      await regenerateReport(reportId);
+      toast.success(t('report_regenerated_success') || 'Report regenerated successfully');
+      fetchReports();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, t('failed_regenerate_report') || 'Failed to regenerate report'));
+    } finally {
+      setRegeneratingId(null);
+    }
+  };
 
 
   const fetchReports = () => {
@@ -205,10 +219,20 @@ const ProjectReports = ({ project, userRole }: Props) => {
                       {activeType === 'weekly' && ` ${t('report_period_to')} ${fmt(r.period_end)}`}
                     </p>
                     <div className="flex items-center gap-2">
+                      {userRole !== 'client' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRegenerate(r.id); }}
+                          disabled={regeneratingId === r.id || downloadingId === r.id}
+                          className="p-2 rounded-lg hover:bg-accent/10 text-accent transition-colors disabled:opacity-50"
+                          title={t('regenerate_report_tip') || 'Regenerate Report'}
+                        >
+                          {regeneratingId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        </button>
+                      )}
                       {(r.photos_count > 0 || r.docs_count > 0 || (r.summary?.rfis?.length || 0) > 0 || (r.summary?.snags?.length || 0) > 0) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDownload(r); }}
-                          disabled={downloadingId === r.id}
+                          disabled={downloadingId === r.id || regeneratingId === r.id}
                           className="p-2 rounded-lg hover:bg-accent/10 text-accent transition-colors disabled:opacity-50"
                           title={t('download_pdf_tip')}
                         >

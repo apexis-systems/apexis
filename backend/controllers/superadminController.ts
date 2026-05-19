@@ -362,6 +362,32 @@ export const updateSystemConfig = async (req: Request, res: Response) => {
 
         await saveSystemConfig(minAppVersion);
 
+        // Broadcast push notification to all users about the new version
+        try {
+            const allUsers = await users.findAll({ attributes: ["id"] });
+            if (allUsers && allUsers.length > 0) {
+                const notificationPromises = allUsers.map((user: any) =>
+                    sendNotification({
+                        userId: user.id,
+                        title: "New Version is available",
+                        body: `Version ${minAppVersion} is now available. Please update your app.`,
+                        type: "broadcast",
+                        data: {
+                            sentBy: authUser.user_id,
+                            isBroadcast: true,
+                            minAppVersion
+                        }
+                    })
+                );
+                // Send notifications in the background so that the API response is not blocked/delayed
+                Promise.all(notificationPromises).catch(err => {
+                    console.error("Error broadcasting new version notifications:", err);
+                });
+            }
+        } catch (notifError) {
+            console.error("Failed to prepare new version broadcast notifications:", notifError);
+        }
+
         res.status(200).json({
             success: true,
             message: "App version configuration updated successfully",
