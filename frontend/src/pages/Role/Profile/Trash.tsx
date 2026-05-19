@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { deleteTrashItemPermanently, getTrashItems, restoreTrashItem } from '@/services/trashService';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 const CATEGORY_ORDER = ['project', 'folder', 'document', 'photo', 'rfi', 'snag', 'manual'];
 
@@ -63,6 +64,7 @@ export default function Trash() {
 
     const [items, setItems] = useState<TrashItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [viewPhoto, setViewPhoto] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
     const [isRestoring, setIsRestoring] = useState<string | null>(null);
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -222,9 +224,18 @@ export default function Trash() {
                                                     </div>
 
                                                     <div className="flex items-start gap-3 mb-3">
-                                                        <div className="h-10 w-10 rounded-2xl bg-secondary flex items-center justify-center shrink-0">
-                                                            <Icon className="h-4 w-4 text-foreground" />
-                                                        </div>
+                                                        {item.itemType === 'photo' && (item as any).downloadUrl ? (
+                                                            <div 
+                                                                onClick={() => setViewPhoto((item as any).downloadUrl)}
+                                                                className="h-10 w-10 rounded-2xl bg-secondary overflow-hidden shrink-0 border border-border cursor-pointer hover:opacity-80 active:scale-95 transition-all"
+                                                            >
+                                                                <img src={(item as any).downloadUrl} alt={item.name} className="h-full w-full object-cover" />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="h-10 w-10 rounded-2xl bg-secondary flex items-center justify-center shrink-0">
+                                                                <Icon className="h-4 w-4 text-foreground" />
+                                                            </div>
+                                                        )}
                                                         <div className="min-w-0 flex-1">
                                                             <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
                                                                 {item.itemType === 'folder' && item.itemSubType === 'photo' ? 'PHOTO FOLDER' : item.itemType === 'folder' ? 'DOC FOLDER' : getItemLabel(item.itemType).slice(0, -1).toUpperCase()}
@@ -313,6 +324,14 @@ export default function Trash() {
                     })}
                 </div>
             )}
+
+            <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
+                <DialogContent className="max-w-2xl p-2 no-scrollbar">
+                    {viewPhoto && (
+                        <img src={viewPhoto} alt="Preview" className="w-full h-auto rounded-lg" />
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -529,6 +529,78 @@ export const deleteFile = async (req: Request, res: Response) => {
     }
 };
 
+export const bulkDeleteFiles = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) {
+            await t.rollback();
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        const { ids } = req.body;
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            await t.rollback();
+            return res.status(400).json({ error: "No file IDs provided" });
+        }
+
+        const fileRecords = await files.findAll({
+            where: { id: ids },
+            transaction: t
+        });
+
+        if (fileRecords.length === 0) {
+            await t.rollback();
+            return res.status(404).json({ error: "No files found to delete" });
+        }
+
+        // Validate each file
+        for (const file of fileRecords) {
+            // Protection: Cannot delete files in protected folders (Confirmations, Archive)
+            if (file.folder_id) {
+                const folder = await folders.findByPk(file.folder_id, { transaction: t });
+                if (folder) {
+                    const folderNameLower = folder.name.toLowerCase();
+                    if (
+                        (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
+                        (folder.folder_type === 'document' && folderNameLower === 'archive')
+                    ) {
+                        await t.rollback();
+                        return res.status(403).json({ error: `Forbidden: File "${file.file_name}" is in a system folder and cannot be deleted` });
+                    }
+                }
+            }
+
+            // ONLY the original uploader can delete
+            if (String(file.created_by) !== String(authUser.user_id)) {
+                await t.rollback();
+                return res.status(403).json({ error: `Unauthorized: Only the original uploader can delete file "${file.file_name}"` });
+            }
+        }
+
+        // Log activities and delete
+        for (const file of fileRecords) {
+            await logActivity({
+                projectId: file.project_id,
+                userId: authUser.user_id,
+                type: 'delete',
+                description: `Moved ${file.file_name} to trash`,
+                metadata: { fileId: file.id, type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
+            });
+
+            await file.destroy({ transaction: t });
+        }
+
+        await t.commit();
+        res.status(200).json({ message: "Files moved to trash successfully" });
+    } catch (error) {
+        await t.rollback();
+        console.error("Bulk Delete Files Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+
 
 export const viewFile = async (req: Request, res: Response) => {
     try {

@@ -9,7 +9,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getProjectFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile } from '@/services/fileService';
 import { getMemberForTag, getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
@@ -823,6 +823,74 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     };
 
+    const handleBulkDelete = async () => {
+        if (selectedFiles.size === 0) {
+            Alert.alert(t('projectPhotos.info'), t('projectPhotos.selectAtLeastOne') || 'Please select at least one photo');
+            return;
+        }
+
+        const filesArray = Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean);
+        const inProtectedFolder = filesArray.some(file => {
+            if (file.folder_id) {
+                const folder = folders.find(f => String(f.id) === String(file.folder_id));
+                if (folder) {
+                    const folderNameLower = folder.name.toLowerCase();
+                    return (
+                        (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
+                        (folder.folder_type === 'document' && folderNameLower === 'archive')
+                    );
+                }
+            }
+            return false;
+        });
+
+        if (inProtectedFolder) {
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.protectedFolderDeleteError') || "Files in system folders (Archive/Confirmations) cannot be deleted.");
+            return;
+        }
+
+        const unauthorized = filesArray.some(file => {
+            return String(file.created_by) !== String(user.id);
+        });
+
+        if (unauthorized) {
+            Alert.alert(t('projectPhotos.error'), t('projectPhotos.unauthorizedDeleteError') || "You can only delete photos that you originally uploaded.");
+            return;
+        }
+
+        const confirmMsg = selectedFiles.size === 1
+            ? t('projectPhotos.deletePhotoConfirm')
+            : (t('projectPhotos.removePhotosConfirm', { count: selectedFiles.size }) || `Move these ${selectedFiles.size} photos to Trash? They can be recovered later from Settings for 30 days.`);
+
+        const alertTitle = selectedFiles.size === 1
+            ? (t('projectPhotos.deletePhoto') || 'Delete Photo')
+            : (t('projectPhotos.deletePhotos') || 'Delete Photos');
+
+        Alert.alert(
+            alertTitle,
+            confirmMsg,
+            [
+                { text: t('projectPhotos.cancel'), style: 'cancel' },
+                {
+                    text: t('projectPhotos.moveToTrash') || 'Move to Trash', style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setProcessing('delete');
+                            await bulkDeleteFiles(Array.from(selectedFiles));
+                            setPhotos((prev) => prev.filter((p) => !selectedFiles.has(p.id)));
+                            clearSelection();
+                        } catch (e: any) {
+                            const errorMsg = e.response?.data?.error || t('projectPhotos.failedToDeletePhoto');
+                            Alert.alert(t('projectPhotos.error'), errorMsg);
+                        } finally {
+                            setProcessing(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handleBulkShare = async () => {
         if (selectedFiles.size > 0) {
             const firstId = Array.from(selectedFiles)[0];
@@ -878,7 +946,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
 
     const handleSharePhoto = async (photo?: any) => {
-        const photoToShare = photo || (selectedFiles.size > 0 ? photos.find(p => p.id === Array.from(selectedFiles)[0]) : null);
+        const photoToShare = photo || (selectedFiles.size > 0 ? photos.find(p => String(p.id) === String(Array.from(selectedFiles)[0])) : null);
         if (!photoToShare) return;
 
         try {
@@ -1581,14 +1649,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 </TouchableOpacity>
                                             );
                                         }
-                                    } else if (selectedFiles.size === 1 && selectedFolders.size === 0) {
-                                        // File delete ONLY for uploader
-                                        const fileId = Array.from(selectedFiles)[0];
-                                        const file = photos.find(p => p.id === fileId);
-                                        if (file && (String(file.created_by) === String(user.id))) {
+                                    } else if (selectedFiles.size > 0 && selectedFolders.size === 0) {
+                                        // File delete option (single or multiple) - only show if all selected files were uploaded by the current user
+                                        const filesArray = Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean);
+                                        const allOwned = filesArray.every(file => String(file.created_by) === String(user.id));
+                                        if (allOwned) {
                                             return (
                                                 <TouchableOpacity
-                                                    onPress={() => handleDeleteFile(file)}
+                                                    onPress={handleBulkDelete}
                                                     style={{ padding: 4 }}
                                                     disabled={processing !== null}
                                                 >
@@ -1718,7 +1786,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             : <Feather name="download" size={20} color={colors.primary} />
                                         }
                                     </TouchableOpacity>
-                                    {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id) || user.role === 'admin' || user.role === 'superadmin') && (
+                                    {(String(sortedPhotos[viewerIndex]?.created_by) === String(user?.id) || String(sortedPhotos[viewerIndex]?.creator?.id) === String(user?.id)) && (
                                         <>
                                             {currentFolder?.name.toLowerCase().includes('archive') ? (
                                                 <TouchableOpacity onPress={() => handleUnarchivePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }}>
@@ -1943,7 +2011,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={false}
-                canDelete={activeActionFile && (String(activeActionFile.created_by) === String(user.id) || user.role === 'admin' || user.role === 'superadmin') && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
+                canDelete={activeActionFile && String(activeActionFile.created_by) === String(user.id) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
                 canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
                 onRename={() => handleRenameFileAction(activeActionFile)}
                 onArchive={() => handleArchiveFile(activeActionFile)}

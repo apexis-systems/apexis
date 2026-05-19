@@ -1,7 +1,8 @@
 import { Op } from "sequelize";
-import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import db, { comments, files, folders, manuals, organizations, project_members, projects, rfis, sequelize, snags, users } from "../models/index.ts";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const TRASH_RETENTION_DAYS = 30;
 
@@ -462,6 +463,40 @@ export const getTrashItemsForUser = async (authUser: any, queryOrgId?: string | 
         return [...childFolders, ...childFiles].sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
     };
 
+    const fileItems = await Promise.all(
+        deletedFiles
+            .filter((file: any) => !file.folder || !file.folder.deletedAt)
+            .map(async (file: any) => {
+                let downloadUrl = null;
+                if (file.file_type?.startsWith("image/")) {
+                    try {
+                        const command = new GetObjectCommand({
+                            Bucket: BUCKET_NAME,
+                            Key: file.file_url,
+                        });
+                        downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+                    } catch (err) {
+                        console.error(`Failed to get presigned URL for trash photo ${file.id}:`, err);
+                    }
+                }
+
+                return {
+                    id: file.id,
+                    itemType: file.file_type?.startsWith("image/") ? "photo" : "document",
+                    name: file.file_name,
+                    description: file.folder?.name || null,
+                    deletedAt: file.deletedAt,
+                    daysRemaining: getDaysRemaining(file.deletedAt),
+                    projectId: file.project_id,
+                    projectName: activeProjectsById.get(Number(file.project_id))?.name || "Project",
+                    itemSubType: file.file_type,
+                    downloadUrl,
+                    canRestore: Number(file.created_by) === Number(authUser.user_id) || ["admin", "superadmin"].includes(authUser.role),
+                    canDeleteForever: Number(file.created_by) === Number(authUser.user_id) || ["admin", "superadmin"].includes(authUser.role),
+                };
+            })
+    );
+
     const items = [
         ...deletedProjects.map((project: any) => ({
             id: project.id,
@@ -494,21 +529,7 @@ export const getTrashItemsForUser = async (authUser: any, queryOrgId?: string | 
                 canRestore: ["admin", "superadmin", "contributor"].includes(authUser.role),
                 canDeleteForever: ["admin", "superadmin", "contributor"].includes(authUser.role),
             })),
-        ...deletedFiles
-            .filter((file: any) => !file.folder || !file.folder.deletedAt)
-            .map((file: any) => ({
-                id: file.id,
-                itemType: file.file_type?.startsWith("image/") ? "photo" : "document",
-                name: file.file_name,
-                description: file.folder?.name || null,
-                deletedAt: file.deletedAt,
-                daysRemaining: getDaysRemaining(file.deletedAt),
-                projectId: file.project_id,
-                projectName: activeProjectsById.get(Number(file.project_id))?.name || "Project",
-                itemSubType: file.file_type,
-                canRestore: Number(file.created_by) === Number(authUser.user_id) || ["admin", "superadmin"].includes(authUser.role),
-                canDeleteForever: Number(file.created_by) === Number(authUser.user_id) || ["admin", "superadmin"].includes(authUser.role),
-            })),
+        ...fileItems,
         ...deletedManuals.map((manual: any) => ({
             id: manual.id,
             itemType: "manual",

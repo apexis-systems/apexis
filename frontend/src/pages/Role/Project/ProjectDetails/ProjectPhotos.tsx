@@ -14,7 +14,7 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, archiveFile, unarchiveFile } from '@/services/fileService';
 
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
@@ -412,10 +412,58 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const handleBulkShare = () => {
     if (selectedFiles.size > 0) {
       const firstId = Array.from(selectedFiles)[0];
-      const firstPhoto = photos.find(p => p.id === firstId);
+      const firstPhoto = photos.find(p => String(p.id) === String(firstId));
       if (firstPhoto) setShareItem(firstPhoto);
     } else {
       toast.info(t('select_photo_share'));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedFiles.size === 0) {
+      toast.info(t('select_photo_delete') || 'Please select at least one photo to delete');
+      return;
+    }
+
+    const filesArray = Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean);
+    const inProtectedFolder = filesArray.some(file => {
+      if (file.folder_id) {
+        const folder = folders.find(f => String(f.id) === String(file.folder_id));
+        if (folder) {
+          const folderNameLower = folder.name.toLowerCase();
+          return (
+            (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
+            (folder.folder_type === 'document' && folderNameLower === 'archive')
+          );
+        }
+      }
+      return false;
+    });
+
+    if (inProtectedFolder) {
+      toast.error(t('protected_folder_delete_error') || "Files in system folders (Archive/Confirmations) cannot be deleted.");
+      return;
+    }
+
+    const unauthorized = filesArray.some(file => {
+      return String(file.created_by) !== String(user.id);
+    });
+
+    if (unauthorized) {
+      toast.error(t('unauthorized_delete_error') || "You can only delete photos that you originally uploaded.");
+      return;
+    }
+
+    const confirmMsg = t('confirm_delete_multiple_photos')?.replace('{count}', String(selectedFiles.size)) || `Move these ${selectedFiles.size} photos to Trash? They can be recovered later from Settings for 30 days.`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      await bulkDeleteFiles(Array.from(selectedFiles));
+      toast.success(t('photos_deleted_msg') || 'Selected photos deleted successfully');
+      setPhotos((prev) => prev.filter((p) => !selectedFiles.has(p.id)));
+      clearSelection();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('failed_delete_photos') || 'Failed to delete photos');
     }
   };
 
@@ -700,7 +748,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         </>
                       )}
 
-                      {(user.role === 'admin' || user.role === 'superadmin' || String(photo.created_by) === String(user.id)) && (
+                      {(String(photo.created_by) === String(user.id)) && (
                         <>
                           {currentFolder?.name.toLowerCase().includes('archive') ? (
                             <button onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-blue-500/10" title={t('unarchive_photo_tip') || 'Unarchive photo'}>
@@ -780,7 +828,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                       )}
                     </button>
                   )}
-                  {(user.role === 'admin' || user.role === 'superadmin' || String(photo.created_by) === String(user.id)) && (
+                  {(String(photo.created_by) === String(user.id)) && (
                     <>
                       {currentFolder?.name.toLowerCase().includes('archive') ? (
                         <button
@@ -882,6 +930,16 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     onClick={handleBulkMove}
                   >
                     <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
+                  </Button>
+                )}
+                 {selectedFiles.size > 0 && Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean).every(file => String(file.created_by) === String(user.id)) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-[10px] font-semibold text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                    onClick={handleBulkDelete}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> {t('delete_btn') || 'Delete'}
                   </Button>
                 )}
                 {(user.role === 'admin' || user.role === 'superadmin') && (
