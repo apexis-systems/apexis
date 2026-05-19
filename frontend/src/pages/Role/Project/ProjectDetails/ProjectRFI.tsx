@@ -546,12 +546,6 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-1">
                                             <Clock className="h-3 w-3" /> {new Date(rfi.createdAt).toLocaleDateString()}
                                         </p>
-                                        {rfi.seen_at && (
-                                            <div className="flex items-center gap-0.5 text-orange-500" title={`Seen at ${new Date(rfi.seen_at).toLocaleString()}`}>
-                                                <CheckCheck className="h-3 w-3" />
-                                                <span className="text-[8px] font-bold uppercase tracking-tighter">{t('seen_badge')}</span>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -567,6 +561,12 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     <div className="flex items-center gap-1.5">
                                         <User className="h-3 w-3 text-accent" />
                                         <span className="text-[10px] font-medium text-accent">{t('assigned_to_user_label').replace('{name}', rfi.assignee.name)}</span>
+                                    </div>
+                                )}
+                                {rfi.seen_at && (
+                                    <div className="flex items-center gap-0.5 text-orange-500" title={`Seen at ${new Date(rfi.seen_at).toLocaleString()}`}>
+                                        <CheckCheck className="h-3.5 w-3.5" />
+                                        <span className="text-[8px] font-bold uppercase tracking-tighter">{t('seen_badge')}</span>
                                     </div>
                                 )}
                                 {rfi.photos && rfi.photos.length > 0 && (

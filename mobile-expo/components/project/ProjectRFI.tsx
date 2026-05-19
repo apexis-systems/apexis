@@ -833,7 +833,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>{item.description}</Text>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ fontSize: 8, color: colors.textMuted }}>{item.creator?.name?.charAt(0) || '?'}</Text>
@@ -847,15 +847,16 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                   <Text style={{ fontSize: 10, fontWeight: '600', color: colors.primary }}>{item.assignee.name}</Text>
                 </View>
               )}
+
+              {item.seen_at && (
+                <Ionicons name="checkmark-done" size={12} color="#f97316" />
+              )}
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Feather name="calendar" size={10} color={colors.textMuted} />
                 <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-                {item.seen_at && (
-                  <Ionicons name="checkmark-done" size={12} color="#f97316" style={{ marginLeft: 4 }} />
-                )}
               </View>
               {item.expiry_date && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
