@@ -27,6 +27,7 @@ import qrAuthRoutes from "./routes/qrAuthRoutes.ts";
 import analyticsRoutes from "./routes/analyticsRoutes.ts";
 import subscriptionRoutes from "./routes/subscriptionRoutes.ts";
 import systemRoutes from "./routes/systemRoutes.ts";
+import { initializeSystemConfig } from "./controllers/systemController.ts";
 import searchRoutes from "./routes/searchRoutes.ts";
 import trashRoutes from "./routes/trashRoutes.ts";
 
@@ -110,4 +111,5 @@ const startServer = async () => {
     }
 };
 
+initializeSystemConfig();
 startServer();

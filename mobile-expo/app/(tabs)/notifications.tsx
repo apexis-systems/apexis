@@ -63,7 +63,7 @@ export default function NotificationsScreen() {
             chat: ['chat', 'group_creation'],
             file: ['file_upload', 'file_upload_admin', 'file_visibility', 'folder_visibility'],
             photo: ['photo_upload', 'photo_comment'],
-            snag: ['snag_assigned', 'snag_creation_admin', 'snag_status_update'],
+            snag: ['snag_assigned', 'snag_creation_admin', 'snag_status_update', 'snag_comment'],
             rfi: ['rfi_created', 'rfi_assigned', 'rfi_status_update', 'rfi_comment'],
             member: ['member_joined'],
         };
@@ -312,7 +312,8 @@ export default function NotificationsScreen() {
             case 'photo_upload':
             case 'photo_comment': return 'camera';
             case 'snag_assigned':
-            case 'snag_creation_admin': return 'warning';
+            case 'snag_creation_admin':
+            case 'snag_comment': return 'warning';
             case 'snag_status_update': return 'checkmark-circle';
             case 'rfi_created':
             case 'rfi_assigned':

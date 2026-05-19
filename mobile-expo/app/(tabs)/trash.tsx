@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, BackHandler } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, BackHandler, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -64,6 +65,8 @@ export default function TrashScreen() {
 
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isRestoring, setIsRestoring] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -244,9 +247,22 @@ export default function TrashScreen() {
                             </View>
 
                             <View style={{ flexDirection: 'row', marginRight: 88 }}>
-                              <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                                <Feather name={getItemIcon(item.itemType) as any} size={18} color={colors.text} />
-                              </View>
+                              {item.itemType === 'photo' && (item as any).downloadUrl ? (
+                                <TouchableOpacity 
+                                  onPress={() => {
+                                    setPreviewImage((item as any).downloadUrl);
+                                    setPreviewVisible(true);
+                                  }}
+                                  activeOpacity={0.8}
+                                  style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.surface, marginRight: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}
+                                >
+                                  <Image source={{ uri: (item as any).downloadUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                </TouchableOpacity>
+                              ) : (
+                                <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                                  <Feather name={getItemIcon(item.itemType) as any} size={18} color={colors.text} />
+                                </View>
+                              )}
                               <View style={{ flex: 1 }}>
                                 <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.1 }}>
                                   {item.itemType === 'folder' && item.itemSubType === 'photo' ? 'Photo Folder' : item.itemType === 'folder' ? 'Doc Folder' : getItemLabel(item.itemType).slice(0, -1)}
@@ -337,6 +353,12 @@ export default function TrashScreen() {
           </View>
         )}
       </ScrollView>
+
+      <FullScreenImageModal
+        visible={previewVisible}
+        uri={previewImage}
+        onClose={() => setPreviewVisible(false)}
+      />
     </SafeAreaView>
   );
 }

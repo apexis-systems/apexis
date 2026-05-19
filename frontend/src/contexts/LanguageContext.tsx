@@ -375,6 +375,7 @@ const translations: Record<Language, Record<string, string>> = {
     size_label: 'Size',
     files_folders_tab: 'Files & Folders',
     linked_rfi_tab: 'Linked RFIs',
+    linked_rfi_and_snag_tab: 'Linked RFIs & Snags',
     move_folder_tip: 'Move folder',
     rename_folder_tip: 'Rename folder',
     files_count_label: '{count} files',
@@ -602,6 +603,8 @@ const translations: Record<Language, Record<string, string>> = {
     unassigned: 'Unassigned',
     selectAssignee: 'Select Assignee',
     assigneeDescription: 'Assign this document to a project member',
+    today: 'Today',
+    yesterday: 'Yesterday',
   },
   hi: {
     welcome_back: 'वापसी पर स्वागत है',
@@ -973,6 +976,7 @@ const translations: Record<Language, Record<string, string>> = {
     size_label: 'आकार',
     files_folders_tab: 'फ़ाइलें और फ़ोल्डर',
     linked_rfi_tab: 'लिंक्ड RFI',
+    linked_rfi_and_snag_tab: 'लिंक्ड RFI और स्नैग',
     move_folder_tip: 'फ़ोल्डर ले जाएं',
     rename_folder_tip: 'फ़ोल्डर का नाम बदलें',
     files_count_label: '{count} फ़ाइलें',
@@ -1200,6 +1204,8 @@ const translations: Record<Language, Record<string, string>> = {
     unassigned: 'अनिर्दिष्ट',
     selectAssignee: 'असाइनी चुनें',
     assigneeDescription: 'इस दस्तावेज़ को प्रोजेक्ट सदस्य को सौंपें',
+    today: 'आज',
+    yesterday: 'कल',
   },
   te: {
     welcome_back: 'తిరిగి స్వాగతం',
@@ -1571,6 +1577,7 @@ const translations: Record<Language, Record<string, string>> = {
     size_label: 'పరిమాణం',
     files_folders_tab: 'ఫైల్‌లు & ఫోల్డర్‌లు',
     linked_rfi_tab: 'లింక్ చేయబడిన RFIలు',
+    linked_rfi_and_snag_tab: 'లింక్ చేయబడిన RFIలు & స్నాగ్‌లు',
     move_folder_tip: 'ఫోల్డర్‌ను తరలించండి',
     rename_folder_tip: 'ఫోల్డర్ పేరు మార్చండి',
     files_count_label: '{count} ఫైల్‌లు',
@@ -1798,6 +1805,8 @@ const translations: Record<Language, Record<string, string>> = {
     unassigned: 'అన్అసైన్ చేయబడింది',
     selectAssignee: 'అసైన్ చేసిన వ్యక్తిని ఎంచుకోండి',
     assigneeDescription: 'ఈ పత్రాన్ని ప్రాజెక్ట్ సభ్యునికి కేటాయించండి',
+    today: 'ఈరోజు',
+    yesterday: 'నిన్న',
   },
 };
 

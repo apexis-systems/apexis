@@ -64,6 +64,16 @@ export const getReportShareUrl = async (id: number): Promise<string> => {
     }
 };
 
+export const regenerateReport = async (id: number) => {
+    try {
+        const res = await PrivateAxios.post(`/reports/${id}/regenerate`);
+        return res.data;
+    } catch (error) {
+        console.error("regenerateReport Error", error);
+        throw error;
+    }
+};
+
 
 
 

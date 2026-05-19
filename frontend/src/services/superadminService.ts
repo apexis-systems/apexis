@@ -142,3 +142,23 @@ export const sendBroadcast = async (title: string, description: string) => {
         throw error;
     }
 };
+
+export const getSystemConfig = async () => {
+    try {
+        const response = await PrivateAxios.get('/system/config');
+        return response.data.data;
+    } catch (error) {
+        console.error("getSystemConfig Error", error);
+        throw error;
+    }
+};
+
+export const updateSystemConfig = async (minAppVersion: string) => {
+    try {
+        const response = await PrivateAxios.put('/superadmin/system-config', { minAppVersion });
+        return response.data;
+    } catch (error) {
+        console.error("updateSystemConfig Error", error);
+        throw error;
+    }
+};

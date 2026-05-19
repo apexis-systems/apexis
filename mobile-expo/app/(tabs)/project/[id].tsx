@@ -310,6 +310,7 @@ export default function ProjectWorkspaceScreen() {
         const targetKey = (tab && ['overview', 'documents', 'photos', 'rfi'].includes(tab))
             ? tab as Tab
             : 'overview';
+        setActiveTab(targetKey);
         const index = visibleTabs.findIndex(t => t.key === targetKey);
         if (index !== -1) {
             setTimeout(() => {

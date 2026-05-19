@@ -16,6 +16,8 @@ interface FileActionMenuProps {
     onRename?: () => void;
     onArchive?: () => void;
     onUnarchive?: () => void;
+    onCreateRfi?: () => void;
+    onCreateSnag?: () => void;
     clientVisible: boolean;
     doNotFollow: boolean;
     canDelete: boolean;
@@ -23,6 +25,8 @@ interface FileActionMenuProps {
     showArchive?: boolean;
     isArchived?: boolean;
     isAdmin: boolean;
+    isContributor?: boolean;
+    isUploader?: boolean;
     fileName: string;
     showDoNotFollow?: boolean;
     processingAction?: string | null;
@@ -38,6 +42,8 @@ export default function FileActionMenu({
     onRename,
     onArchive,
     onUnarchive,
+    onCreateRfi,
+    onCreateSnag,
     clientVisible,
     doNotFollow,
     canDelete,
@@ -45,6 +51,8 @@ export default function FileActionMenu({
     showArchive = false,
     isArchived = false,
     isAdmin,
+    isContributor = false,
+    isUploader = false,
     fileName,
     showDoNotFollow = true,
     processingAction = null
@@ -70,6 +78,28 @@ export default function FileActionMenu({
                             </View>
 
                             <View style={styles.optionsContainer}>
+                                {onCreateRfi && (
+                                    <TouchableOpacity 
+                                        style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                        onPress={() => { !isProcessing && onCreateRfi(); !isProcessing && onClose(); }}
+                                        disabled={isProcessing}
+                                    >
+                                        <Feather name="help-circle" size={18} color={colors.primary} />
+                                        <Text style={[styles.optionText, { color: colors.text }]}>Create RFI</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {onCreateSnag && (
+                                    <TouchableOpacity 
+                                        style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                        onPress={() => { !isProcessing && onCreateSnag(); !isProcessing && onClose(); }}
+                                        disabled={isProcessing}
+                                    >
+                                        <Feather name="alert-triangle" size={18} color={colors.primary} />
+                                        <Text style={[styles.optionText, { color: colors.text }]}>Create Snag</Text>
+                                    </TouchableOpacity>
+                                )}
+
                                 {onShare && (
                                     <TouchableOpacity 
                                         style={[styles.option, isProcessing && { opacity: 0.5 }]} 
@@ -113,7 +143,7 @@ export default function FileActionMenu({
                                     </TouchableOpacity>
                                 )}
 
-                                {(!isArchived && showDoNotFollow && (isAdmin || !isAdmin)) && ( // Admin and Contributor can toggle DNF
+                                {(!isArchived && showDoNotFollow && (isAdmin || !isContributor || isUploader)) && ( // Admin and Contributor (only if uploaded) can toggle DNF
                                     <TouchableOpacity 
                                         style={[styles.option, isProcessing && { opacity: 0.5 }]} 
                                         onPress={() => { !isProcessing && onDoNotFollow(); }}

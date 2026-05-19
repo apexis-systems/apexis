@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { rfis, users, activities, projects, project_members, folders, sequelize } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
@@ -110,7 +110,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        const { project_id, title, description, assigned_to, expiry_date, folder_ids } = req.body;
+        const { project_id, title, description, assigned_to, expiry_date, folder_ids, photo_key } = req.body;
         if (!project_id || !title || !assigned_to) {
             return res.status(400).json({ error: 'project_id, title and assigned_to are required' });
         }
@@ -138,6 +138,23 @@ export const createRFI = async (req: Request | any, res: Response) => {
 
         // Photo Upload Logic
         const uploadedPhotos: string[] = [];
+        if (photo_key) {
+            const ext = photo_key.match(/\.[0-9a-z]+$/i)?.[0] || '.jpg';
+            const key = `projects/${project_id}/rfis/${Date.now()}_${Math.random().toString(36).substr(2, 5)}${ext}`;
+            try {
+                const sourceKey = photo_key.startsWith('/') ? photo_key.substring(1) : photo_key;
+                await s3Client.send(new CopyObjectCommand({
+                    Bucket: BUCKET,
+                    CopySource: `/${BUCKET}/${encodeURIComponent(sourceKey)}`,
+                    Key: key
+                }));
+                uploadedPhotos.push(key);
+            } catch (err) {
+                console.error("S3 CopyObject for RFI error:", err);
+                uploadedPhotos.push(photo_key); // Fallback
+            }
+        }
+
         if (req.files && Array.isArray(req.files)) {
             const validationError = validateRfiAttachmentBatch(req.files, 4);
             if (validationError) {
@@ -614,6 +631,12 @@ export const deleteRFI = async (req: Request, res: Response) => {
             skipNotifications: true
         });
 
+        try {
+            getIO().to(`project-${rfi.project_id}`).emit('rfi-deleted', { rfiId: Number(id) });
+        } catch (e) {
+            console.error('Socket emit error (deleteRFI):', e);
+        }
+
         res.json({ message: 'RFI moved to trash successfully' });
     } catch (err) {
         console.error('deleteRFI error:', err);
@@ -751,9 +774,9 @@ export const getFolderRFIs = async (req: Request, res: Response) => {
         const folder = await folders.findByPk(folder_id);
         if (!folder) return res.status(404).json({ error: 'Folder not found' });
 
-        // PostgreSQL JSONB containment: folder_ids @> '[fid]'
+        // PostgreSQL JSONB containment: folder_ids::jsonb @> '[fid]'
         const data = await rfis.findAll({
-            where: sequelize.literal(`"rfis"."folder_ids" @> '[${fid}]'`),
+            where: sequelize.literal(`"rfis"."folder_ids"::jsonb @> '[${fid}]'`),
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
                 { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },

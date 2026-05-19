@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, Modal, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, Modal, ScrollView, StyleSheet, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { getFolders } from '@/services/folderService';
-import { Alert } from 'react-native';
+import { getFolders, createFolder } from '@/services/folderService';
 
 interface MobileFolderPickerDialogProps {
     visible: boolean;
@@ -31,11 +30,18 @@ export default function MobileFolderPickerDialog({
     const [tempSelection, setTempSelection] = useState<(string | number)[]>([]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'document' | 'photo'>('document');
+    const [currentParentId, setCurrentParentId] = useState<string | null>(null);
+
+    // New folder creation states
+    const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+    const [submittingFolder, setSubmittingFolder] = useState(false);
 
     useEffect(() => {
         if (visible && project?.id) {
             fetchFolders();
             setTempSelection([...selectedFolderIds]);
+            setCurrentParentId(null);
         }
     }, [visible, project?.id]);
 
@@ -65,29 +71,68 @@ export default function MobileFolderPickerDialog({
         );
     };
 
-    const renderFolderTree = (folders: any[], parentId: string | null = null, depth = 0) => {
-        return folders
-            .filter(f => String(f.parent_id ?? 'null') === String(parentId ?? 'null'))
-            .map(folder => {
-                const isSelected = tempSelection.includes(folder.id);
-                return (
-                    <View key={folder.id}>
-                        <TouchableOpacity
-                            onPress={() => toggleFolder(folder.id)}
-                            style={[
-                                styles.folderItem,
-                                isSelected && { backgroundColor: colors.primary + '20' },
-                                { paddingLeft: depth * 20 + 12 }
-                            ]}
-                        >
-                            <Feather name="folder" size={16} color={isSelected ? colors.primary : colors.textMuted} />
-                            <Text style={[styles.folderName, { color: colors.text, flex: 1 }]}>{folder.name}</Text>
-                            {isSelected && <Feather name="check-circle" size={16} color={colors.primary} />}
-                        </TouchableOpacity>
-                        {renderFolderTree(folders, folder.id, depth + 1)}
-                    </View>
-                );
+    const submitNewFolder = async () => {
+        if (!newFolderName.trim() || !project?.id) return;
+        setSubmittingFolder(true);
+        try {
+            const res = await createFolder({
+                project_id: String(project.id),
+                name: newFolderName.trim(),
+                parent_id: currentParentId,
+                folder_type: activeTab
             });
+            await fetchFolders();
+            // Automatically select newly created folder
+            if (res?.id) {
+                setTempSelection(prev => [...prev, res.id]);
+            }
+            setShowNewFolderModal(false);
+            setNewFolderName('');
+        } catch (err) {
+            Alert.alert("Error", "Failed to create folder");
+        } finally {
+            setSubmittingFolder(false);
+        }
+    };
+
+    const getValidFolders = () => {
+        const folders = activeTab === 'document' ? docFolders : photoFolders;
+        return folders.filter(f => {
+            const nameLower = f.name.toLowerCase();
+            return nameLower !== 'archive' && nameLower !== 'confirmation' && nameLower !== 'confirmations';
+        });
+    };
+
+    const getFoldersInCurrentLevel = () => {
+        const valid = getValidFolders();
+        return valid.filter(f => String(f.parent_id ?? 'null') === String(currentParentId ?? 'null'));
+    };
+
+    const getBreadcrumbs = () => {
+        const tabLabel = activeTab === 'document' ? t('projectRfi.documents') : t('projectRfi.photos');
+        if (currentParentId === null) return tabLabel;
+
+        const folders = activeTab === 'document' ? docFolders : photoFolders;
+        const path: string[] = [];
+        let current = folders.find(f => String(f.id) === String(currentParentId));
+        while (current) {
+            path.unshift(current.name);
+            current = folders.find(f => String(f.id) === String(current.parent_id));
+        }
+        return tabLabel + " > " + path.join(" > ");
+    };
+
+    const goUp = () => {
+        if (currentParentId === null) return;
+        const folders = activeTab === 'document' ? docFolders : photoFolders;
+        const currentFolderObj = folders.find(f => String(f.id) === String(currentParentId));
+        const parentId = currentFolderObj ? (currentFolderObj.parent_id ?? null) : null;
+        setCurrentParentId(parentId);
+    };
+
+    const handleTabChange = (tab: 'document' | 'photo') => {
+        setActiveTab(tab);
+        setCurrentParentId(null);
     };
 
     return (
@@ -106,13 +151,13 @@ export default function MobileFolderPickerDialog({
 
                     <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
                         <TouchableOpacity 
-                            onPress={() => setActiveTab('document')}
+                            onPress={() => handleTabChange('document')}
                             style={[styles.tab, activeTab === 'document' && { borderBottomColor: colors.primary }]}
                         >
                             <Text style={[styles.tabText, { color: activeTab === 'document' ? colors.primary : colors.textMuted }]}>{t('projectRfi.documents')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            onPress={() => setActiveTab('photo')}
+                            onPress={() => handleTabChange('photo')}
                             style={[styles.tab, activeTab === 'photo' && { borderBottomColor: colors.primary }]}
                         >
                             <Text style={[styles.tabText, { color: activeTab === 'photo' ? colors.primary : colors.textMuted }]}>{t('projectRfi.photos')}</Text>
@@ -123,7 +168,97 @@ export default function MobileFolderPickerDialog({
                         {loading ? (
                             <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 20 }} />
                         ) : (
-                            renderFolderTree(activeTab === 'document' ? docFolders : photoFolders, null)
+                            <View style={{ flex: 1 }}>
+                                {/* Breadcrumbs */}
+                                <View style={[styles.breadcrumbContainer, { backgroundColor: colors.border + '30' }]}>
+                                    <Feather name="folder" size={14} color={colors.textMuted} style={{ marginRight: 6 }} />
+                                    <Text numberOfLines={1} style={[styles.breadcrumbText, { color: colors.textMuted }]}>
+                                        {getBreadcrumbs()}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.gridContainer}>
+                                    {currentParentId !== null && (
+                                        <TouchableOpacity
+                                            onPress={goUp}
+                                            style={[
+                                                styles.folderItem,
+                                                { borderColor: colors.border, borderStyle: 'dashed' },
+                                            ]}
+                                        >
+                                            <Feather name="corner-left-up" size={22} color={colors.primary} />
+                                            <Text 
+                                                numberOfLines={1} 
+                                                style={[styles.folderName, { color: colors.text }]}
+                                            >
+                                                Go Up
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+
+                                    {getFoldersInCurrentLevel().map(folder => {
+                                        const isSelected = tempSelection.includes(folder.id);
+                                        return (
+                                            <TouchableOpacity
+                                                key={folder.id}
+                                                onPress={() => {
+                                                    setCurrentParentId(folder.id);
+                                                }}
+                                                style={[
+                                                    styles.folderItem,
+                                                    { borderColor: colors.border },
+                                                    isSelected && { backgroundColor: colors.primary + '15', borderColor: colors.primary }
+                                                ]}
+                                            >
+                                                {/* Absolute corner selection checkbox */}
+                                                <TouchableOpacity 
+                                                    onPress={() => toggleFolder(folder.id)}
+                                                    style={styles.checkboxContainer}
+                                                >
+                                                    <Feather 
+                                                        name={isSelected ? "check-circle" : "circle"} 
+                                                        size={16} 
+                                                        color={isSelected ? colors.primary : colors.textMuted} 
+                                                    />
+                                                </TouchableOpacity>
+
+                                                <Feather name="folder" size={22} color={colors.primary} />
+                                                <Text 
+                                                    numberOfLines={2} 
+                                                    style={[styles.folderName, { color: colors.text }]}
+                                                >
+                                                    {folder.name}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+
+                                    <TouchableOpacity
+                                        onPress={() => setShowNewFolderModal(true)}
+                                        style={[
+                                            styles.folderItem,
+                                            { borderColor: colors.border, borderStyle: 'dashed' },
+                                        ]}
+                                    >
+                                        <Feather name="folder-plus" size={22} color={colors.primary} />
+                                        <Text 
+                                            numberOfLines={1} 
+                                            style={[styles.folderName, { color: colors.text }]}
+                                        >
+                                            New Folder
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    {getFoldersInCurrentLevel().length === 0 && currentParentId !== null && (
+                                        <View style={styles.emptyContainer}>
+                                            <Feather name="folder-minus" size={32} color={colors.border} />
+                                            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                                                This folder is empty
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
                         )}
                     </ScrollView>
 
@@ -148,6 +283,68 @@ export default function MobileFolderPickerDialog({
                         </TouchableOpacity>
                     </View>
                 </View>
+
+                {/* Create Folder Overlay - absolute sibling avoids multiple nested modals in iOS */}
+                {showNewFolderModal && (
+                    <View style={[StyleSheet.absoluteFill, { zIndex: 999, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 }]}>
+                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 16 }}>Create New Folder</Text>
+                            
+                            <TextInput
+                                value={newFolderName}
+                                onChangeText={setNewFolderName}
+                                placeholder="Folder Name"
+                                placeholderTextColor={colors.textMuted}
+                                autoFocus
+                                style={{
+                                    height: 44,
+                                    borderRadius: 10,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    backgroundColor: colors.background,
+                                    paddingHorizontal: 12,
+                                    color: colors.text,
+                                    fontSize: 14,
+                                    marginBottom: 20,
+                                }}
+                            />
+
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <TouchableOpacity
+                                    onPress={() => { setShowNewFolderModal(false); setNewFolderName(''); }}
+                                    style={{
+                                        flex: 1,
+                                        height: 40,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <Text style={{ color: colors.textMuted, fontWeight: '700', fontSize: 13 }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={submitNewFolder}
+                                    disabled={submittingFolder || !newFolderName.trim()}
+                                    style={{
+                                        flex: 1,
+                                        height: 40,
+                                        borderRadius: 10,
+                                        backgroundColor: colors.primary,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        opacity: (!newFolderName.trim() || submittingFolder) ? 0.5 : 1,
+                                    }}
+                                >
+                                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                                        {submittingFolder ? 'Creating...' : 'Create'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                )}
             </View>
         </Modal>
     );
@@ -178,7 +375,7 @@ const styles = StyleSheet.create({
     tabBar: {
         flexDirection: 'row',
         borderBottomWidth: 1,
-        marginBottom: 10,
+        marginBottom: 16,
     },
     tab: {
         flex: 1,
@@ -192,19 +389,64 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     scrollContainer: {
-        minHeight: 200,
+        minHeight: 250,
         marginBottom: 20,
     },
-    folderItem: {
+    gridContainer: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        justifyContent: 'flex-start',
+        paddingVertical: 4,
+    },
+    folderItem: {
+        width: '23%',
+        aspectRatio: 1,
         alignItems: 'center',
-        gap: 10,
-        padding: 12,
-        borderRadius: 8,
-        marginVertical: 1,
+        justifyContent: 'center',
+        padding: 6,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginBottom: 4,
+        position: 'relative',
+    },
+    checkboxContainer: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        padding: 4,
+        zIndex: 10,
     },
     folderName: {
-        fontSize: 14,
+        fontSize: 10,
+        fontWeight: '600',
+        textAlign: 'center',
+        marginTop: 6,
+        lineHeight: 12,
+        paddingHorizontal: 2,
+    },
+    breadcrumbContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        marginBottom: 16,
+    },
+    breadcrumbText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    emptyContainer: {
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 24,
+        gap: 8,
+    },
+    emptyText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     footer: {
         flexDirection: 'row',

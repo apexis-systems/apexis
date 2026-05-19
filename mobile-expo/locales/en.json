@@ -330,6 +330,9 @@
             "shareInviteMessage": "You've been invited to access the project \"{{projectName}}\" on Apexis as a \"{{role}}\".\n\nClick the link below to securely login to your project:\n{{url}}"
         },
         "projectSnags": {
+            "successTitle": "Success",
+            "errorTitle": "Error",
+            "by": "by",
             "status": {
                 "waiting": "Waiting for Clearance",
                 "completed": "Completed",
@@ -383,7 +386,11 @@
             "completedSnagNoUpdate": "Completed snags cannot be updated",
             "voiceNoteHeader": "Voice Note",
             "voiceResponseHeader": "Voice Response",
-            "submitResponse": "Submit Response"
+            "submitResponse": "Submit Response",
+            "noMessagesYet": "No messages yet",
+            "sendMessage": "Send message",
+            "failedToSendMessage": "Failed to send message",
+            "linkedFolders": "Linked Folders"
         },
         "months": {
             "january": "January",
@@ -424,6 +431,9 @@
             "updateResponse": "Update Response",
             "provideResponse": "Provide Response",
             "typeResponsePlaceholder": "Type your response here...",
+            "noMessagesYet": "No messages yet",
+            "sendMessage": "Send message",
+            "failedToSendMessage": "Failed to send message",
             "closedRfiNoUpdate": "Closed RFIs cannot be updated",
             "updateStatus": "Update Status",
             "titleLabel": "Title *",
@@ -506,7 +516,9 @@
                 "failedGenerate": "Failed to generate this week's report",
                 "featureRestricted": "Feature Restricted",
                 "limitReached": "Limit Reached",
-                "error": "Error"
+                "error": "Error",
+                "success": "Success",
+                "regenerateSuccess": "Weekly report regenerated successfully"
             },
             "monthly": {
                 "title": "Monthly Report",
@@ -514,7 +526,8 @@
                 "generating": "Generating...",
                 "noReports": "No monthly reports yet",
                 "autoGenerateHint": "Reports are auto-generated at the end of every month",
-                "failedGenerate": "Failed to generate monthly report"
+                "failedGenerate": "Failed to generate monthly report",
+                "regenerateSuccess": "Monthly report regenerated successfully"
             },
             "daily": {
                 "title": "Daily Report",
@@ -522,7 +535,8 @@
                 "generating": "Generating...",
                 "noReports": "No daily reports yet",
                 "autoGenerateHint": "Reports are auto-generated daily at 11:59 PM",
-                "failedGenerate": "Failed to generate today's report"
+                "failedGenerate": "Failed to generate today's report",
+                "regenerateSuccess": "Daily report regenerated successfully"
             },
             "status": {
                 "waiting": "Waiting for Clearance",
@@ -544,6 +558,7 @@
             "deleteFolder": "Delete Folder",
             "renamePhoto": "Rename Photo",
             "deletePhoto": "Delete Photo",
+            "deletePhotos": "Delete Photos",
             "photo": "Photo",
             "folderNamePlaceholder": "Folder name",
             "photoNamePlaceholder": "Photo name",
@@ -574,6 +589,7 @@
             "deleteFolderConfirm": "Move \"{{name}}\" to Trash? It can be recovered later from Settings for 30 days.",
             "deletePhotoConfirm": "Move this photo to Trash? It can be recovered later from Settings for 30 days.",
             "removePhotoConfirm": "Move \"{{name}}\" to Trash? It can be recovered later from Settings for 30 days.",
+            "removePhotosConfirm": "Move these {{count}} photos to Trash? They can be recovered later from Settings for 30 days.",
             "moveToTrash": "Delete",
             "folderNotEmpty": "Folder Not Empty",
             "folderNotEmptyMessage": "\"{{name}}\" contains files or subfolders. Choose how you want to continue.",
@@ -587,6 +603,7 @@
             "failedToGetShareLink": "Failed to get share link",
             "photosCount": "Photos ({{count}})",
             "linkedRfisCount": "Linked RFIs ({{count}})",
+            "linkedItemsCount": "Linked RFIs & Snags ({{count}})",
             "unassigned": "Unassigned",
             "noRfisLinked": "No RFIs linked to this folder",
             "photosFoldersCount": "{{photoCount}} photos · {{folderCount}} folders",
@@ -687,6 +704,7 @@
             "noFoldersDocs": "No folders or documents yet",
             "filesCount": "Files ({{count}})",
             "linkedRfisCount": "Linked RFIs ({{count}})",
+            "linkedItemsCount": "Linked RFIs & Snags ({{count}})",
             "unassigned": "Unassigned",
             "noRfisLinked": "No RFIs linked to this folder",
             "sortBy": {

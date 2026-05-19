@@ -2,6 +2,31 @@ import { PrivateAxios } from "@/helpers/PrivateAxios";
 
 export type RFIStatus = 'open' | 'closed' | 'overdue';
 
+export interface ConversationMessage {
+    id: number;
+    item_type: 'rfi' | 'snag';
+    item_id: number;
+    project_id: number;
+    sender_id: number;
+    text?: string | null;
+    attachment_type?: 'image' | 'audio' | null;
+    file_url?: string | null;
+    file_name?: string | null;
+    file_type?: string | null;
+    file_size?: string | null;
+    downloadUrl?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    sender?: { id: number; name: string; role?: string; profile_pic?: string | null };
+}
+
+export interface RFIAssignee {
+    id: number;
+    name: string;
+    role: string;
+    profile_pic?: string;
+}
+
 export interface RFI {
     id: number;
     project_id: number;
@@ -31,7 +56,7 @@ export const getRFIs = async (projectId: number | string): Promise<RFI[]> => {
     return res.data.rfis;
 };
 
-export const getRFIAssignees = async (projectId: number | string): Promise<any[]> => {
+export const getRFIAssignees = async (projectId: number | string): Promise<RFIAssignee[]> => {
     const res = await PrivateAxios.get('/rfis/assignees', { params: { project_id: projectId } });
     return res.data.assignees;
 };
@@ -78,4 +103,16 @@ export const getFolderRFIs = async (folderId: number | string): Promise<RFI[]> =
 export const markRFISeen = async (id: number): Promise<{ seen_at: string }> => {
     const res = await PrivateAxios.patch(`/rfis/${id}/seen`);
     return res.data;
+};
+
+export const getRFIMessages = async (id: number): Promise<ConversationMessage[]> => {
+    const res = await PrivateAxios.get(`/rfis/${id}/messages`);
+    return res.data.messages || [];
+};
+
+export const sendRFIMessage = async (id: number, form: FormData): Promise<ConversationMessage> => {
+    const res = await PrivateAxios.post(`/rfis/${id}/messages`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.message;
 };

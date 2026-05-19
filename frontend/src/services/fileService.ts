@@ -71,6 +71,16 @@ export const bulkUpdateFiles = async (data: { ids: (string | number)[], folder_i
     }
 };
 
+export const bulkDeleteFiles = async (ids: (string | number)[]) => {
+    try {
+        const response = await PrivateAxios.post('/files/bulk-delete', { ids });
+        return response.data;
+    } catch (error) {
+        console.error("bulkDeleteFiles Error", error);
+        throw error;
+    }
+};
+
 export const updateFile = async (fileId: string | number, data: { file_name?: string, folder_id?: string | null, client_visible?: boolean, do_not_follow?: boolean }) => {
     try {
         const response = await PrivateAxios.put(`/files/${fileId}`, data);

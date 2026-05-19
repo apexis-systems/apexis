@@ -90,6 +90,190 @@ export const getReportById = async (req: Request, res: Response) => {
     }
 };
 
+export const regenerateReport = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const report = await reports.findByPk(id);
+        if (!report) return res.status(404).json({ error: 'Report not found' });
+
+        const projectId = report.project_id;
+        const type = report.type;
+
+        const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+        const periodStartIST = new Date(report.period_start + 'T00:00:00.000Z');
+        const periodEndIST = new Date(report.period_end + 'T23:59:59.999Z');
+
+        // Convert IST boundaries back to UTC for DB queries
+        const periodStart = new Date(periodStartIST.getTime() - IST_OFFSET_MS);
+        const periodEnd = new Date(periodEndIST.getTime() - IST_OFFSET_MS);
+
+        // --- Get all folders for this project ---
+        const projectFolders = await folders.findAll({ where: { project_id: projectId } });
+        const folderIds = projectFolders.map((f: any) => f.id);
+
+        // --- Get all files in those folders uploaded in the period ---
+        const uploadedFiles = folderIds.length > 0 ? await files.findAll({
+            where: {
+                folder_id: { [Op.in]: folderIds },
+                createdAt: { [Op.between]: [periodStart, periodEnd] },
+            },
+            include: [
+                { model: users, as: 'creator', attributes: ['id', 'name'] },
+                { model: folders, as: 'folder', attributes: ['id', 'name'] },
+            ],
+        }) : [];
+
+        // --- Get Project Members (Clients & Contributors) ---
+        const members = await project_members.findAll({
+            where: { project_id: projectId },
+            include: [{ model: users, attributes: ['name'] }]
+        });
+
+        const targetProject = await projects.findByPk(projectId);
+        const organization = await organizations.findByPk(targetProject?.organization_id);
+        const orgName = organization?.name || 'APEXISpro™ Systems Private Limited';
+
+        const clientList = members.filter((m: any) => m.role === 'client').map((m: any) => m.user?.name).filter(Boolean);
+        const contributorList = members.filter((m: any) => m.role === 'contributor').map((m: any) => m.user?.name).filter(Boolean);
+
+        const photos = uploadedFiles.filter((f: any) => f.file_type?.startsWith('image/'));
+        const docs = uploadedFiles.filter((f: any) => !f.file_type?.startsWith('image/'));
+
+        // --- Released files (client_visible = true, updated in period) ---
+        const released = folderIds.length > 0 ? await files.findAll({
+            where: {
+                folder_id: { [Op.in]: folderIds },
+                client_visible: true,
+                updatedAt: { [Op.between]: [periodStart, periodEnd] },
+            },
+        }) : [];
+
+        // --- Comments made in the period ---
+        const allFileIds = folderIds.length > 0 ? (await files.findAll({
+            where: { folder_id: { [Op.in]: folderIds } },
+            attributes: ['id'],
+        })).map((f: any) => f.id) : [];
+
+        const periodComments = allFileIds.length > 0 ? await comments.findAll({
+            where: {
+                file_id: { [Op.in]: allFileIds },
+                createdAt: { [Op.between]: [periodStart, periodEnd] },
+            },
+        }) : [];
+
+        const periodRfis = await rfis.findAll({
+            where: {
+                project_id: projectId,
+                [Op.or]: [
+                    { createdAt: { [Op.between]: [periodStart, periodEnd] } },
+                    { updatedAt: { [Op.between]: [periodStart, periodEnd] } },
+                ],
+            },
+            include: [
+                { model: users, as: 'creator', attributes: ['name'] },
+                { model: users, as: 'assignee', attributes: ['name'] }
+            ]
+        });
+
+        // --- Snags in the period ---
+        const periodSnags = await snags.findAll({
+            where: {
+                project_id: projectId,
+                [Op.or]: [
+                    { createdAt: { [Op.between]: [periodStart, periodEnd] } },
+                    { updatedAt: { [Op.between]: [periodStart, periodEnd] } },
+                ],
+            },
+            include: [
+                { model: users, as: 'creator', attributes: ['name'] },
+                { model: users, as: 'assignee', attributes: ['name'] }
+            ]
+        });
+
+        // --- Build summary breakdown ---
+        const projectName = targetProject?.name || 'Project';
+        const folderMap = new Map(projectFolders.map((f: any) => [Number(f.id), f]));
+        const folderPathCache = new Map<number, string>();
+
+        const getFullPath = (folderId: number | null): string => {
+            if (!folderId) return projectName;
+            const id = Number(folderId);
+            if (folderPathCache.has(id)) return folderPathCache.get(id)!;
+
+            const f = folderMap.get(id) as any;
+            if (!f) return projectName;
+
+            let path = f.name;
+            if (f.parent_id) {
+                const parentPath = getFullPath(f.parent_id);
+                path = `${parentPath}/${f.name}`;
+            } else {
+                path = `${projectName}/${f.name}`;
+            }
+
+            folderPathCache.set(id, path);
+            return path;
+        };
+
+        const photosByDetails: Record<string, { count: number; user: string; folder: string }> = {};
+        photos.forEach((f: any) => {
+            const key = `${f.created_by}_${f.folder_id}`;
+            if (!photosByDetails[key]) {
+                photosByDetails[key] = {
+                    count: 0,
+                    user: f.creator?.name || 'Unknown',
+                    folder: getFullPath(f.folder_id) || 'Unknown',
+                };
+            }
+            photosByDetails[key].count++;
+        });
+
+        const summary = {
+            client: clientList || ' ',
+            consultant: orgName,
+            contributors: contributorList || ' ',
+            document_titles: docs.map((f: any) => ({
+                title: f.file_name,
+                user: f.creator?.name || 'Unknown',
+                folder: getFullPath(f.folder_id) || 'Unknown',
+                date: f.createdAt.toISOString().split('T')[0]
+            })),
+            photo_summary: Object.values(photosByDetails),
+            uploaded_photos: photos.map((f: any) => ({
+                key: f.file_url,
+                path: getFullPath(f.folder_id) || 'Unknown'
+            })),
+            rfis: periodRfis.map((r: any) => ({
+                title: r.title,
+                status: r.status,
+                user: r.creator?.name || 'Unknown',
+                assigned_to: r.assignee?.name || ' '
+            })),
+            snags: periodSnags.map((s: any) => ({
+                title: s.title,
+                status: s.status,
+                user: s.creator?.name || 'Unknown',
+                assigned_to: s.assignee?.name || ' '
+            })),
+        };
+
+        const reportData = {
+            photos_count: photos.length,
+            docs_count: docs.length,
+            releases_count: released.length,
+            comments_count: periodComments.length,
+            summary,
+        };
+
+        await report.update(reportData);
+
+        res.json({ message: 'Report regenerated successfully', report });
+    } catch (error: any) {
+        console.error('regenerateReport error:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+
 // ── Manual trigger (dev/test) ──────────────────────────────────────────────
 
 export const triggerReport = async (req: Request, res: Response) => {
@@ -110,38 +294,36 @@ export const triggerReport = async (req: Request, res: Response) => {
 
 export const generateReport = async (projectId: number, type: 'daily' | 'weekly' | 'monthly', skipIfExists: boolean = false) => {
 
-    // IST = UTC+5:30. Shift now into IST so calendar day boundaries align with India time.
+    // IST = UTC+5:30. Shift now into IST so calendar day boundaries align with India time in UTC methods.
     const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
     const nowUTC = new Date();
     const nowIST = new Date(nowUTC.getTime() + IST_OFFSET_MS);
 
-    let periodStartIST: Date;
-    let periodEndIST: Date = new Date(nowIST);
-    periodEndIST.setHours(23, 59, 59, 999);
+    let periodStartIST = new Date(nowIST.getTime());
+    let periodEndIST = new Date(nowIST.getTime());
 
     if (type === 'daily') {
-        periodStartIST = new Date(nowIST);
-        periodStartIST.setHours(0, 0, 0, 0);
+        // Daily: Start of today in IST to end of today in IST
+        periodStartIST.setUTCHours(0, 0, 0, 0);
+        periodEndIST.setUTCHours(23, 59, 59, 999);
     } else if (type === 'weekly') {
-        // ALWAYS Current Week's Monday–Sunday window (7 days)
-        // Regardless of when triggered, it shows the Monday to Sunday of the active week.
-        periodStartIST = new Date(nowIST);
-        const day = periodStartIST.getDay(); // 0 (Sun) to 6 (Sat)
-        // If today is Sunday (0), we go back 6 days to Monday. Otherwise, go back (day - 1) days.
+        // ALWAYS Current Week's Monday–Sunday window (7 days) in IST
+        const day = periodStartIST.getUTCDay(); // 0 (Sun) to 6 (Sat) in IST
         const diffToMonday = day === 0 ? 6 : day - 1;
-        periodStartIST.setDate(periodStartIST.getDate() - diffToMonday);
-        periodStartIST.setHours(0, 0, 0, 0);
+        
+        periodStartIST.setUTCDate(periodStartIST.getUTCDate() - diffToMonday);
+        periodStartIST.setUTCHours(0, 0, 0, 0);
 
-        periodEndIST = new Date(periodStartIST);
-        periodEndIST.setDate(periodEndIST.getDate() + 6);
-        periodEndIST.setHours(23, 59, 59, 999);
+        periodEndIST = new Date(periodStartIST.getTime());
+        periodEndIST.setUTCDate(periodEndIST.getUTCDate() + 6);
+        periodEndIST.setUTCHours(23, 59, 59, 999);
     } else {
-        // Monthly: Start from 1st of the current month
-        periodStartIST = new Date(nowIST);
-        periodStartIST.setDate(1);
-        periodStartIST.setHours(0, 0, 0, 0);
-    }
+        // Monthly: Start from 1st of the current month in IST to end of today in IST
+        periodStartIST.setUTCDate(1);
+        periodStartIST.setUTCHours(0, 0, 0, 0);
 
+        periodEndIST.setUTCHours(23, 59, 59, 999);
+    }
 
     // Convert IST boundaries back to UTC for DB queries
     const periodStart = new Date(periodStartIST.getTime() - IST_OFFSET_MS);

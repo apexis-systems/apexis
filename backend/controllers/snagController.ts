@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
+import { getIO } from "../socket.ts";
+import "multer";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
-import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, GetObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Op } from "sequelize";
 import sharp from "sharp";
@@ -11,6 +13,8 @@ import {
   project_members,
   activities,
   projects,
+  folders,
+  sequelize,
 } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { logActivity } from "../utils/activityUtils.ts";
@@ -68,6 +72,19 @@ const withPresignedUrl = async (snag: any) => {
     json.responsePhotoUrls = [];
   }
 
+  if (json.folder_ids && Array.isArray(json.folder_ids) && json.folder_ids.length > 0) {
+    try {
+      json.linked_folders = await folders.findAll({
+        where: { id: json.folder_ids },
+        attributes: ['id', 'name', 'folder_type']
+      });
+    } catch {
+      json.linked_folders = [];
+    }
+  } else {
+    json.linked_folders = [];
+  }
+
   return json;
 };
 
@@ -83,7 +100,7 @@ export const getSnags = async (req: Request, res: Response) => {
       attributes: [
         "id", "project_id", "title", "description", "photo_url", "audio_url",
         "assigned_to", "status", "response", "response_photos", 
-        "created_by", "createdAt", "updatedAt", "seen_at"
+        "created_by", "createdAt", "updatedAt", "seen_at", "folder_ids"
       ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name", "email"] },
@@ -106,7 +123,7 @@ export const createSnag = async (req: Request, res: Response) => {
     const authUser = (req as any).user;
     if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-    const { project_id, title, description, assigned_to } = req.body;
+    const { project_id, title, description, assigned_to, folder_ids, photo_key } = req.body;
     if (!project_id || !title)
       return res
         .status(400)
@@ -117,7 +134,7 @@ export const createSnag = async (req: Request, res: Response) => {
     const photoFile = files.photo?.[0];
     const audioFile = files.audio?.[0];
 
-    if (!photoFile)
+    if (!photoFile && !photo_key)
       return res.status(400).json({ error: "Photo is required" });
     const project = await projects.findByPk(project_id);
     if (!project) return res.status(404).json({ error: "Project not found" });
@@ -129,7 +146,24 @@ export const createSnag = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
     }
 
-    if (photoFile) {
+    if (photo_key) {
+      const ext = photo_key.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
+      const key = `projects/${project_id}/snags/${Date.now()}${ext}`;
+      try {
+        const sourceKey = photo_key.startsWith('/') ? photo_key.substring(1) : photo_key;
+        await s3Client.send(
+          new CopyObjectCommand({
+            Bucket: BUCKET_NAME,
+            CopySource: `/${BUCKET_NAME}/${encodeURIComponent(sourceKey)}`,
+            Key: key,
+          })
+        );
+        photo_url = key;
+      } catch (err) {
+        console.error("S3 CopyObject error for Snag:", err);
+        photo_url = photo_key; // Fallback
+      }
+    } else if (photoFile) {
       let fileBuffer = photoFile.buffer;
       let ext = photoFile.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
 
@@ -169,6 +203,15 @@ export const createSnag = async (req: Request, res: Response) => {
       audio_url = key;
     }
 
+    let parsedFolderIds: number[] = [];
+    if (folder_ids) {
+      if (Array.isArray(folder_ids)) {
+        parsedFolderIds = folder_ids.map(Number);
+      } else if (typeof folder_ids === 'string') {
+        parsedFolderIds = folder_ids.split(',').map((s: any) => Number(s.trim())).filter((n: any) => !isNaN(n));
+      }
+    }
+
     const snag = await snags.create({
       project_id: Number(project_id),
       title: title.trim(),
@@ -178,6 +221,7 @@ export const createSnag = async (req: Request, res: Response) => {
       assigned_to: assigned_to ? Number(assigned_to) : null,
       status: "amber",
       created_by: authUser.user_id,
+      folder_ids: parsedFolderIds,
     });
 
     await logActivity({
@@ -237,14 +281,20 @@ export const createSnag = async (req: Request, res: Response) => {
         "id", "project_id", "title", "description", "photo_url", 
         "audio_url",
         "assigned_to", "status", "response", "response_photos", 
-        "created_by", "createdAt", "updatedAt"
+        "created_by", "createdAt", "updatedAt", "folder_ids"
       ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name"] },
         { model: users, as: "creator", attributes: ["id", "name"] },
       ],
     });
-    res.status(201).json({ snag: await withPresignedUrl(full!) });
+    const snagWithUrls = await withPresignedUrl(full!);
+    try {
+      getIO().to(`project-${(snag as any).project_id}`).emit('snag-updated', { snag: snagWithUrls });
+    } catch (e) {
+      console.error('Socket emit error (createSnag):', e);
+    }
+    res.status(201).json({ snag: snagWithUrls });
   } catch (err) {
     console.error("createSnag error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -360,7 +410,25 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
         skipNotifications: true
       });
     }
-    res.json({ snag: await withPresignedUrl(snag) });
+    const full = await snags.findByPk((snag as any).id, {
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", 
+        "audio_url",
+        "assigned_to", "status", "response", "response_photos", 
+        "created_by", "createdAt", "updatedAt", "folder_ids"
+      ],
+      include: [
+        { model: users, as: "assignee", attributes: ["id", "name"] },
+        { model: users, as: "creator", attributes: ["id", "name"] },
+      ],
+    });
+    const snagWithUrls = await withPresignedUrl(full || snag);
+    try {
+      getIO().to(`project-${(snag as any).project_id}`).emit('snag-updated', { snag: snagWithUrls });
+    } catch (e) {
+      console.error('Socket emit error (updateSnagStatus):', e);
+    }
+    res.json({ snag: snagWithUrls });
 
     // Notify assignee and creator if status changed by someone else
     const notifyIds = new Set<number>();
@@ -472,6 +540,12 @@ export const deleteSnag = async (req: Request, res: Response) => {
       skipNotifications: true
     });
 
+    try {
+      getIO().to(`project-${snag.project_id}`).emit('snag-deleted', { snagId: Number(id) });
+    } catch (e) {
+      console.error('Socket emit error (deleteSnag):', e);
+    }
+
     res.json({ message: "Moved to trash" });
   } catch (err) {
     console.error("deleteSnag error:", err);
@@ -542,7 +616,7 @@ export const updateSnag = async (req: Request | any, res: Response) => {
   try {
     const authUser = (req as any).user;
     const { id } = req.params;
-    const { title, description, assigned_to, remove_audio } = req.body;
+    const { title, description, assigned_to, remove_audio, folder_ids } = req.body;
 
     const snag = await snags.findByPk(id);
     if (!snag) return res.status(404).json({ error: "Snag not found" });
@@ -556,13 +630,31 @@ export const updateSnag = async (req: Request | any, res: Response) => {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    if (snag.response || (snag.response_photos && snag.response_photos.length > 0)) {
-      return res.status(400).json({ error: "Cannot edit snag because a response has already been generated" });
+    const hasResponse = snag.response || (snag.response_photos && snag.response_photos.length > 0);
+    const hasPhoto = req.files && req.files.photo && req.files.photo.length > 0;
+    const hasAudio = req.files && req.files.audio && req.files.audio.length > 0;
+    const isCoreUpdate = title || (description !== undefined) || assigned_to || hasPhoto || hasAudio || remove_audio;
+
+    if (hasResponse && isCoreUpdate) {
+      return res.status(400).json({ error: "Cannot edit snag details because a response has already been generated. However, folder links can still be updated." });
     }
 
     if (title) snag.title = title.trim();
     if (description !== undefined) snag.description = description?.trim() || null;
     if (assigned_to) snag.assigned_to = Number(assigned_to);
+
+    if (folder_ids !== undefined) {
+      let parsedFolderIds: number[] = [];
+      if (Array.isArray(folder_ids)) {
+        parsedFolderIds = folder_ids.map(Number);
+      } else if (typeof folder_ids === 'string') {
+        if (folder_ids.trim() !== '') {
+          parsedFolderIds = folder_ids.split(',').map((s: any) => Number(s.trim())).filter((n: any) => !isNaN(n));
+        }
+      }
+      snag.folder_ids = parsedFolderIds;
+      snag.changed('folder_ids', true);
+    }
 
     const files = (req.files || {}) as Record<string, Express.Multer.File[]>;
     const photoFile = files.photo?.[0];
@@ -633,7 +725,7 @@ export const updateSnag = async (req: Request | any, res: Response) => {
         "id", "project_id", "title", "description", "photo_url", 
         "audio_url",
         "assigned_to", "status", "response", "response_photos", 
-        "created_by", "createdAt", "updatedAt"
+        "created_by", "createdAt", "updatedAt", "folder_ids"
       ],
       include: [
         { model: users, as: "assignee", attributes: ["id", "name"] },
@@ -641,9 +733,48 @@ export const updateSnag = async (req: Request | any, res: Response) => {
       ],
     });
 
-    res.json({ snag: await withPresignedUrl(full!) });
+    const snagWithUrls = await withPresignedUrl(full!);
+    try {
+      getIO().to(`project-${snag.project_id}`).emit('snag-updated', { snag: snagWithUrls });
+    } catch (e) {
+      console.error('Socket emit error (updateSnag):', e);
+    }
+
+    res.json({ snag: snagWithUrls });
   } catch (err) {
     console.error("updateSnag error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+// GET /snags/folder/:folder_id
+export const getFolderSnags = async (req: Request, res: Response) => {
+  try {
+    const { folder_id } = req.params;
+    if (!folder_id) return res.status(400).json({ error: "folder_id is required" });
+
+    const list = await snags.findAll({
+      where: sequelize.literal(`"snags"."folder_ids"::jsonb @> '[${Number(folder_id)}]'`),
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", "audio_url",
+        "assigned_to", "status", "response", "response_photos",
+        "created_by", "createdAt", "updatedAt", "seen_at", "folder_ids"
+      ],
+      include: [
+        { model: users, as: "assignee", attributes: ["id", "name", "email"] },
+        { model: users, as: "creator", attributes: ["id", "name"] },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    const populated = await Promise.all(
+      list.map((s: any) => withPresignedUrl(s))
+    );
+
+    res.json({ snags: populated });
+  } catch (err) {
+    console.error("getFolderSnags error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+

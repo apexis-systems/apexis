@@ -2,7 +2,8 @@ import { Router } from 'express';
 import multer from 'multer';
 import { verifyToken } from '../middleware/verifyToken.ts';
 import { checkLimit } from '../middleware/checkLimit.ts';
-import { getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees, updateSnag, markSnagSeen } from '../controllers/snagController.ts';
+import { getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees, updateSnag, markSnagSeen, getFolderSnags } from '../controllers/snagController.ts';
+import { createConversationMessage, getConversationMessages } from '../controllers/conversationMessageController.ts';
 
 const router = Router();
 const upload = multer({ 
@@ -13,8 +14,11 @@ const upload = multer({
 router.use(verifyToken);
 
 router.get('/assignees', getAssignees);
+router.get('/folder/:folder_id', getFolderSnags);
 router.get('/', getSnags);
+router.get('/:id/messages', (req, res) => getConversationMessages({ ...req, params: { ...req.params, itemType: 'snag' } } as any, res));
 router.post('/', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), checkLimit('snag'), createSnag);
+router.post('/:id/messages', upload.single('file'), (req, res) => createConversationMessage({ ...req, params: { ...req.params, itemType: 'snag' } } as any, res));
 router.patch('/:id/status', upload.array('photos', 2), updateSnagStatus);
 router.patch('/:id/seen', markSnagSeen);
 router.patch('/:id', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), updateSnag);

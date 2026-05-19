@@ -16,7 +16,8 @@ import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, up
 import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile } from '@/services/fileService';
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
-import LinkedRFITab from './LinkedRFITab';
+import LinkedItemsTab from './LinkedItemsTab';
+import { getFolderSnags } from '@/services/snagService';
 import RenameFileDialog from './RenameFileDialog';
 
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -45,6 +46,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfi'>('files');
   const [linkedRFICount, setLinkedRFICount] = useState(0);
+  const [linkedSnagCount, setLinkedSnagCount] = useState(0);
   const [shareItem, setShareItem] = useState<any | null>(null);
   const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
   const [initialFileId, setInitialFileId] = useState<string | null>(searchParams?.get('fileId') || searchParams?.get('documentId') || null);
@@ -113,10 +115,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     if (selectedFolder) {
       setSortBy('date');
       setLinkedRFICount(0); // Reset immediately to prevent glitch
+      setLinkedSnagCount(0);
     } else {
       setSortBy('name');
       setActiveFolderTab('files'); // Reset tab when going to root
       setLinkedRFICount(0);
+      setLinkedSnagCount(0);
     }
   }, [selectedFolder]);
 
@@ -133,6 +137,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       importRFIsForFolder();
     } else {
       setLinkedRFICount(0);
+      setLinkedSnagCount(0);
       setActiveFolderTab('files');
     }
   }, [selectedFolder]);
@@ -152,11 +157,15 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const importRFIsForFolder = async () => {
     if (!selectedFolder) return;
     try {
-      const res = await getFolderRFIs(selectedFolder);
-      setLinkedRFICount(res.length);
-      if (res.length === 0) setActiveFolderTab('files');
+      const [rfis, snags] = await Promise.all([
+        getFolderRFIs(selectedFolder).catch(() => []),
+        getFolderSnags(selectedFolder).catch(() => [])
+      ]);
+      setLinkedRFICount(rfis.length);
+      setLinkedSnagCount(snags.length);
+      if (rfis.length === 0 && snags.length === 0) setActiveFolderTab('files');
     } catch (error) {
-      console.error("Failed to fetch linked RFIs count:", error);
+      console.error("Failed to fetch linked items count:", error);
     }
   };
 
@@ -543,7 +552,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         </div>
       </div>
 
-      {selectedFolder && linkedRFICount > 0 && (
+      {selectedFolder && (linkedRFICount > 0 || linkedSnagCount > 0) && (
         <div className="flex border-b border-border mb-3">
           <button
             onClick={() => setActiveFolderTab('files')}
@@ -562,14 +571,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               activeFolderTab === 'rfi' ? "text-accent" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {t('linked_rfi_tab')}
+            {t('linked_rfi_and_snag_tab') || 'Linked RFIs & Snags'}
             {activeFolderTab === 'rfi' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
         </div>
       )}
 
-      {activeFolderTab === 'rfi' && selectedFolder && linkedRFICount > 0 ? (
-        <LinkedRFITab folderId={selectedFolder} projectId={project.id} />
+      {activeFolderTab === 'rfi' && selectedFolder && (linkedRFICount > 0 || linkedSnagCount > 0) ? (
+        <LinkedItemsTab folderId={selectedFolder} projectId={project.id} />
       ) : (
         <>
           <div className="grid grid-cols-4 gap-2">
@@ -706,7 +715,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                               <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                             </button>
                           )}
-                          {(user.role === 'admin' || user.role === 'superadmin') && (
+                          {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
                             <>
                               <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('toggle_visibility_tip')}>
                                 {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
@@ -808,7 +817,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           <Move className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       )}
-                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                      {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
                         <>
                           <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
                             {doc.client_visible !== false ? (

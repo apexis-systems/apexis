@@ -2,8 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, CheckCircle2, Archive } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, CheckCircle2, Archive, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useUsage } from '@/contexts/UsageContext';
+import { createSnag, getAssignees } from '@/services/snagService';
+import { createRFI, getRFIAssignees } from '@/services/rfiService';
 
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -14,11 +20,12 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, archiveFile, unarchiveFile } from '@/services/fileService';
 
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
-import LinkedRFITab from './LinkedRFITab';
+import LinkedItemsTab from './LinkedItemsTab';
+import { getFolderSnags } from '@/services/snagService';
 import { getFolderRFIs } from '@/services/rfiService';
 
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -62,6 +69,131 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
   const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfi'>('files');
   const [linkedRFICount, setLinkedRFICount] = useState(0);
+  const [linkedSnagCount, setLinkedSnagCount] = useState(0);
+
+  const { checkLimit } = useUsage();
+  const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
+  const [showCreateSnagDialog, setShowCreateSnagDialog] = useState(false);
+  const [showCreateRfiDialog, setShowCreateRfiDialog] = useState(false);
+
+  const [snagTitle, setSnagTitle] = useState('');
+  const [snagDescription, setSnagDescription] = useState('');
+  const [snagAssignee, setSnagAssignee] = useState('');
+  const [snagAssigneesList, setSnagAssigneesList] = useState<any[]>([]);
+
+  const [rfiTitle, setRfiTitle] = useState('');
+  const [rfiDescription, setRfiDescription] = useState('');
+  const [rfiAssignee, setRfiAssignee] = useState('');
+  const [rfiExpiryDate, setRfiExpiryDate] = useState('');
+  const [rfiAssigneesList, setRfiAssigneesList] = useState<any[]>([]);
+
+  const [submittingEntity, setSubmittingEntity] = useState(false);
+
+  useEffect(() => {
+    if (showCreateSnagDialog && project?.id) {
+      getAssignees(project.id)
+        .then(setSnagAssigneesList)
+        .catch(err => console.error("Error fetching snag assignees:", err));
+    }
+  }, [showCreateSnagDialog, project?.id]);
+
+  useEffect(() => {
+    if (showCreateRfiDialog && project?.id) {
+      getRFIAssignees(project.id)
+        .then(setRfiAssigneesList)
+        .catch(err => console.error("Error fetching rfi assignees:", err));
+    }
+  }, [showCreateRfiDialog, project?.id]);
+
+  const handleStartCreateSnag = (photo: any) => {
+    setViewerState(prev => ({ ...prev, open: false }));
+    setSelectedPhoto(photo);
+    setShowCreateSnagDialog(true);
+  };
+
+  const handleStartCreateRfi = (photo: any) => {
+    setViewerState(prev => ({ ...prev, open: false }));
+    setSelectedPhoto(photo);
+    setShowCreateRfiDialog(true);
+  };
+
+  const handleCreateSnagFromPhoto = async () => {
+    if (!snagTitle.trim()) { toast.error(t('title_required_msg') || 'Title is required'); return; }
+    if (!snagAssignee) { toast.error(t('assignee_required_msg') || 'Assignee is required'); return; }
+    if (!selectedPhoto) return;
+
+    if (!checkLimit('snags')) {
+      toast.error(t('snag_limit_msg') || 'Snag limit reached. Please upgrade.', {
+        action: {
+          label: t('upgrade_label') || 'Upgrade',
+          onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
+        },
+        duration: 5000,
+      });
+      return;
+    }
+
+    setSubmittingEntity(true);
+    try {
+      const form = new FormData();
+      form.append('project_id', String(project.id));
+      form.append('title', snagTitle.trim());
+      if (snagDescription.trim()) form.append('description', snagDescription.trim());
+      form.append('assigned_to', snagAssignee);
+      form.append('photo_key', selectedPhoto.file_url);
+
+      await createSnag(form);
+      toast.success(t('snag_added_msg') || 'Snag created successfully');
+      setShowCreateSnagDialog(false);
+      setSnagTitle('');
+      setSnagDescription('');
+      setSnagAssignee('');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to create snag');
+    } finally {
+      setSubmittingEntity(false);
+    }
+  };
+
+  const handleCreateRfiFromPhoto = async () => {
+    if (!rfiTitle.trim()) { toast.error(t('title_required_msg') || 'Title is required'); return; }
+    if (!rfiAssignee) { toast.error(t('assignee_required_msg') || 'Assignee is required'); return; }
+    if (!selectedPhoto) return;
+
+    if (!checkLimit('rfis')) {
+      toast.error(t('rfi_limit_msg') || 'RFI limit reached. Please upgrade.', {
+        action: {
+          label: t('upgrade_label') || 'Upgrade',
+          onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
+        },
+        duration: 5000,
+      });
+      return;
+    }
+
+    setSubmittingEntity(true);
+    try {
+      const form = new FormData();
+      form.append('project_id', String(project.id));
+      form.append('title', rfiTitle.trim());
+      if (rfiDescription.trim()) form.append('description', rfiDescription.trim());
+      form.append('assigned_to', rfiAssignee);
+      if (rfiExpiryDate) form.append('expiry_date', new Date(rfiExpiryDate).toISOString());
+      form.append('photo_key', selectedPhoto.file_url);
+
+      await createRFI(form);
+      toast.success(t('rfi_created_msg') || 'RFI created successfully');
+      setShowCreateRfiDialog(false);
+      setRfiTitle('');
+      setRfiDescription('');
+      setRfiAssignee('');
+      setRfiExpiryDate('');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to create RFI');
+    } finally {
+      setSubmittingEntity(false);
+    }
+  };
 
   if (!project) return null;
 
@@ -145,6 +277,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       importRFIsForFolder();
     } else {
       setLinkedRFICount(0);
+      setLinkedSnagCount(0);
       setActiveFolderTab('files');
     }
   }, [selectedFolder]);
@@ -152,11 +285,15 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const importRFIsForFolder = async () => {
     if (!selectedFolder) return;
     try {
-      const res = await getFolderRFIs(selectedFolder);
-      setLinkedRFICount(res.length);
-      if (res.length === 0) setActiveFolderTab('files');
+      const [rfis, snags] = await Promise.all([
+        getFolderRFIs(selectedFolder).catch(() => []),
+        getFolderSnags(selectedFolder).catch(() => [])
+      ]);
+      setLinkedRFICount(rfis.length);
+      setLinkedSnagCount(snags.length);
+      if (rfis.length === 0 && snags.length === 0) setActiveFolderTab('files');
     } catch (error) {
-      console.error("Failed to fetch linked RFIs count:", error);
+      console.error("Failed to fetch linked items count:", error);
     }
   };
 
@@ -341,11 +478,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
 
   const handleMoveContents = () => {
     if (!folderToDelete) return;
-    
+
     // Find direct children
     const childFolders = folders.filter(f => String(f.parent_id) === String(folderToDelete.id));
     const childFiles = photos.filter(p => String(p.folder_id) === String(folderToDelete.id));
-    
+
     if (childFolders.length === 0 && childFiles.length === 0) {
       toast.info(t('folder_already_empty'));
       setShowDeleteConflict(false);
@@ -412,10 +549,58 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const handleBulkShare = () => {
     if (selectedFiles.size > 0) {
       const firstId = Array.from(selectedFiles)[0];
-      const firstPhoto = photos.find(p => p.id === firstId);
+      const firstPhoto = photos.find(p => String(p.id) === String(firstId));
       if (firstPhoto) setShareItem(firstPhoto);
     } else {
       toast.info(t('select_photo_share'));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedFiles.size === 0) {
+      toast.info(t('select_photo_delete') || 'Please select at least one photo to delete');
+      return;
+    }
+
+    const filesArray = Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean);
+    const inProtectedFolder = filesArray.some(file => {
+      if (file.folder_id) {
+        const folder = folders.find(f => String(f.id) === String(file.folder_id));
+        if (folder) {
+          const folderNameLower = folder.name.toLowerCase();
+          return (
+            (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
+            (folder.folder_type === 'document' && folderNameLower === 'archive')
+          );
+        }
+      }
+      return false;
+    });
+
+    if (inProtectedFolder) {
+      toast.error(t('protected_folder_delete_error') || "Files in system folders (Archive/Confirmations) cannot be deleted.");
+      return;
+    }
+
+    const unauthorized = filesArray.some(file => {
+      return String(file.created_by) !== String(user.id);
+    });
+
+    if (unauthorized) {
+      toast.error(t('unauthorized_delete_error') || "You can only delete photos that you originally uploaded.");
+      return;
+    }
+
+    const confirmMsg = t('confirm_delete_multiple_photos')?.replace('{count}', String(selectedFiles.size)) || `Move these ${selectedFiles.size} photos to Trash? They can be recovered later from Settings for 30 days.`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      await bulkDeleteFiles(Array.from(selectedFiles));
+      toast.success(t('photos_deleted_msg') || 'Selected photos deleted successfully');
+      setPhotos((prev) => prev.filter((p) => !selectedFiles.has(p.id)));
+      clearSelection();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('failed_delete_photos') || 'Failed to delete photos');
     }
   };
 
@@ -523,7 +708,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         </div>
       </div>
 
-      {selectedFolder && linkedRFICount > 0 && (
+      {selectedFolder && (linkedRFICount > 0 || linkedSnagCount > 0) && (
         <div className="flex border-b border-border mb-3">
           <button
             onClick={() => setActiveFolderTab('files')}
@@ -542,306 +727,461 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               activeFolderTab === 'rfi' ? "text-accent" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {t('linked_rfi_tab')}
+            {t('linked_rfi_and_snag_tab') || 'Linked RFIs & Snags'}
             {activeFolderTab === 'rfi' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
         </div>
       )}
 
-      {activeFolderTab === 'rfi' && selectedFolder && linkedRFICount > 0 ? (
-        <LinkedRFITab folderId={selectedFolder} projectId={project.id} />
+      {activeFolderTab === 'rfi' && selectedFolder && (linkedRFICount > 0 || linkedSnagCount > 0) ? (
+        <LinkedItemsTab folderId={selectedFolder} projectId={project.id} />
       ) : (
         <>
           <div className="grid grid-cols-4 gap-2">
-        {sortedFolders.map((folder) => {
-          const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
-          const subFolders = folders.filter((f) => f.parent_id === folder.id);
-          const isSelected = selectedFolders.has(folder.id);
-          const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
-          const isArchiveFolder = folder.name.toLowerCase() === 'archive';
-          return (
-            <button
-              key={folder.id}
-              onClick={() => {
-                if (isSelectionMode) toggleSelection('folder', folder.id);
-                else setSelectedFolder(folder.id);
-              }}
-              className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
-            >
-              {!isSelectionMode && !isConfirmationFolder && !isArchiveFolder && (
-                <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
-                  {(user.role === 'admin' || user.role === 'superadmin') && (
-                    <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
-                      {folder.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
-                    </button>
-                  )}
-                  {(user.role === 'admin' || user.role === 'superadmin') && (
-                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('move_folder_tip')}>
-                      <Move className="h-2.5 w-2.5 text-muted-foreground" />
-                    </button>
-                  )}
-                  {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
-                    <>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
-                        className="rounded-full p-1 hover:bg-secondary transition-colors" 
-                        title={t('rename_folder_tip')}
-                      >
-                        <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
-                      </button>
-                      <button 
-                        onClick={(e) => handleDeleteFolder(folder, e)} 
-                        className="rounded-full p-1 hover:bg-destructive/10 transition-colors" 
-                        title={t('delete_folder_tip')}
-                      >
-                        <Trash2 className="h-2.5 w-2.5 text-destructive" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {isSelectionMode && (
-                <div className="absolute top-2 right-2 z-10">
-                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
-                </div>
-              )}
-              {isArchiveFolder ? (
-                <Archive className="h-8 w-8 text-slate-400" />
-              ) : isConfirmationFolder ? (
-                <CheckCircle2 className="h-8 w-8 text-orange-400" />
-              ) : (
-                <FolderIcon className="h-8 w-8 text-accent" />
-              )}
-              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
-                {isConfirmationFolder ? "Confirmations" : folder.name}
-              </span>
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-[9px] text-muted-foreground mr-1">
-                  {t('photos_count_label').replace('{count}', String(folderPhotos.length))}{subFolders.length > 0 ? `, ${t('folders_count_label').replace('{count}', String(subFolders.length))}` : ''}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-
-
-      <CreateFolderDialog
-        open={showCreateFolder}
-        onOpenChange={setShowCreateFolder}
-        onCreateFolder={handleCreateFolder}
-        type="photos"
-      />
-
-      <EditFolderDialog
-        open={!!editFolder}
-        onOpenChange={(open) => !open && setEditFolder(null)}
-        onRename={handleRenameFolder}
-        currentName={editFolder?.name || ''}
-      />
-
-
-      <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-0.5" : "space-y-1"}>
-        {sortedPhotos.map((photo) => {
-          const isSelected = selectedFiles.has(photo.id);
-
-          if (viewMode === 'list') {
-            return (
-              <div
-                key={photo.id}
-                className={`flex items-center gap-3 rounded-lg border p-2 cursor-pointer transition-colors ${isSelected ? 'border-accent bg-accent/5' : 'border-border bg-card'}`}
-                onClick={() => {
-                  if (isSelectionMode) toggleSelection('file', photo.id);
-                }}
-              >
-                {isSelectionMode && (
-                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} className="mr-1" />
-                )}
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary overflow-hidden">
-                  <img src={photo.downloadUrl} alt={photo.file_name} className="w-full h-full object-cover" />
-                </div>
-                <div className="flex-1 min-w-0 flex items-center gap-2">
-                  <div
-                    className="min-w-0 text-left cursor-pointer hover:underline"
-                    onClick={(e) => {
-                      if (!isSelectionMode) {
-                        e.stopPropagation();
-                        setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
-                      }
-                    }}
-                  >
-                    <p className="text-[10px] font-semibold truncate">{photo.file_name}</p>
-                    <p className="text-[9px] text-muted-foreground">
-                      {formatFileSize(photo.file_size_mb)} • {new Date(photo.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  {photo.do_not_follow && (
-                    <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
-                      <ShieldAlert className="h-2.5 w-2.5" /> {t('do_not_follow_tag')}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1">
-                  {!isSelectionMode && (
-                    <>
-                      <button onClick={(e) => { e.stopPropagation(); setShareItem(photo); }} className="rounded-md p-1 hover:bg-secondary">
-                        <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
+            {sortedFolders.map((folder) => {
+              const folderPhotos = photos.filter((p) => p.folder_id === folder.id);
+              const subFolders = folders.filter((f) => f.parent_id === folder.id);
+              const isSelected = selectedFolders.has(folder.id);
+              const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
+              const isArchiveFolder = folder.name.toLowerCase() === 'archive';
+              return (
+                <button
+                  key={folder.id}
+                  onClick={() => {
+                    if (isSelectionMode) toggleSelection('folder', folder.id);
+                    else setSelectedFolder(folder.id);
+                  }}
+                  className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
+                >
+                  {!isSelectionMode && !isConfirmationFolder && !isArchiveFolder && (
+                    <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
                       {(user.role === 'admin' || user.role === 'superadmin') && (
+                        <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                          {folder.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
+                        </button>
+                      )}
+                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                        <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('move_folder_tip')}>
+                          <Move className="h-2.5 w-2.5 text-muted-foreground" />
+                        </button>
+                      )}
+                      {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
                         <>
-                          <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
-                            {photo.client_visible !== false ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }}
+                            className="rounded-full p-1 hover:bg-secondary transition-colors"
+                            title={t('rename_folder_tip')}
+                          >
+                            <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); togglePhotoDoNotFollow(photo); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_dnf_tip')}>
-                            <ShieldAlert className={`h-3.5 w-3.5 ${photo.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                          <button
+                            onClick={(e) => handleDeleteFolder(folder, e)}
+                            className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
+                            title={t('delete_folder_tip')}
+                          >
+                            <Trash2 className="h-2.5 w-2.5 text-destructive" />
                           </button>
                         </>
                       )}
+                    </div>
+                  )}
 
-                      {(user.role === 'admin' || user.role === 'superadmin' || String(photo.created_by) === String(user.id)) && (
+                  {isSelectionMode && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
+                    </div>
+                  )}
+                  {isArchiveFolder ? (
+                    <Archive className="h-8 w-8 text-slate-400" />
+                  ) : isConfirmationFolder ? (
+                    <CheckCircle2 className="h-8 w-8 text-orange-400" />
+                  ) : (
+                    <FolderIcon className="h-8 w-8 text-accent" />
+                  )}
+                  <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
+                    {isConfirmationFolder ? "Confirmations" : folder.name}
+                  </span>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-[9px] text-muted-foreground mr-1">
+                      {t('photos_count_label').replace('{count}', String(folderPhotos.length))}{subFolders.length > 0 ? `, ${t('folders_count_label').replace('{count}', String(subFolders.length))}` : ''}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+
+
+          <CreateFolderDialog
+            open={showCreateFolder}
+            onOpenChange={setShowCreateFolder}
+            onCreateFolder={handleCreateFolder}
+            type="photos"
+          />
+
+          <EditFolderDialog
+            open={!!editFolder}
+            onOpenChange={(open) => !open && setEditFolder(null)}
+            onRename={handleRenameFolder}
+            currentName={editFolder?.name || ''}
+          />
+
+
+          <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-0.5" : "space-y-1"}>
+            {sortedPhotos.map((photo) => {
+              const isSelected = selectedFiles.has(photo.id);
+
+              if (viewMode === 'list') {
+                return (
+                  <div
+                    key={photo.id}
+                    className={`flex items-center gap-3 rounded-lg border p-2 cursor-pointer transition-colors ${isSelected ? 'border-accent bg-accent/5' : 'border-border bg-card'}`}
+                    onClick={() => {
+                      if (isSelectionMode) toggleSelection('file', photo.id);
+                    }}
+                  >
+                    {isSelectionMode && (
+                      <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} className="mr-1" />
+                    )}
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary overflow-hidden">
+                      <img src={photo.downloadUrl} alt={photo.file_name} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <div
+                        className="min-w-0 text-left cursor-pointer hover:underline"
+                        onClick={(e) => {
+                          if (!isSelectionMode) {
+                            e.stopPropagation();
+                            setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
+                          }
+                        }}
+                      >
+                        <p className="text-[10px] font-semibold truncate">{photo.file_name}</p>
+                        <p className="text-[9px] text-muted-foreground">
+                          {formatFileSize(photo.file_size_mb)} • {new Date(photo.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      {photo.do_not_follow && (
+                        <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
+                          <ShieldAlert className="h-2.5 w-2.5" /> {t('do_not_follow_tag')}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!isSelectionMode && (
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); setShareItem(photo); }} className="rounded-md p-1 hover:bg-secondary">
+                            <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                          {(user.role === 'admin' || user.role === 'superadmin') && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
+                                {photo.client_visible !== false ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); togglePhotoDoNotFollow(photo); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_dnf_tip')}>
+                                <ShieldAlert className={`h-3.5 w-3.5 ${photo.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                              </button>
+                            </>
+                          )}
+
+                          {(String(photo.created_by) === String(user.id)) && (
+                            <>
+                              {currentFolder?.name.toLowerCase().includes('archive') ? (
+                                <button onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-blue-500/10" title={t('unarchive_photo_tip') || 'Unarchive photo'}>
+                                  <Archive className="h-3.5 w-3.5 text-blue-500" />
+                                </button>
+                              ) : currentFolder?.name.toLowerCase().includes('confirmation') ? (
+                                <button onClick={(e) => { e.stopPropagation(); handleArchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title={t('archive_photo_tip')}>
+                                  <Archive className="h-3.5 w-3.5 text-amber-600" />
+                                </button>
+                              ) : (
+                                <button onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }} className="rounded-md p-1 hover:bg-destructive/10">
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </button>
+                              )}
+                            </>
+                          )}
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button onClick={(e) => e.stopPropagation()} className="rounded-md p-1 hover:bg-secondary">
+                                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }}>
+                                Create RFI
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }}>
+                                Create Snag
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </>
+                      )}
+                    </div>
+                    {photo.do_not_follow && (
+                      <div className="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-sm ml-1 shadow-sm uppercase tracking-tighter border border-white/20">
+                        {t('dnf_tag')}
+                      </div>
+                    )}
+
+                  </div>
+
+                );
+              }
+
+              return (
+                <div
+                  key={photo.id}
+                  className={`relative aspect-square bg-secondary cursor-pointer transition-all group ${isSelected ? 'ring-2 ring-accent ring-inset overflow-hidden' : ''}`}
+                  onClick={() => {
+                    if (isSelectionMode) toggleSelection('file', photo.id);
+                  }}
+                >
+                  <button
+                    onClick={(e) => {
+                      if (isSelectionMode) {
+                        e.stopPropagation();
+                        toggleSelection('file', photo.id);
+                      } else {
+                        setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
+                      }
+                    }}
+                    className="absolute inset-0 flex items-center justify-center overflow-hidden"
+                  >
+                    <img src={photo.downloadUrl} alt={photo.file_name} className={`w-full h-full object-cover ${isSelected ? 'opacity-80' : ''}`} />
+                  </button>
+
+                  {isSelectionMode && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} />
+                    </div>
+                  )}
+
+                  {!isSelectionMode && (
+                    <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShareItem(photo); }}
+                        className="rounded-full p-1 hover:bg-secondary transition-colors"
+                      >
+                        <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
+                      </button>
+                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
+                          className="rounded-full p-1 hover:bg-secondary transition-colors"
+                          title={t('toggle_client_vis_tip')}
+                        >
+                          {photo.client_visible !== false ? (
+                            <Eye className="h-2.5 w-2.5 text-accent" />
+                          ) : (
+                            <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />
+                          )}
+                        </button>
+                      )}
+                      {(String(photo.created_by) === String(user.id)) && (
                         <>
                           {currentFolder?.name.toLowerCase().includes('archive') ? (
-                            <button onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-blue-500/10" title={t('unarchive_photo_tip') || 'Unarchive photo'}>
-                              <Archive className="h-3.5 w-3.5 text-blue-500" />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }}
+                              className="rounded-full p-1 hover:bg-blue-500/10 transition-colors"
+                              title={t('unarchive_photo_tip') || 'Unarchive photo'}
+                            >
+                              <Archive className="h-2.5 w-2.5 text-blue-500" />
                             </button>
                           ) : currentFolder?.name.toLowerCase().includes('confirmation') ? (
-                            <button onClick={(e) => { e.stopPropagation(); handleArchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title={t('archive_photo_tip')}>
-                              <Archive className="h-3.5 w-3.5 text-amber-600" />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleArchivePhoto(photo.id); }}
+                              className="rounded-full p-1 hover:bg-amber-500/10 transition-colors"
+                              title={t('archive_photo_tip')}
+                            >
+                              <Archive className="h-2.5 w-2.5 text-amber-600" />
                             </button>
                           ) : (
-                            <button onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }} className="rounded-md p-1 hover:bg-destructive/10">
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
+                              className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
+                              title={t('delete_photo_tip')}
+                            >
+                              <Trash2 className="h-2.5 w-2.5 text-destructive" />
                             </button>
                           )}
                         </>
                       )}
-                    </>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button onClick={(e) => e.stopPropagation()} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                            <MoreVertical className="h-2.5 w-2.5 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }}>
+                            Create RFI
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }}>
+                            Create Snag
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   )}
-                </div>
-                {photo.do_not_follow && (
-                  <div className="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-sm ml-1 shadow-sm uppercase tracking-tighter border border-white/20">
-                    {t('dnf_tag')}
-                  </div>
-                )}
-
-              </div>
-
-            );
-          }
-
-          return (
-            <div
-              key={photo.id}
-              className={`relative aspect-square bg-secondary cursor-pointer transition-all group ${isSelected ? 'ring-2 ring-accent ring-inset overflow-hidden' : ''}`}
-              onClick={() => {
-                if (isSelectionMode) toggleSelection('file', photo.id);
-              }}
-            >
-              <button
-                onClick={(e) => {
-                  if (isSelectionMode) {
-                    e.stopPropagation();
-                    toggleSelection('file', photo.id);
-                  } else {
-                    setViewerState({ open: true, index: sortedPhotos.indexOf(photo) });
-                  }
-                }}
-                className="absolute inset-0 flex items-center justify-center overflow-hidden"
-              >
-                <img src={photo.downloadUrl} alt={photo.file_name} className={`w-full h-full object-cover ${isSelected ? 'opacity-80' : ''}`} />
-              </button>
-
-              {isSelectionMode && (
-                <div className="absolute top-2 right-2 z-10">
-                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} />
-                </div>
-              )}
-
-              {!isSelectionMode && (
-                <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShareItem(photo); }}
-                    className="rounded-full p-1 hover:bg-secondary transition-colors"
-                  >
-                    <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
-                  </button>
-                  {(user.role === 'admin' || user.role === 'superadmin') && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); togglePhotoVisibility(photo); }}
-                      className="rounded-full p-1 hover:bg-secondary transition-colors"
-                      title={t('toggle_client_vis_tip')}
-                    >
-                      {photo.client_visible !== false ? (
-                        <Eye className="h-2.5 w-2.5 text-accent" />
-                      ) : (
-                        <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />
-                      )}
-                    </button>
+                  {photo.do_not_follow && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
+                      {t('dnf_tag')}
+                    </div>
                   )}
-                  {(user.role === 'admin' || user.role === 'superadmin' || String(photo.created_by) === String(user.id)) && (
-                    <>
-                      {currentFolder?.name.toLowerCase().includes('archive') ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }}
-                          className="rounded-full p-1 hover:bg-blue-500/10 transition-colors"
-                          title={t('unarchive_photo_tip') || 'Unarchive photo'}
-                        >
-                          <Archive className="h-2.5 w-2.5 text-blue-500" />
-                        </button>
-                      ) : currentFolder?.name.toLowerCase().includes('confirmation') ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleArchivePhoto(photo.id); }}
-                          className="rounded-full p-1 hover:bg-amber-500/10 transition-colors"
-                          title={t('archive_photo_tip')}
-                        >
-                          <Archive className="h-2.5 w-2.5 text-amber-600" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
-                          className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
-                          title={t('delete_photo_tip')}
-                        >
-                          <Trash2 className="h-2.5 w-2.5 text-destructive" />
-                        </button>
-                      )}
-                    </>
-                  )}
+
                 </div>
-              )}
-              {photo.do_not_follow && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
-                  {t('dnf_tag')}
-                </div>
-              )}
 
-            </div>
-
-          );
-        })}
-      </div>
-
-      <FileViewer
-        files={sortedPhotos}
-        initialIndex={viewerState.index}
-        open={viewerState.open}
-        onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
-        user={user}
-        onUpdate={(updatedFile) => setPhotos(prev => prev.map(p => p.id === updatedFile.id ? updatedFile : p))}
-        targetType="photo"
-        projectId={project.id}
-      />
-
-      {
-        currentFolders.length === 0 && visiblePhotos.length === 0 && (
-          <div className="mt-12 text-center">
-            <Camera className="mx-auto h-8 w-8 text-muted-foreground/30" />
-            <p className="mt-1.5 text-xs text-muted-foreground">{t('no_photos_yet')}</p>
+              );
+            })}
           </div>
-        )
-      }
+
+          <FileViewer
+            files={sortedPhotos}
+            initialIndex={viewerState.index}
+            open={viewerState.open}
+            onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
+            user={user}
+            onUpdate={(updatedFile) => setPhotos(prev => prev.map(p => p.id === updatedFile.id ? updatedFile : p))}
+            targetType="photo"
+            projectId={project.id}
+            onCreateSnag={handleStartCreateSnag}
+            onCreateRfi={handleStartCreateRfi}
+          />
+
+          {/* Create Snag Dialog */}
+          <Dialog open={showCreateSnagDialog} onOpenChange={setShowCreateSnagDialog}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create Snag from Photo</DialogTitle>
+                <DialogDescription>
+                  Create a new snag linked to this photo. Fill in the details below.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="snag-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Title <span className="text-destructive">*</span></label>
+                  <Input
+                    id="snag-title"
+                    value={snagTitle}
+                    onChange={(e) => setSnagTitle(e.target.value)}
+                    placeholder="Enter snag title"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="snag-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description</label>
+                  <Textarea
+                    id="snag-desc"
+                    value={snagDescription}
+                    onChange={(e) => setSnagDescription(e.target.value)}
+                    placeholder="Enter snag description"
+                    rows={3}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assignee <span className="text-destructive">*</span></label>
+                  <Select value={snagAssignee} onValueChange={setSnagAssignee}>
+                    <SelectTrigger className="h-10 text-xs bg-background">
+                      <SelectValue placeholder="Select Assignee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {snagAssigneesList.map((assignee) => (
+                        <SelectItem key={assignee.id} value={String(assignee.id)}>
+                          {assignee.name} ({assignee.role})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowCreateSnagDialog(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateSnagFromPhoto} disabled={submittingEntity}>
+                  {submittingEntity ? 'Creating...' : 'Create Snag'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Create RFI Dialog */}
+          <Dialog open={showCreateRfiDialog} onOpenChange={setShowCreateRfiDialog}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create RFI from Photo</DialogTitle>
+                <DialogDescription>
+                  Create a new RFI linked to this photo. Fill in the details below.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="rfi-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Title <span className="text-destructive">*</span></label>
+                  <Input
+                    id="rfi-title"
+                    value={rfiTitle}
+                    onChange={(e) => setRfiTitle(e.target.value)}
+                    placeholder="Enter RFI title"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="rfi-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description</label>
+                  <Textarea
+                    id="rfi-desc"
+                    value={rfiDescription}
+                    onChange={(e) => setRfiDescription(e.target.value)}
+                    placeholder="Enter RFI description"
+                    rows={3}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assignee <span className="text-destructive">*</span></label>
+                  <Select value={rfiAssignee} onValueChange={setRfiAssignee}>
+                    <SelectTrigger className="h-10 text-xs bg-background">
+                      <SelectValue placeholder="Select Assignee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rfiAssigneesList.map((assignee) => (
+                        <SelectItem key={assignee.id} value={String(assignee.id)}>
+                          {assignee.name} ({assignee.role})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="rfi-expiry" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Expiry Date</label>
+                  <Input
+                    id="rfi-expiry"
+                    type="date"
+                    value={rfiExpiryDate}
+                    onChange={(e) => setRfiExpiryDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowCreateRfiDialog(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateRfiFromPhoto} disabled={submittingEntity}>
+                  {submittingEntity ? 'Creating...' : 'Create RFI'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {
+            currentFolders.length === 0 && visiblePhotos.length === 0 && (
+              <div className="mt-12 text-center">
+                <Camera className="mx-auto h-8 w-8 text-muted-foreground/30" />
+                <p className="mt-1.5 text-xs text-muted-foreground">{t('no_photos_yet')}</p>
+              </div>
+            )
+          }
         </>
       )}
 
@@ -882,6 +1222,16 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     onClick={handleBulkMove}
                   >
                     <Move className="h-3.5 w-3.5 mr-1" /> {t('move_btn')}
+                  </Button>
+                )}
+                {selectedFiles.size > 0 && Array.from(selectedFiles).map(id => photos.find(p => String(p.id) === String(id))).filter(Boolean).every(file => String(file.created_by) === String(user.id)) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-[10px] font-semibold text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                    onClick={handleBulkDelete}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> {t('delete_btn') || 'Delete'}
                   </Button>
                 )}
                 {(user.role === 'admin' || user.role === 'superadmin') && (

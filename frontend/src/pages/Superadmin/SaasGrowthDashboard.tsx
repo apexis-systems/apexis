@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Users, Building2, FolderKanban, UserCheck, CreditCard, DollarSign,
-  TrendingUp, ArrowUpRight, ArrowDownRight, Minus, Filter,
+  TrendingUp, ArrowUpRight, ArrowDownRight, Minus, Filter, RefreshCw,
   Upload, Camera, CheckCircle, MessageSquare, AlertCircle, UserPlus, Star
 } from "lucide-react";
 
@@ -145,12 +145,25 @@ const SaasGrowthDashboard = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [data, setData] = useState<any>(null);
   const [timeRange, setTimeRange] = useState("allTime");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const timeRanges = [
     { key: "today", label: "Today" },
     { key: "7days", label: "7 Days" },
     { key: "30days", label: "30 Days" },
     { key: "allTime", label: "All Time" },
   ];
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await getGrowthAnalytics();
+      setData(response);
+    } catch (error) {
+      console.error("Failed to fetch growth data:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     const fetchGrowthData = async () => {
@@ -169,12 +182,14 @@ const SaasGrowthDashboard = () => {
 
 
 
-  if (loading) {
+  if (loading || isRefreshing) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <div className="flex flex-col items-center gap-2">
           <TrendingUp className="h-8 w-8 animate-pulse text-[hsl(24_95%_53%)]" />
-          <p className={cn("text-sm font-medium", mutedTextClass)}>Loading growth analytics...</p>
+          <p className={cn("text-sm font-medium", mutedTextClass)}>
+            {isRefreshing ? "Refreshing growth analytics..." : "Loading growth analytics..."}
+          </p>
         </div>
       </div>
     );
@@ -254,21 +269,39 @@ const SaasGrowthDashboard = () => {
             <h1 className="text-xl font-bold font-display text-foreground">SaaS Growth Dashboard</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Executive overview — platform health & growth</p>
           </div>
-          <div className="flex items-center gap-1.5 rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-1 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)] mr-12">
-            {timeRanges.map((range) => (
-              <button
-                key={range.key}
-                onClick={() => setTimeRange(range.key)}
+          <div className="flex items-center gap-3 mr-12">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] text-[hsl(30_8%_45%)] transition-all duration-300 hover:bg-[hsl(37_18%_91%)] hover:text-[hsl(24_95%_53%)] hover:border-[hsl(24_95%_53%/0.35)] active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)] dark:hover:text-[hsl(24_95%_53%)] dark:hover:border-[hsl(24_95%_53%/0.35)]"
+              )}
+              title="Refresh Dashboard"
+            >
+              <RefreshCw
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-[11px] font-medium transition-all",
-                  timeRange === range.key
-                    ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
-                    : "text-[hsl(30_8%_45%)] hover:bg-[hsl(37_18%_91%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)]"
+                  "h-3.5 w-3.5 transition-transform duration-500",
+                  isRefreshing && "animate-spin text-[hsl(24_95%_53%)]"
                 )}
-              >
-                {range.label}
-              </button>
-            ))}
+              />
+            </button>
+
+            <div className="flex items-center gap-1.5 rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-1 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)]">
+              {timeRanges.map((range) => (
+                <button
+                  key={range.key}
+                  onClick={() => setTimeRange(range.key)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-[11px] font-medium transition-all",
+                    timeRange === range.key
+                      ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                      : "text-[hsl(30_8%_45%)] hover:bg-[hsl(37_18%_91%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)]"
+                  )}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

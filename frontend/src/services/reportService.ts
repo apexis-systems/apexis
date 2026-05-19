@@ -70,4 +70,14 @@ export const downloadReport = async (id: number, fileName?: string, options: any
     }
 };
 
+export const regenerateReport = async (id: number) => {
+    try {
+        const res = await PrivateAxios.post(`/reports/${id}/regenerate`);
+        return res.data;
+    } catch (error) {
+        console.error("regenerateReport Error", error);
+        throw error;
+    }
+};
+
 

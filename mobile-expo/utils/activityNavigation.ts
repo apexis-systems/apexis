@@ -95,6 +95,7 @@ export const handleActivityNavigation = (act: any, router: Router) => {
         case 'snag_assigned':
         case 'snag_creation_admin':
         case 'snag_status_update':
+        case 'snag_comment':
             tab = 'snags';
             break;
         case 'rfi_created':

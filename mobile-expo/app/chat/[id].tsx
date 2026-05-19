@@ -26,6 +26,38 @@ import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
 import ViewShot from 'react-native-view-shot';
 
+const formatHeaderDate = (date: Date) => {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const isSameDay = (d1: Date, d2: Date) => {
+        return d1.getFullYear() === d2.getFullYear() &&
+            d1.getMonth() === d2.getMonth() &&
+            d1.getDate() === d2.getDate();
+    };
+
+    if (isSameDay(date, today)) {
+        return 'Today';
+    } else if (isSameDay(date, yesterday)) {
+        return 'Yesterday';
+    } else {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        const dayOfWeek = days[date.getDay()];
+        const dayOfMonth = date.getDate();
+        const month = months[date.getMonth()];
+        const year = date.getFullYear();
+
+        const currentYear = today.getFullYear();
+        if (year !== currentYear) {
+            return `${dayOfWeek}, ${dayOfMonth} ${month} ${year}`;
+        }
+        return `${dayOfWeek}, ${dayOfMonth} ${month}`;
+    }
+};
+
 export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams();
     const { colors, isDark } = useTheme();
@@ -447,8 +479,43 @@ export default function ChatDetailScreen() {
         }
     };
 
+    const messagesWithSeparators = React.useMemo(() => {
+        const list: any[] = [];
+        if (messages.length === 0) return list;
+
+        for (let i = 0; i < messages.length; i++) {
+            const currentMsg = messages[i];
+            list.push(currentMsg);
+
+            const currentDate = currentMsg.createdAt ? new Date(currentMsg.createdAt) : new Date();
+
+            let shouldAddSeparator = false;
+            if (i === messages.length - 1) {
+                shouldAddSeparator = true;
+            } else {
+                const nextMsg = messages[i + 1];
+                const nextDate = nextMsg.createdAt ? new Date(nextMsg.createdAt) : new Date();
+                if (currentDate.getFullYear() !== nextDate.getFullYear() ||
+                    currentDate.getMonth() !== nextDate.getMonth() ||
+                    currentDate.getDate() !== nextDate.getDate()) {
+                    shouldAddSeparator = true;
+                }
+            }
+
+            if (shouldAddSeparator) {
+                list.push({
+                    id: `date-sep-${currentMsg.id}`,
+                    type: 'date-separator',
+                    text: formatHeaderDate(currentDate)
+                });
+            }
+        }
+
+        return list;
+    }, [messages]);
+
     const scrollToMessage = React.useCallback((messageId: number) => {
-        const index = messages.findIndex(m => m.id === messageId);
+        const index = messagesWithSeparators.findIndex(m => m.id === messageId);
         if (index !== -1) {
             flatListRef.current?.scrollToIndex({
                 index,
@@ -456,7 +523,7 @@ export default function ChatDetailScreen() {
                 viewPosition: 0.5 // Center the message
             });
         }
-    }, [messages]);
+    }, [messagesWithSeparators]);
 
     const handleDownload = React.useCallback(async (msg: any) => {
         if (!msg.downloadUrl) return;
@@ -564,13 +631,15 @@ export default function ChatDetailScreen() {
     const handleDeleteMessage = async (messageId: number) => {
         Alert.alert('Delete Message', 'Are you sure?', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: async () => {
-                try {
-                    await deleteChatMessage(messageId);
-                } catch (err) {
-                    Alert.alert('Error', 'Failed to delete message');
+            {
+                text: 'Delete', style: 'destructive', onPress: async () => {
+                    try {
+                        await deleteChatMessage(messageId);
+                    } catch (err) {
+                        Alert.alert('Error', 'Failed to delete message');
+                    }
                 }
-            }}
+            }
         ]);
     };
 
@@ -597,29 +666,33 @@ export default function ChatDetailScreen() {
     const handleRemoveMember = async (uid: number) => {
         Alert.alert('Remove Member', 'Are you sure?', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Remove', style: 'destructive', onPress: async () => {
-                try {
-                    await removeRoomMember(id as string, uid);
-                } catch (err) {
-                    Alert.alert('Error', 'Failed to remove member');
+            {
+                text: 'Remove', style: 'destructive', onPress: async () => {
+                    try {
+                        await removeRoomMember(id as string, uid);
+                    } catch (err) {
+                        Alert.alert('Error', 'Failed to remove member');
+                    }
                 }
-            }}
+            }
         ]);
     };
 
     const handleLeaveRoom = async () => {
         Alert.alert('Leave Group', 'Are you sure?', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Leave', style: 'destructive', onPress: async () => {
-                try {
-                    if (user?.id) {
-                        await removeRoomMember(id as string, user.id);
-                        router.back();
+            {
+                text: 'Leave', style: 'destructive', onPress: async () => {
+                    try {
+                        if (user?.id) {
+                            await removeRoomMember(id as string, user.id);
+                            router.back();
+                        }
+                    } catch (err) {
+                        Alert.alert('Error', 'Failed to leave group');
                     }
-                } catch (err) {
-                    Alert.alert('Error', 'Failed to leave group');
                 }
-            }}
+            }
         ]);
     };
 
@@ -818,6 +891,30 @@ export default function ChatDetailScreen() {
     });
 
     const renderMessage = React.useCallback(({ item }: { item: any }) => {
+        if (item.type === 'date-separator') {
+            return (
+                <View style={{ alignItems: 'center', marginVertical: 14 }}>
+                    <View style={{
+                        backgroundColor: isDark ? 'rgba(30,45,55,0.95)' : 'rgba(255,255,255,0.95)',
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 1.5,
+                        elevation: 1.5,
+                    }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600', textAlign: 'center' }}>
+                            {item.text}
+                        </Text>
+                    </View>
+                </View>
+            );
+        }
+
         if (item.type === 'system') {
             return (
                 <View style={{ alignItems: 'center', marginVertical: 12 }}>
@@ -898,7 +995,7 @@ export default function ChatDetailScreen() {
                             )}
                         </TouchableOpacity>
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={{ flex: 1, marginLeft: 10 }}
                             onPress={() => setDetailsModalVisible(true)}
                         >
@@ -931,17 +1028,17 @@ export default function ChatDetailScreen() {
                         </View>
                     ) : (
                         <View style={{ flex: 1 }}>
-                                <FlatList
-                                    ref={flatListRef}
-                                    style={{ flex: 1 }}
-                                    data={messages}
-                                    inverted={true}
-                                    keyExtractor={item => String(item.id)}
-                                    renderItem={renderMessage}
-                                    contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', paddingBottom: 20, paddingTop: 10 }}
-                                    keyboardShouldPersistTaps="handled"
-                                    keyboardDismissMode="on-drag"
-                                />
+                            <FlatList
+                                ref={flatListRef}
+                                style={{ flex: 1 }}
+                                data={messagesWithSeparators}
+                                inverted={true}
+                                keyExtractor={item => String(item.id)}
+                                renderItem={renderMessage}
+                                contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', paddingBottom: 20, paddingTop: 10 }}
+                                keyboardShouldPersistTaps="handled"
+                                keyboardDismissMode="on-drag"
+                            />
                         </View>
                     )}
 
@@ -991,16 +1088,16 @@ export default function ChatDetailScreen() {
                             )}
 
                             {editingMessage && (
-                                <View style={{ 
-                                    backgroundColor: colors.primary + '10', 
-                                    borderTopWidth: 1, 
-                                    borderTopColor: colors.border, 
-                                    padding: 12, 
-                                    borderLeftWidth: 4, 
-                                    borderLeftColor: colors.primary, 
-                                    flexDirection: 'row', 
-                                    alignItems: 'center', 
-                                    gap: 12 
+                                <View style={{
+                                    backgroundColor: colors.primary + '10',
+                                    borderTopWidth: 1,
+                                    borderTopColor: colors.border,
+                                    padding: 12,
+                                    borderLeftWidth: 4,
+                                    borderLeftColor: colors.primary,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 12
                                 }}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>Editing Message</Text>
@@ -1155,10 +1252,10 @@ export default function ChatDetailScreen() {
                 onRequestClose={() => setShowProjectPicker(false)}
             >
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-                    <TouchableOpacity 
-                        activeOpacity={1} 
-                        style={{ flex: 1 }} 
-                        onPress={() => setShowProjectPicker(false)} 
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={{ flex: 1 }}
+                        onPress={() => setShowProjectPicker(false)}
                     />
                     <View style={{
                         backgroundColor: colors.surface,
@@ -1169,7 +1266,7 @@ export default function ChatDetailScreen() {
                         maxHeight: '80%'
                     }}>
                         <View style={{ width: 40, height: 5, backgroundColor: colors.border, borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
-                        
+
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>Select Project</Text>
                             <TouchableOpacity onPress={() => setShowProjectPicker(false)} style={{ padding: 4 }}>
@@ -1181,7 +1278,7 @@ export default function ChatDetailScreen() {
                             Select the project where this confirmation should be indexed.
                         </Text>
 
-                        <ScrollView 
+                        <ScrollView
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={{ paddingBottom: 20 }}
                         >
@@ -1226,24 +1323,24 @@ export default function ChatDetailScreen() {
                                                 {p.name ? p.name.charAt(0).toUpperCase() : '?'}
                                             </Text>
                                         </View>
-                                        
+
                                         <View style={{ flex: 1, marginLeft: 16 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                                                 <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{p.name || 'Untitled Project'}</Text>
                                                 {p.user_role && (
-                                                    <View style={{ 
-                                                        backgroundColor: colors.primary + '11', 
-                                                        paddingHorizontal: 6, 
-                                                        paddingVertical: 1, 
+                                                    <View style={{
+                                                        backgroundColor: colors.primary + '11',
+                                                        paddingHorizontal: 6,
+                                                        paddingVertical: 1,
                                                         borderRadius: 4,
                                                         borderWidth: 0.5,
                                                         borderColor: colors.primary + '22'
                                                     }}>
-                                                        <Text style={{ 
-                                                            fontSize: 8, 
-                                                            color: colors.primary, 
-                                                            fontWeight: '800', 
-                                                            textTransform: 'uppercase' 
+                                                        <Text style={{
+                                                            fontSize: 8,
+                                                            color: colors.primary,
+                                                            fontWeight: '800',
+                                                            textTransform: 'uppercase'
                                                         }}>
                                                             {p.user_role}
                                                         </Text>
@@ -1254,7 +1351,7 @@ export default function ChatDetailScreen() {
                                                 {p.description || 'No project description'}
                                             </Text>
                                         </View>
-                                        
+
                                         {selectingProject ? (
                                             <ActivityIndicator size="small" color={colors.primary} />
                                         ) : (
@@ -1284,10 +1381,10 @@ export default function ChatDetailScreen() {
                 onRequestClose={() => setDetailsModalVisible(false)}
             >
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <TouchableOpacity 
-                        activeOpacity={1} 
-                        style={{ flex: 1 }} 
-                        onPress={() => setDetailsModalVisible(false)} 
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={{ flex: 1 }}
+                        onPress={() => setDetailsModalVisible(false)}
                     />
                     <View style={{
                         backgroundColor: colors.surface,
@@ -1298,7 +1395,7 @@ export default function ChatDetailScreen() {
                         maxHeight: '90%'
                     }}>
                         <View style={{ width: 40, height: 5, backgroundColor: colors.border, borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
-                        
+
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                             <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text }}>
                                 {room?.type === 'group' ? 'Group Information' : 'User Profile'}
@@ -1311,7 +1408,7 @@ export default function ChatDetailScreen() {
                         <ScrollView showsVerticalScrollIndicator={false}>
                             {room?.type === 'direct' ? (
                                 <View style={{ alignItems: 'center', paddingBottom: 20 }}>
-                                    <SecureAvatar 
+                                    <SecureAvatar
                                         fileKey={room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.profile_pic}
                                         name={room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.name}
                                         size={100}
@@ -1331,12 +1428,12 @@ export default function ChatDetailScreen() {
                                         <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 16 }}>Project Roles</Text>
                                         <View style={{ gap: 12 }}>
                                             {room?.room_members?.find((m: any) => String(m.user?.id) !== String(user?.id))?.user?.project_members?.map((pm: any, idx: number) => (
-                                                <View key={idx} style={{ 
-                                                    flexDirection: 'row', 
-                                                    alignItems: 'center', 
-                                                    justifyContent: 'space-between', 
-                                                    backgroundColor: colors.background, 
-                                                    padding: 14, 
+                                                <View key={idx} style={{
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    backgroundColor: colors.background,
+                                                    padding: 14,
                                                     borderRadius: 16,
                                                     borderWidth: 1,
                                                     borderColor: colors.border
@@ -1355,15 +1452,15 @@ export default function ChatDetailScreen() {
                                     <View>
                                         <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', marginBottom: 8, letterSpacing: 1 }}>Group Name</Text>
                                         <View style={{ flexDirection: 'row', gap: 12 }}>
-                                            <TextInput 
+                                            <TextInput
                                                 defaultValue={room?.name}
                                                 onEndEditing={(e) => handleUpdateRoomName(e.nativeEvent.text)}
-                                                style={{ 
-                                                    flex: 1, 
-                                                    backgroundColor: colors.background, 
-                                                    padding: 14, 
-                                                    borderRadius: 16, 
-                                                    color: colors.text, 
+                                                style={{
+                                                    flex: 1,
+                                                    backgroundColor: colors.background,
+                                                    padding: 14,
+                                                    borderRadius: 16,
+                                                    color: colors.text,
                                                     fontSize: 16,
                                                     borderWidth: 1,
                                                     borderColor: colors.border
@@ -1383,17 +1480,17 @@ export default function ChatDetailScreen() {
                                         </View>
                                         <View style={{ gap: 8 }}>
                                             {room?.room_members?.map((member: any) => (
-                                                <View key={member.user?.id} style={{ 
-                                                    flexDirection: 'row', 
-                                                    alignItems: 'center', 
-                                                    gap: 12, 
-                                                    backgroundColor: colors.background, 
-                                                    padding: 10, 
+                                                <View key={member.user?.id} style={{
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 12,
+                                                    backgroundColor: colors.background,
+                                                    padding: 10,
                                                     borderRadius: 16,
                                                     borderWidth: 1,
                                                     borderColor: colors.border
                                                 }}>
-                                                    <SecureAvatar 
+                                                    <SecureAvatar
                                                         fileKey={member.user?.profile_pic}
                                                         name={member.user?.name}
                                                         size={40}
@@ -1415,7 +1512,7 @@ export default function ChatDetailScreen() {
                                     </View>
                                     <View style={{ marginTop: 8, paddingTop: 24, borderTopWidth: 1, borderTopColor: colors.border }}>
                                         <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', marginBottom: 12, letterSpacing: 1 }}>Add New Member</Text>
-                                        <TextInput 
+                                        <TextInput
                                             placeholder="Search members to add..."
                                             placeholderTextColor={colors.textMuted}
                                             value={userSearchQuery}
@@ -1440,9 +1537,9 @@ export default function ChatDetailScreen() {
                                                     .filter(u => u.name.toLowerCase().includes(userSearchQuery.toLowerCase()))
                                                     .slice(0, 5)
                                                     .map(u => (
-                                                        <View key={u.id} style={{ 
-                                                            flexDirection: 'row', 
-                                                            alignItems: 'center', 
+                                                        <View key={u.id} style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
                                                             justifyContent: 'space-between',
                                                             backgroundColor: colors.background,
                                                             padding: 12,
