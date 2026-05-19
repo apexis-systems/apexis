@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { organizations, projects, folders, users } from "../models/index.ts";
 import jwt from "jsonwebtoken";
+import { saveSystemConfig, getCachedVersion } from "./systemController.ts";
 import { sendEmail } from "../utils/email.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 
@@ -343,5 +344,33 @@ export const sendBroadcastNotification = async (req: Request, res: Response) => 
     } catch (error) {
         console.error("Send Broadcast Notification Error:", error);
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const updateSystemConfig = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser || authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
+        }
+
+        const { minAppVersion } = req.body;
+
+        if (!minAppVersion || typeof minAppVersion !== 'string') {
+            return res.status(400).json({ error: "A valid minAppVersion string is required" });
+        }
+
+        await saveSystemConfig(minAppVersion);
+
+        res.status(200).json({
+            success: true,
+            message: "App version configuration updated successfully",
+            data: {
+                minAppVersion: getCachedVersion()
+            }
+        });
+    } catch (error: any) {
+        console.error("updateSystemConfig Error:", error);
+        res.status(500).json({ error: error.message || "Internal server error" });
     }
 };

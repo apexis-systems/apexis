@@ -11,7 +11,8 @@ import {
   Calendar,
   Activity,
   ArrowUpDown,
-  MoreVertical
+  MoreVertical,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getAllUsers } from "@/services/superadminService";
@@ -30,6 +31,19 @@ export default function SuperadminUsers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const data = await getAllUsers();
+      setUsers(data);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -68,14 +82,33 @@ export default function SuperadminUsers() {
   return (
     <div className="space-y-6 p-4 md:p-8 max-w-[1600px] mx-auto">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className={cn("text-2xl font-bold tracking-tight", strongTextClass)}>User Management</h1>
-          <p className={cn("text-sm mt-1", mutedTextClass)}>
-            Monitor and manage all users across the platform
-          </p>
+        <div className="flex flex-row justify-between items-center w-full md:w-auto">
+          <div>
+            <h1 className={cn("text-2xl font-bold tracking-tight", strongTextClass)}>User Management</h1>
+            <p className={cn("text-sm mt-1", mutedTextClass)}>
+              Monitor and manage all users across the platform
+            </p>
+          </div>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex justify-center items-center">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] text-[hsl(30_8%_45%)] transition-all duration-300 hover:bg-[hsl(37_18%_91%)] hover:text-[hsl(24_95%_53%)] hover:border-[hsl(24_95%_53%/0.35)] active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)] dark:hover:text-[hsl(24_95%_53%)] dark:hover:border-[hsl(24_95%_53%/0.35)]"
+              )}
+              title="Refresh Users"
+            >
+              <RefreshCw
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-500",
+                  isRefreshing && "animate-spin text-[hsl(24_95%_53%)]"
+                )}
+              />
+            </button>
+          </div>
           <div className="relative group min-w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-[hsl(24_95%_53%)] transition-colors" />
             <input 
@@ -144,7 +177,7 @@ export default function SuperadminUsers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[hsl(35_15%_85%/0.4)] dark:divide-[hsl(30_8%_22%/0.4)]">
-              {loading ? (
+              {loading || isRefreshing ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     <td colSpan={5} className="py-8 px-4 h-16 bg-[hsl(37_18%_91%/0.3)] dark:bg-white/5 rounded-lg mb-2" />

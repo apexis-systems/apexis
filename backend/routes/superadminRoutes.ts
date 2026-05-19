@@ -11,7 +11,8 @@ import {
     getFreemiumLeadList,
     getOrganizationDetails,
     getUsersList,
-    sendBroadcastNotification
+    sendBroadcastNotification,
+    updateSystemConfig
 } from "../controllers/superadminController.ts";
 import { verifyToken, isSuperAdmin } from "../middleware/verifyToken.ts";
 
@@ -33,5 +34,6 @@ router.get("/users", getUsersList);
 router.post("/broadcast", sendBroadcastNotification);
 router.post("/invite", inviteSuperAdmin);
 router.delete("/teams/:id", deleteSuperAdmin);
+router.put("/system-config", updateSystemConfig);
 
 export default router;
