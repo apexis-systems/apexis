@@ -23,6 +23,56 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 
+const formatHeaderDate = (date: Date, t: (key: string) => string) => {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const isSameDay = (d1: Date, d2: Date) => {
+        return d1.getFullYear() === d2.getFullYear() &&
+               d1.getMonth() === d2.getMonth() &&
+               d1.getDate() === d2.getDate();
+    };
+
+    if (isSameDay(date, today)) {
+        return t('today');
+    } else if (isSameDay(date, yesterday)) {
+        return t('yesterday');
+    } else {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        const dayOfWeek = days[date.getDay()];
+        const dayOfMonth = date.getDate();
+        const month = months[date.getMonth()];
+        const year = date.getFullYear();
+        
+        const currentYear = today.getFullYear();
+        if (year !== currentYear) {
+            return `${dayOfWeek}, ${dayOfMonth} ${month} ${year}`;
+        }
+        return `${dayOfWeek}, ${dayOfMonth} ${month}`;
+    }
+};
+
+const groupMessagesByDate = (msgs: any[], t: (key: string) => string) => {
+    const groups: { dateLabel: string; messages: any[] }[] = [];
+    
+    msgs.forEach(msg => {
+        const date = msg.createdAt ? new Date(msg.createdAt) : new Date();
+        const label = formatHeaderDate(date, t);
+        
+        let group = groups.find(g => g.dateLabel === label);
+        if (!group) {
+            group = { dateLabel: label, messages: [] };
+            groups.push(group);
+        }
+        group.messages.push(msg);
+    });
+    
+    return groups;
+};
+
 export default function ChatDetail() {
     const router = useRouter();
     const params = useParams();
@@ -632,134 +682,145 @@ export default function ChatDetail() {
                     <div className="flex-1 min-h-0 shrink-0 pointer-events-none" />
 
                     <div ref={bottomRef} />
-                    {messages.map(msg => {
-                        const isMe = msg.sender_id === user?.id;
-                        const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    {groupMessagesByDate(messages, t).map(group => (
+                        <div key={group.dateLabel} className="flex flex-col-reverse space-y-2 space-y-reverse shrink-0">
+                            {group.messages.map(msg => {
+                                const isMe = msg.sender_id === user?.id;
+                                const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                        return (
-                            <div key={msg.id} id={`msg-${msg.id}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} transition-colors duration-500 rounded-2xl`}>
-                                <div
-                                    className={`max-w-[75%] px-3.5 py-2.5 shadow-sm ${isMe
-                                        ? 'bg-accent text-white rounded-2xl rounded-br-sm'
-                                        : 'bg-card text-foreground border border-border rounded-2xl rounded-bl-sm'
-                                        }`}
-                                >
-                                    {!isMe && (
-                                        <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || t('user_fallback')}</p>
-                                    )}
-
-                                    {(msg.parent || msg.parent_id) && (
+                                return (
+                                    <div key={msg.id} id={`msg-${msg.id}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} transition-colors duration-500 rounded-2xl`}>
                                         <div
-                                            onClick={() => scrollToMessage(msg.parent_id || (msg.parent as any)?.id)}
-                                            className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10 border-white/40' : 'bg-secondary/50'}`}
+                                            className={`max-w-[75%] px-3.5 py-2.5 shadow-sm ${isMe
+                                                ? 'bg-accent text-white rounded-2xl rounded-br-sm'
+                                                : 'bg-card text-foreground border border-border rounded-2xl rounded-bl-sm'
+                                                }`}
                                         >
-                                            <p className={`font-bold mb-0.5 truncate ${isMe ? 'text-white' : 'text-accent'}`}>
-                                                {msg.parent?.sender?.name || t('user_fallback')}
-                                            </p>
-                                            <p className={`opacity-80 line-clamp-1 italic ${isMe ? 'text-white/90' : 'text-foreground/70'}`}>
-                                                {msg.parent ? (
-                                                    (msg.parent.type === 'audio' || msg.parent.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : msg.parent.type === 'image' ? `📷 ${t('photo_message')}` : msg.parent.type === 'file' ? `📄 ${t('file_message')}` : msg.parent.text || t('message_fallback')
-                                                ) : t('replied_to_message')}
-                                            </p>
-                                        </div>
-                                    )}
+                                            {!isMe && (
+                                                <p className="text-accent text-xs font-semibold mb-1">{msg.sender?.name || t('user_fallback')}</p>
+                                            )}
 
-                                    {msg.type === 'image' && msg.downloadUrl && (
-                                        <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20 relative group cursor-pointer" onClick={() => { setViewPhoto(msg.downloadUrl); setViewPhotoName(msg.file_name || 'image.jpg'); setViewPhotoId(msg.id); }}>
-                                            <img
-                                                src={msg.downloadUrl}
-                                                alt={msg.file_name}
-                                                className="max-w-[400px] h-auto block"
-                                            />
-                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <ZoomIn className="h-6 w-6 text-white" />
-                                            </div>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDownload(msg.id, msg.file_name || 'image.jpg');
-                                                }}
-                                                className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
-                                            >
-                                                <Download className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    )}
+                                            {(msg.parent || msg.parent_id) && (
+                                                <div
+                                                    onClick={() => scrollToMessage(msg.parent_id || (msg.parent as any)?.id)}
+                                                    className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10 border-white/40' : 'bg-secondary/50'}`}
+                                                >
+                                                    <p className={`font-bold mb-0.5 truncate ${isMe ? 'text-white' : 'text-accent'}`}>
+                                                        {msg.parent?.sender?.name || t('user_fallback')}
+                                                    </p>
+                                                    <p className={`opacity-80 line-clamp-1 italic ${isMe ? 'text-white/90' : 'text-foreground/70'}`}>
+                                                        {msg.parent ? (
+                                                            (msg.parent.type === 'audio' || msg.parent.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : msg.parent.type === 'image' ? `📷 ${t('photo_message')}` : msg.parent.type === 'file' ? `📄 ${t('file_message')}` : msg.parent.text || t('message_fallback')
+                                                        ) : t('replied_to_message')}
+                                                    </p>
+                                                </div>
+                                            )}
 
-                                    {(msg.type === 'audio' || msg.file_type?.startsWith('audio/')) && msg.downloadUrl && (
-                                        <div className="mb-2">
-                                            <VoiceNotePlayer url={msg.downloadUrl} isMe={isMe} />
-                                        </div>
-                                    )}
+                                            {msg.type === 'image' && msg.downloadUrl && (
+                                                <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-secondary/20 relative group cursor-pointer" onClick={() => { setViewPhoto(msg.downloadUrl); setViewPhotoName(msg.file_name || 'image.jpg'); setViewPhotoId(msg.id); }}>
+                                                    <img
+                                                        src={msg.downloadUrl}
+                                                        alt={msg.file_name}
+                                                        className="max-w-[400px] h-auto block"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <ZoomIn className="h-6 w-6 text-white" />
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDownload(msg.id, msg.file_name || 'image.jpg');
+                                                        }}
+                                                        className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                                                    >
+                                                        <Download className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                            )}
 
-                                    {msg.type === 'file' && !msg.file_type?.startsWith('audio/') && msg.downloadUrl && (
-                                        <div className={`p-2 mb-2 rounded-lg flex items-center gap-3 ${isMe ? 'bg-white/10' : 'bg-secondary/50'}`}>
-                                            <FileText className="h-8 w-8 text-accent" />
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">{msg.file_name}</p>
-                                                <p className="text-[10px] opacity-70">{msg.file_size || '0 KB'}</p>
-                                            </div>
-                                            <button
-                                                onClick={() => handleDownload(msg.id, msg.file_name || 'file')}
-                                                className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
-                                            >
-                                                <Download className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    )}
+                                            {(msg.type === 'audio' || msg.file_type?.startsWith('audio/')) && msg.downloadUrl && (
+                                                <div className="mb-2">
+                                                    <VoiceNotePlayer url={msg.downloadUrl} isMe={isMe} />
+                                                </div>
+                                            )}
 
-                                    {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
-                                    <div className={`flex items-center gap-1 mt-1 justify-end`}>
-                                        <span className={`text-[10px] ${isMe ? 'text-orange-100' : 'text-muted-foreground'}`}>
-                                            {time}
-                                        </span>
-                                        {isMe && (
-                                            <div className="flex items-center">
-                                                {msg.seen ? (
-                                                    <CheckCheck className="w-3.5 h-3.5 text-green-400" />
-                                                ) : (
-                                                    <Check className="w-3.5 h-3.5 text-orange-100 opacity-70" />
-                                                )}
-                                            </div>
-                                        )}
-                                        <button
-                                            onClick={() => {
-                                                setReplyTo(msg);
-                                                inputRef.current?.focus();
-                                            }}
-                                            className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}
-                                            title="Reply"
-                                        >
-                                            <CornerUpLeft className="h-3 w-3" />
-                                        </button>
+                                            {msg.type === 'file' && !msg.file_type?.startsWith('audio/') && msg.downloadUrl && (
+                                                <div className={`p-2 mb-2 rounded-lg flex items-center gap-3 ${isMe ? 'bg-white/10' : 'bg-secondary/50'}`}>
+                                                    <FileText className="h-8 w-8 text-accent" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium truncate">{msg.file_name}</p>
+                                                        <p className="text-[10px] opacity-70">{msg.file_size || '0 KB'}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleDownload(msg.id, msg.file_name || 'file')}
+                                                        className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
+                                                    >
+                                                        <Download className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                            )}
 
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <button className={`p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}>
-                                                    <MoreVertical className="h-3 w-3" />
-                                                </button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={takeConfirmationScreenshot} className="text-xs cursor-pointer">
-                                                    Confirm as Confirmation
-                                                </DropdownMenuItem>
-                                                {isMe && msg.type === 'text' && (
-                                                    <DropdownMenuItem onClick={() => { setEditingMessage(msg); setMessage(msg.text); setReplyTo(null); setTimeout(() => inputRef.current?.focus(), 100); }} className="text-xs cursor-pointer">
-                                                        <Edit2 className="h-3 w-3 mr-2" /> Edit
-                                                    </DropdownMenuItem>
-                                                )}
+                                            {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
+                                            <div className={`flex items-center gap-1 mt-1 justify-end`}>
+                                                <span className={`text-[10px] ${isMe ? 'text-orange-100' : 'text-muted-foreground'}`}>
+                                                    {time}
+                                                </span>
                                                 {isMe && (
-                                                    <DropdownMenuItem onClick={() => handleDeleteMessage(msg.id)} className="text-xs cursor-pointer text-destructive focus:text-destructive">
-                                                        <Trash2 className="h-3 w-3 mr-2" /> Delete
-                                                    </DropdownMenuItem>
+                                                    <div className="flex items-center">
+                                                        {msg.seen ? (
+                                                            <CheckCheck className="w-3.5 h-3.5 text-green-400" />
+                                                        ) : (
+                                                            <Check className="w-3.5 h-3.5 text-orange-100 opacity-70" />
+                                                        )}
+                                                    </div>
                                                 )}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                                <button
+                                                    onClick={() => {
+                                                        setReplyTo(msg);
+                                                        inputRef.current?.focus();
+                                                    }}
+                                                    className={`ml-1 p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}
+                                                    title="Reply"
+                                                >
+                                                    <CornerUpLeft className="h-3 w-3" />
+                                                </button>
+
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <button className={`p-0.5 rounded hover:bg-black/10 transition-colors ${isMe ? 'text-white' : 'text-accent'}`}>
+                                                            <MoreVertical className="h-3 w-3" />
+                                                        </button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={takeConfirmationScreenshot} className="text-xs cursor-pointer">
+                                                            Confirm as Confirmation
+                                                        </DropdownMenuItem>
+                                                        {isMe && msg.type === 'text' && (
+                                                            <DropdownMenuItem onClick={() => { setEditingMessage(msg); setMessage(msg.text); setReplyTo(null); setTimeout(() => inputRef.current?.focus(), 100); }} className="text-xs cursor-pointer">
+                                                                <Edit2 className="h-3 w-3 mr-2" /> Edit
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {isMe && (
+                                                            <DropdownMenuItem onClick={() => handleDeleteMessage(msg.id)} className="text-xs cursor-pointer text-destructive focus:text-destructive">
+                                                                <Trash2 className="h-3 w-3 mr-2" /> Delete
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
+                                );
+                            })}
+
+                            {/* Sticky Date Header */}
+                            <div className="sticky top-2 z-10 flex justify-center my-2 pointer-events-none">
+                                <span className="bg-card/90 backdrop-blur-md text-muted-foreground text-[11px] font-medium px-2.5 py-1 rounded-md shadow-sm border border-border/60 select-none">
+                                    {group.dateLabel}
+                                </span>
                             </div>
-                        );
-                    })}
+                        </div>
+                    ))}
                 </div>
 
                 {/* Floating Typing Indicator */}

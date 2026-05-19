@@ -603,6 +603,8 @@ const translations: Record<Language, Record<string, string>> = {
     unassigned: 'Unassigned',
     selectAssignee: 'Select Assignee',
     assigneeDescription: 'Assign this document to a project member',
+    today: 'Today',
+    yesterday: 'Yesterday',
   },
   hi: {
     welcome_back: 'वापसी पर स्वागत है',
@@ -1202,6 +1204,8 @@ const translations: Record<Language, Record<string, string>> = {
     unassigned: 'अनिर्दिष्ट',
     selectAssignee: 'असाइनी चुनें',
     assigneeDescription: 'इस दस्तावेज़ को प्रोजेक्ट सदस्य को सौंपें',
+    today: 'आज',
+    yesterday: 'कल',
   },
   te: {
     welcome_back: 'తిరిగి స్వాగతం',
@@ -1801,6 +1805,8 @@ const translations: Record<Language, Record<string, string>> = {
     unassigned: 'అన్అసైన్ చేయబడింది',
     selectAssignee: 'అసైన్ చేసిన వ్యక్తిని ఎంచుకోండి',
     assigneeDescription: 'ఈ పత్రాన్ని ప్రాజెక్ట్ సభ్యునికి కేటాయించండి',
+    today: 'ఈరోజు',
+    yesterday: 'నిన్న',
   },
 };
 
