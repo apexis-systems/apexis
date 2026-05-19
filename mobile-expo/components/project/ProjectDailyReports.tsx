@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useTranslation } from "react-i18next";
 import { useTheme } from '@/contexts/ThemeContext';
 
-import { getReports, triggerReport, getReportShareUrl, type Report } from '@/services/reportService';
+import { getReports, triggerReport, getReportShareUrl, regenerateReport, type Report } from '@/services/reportService';
 import { useEffect, useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
@@ -30,8 +30,25 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [generating, setGenerating] = useState(false);
     const [sharingId, setSharingId] = useState<number | null>(null);
+    const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
     const [showShareModal, setShowShareModal] = useState(false);
     const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+
+    const handleRegenerate = async (reportId: number) => {
+        setRegeneratingId(reportId);
+        try {
+            await regenerateReport(reportId);
+            Alert.alert(t('projectReports.weekly.success') || 'Success', t('projectReports.daily.regenerateSuccess') || 'Report regenerated successfully');
+            await fetchReports();
+        } catch (e: any) {
+            console.error('regenerateReport error:', e);
+            const { message, code } = parseApiError(e, t('projectReports.daily.failedGenerate'));
+            const alertTitle = code === 'FEATURE_RESTRICTED' ? t('projectReports.weekly.featureRestricted') : code === 'LIMIT_REACHED' ? t('projectReports.weekly.limitReached') : t('projectReports.weekly.error');
+            Alert.alert(alertTitle as string, message);
+        } finally {
+            setRegeneratingId(null);
+        }
+    };
     const [shareOptions, setShareOptions] = useState({
         snag: true,
         rfi: true,
@@ -231,10 +248,23 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
                                 </View>
                             </View>
                             
+                            {userRole !== 'client' && (
+                                <TouchableOpacity 
+                                    onPress={(e) => { e.stopPropagation(); handleRegenerate(report.id); }}
+                                    disabled={regeneratingId === report.id || sharingId === report.id}
+                                    style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: 4 }}
+                                >
+                                    {regeneratingId === report.id 
+                                        ? <ActivityIndicator size="small" color={colors.primary} />
+                                        : <Feather name="refresh-cw" size={14} color={colors.primary} />
+                                    }
+                                </TouchableOpacity>
+                            )}
+                            
                             {(report.photos_count > 0 || report.docs_count > 0 || (report.summary?.rfis?.length || 0) > 0 || (report.summary?.snags?.length || 0) > 0) && (
                                 <TouchableOpacity 
                                     onPress={(e) => { e.stopPropagation(); handleShare(report); }}
-                                    disabled={sharingId === report.id}
+                                    disabled={sharingId === report.id || regeneratingId === report.id}
                                     style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}
                                 >
                                     {sharingId === report.id 
