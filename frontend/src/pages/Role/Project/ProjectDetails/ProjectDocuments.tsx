@@ -706,7 +706,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                               <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                             </button>
                           )}
-                          {(user.role === 'admin' || user.role === 'superadmin') && (
+                          {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
                             <>
                               <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('toggle_visibility_tip')}>
                                 {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
@@ -808,7 +808,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           <Move className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       )}
-                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                      {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
                         <>
                           <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
                             {doc.client_visible !== false ? (

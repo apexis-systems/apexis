@@ -2038,8 +2038,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     return null;
                                 })()}
 
-                                {/* Visibility Toggle - Admin, Contributor, and Client */}
-                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor' || user.role === 'client') && (
+                                {/* Visibility Toggle - Admin */}
+                                {(user.role === 'admin' || user.role === 'superadmin') && (
                                     <>
                                         <TouchableOpacity
                                             onPress={() => handleBulkVisibility(true)}
@@ -2067,7 +2067,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 )}
 
                                 {/* Don't Follow - Admin/Contributor */}
-                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && selectedFiles.size > 0 && (
+                                {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && Array.from(selectedFiles).every(id => {
+                                    const file = docs.find(d => d.id === id);
+                                    return file && String(file.created_by) === String(user.id);
+                                }))) && selectedFiles.size > 0 && (
                                     <>
                                         <TouchableOpacity
                                             onPress={() => handleBulkDoNotFollow(true)}
@@ -2229,6 +2232,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 isArchived={folders.find(f => f.id === activeActionFile?.folder_id)?.name.toLowerCase() === 'archive'}
                 canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('archive')}
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
+                isContributor={user.role === 'contributor'}
+                isUploader={activeActionFile && String(activeActionFile.created_by) === String(user.id)}
                 fileName={activeActionFile?.file_name || ''}
                 processingAction={processing}
             />

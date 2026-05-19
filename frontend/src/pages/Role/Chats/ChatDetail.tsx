@@ -103,7 +103,7 @@ export default function ChatDetail() {
             const response = await PrivateAxios.get(`/chats/download/${messageId}`, {
                 responseType: 'blob'
             });
-            
+
             const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = blobUrl;
@@ -119,17 +119,17 @@ export default function ChatDetail() {
 
     const getActiveProjectId = () => {
         if (room?.project_id) return room.project_id;
-        
+
         // Fallback: If it's a direct chat, see if the users share exactly one project
         if (room?.room_members && room.room_members.length >= 2) {
-            const memberProjects = room.room_members.map((m: any) => 
+            const memberProjects = room.room_members.map((m: any) =>
                 m.user?.project_members?.map((pm: any) => pm.project_id) || []
             );
-            
-            const intersection = memberProjects.reduce((a: any[], b: any[]) => 
+
+            const intersection = memberProjects.reduce((a: any[], b: any[]) =>
                 a.filter(x => b.includes(x))
             );
-            
+
             if (intersection.length === 1) return intersection[0];
         }
         return null;
@@ -137,7 +137,7 @@ export default function ChatDetail() {
 
     const takeConfirmationScreenshot = async () => {
         if (!chatContainerRef.current) return;
-        
+
         setIsCapturing(true);
         try {
             // Use html-to-image with filter to hide the loader from capture
@@ -148,7 +148,7 @@ export default function ChatDetail() {
                 filter: (node) => {
                     const el = node as HTMLElement;
                     if (el.id === 'capture-loader-overlay') return false;
-                    
+
                     // Exclude external images to prevent strict CORS policies from failing the screenshot
                     if (el.tagName === 'IMG') {
                         const img = el as HTMLImageElement;
@@ -159,7 +159,7 @@ export default function ChatDetail() {
                     return true;
                 }
             });
-            
+
             const blob = await (await fetch(dataUrl)).blob();
             setCapturedBlob(blob);
 
@@ -425,7 +425,7 @@ export default function ChatDetail() {
                 roomId,
                 type: fileData ? (
                     fileData.file_type.startsWith('image/') ? 'image' :
-                    fileData.file_type.startsWith('audio/') ? 'audio' : 'file'
+                        fileData.file_type.startsWith('audio/') ? 'audio' : 'file'
                 ) : 'text',
                 file_url: fileData?.file_url,
                 file_name: fileData?.file_name,
@@ -434,7 +434,7 @@ export default function ChatDetail() {
                 parent_id: replyTo?.id ? Number(replyTo.id) : null
             };
             if (tempText) payload.text = tempText;
-            
+
             console.log("[CHAT] Sending payload:", payload);
             setReplyTo(null);
 
@@ -474,7 +474,7 @@ export default function ChatDetail() {
         setMessage(prev => prev + emoji);
         // setShowEmojiPicker(false);
     };
- 
+
     const scrollToMessage = (messageId: number) => {
         const element = document.getElementById(`msg-${messageId}`);
         if (element) {
@@ -585,7 +585,7 @@ export default function ChatDetail() {
                     <ChevronLeft className="h-5 w-5" />
                 </button>
 
-                <div 
+                <div
                     className="flex flex-1 items-center gap-3 cursor-pointer hover:bg-secondary/30 transition-colors p-1 rounded-lg min-w-0"
                     onClick={() => setShowRoomDetails(true)}
                 >
@@ -649,7 +649,7 @@ export default function ChatDetail() {
                                     )}
 
                                     {(msg.parent || msg.parent_id) && (
-                                        <div 
+                                        <div
                                             onClick={() => scrollToMessage(msg.parent_id || (msg.parent as any)?.id)}
                                             className={`p-2 mb-2 rounded-lg border-l-4 border-accent text-xs cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-white/10 border-white/40' : 'bg-secondary/50'}`}
                                         >
@@ -669,7 +669,7 @@ export default function ChatDetail() {
                                             <img
                                                 src={msg.downloadUrl}
                                                 alt={msg.file_name}
-                                                className="max-w-full h-auto block"
+                                                className="max-w-[400px] h-auto block"
                                             />
                                             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                 <ZoomIn className="h-6 w-6 text-white" />
@@ -722,7 +722,7 @@ export default function ChatDetail() {
                                                 )}
                                             </div>
                                         )}
-                                        <button 
+                                        <button
                                             onClick={() => {
                                                 setReplyTo(msg);
                                                 inputRef.current?.focus();
@@ -843,7 +843,7 @@ export default function ChatDetail() {
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold text-accent">{replyTo.sender?.name || t('user_fallback')}</p>
                             <p className="text-sm text-foreground truncate opacity-80">
-                                { (replyTo.type === 'audio' || replyTo.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : replyTo.type === 'image' ? `📷 ${t('photo_message')}` : replyTo.type === 'file' ? `📄 ${t('file_message')}` : replyTo.text || t('message_fallback')}
+                                {(replyTo.type === 'audio' || replyTo.file_type?.startsWith('audio/')) ? `🎤 ${t('voice_note')}` : replyTo.type === 'image' ? `📷 ${t('photo_message')}` : replyTo.type === 'file' ? `📄 ${t('file_message')}` : replyTo.text || t('message_fallback')}
                             </p>
                         </div>
                         <button
@@ -904,7 +904,7 @@ export default function ChatDetail() {
                     )}
 
                     {(!message.trim() && !selectedFile) || isRecordingVoice ? (
-                        <VoiceNoteRecorder 
+                        <VoiceNoteRecorder
                             onRecordingStateChange={setIsRecordingVoice}
                             onSend={(file) => handleSend(file)}
                         />
@@ -941,7 +941,7 @@ export default function ChatDetail() {
                     <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-thin">
                         {room?.type === 'direct' ? (
                             <div className="flex flex-col items-center text-center space-y-4">
-                                <SecureAvatar 
+                                <SecureAvatar
                                     fileKey={room?.room_members?.find((m: any) => m.user?.id !== user?.id)?.user?.profile_pic}
                                     name={room?.room_members?.find((m: any) => m.user?.id !== user?.id)?.user?.name}
                                     size="h-24 w-24"
@@ -972,8 +972,8 @@ export default function ChatDetail() {
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Group Name</label>
                                     <div className="flex gap-2">
-                                        <Input 
-                                            defaultValue={room?.name} 
+                                        <Input
+                                            defaultValue={room?.name}
                                             onBlur={e => handleUpdateRoomName(e.target.value)}
                                             onKeyDown={e => e.key === 'Enter' && handleUpdateRoomName(e.currentTarget.value)}
                                             className="bg-secondary/20"
@@ -984,7 +984,7 @@ export default function ChatDetail() {
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Members ({room?.room_members?.length})</label>
-                                        <button 
+                                        <button
                                             onClick={handleLeaveRoom}
                                             className="text-xs font-bold text-destructive hover:underline flex items-center gap-1"
                                         >
@@ -994,7 +994,7 @@ export default function ChatDetail() {
                                     <div className="space-y-2">
                                         {room?.room_members?.map((member: any) => (
                                             <div key={member.user?.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary/20 transition-colors">
-                                                <SecureAvatar 
+                                                <SecureAvatar
                                                     fileKey={member.user?.profile_pic}
                                                     name={member.user?.name}
                                                     size="h-8 w-8"
@@ -1015,8 +1015,8 @@ export default function ChatDetail() {
 
                                 <div className="space-y-3 pt-4 border-t border-border">
                                     <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Add New Member</label>
-                                    <Input 
-                                        placeholder="Search members to add..." 
+                                    <Input
+                                        placeholder="Search members to add..."
                                         value={userSearchQuery}
                                         onChange={e => setUserSearchQuery(e.target.value)}
                                         className="bg-secondary/10"
@@ -1040,7 +1040,7 @@ export default function ChatDetail() {
                                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{u.organization?.name}</span>
                                                             </div>
                                                         </div>
-                                                        <button 
+                                                        <button
                                                             onClick={() => handleAddMember(u.id)}
                                                             className="p-1.5 rounded-full hover:bg-primary hover:text-white transition-all text-primary"
                                                         >
@@ -1067,10 +1067,10 @@ export default function ChatDetail() {
 
             {/* Photo Viewer */}
             <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
-                <DialogContent className="max-w-4xl p-2 no-scrollbar">
+                <DialogContent className="max-w-[90vw] md:max-w-6xl lg:max-w-6xl w-full p-2 no-scrollbar">
                     {viewPhoto && (
                         <div className="relative flex flex-col items-center">
-                            <img src={viewPhoto} alt="Preview" className="max-w-full max-h-[85vh] rounded-lg" />
+                            <img src={viewPhoto} alt="Preview" className="max-w-full max-h-[90vh] object-contain rounded-lg" />
                         </div>
                     )}
                 </DialogContent>

@@ -1672,8 +1672,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     return null;
                                 })()}
 
-                                {/* Visibility Toggle - Admin, Contributor, and Client */}
-                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor' || user.role === 'client') && (
+                                {/* Visibility Toggle - Admin */}
+                                {(user.role === 'admin' || user.role === 'superadmin') && (
                                     <>
                                         <TouchableOpacity
                                             onPress={() => handleBulkVisibility(true)}
@@ -2009,6 +2009,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 onShare={() => handleSharePhoto(activeActionFile)}
                 showDoNotFollow={false}
                 isAdmin={user.role === 'admin' || user.role === 'superadmin'}
+                isContributor={user.role === 'contributor'}
+                isUploader={activeActionFile && String(activeActionFile.created_by) === String(user.id)}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={false}
                 canDelete={activeActionFile && String(activeActionFile.created_by) === String(user.id) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}

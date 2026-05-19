@@ -23,6 +23,8 @@ interface FileActionMenuProps {
     showArchive?: boolean;
     isArchived?: boolean;
     isAdmin: boolean;
+    isContributor?: boolean;
+    isUploader?: boolean;
     fileName: string;
     showDoNotFollow?: boolean;
     processingAction?: string | null;
@@ -45,6 +47,8 @@ export default function FileActionMenu({
     showArchive = false,
     isArchived = false,
     isAdmin,
+    isContributor = false,
+    isUploader = false,
     fileName,
     showDoNotFollow = true,
     processingAction = null
@@ -113,7 +117,7 @@ export default function FileActionMenu({
                                     </TouchableOpacity>
                                 )}
 
-                                {(!isArchived && showDoNotFollow && (isAdmin || !isAdmin)) && ( // Admin and Contributor can toggle DNF
+                                {(!isArchived && showDoNotFollow && (isAdmin || !isContributor || isUploader)) && ( // Admin and Contributor (only if uploaded) can toggle DNF
                                     <TouchableOpacity 
                                         style={[styles.option, isProcessing && { opacity: 0.5 }]} 
                                         onPress={() => { !isProcessing && onDoNotFollow(); }}
