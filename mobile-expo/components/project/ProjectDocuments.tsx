@@ -18,6 +18,7 @@ import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { WebView } from 'react-native-webview';
 import { getFolderRFIs } from '@/services/rfiService';
+import { getFolderSnags } from '@/services/snagService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { getMemberForTag } from '@/services/projectService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -103,6 +104,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [isUnarchiving, setIsUnarchiving] = useState(false);
     const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfis'>('files');
     const [linkedRFIs, setLinkedRFIs] = useState<any[]>([]);
+    const [linkedSnags, setLinkedSnags] = useState<any[]>([]);
     const [loadingRFIs, setLoadingRFIs] = useState(false);
     const insets = useSafeAreaInsets();
 
@@ -179,11 +181,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         if (selectedFolder) {
             setSortBy('newest');
             setLinkedRFIs([]); // Reset immediately to prevent toggle glitch
+            setLinkedSnags([]);
             fetchLinkedRFIs();
         } else {
             setSortBy('name');
             setActiveFolderTab('files');
             setLinkedRFIs([]);
+            setLinkedSnags([]);
         }
     }, [selectedFolder]);
 
@@ -191,8 +195,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         if (!selectedFolder) return;
         setLoadingRFIs(true);
         try {
-            const data = await getFolderRFIs(selectedFolder);
-            setLinkedRFIs(data);
+            const [rfiData, snagData] = await Promise.all([
+                getFolderRFIs(selectedFolder).catch(() => []),
+                getFolderSnags(selectedFolder).catch(() => [])
+            ]);
+            setLinkedRFIs(rfiData);
+            setLinkedSnags(snagData);
         } catch (e) {
             console.error("fetchLinkedRFIs error", e);
         } finally {
@@ -1379,7 +1387,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     </TouchableOpacity>
                 </View>
 
-                {selectedFolder && linkedRFIs.length > 0 && (
+                {selectedFolder && (linkedRFIs.length > 0 || linkedSnags.length > 0) && (
                     <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.border : '#f1f5f9', borderRadius: 10, padding: 3, marginBottom: 12 }}>
                         <TouchableOpacity
                             onPress={() => setActiveFolderTab('files')}
@@ -1405,67 +1413,134 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 ...(activeFolderTab === 'rfis' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 } : {})
                             }}
                         >
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>{t('projectDocuments.linkedRfisCount', { count: linkedRFIs.length })}</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: activeFolderTab === 'rfis' ? colors.primary : colors.textMuted }}>{t('projectDocuments.linkedItemsCount', { count: linkedRFIs.length + linkedSnags.length }) || `Linked RFIs & Snags (${linkedRFIs.length + linkedSnags.length})`}</Text>
                         </TouchableOpacity>
                     </View>
                 )}
 
                 {activeFolderTab === 'rfis' ? (
-                    <View style={{ gap: 10 }}>
+                    <View style={{ gap: 16 }}>
                         {loadingRFIs ? (
                             <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 20 }} />
-                        ) : linkedRFIs.length > 0 ? (
-                            linkedRFIs.map((rfi) => (
-                                <TouchableOpacity
-                                    key={rfi.id}
-                                    onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
-                                    style={{
-                                        backgroundColor: colors.surface,
-                                        borderRadius: 12,
-                                        padding: 12,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        gap: 12
-                                    }}
-                                >
-                                    <View style={{ flex: 1 }}>
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{rfi.title}</Text>
-                                            <View style={{
-                                                paddingHorizontal: 8,
-                                                paddingVertical: 2,
-                                                borderRadius: 6,
-                                                backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
-                                            }}>
-                                                <Text style={{
-                                                    fontSize: 9,
-                                                    fontWeight: '800',
-                                                    textTransform: 'uppercase',
-                                                    color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444'
-                                                }}>{rfi.status}</Text>
-                                            </View>
-                                        </View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                <Feather name="calendar" size={10} color={colors.textMuted} />
-                                                <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(rfi.createdAt).toLocaleDateString()}</Text>
-                                            </View>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                <Feather name="user" size={10} color={colors.textMuted} />
-                                                <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || t('projectDocuments.unassigned')}</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-                                    <Feather name="chevron-right" size={16} color={colors.textMuted} />
-                                </TouchableOpacity>
-                            ))
                         ) : (
-                            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                                <Feather name="link-2" size={32} color={colors.border} />
-                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>{t('projectDocuments.noRfisLinked')}</Text>
-                            </View>
+                            <>
+                                {/* Linked RFIs Section */}
+                                {linkedRFIs.length > 0 && (
+                                    <View style={{ gap: 10 }}>
+                                        <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', paddingHorizontal: 4 }}>Linked RFIs ({linkedRFIs.length})</Text>
+                                        {linkedRFIs.map((rfi) => (
+                                            <TouchableOpacity
+                                                key={rfi.id}
+                                                onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                                style={{
+                                                    backgroundColor: colors.surface,
+                                                    borderRadius: 12,
+                                                    padding: 12,
+                                                    borderWidth: 1,
+                                                    borderColor: colors.border,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 12
+                                                }}
+                                            >
+                                                <View style={{ flex: 1 }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{rfi.title}</Text>
+                                                        <View style={{
+                                                            paddingHorizontal: 8,
+                                                            paddingVertical: 2,
+                                                            borderRadius: 6,
+                                                            backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
+                                                        }}>
+                                                            <Text style={{
+                                                                fontSize: 9,
+                                                                fontWeight: '800',
+                                                                textTransform: 'uppercase',
+                                                                color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444'
+                                                            }}>{rfi.status}</Text>
+                                                        </View>
+                                                    </View>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                            <Feather name="calendar" size={10} color={colors.textMuted} />
+                                                            <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(rfi.createdAt).toLocaleDateString()}</Text>
+                                                        </View>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                            <Feather name="user" size={10} color={colors.textMuted} />
+                                                            <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || t('projectDocuments.unassigned')}</Text>
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                                <Feather name="chevron-right" size={16} color={colors.textMuted} />
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {/* Linked Snags Section */}
+                                {linkedSnags.length > 0 && (
+                                    <View style={{ gap: 10 }}>
+                                        <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', paddingHorizontal: 4 }}>Linked Snags ({linkedSnags.length})</Text>
+                                        {linkedSnags.map((snag) => (
+                                            <TouchableOpacity
+                                                key={snag.id}
+                                                onPress={() => router.setParams({ tab: 'snags', snagId: String(snag.id) })}
+                                                style={{
+                                                    backgroundColor: colors.surface,
+                                                    borderRadius: 12,
+                                                    padding: 12,
+                                                    borderWidth: 1,
+                                                    borderColor: colors.border,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 12
+                                                }}
+                                            >
+                                                <View style={{ flex: 1 }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{snag.title}</Text>
+                                                        <View style={{
+                                                            paddingHorizontal: 8,
+                                                            paddingVertical: 2,
+                                                            borderRadius: 6,
+                                                            backgroundColor: snag.status === 'amber' ? 'rgba(245,158,11,0.1)' : snag.status === 'green' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
+                                                        }}>
+                                                            <Text style={{
+                                                                fontSize: 9,
+                                                                fontWeight: '800',
+                                                                textTransform: 'uppercase',
+                                                                color: snag.status === 'amber' ? '#f59e0b' : snag.status === 'green' ? '#22c55e' : '#ef4444'
+                                                            }}>
+                                                                {snag.status === 'amber' ? t('projectSnags.status.waiting') :
+                                                                 snag.status === 'green' ? t('projectSnags.status.completed') :
+                                                                 t('projectSnags.status.noAction')}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                            <Feather name="calendar" size={10} color={colors.textMuted} />
+                                                            <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(snag.createdAt).toLocaleDateString()}</Text>
+                                                        </View>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                            <Feather name="user" size={10} color={colors.textMuted} />
+                                                            <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{snag.assignee?.name || t('projectDocuments.unassigned')}</Text>
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                                <Feather name="chevron-right" size={16} color={colors.textMuted} />
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {linkedRFIs.length === 0 && linkedSnags.length === 0 && (
+                                    <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                                        <Feather name="link-2" size={32} color={colors.border} />
+                                        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>{t('projectDocuments.noRfisLinked')}</Text>
+                                    </View>
+                                )}
+                            </>
                         )}
                     </View>
                 ) : (

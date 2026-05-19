@@ -330,6 +330,8 @@
             "shareInviteMessage": "You've been invited to access the project \"{{projectName}}\" on Apexis as a \"{{role}}\".\n\nClick the link below to securely login to your project:\n{{url}}"
         },
         "projectSnags": {
+            "successTitle": "Success",
+            "by": "by",
             "status": {
                 "waiting": "Waiting for Clearance",
                 "completed": "Completed",
@@ -589,6 +591,7 @@
             "failedToGetShareLink": "Failed to get share link",
             "photosCount": "Photos ({{count}})",
             "linkedRfisCount": "Linked RFIs ({{count}})",
+            "linkedItemsCount": "Linked RFIs & Snags ({{count}})",
             "unassigned": "Unassigned",
             "noRfisLinked": "No RFIs linked to this folder",
             "photosFoldersCount": "{{photoCount}} photos · {{folderCount}} folders",
@@ -689,6 +692,7 @@
             "noFoldersDocs": "No folders or documents yet",
             "filesCount": "Files ({{count}})",
             "linkedRfisCount": "Linked RFIs ({{count}})",
+            "linkedItemsCount": "Linked RFIs & Snags ({{count}})",
             "unassigned": "Unassigned",
             "noRfisLinked": "No RFIs linked to this folder",
             "sortBy": {

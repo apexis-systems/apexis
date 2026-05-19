@@ -18,7 +18,8 @@ import { getFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdate
 
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
-import LinkedRFITab from './LinkedRFITab';
+import LinkedItemsTab from './LinkedItemsTab';
+import { getFolderSnags } from '@/services/snagService';
 import { getFolderRFIs } from '@/services/rfiService';
 
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -62,6 +63,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
   const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfi'>('files');
   const [linkedRFICount, setLinkedRFICount] = useState(0);
+  const [linkedSnagCount, setLinkedSnagCount] = useState(0);
 
   if (!project) return null;
 
@@ -145,6 +147,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       importRFIsForFolder();
     } else {
       setLinkedRFICount(0);
+      setLinkedSnagCount(0);
       setActiveFolderTab('files');
     }
   }, [selectedFolder]);
@@ -152,11 +155,15 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const importRFIsForFolder = async () => {
     if (!selectedFolder) return;
     try {
-      const res = await getFolderRFIs(selectedFolder);
-      setLinkedRFICount(res.length);
-      if (res.length === 0) setActiveFolderTab('files');
+      const [rfis, snags] = await Promise.all([
+        getFolderRFIs(selectedFolder).catch(() => []),
+        getFolderSnags(selectedFolder).catch(() => [])
+      ]);
+      setLinkedRFICount(rfis.length);
+      setLinkedSnagCount(snags.length);
+      if (rfis.length === 0 && snags.length === 0) setActiveFolderTab('files');
     } catch (error) {
-      console.error("Failed to fetch linked RFIs count:", error);
+      console.error("Failed to fetch linked items count:", error);
     }
   };
 
@@ -571,7 +578,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         </div>
       </div>
 
-      {selectedFolder && linkedRFICount > 0 && (
+      {selectedFolder && (linkedRFICount > 0 || linkedSnagCount > 0) && (
         <div className="flex border-b border-border mb-3">
           <button
             onClick={() => setActiveFolderTab('files')}
@@ -590,14 +597,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               activeFolderTab === 'rfi' ? "text-accent" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {t('linked_rfi_tab')}
+            {t('linked_rfi_and_snag_tab') || 'Linked RFIs & Snags'}
             {activeFolderTab === 'rfi' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
         </div>
       )}
 
-      {activeFolderTab === 'rfi' && selectedFolder && linkedRFICount > 0 ? (
-        <LinkedRFITab folderId={selectedFolder} projectId={project.id} />
+      {activeFolderTab === 'rfi' && selectedFolder && (linkedRFICount > 0 || linkedSnagCount > 0) ? (
+        <LinkedItemsTab folderId={selectedFolder} projectId={project.id} />
       ) : (
         <>
           <div className="grid grid-cols-4 gap-2">
