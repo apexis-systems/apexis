@@ -385,7 +385,8 @@
             "completedSnagNoUpdate": "పూర్తయిన స్నాగ్‌లను అప్‌డేట్ చేయడం సాధ్యం కాదు",
             "voiceNoteHeader": "వాయిస్ నోట్",
             "voiceResponseHeader": "వాయిస్ ప్రతిస్పందన",
-            "submitResponse": "స్పందనను సమర్పించండి"
+            "submitResponse": "స్పందనను సమర్పించండి",
+            "linkedFolders": "లింక్ చేయబడిన ఫోల్డర్‌లు"
         },
         "te": "తెలుగు",
         "months": {

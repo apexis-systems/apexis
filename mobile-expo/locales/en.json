@@ -385,7 +385,8 @@
             "completedSnagNoUpdate": "Completed snags cannot be updated",
             "voiceNoteHeader": "Voice Note",
             "voiceResponseHeader": "Voice Response",
-            "submitResponse": "Submit Response"
+            "submitResponse": "Submit Response",
+            "linkedFolders": "Linked Folders"
         },
         "months": {
             "january": "January",

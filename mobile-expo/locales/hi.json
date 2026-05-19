@@ -385,7 +385,8 @@
             "completedSnagNoUpdate": "पूरे किए गए स्नैग को अपडेट नहीं किया जा सकता",
             "submitResponse": "प्रतिक्रिया सबमिट करें",
             "voiceNoteHeader": "वॉयस नोट",
-            "voiceResponseHeader": "वॉयस प्रतिक्रिया"
+            "voiceResponseHeader": "वॉयस प्रतिक्रिया",
+            "linkedFolders": "लिंक्ड फोल्डर"
         },
         "te": "తెలుగు",
         "months": {
