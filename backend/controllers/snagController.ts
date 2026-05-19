@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
+import "multer";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
-import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, GetObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Op } from "sequelize";
 import sharp from "sharp";
@@ -121,7 +122,7 @@ export const createSnag = async (req: Request, res: Response) => {
     const authUser = (req as any).user;
     if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-    const { project_id, title, description, assigned_to, folder_ids } = req.body;
+    const { project_id, title, description, assigned_to, folder_ids, photo_key } = req.body;
     if (!project_id || !title)
       return res
         .status(400)
@@ -132,7 +133,7 @@ export const createSnag = async (req: Request, res: Response) => {
     const photoFile = files.photo?.[0];
     const audioFile = files.audio?.[0];
 
-    if (!photoFile)
+    if (!photoFile && !photo_key)
       return res.status(400).json({ error: "Photo is required" });
     const project = await projects.findByPk(project_id);
     if (!project) return res.status(404).json({ error: "Project not found" });
@@ -144,7 +145,24 @@ export const createSnag = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Voice note exceeds the maximum allowed duration of 5 minutes." });
     }
 
-    if (photoFile) {
+    if (photo_key) {
+      const ext = photo_key.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
+      const key = `projects/${project_id}/snags/${Date.now()}${ext}`;
+      try {
+        const sourceKey = photo_key.startsWith('/') ? photo_key.substring(1) : photo_key;
+        await s3Client.send(
+          new CopyObjectCommand({
+            Bucket: BUCKET_NAME,
+            CopySource: `/${BUCKET_NAME}/${encodeURIComponent(sourceKey)}`,
+            Key: key,
+          })
+        );
+        photo_url = key;
+      } catch (err) {
+        console.error("S3 CopyObject error for Snag:", err);
+        photo_url = photo_key; // Fallback
+      }
+    } else if (photoFile) {
       let fileBuffer = photoFile.buffer;
       let ext = photoFile.originalname.match(/\.[0-9a-z]+$/i)?.[0] || ".jpg";
 

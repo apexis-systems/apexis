@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { RFI, getFolderRFIs } from '@/services/rfiService';
 import { Snag, getFolderSnags } from '@/services/snagService';
-import { FileText, Loader2, Calendar, User, ArrowRight, Wrench, FolderOpen } from 'lucide-react';
+import { HelpCircle, AlertTriangle, Loader2, Calendar, User, ArrowRight, FolderOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -17,6 +17,7 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
     const [rfis, setRfis] = useState<RFI[]>([]);
     const [snags, setSnags] = useState<Snag[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activeSubTab, setActiveSubTab] = useState<'rfis' | 'snags'>('rfis');
     const router = useRouter();
 
     useEffect(() => {
@@ -29,6 +30,11 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
             .then(([rfiData, snagData]) => {
                 setRfis(rfiData);
                 setSnags(snagData);
+                if (rfiData.length === 0 && snagData.length > 0) {
+                    setActiveSubTab('snags');
+                } else {
+                    setActiveSubTab('rfis');
+                }
             })
             .finally(() => setLoading(false));
         }
@@ -68,13 +74,34 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
     }
 
     return (
-        <div className="space-y-6 mt-2">
+        <div className="space-y-4 mt-2">
+            {/* Sub-tab selection */}
+            <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border/40 max-w-[240px] mx-auto">
+                <button
+                    onClick={() => setActiveSubTab('rfis')}
+                    className={`flex-1 py-1 text-[10px] font-bold rounded-md transition-all ${
+                        activeSubTab === 'rfis'
+                            ? 'bg-background text-primary shadow-sm border border-border/40'
+                            : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                >
+                    RFIs ({rfis.length})
+                </button>
+                <button
+                    onClick={() => setActiveSubTab('snags')}
+                    className={`flex-1 py-1 text-[10px] font-bold rounded-md transition-all ${
+                        activeSubTab === 'snags'
+                            ? 'bg-background text-primary shadow-sm border border-border/40'
+                            : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                >
+                    Snags ({snags.length})
+                </button>
+            </div>
+
             {/* Linked RFIs Section */}
-            {rfis.length > 0 && (
-                <div className="space-y-2">
-                    <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">
-                        Linked RFIs ({rfis.length})
-                    </h3>
+            {activeSubTab === 'rfis' && (
+                rfis.length > 0 ? (
                     <div className="space-y-2">
                         {rfis.map((rfi) => (
                             <div 
@@ -84,7 +111,7 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="h-9 w-9 rounded-lg bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
-                                        <FileText className="h-4 w-4 text-accent" />
+                                        <HelpCircle className="h-4 w-4 text-accent" />
                                     </div>
                                     <div className="min-w-0">
                                         <h4 className="text-[11px] font-bold text-foreground truncate group-hover:text-accent transition-colors">
@@ -115,15 +142,17 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                             </div>
                         ))}
                     </div>
-                </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <HelpCircle className="h-6 w-6 text-muted-foreground/30 mb-2" />
+                        <p className="text-[10px] text-muted-foreground">No Linked RFIs</p>
+                    </div>
+                )
             )}
 
             {/* Linked Snags Section */}
-            {snags.length > 0 && (
-                <div className="space-y-2">
-                    <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">
-                        Linked Snags ({snags.length})
-                    </h3>
+            {activeSubTab === 'snags' && (
+                snags.length > 0 ? (
                     <div className="space-y-2">
                         {snags.map((snag) => (
                             <div 
@@ -133,7 +162,7 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="h-9 w-9 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                                        <Wrench className="h-4 w-4 text-emerald-600" />
+                                        <AlertTriangle className="h-4 w-4 text-emerald-600" />
                                     </div>
                                     <div className="min-w-0">
                                         <h4 className="text-[11px] font-bold text-foreground truncate group-hover:text-accent transition-colors">
@@ -166,7 +195,12 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                             </div>
                         ))}
                     </div>
-                </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <AlertTriangle className="h-6 w-6 text-muted-foreground/30 mb-2" />
+                        <p className="text-[10px] text-muted-foreground">No Linked Snags</p>
+                    </div>
+                )
             )}
         </div>
     );

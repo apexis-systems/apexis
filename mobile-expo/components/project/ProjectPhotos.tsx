@@ -27,8 +27,9 @@ import ZoomableImage from '../shared/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
-import { getFolderRFIs } from '@/services/rfiService';
-import { getFolderSnags } from '@/services/snagService';
+import { getFolderRFIs, getRFIAssignees, createRFI } from '@/services/rfiService';
+import { getFolderSnags, getAssignees as getSnagAssignees, createSnag } from '@/services/snagService';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Removed local ZoomableImage
 
@@ -41,6 +42,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const router = useRouter();
     const [photos, setPhotos] = useState<any[]>([]);
     const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfis'>('files');
+    const [activeLinkedSubTab, setActiveLinkedSubTab] = useState<'rfis' | 'snags'>('rfis');
     const [linkedRFIs, setLinkedRFIs] = useState<any[]>([]);
     const [linkedSnags, setLinkedSnags] = useState<any[]>([]);
     const [loadingRFIs, setLoadingRFIs] = useState(false);
@@ -106,6 +108,129 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [processing, setProcessing] = useState<string | null>(null);
     const mainScrollRef = useRef<ScrollView>(null);
 
+    // Snag & RFI from existing photo creation states
+    const [showCreateSnagModal, setShowCreateSnagModal] = useState(false);
+    const [showCreateRfiModal, setShowCreateRfiModal] = useState(false);
+    const [snagTitle, setSnagTitle] = useState('');
+    const [snagDesc, setSnagDesc] = useState('');
+    const [snagAssignedToId, setSnagAssignedToId] = useState<number | null>(null);
+    const [showSnagAssigneeDropdown, setShowSnagAssigneeDropdown] = useState(false);
+    const [snagAssignees, setSnagAssignees] = useState<any[]>([]);
+
+    const [rfiTitle, setRfiTitle] = useState('');
+    const [rfiDesc, setRfiDesc] = useState('');
+    const [rfiAssignedToId, setRfiAssignedToId] = useState<number | null>(null);
+    const [showRfiAssigneeDropdown, setShowRfiAssigneeDropdown] = useState(false);
+    const [rfiAssignees, setRfiAssignees] = useState<any[]>([]);
+    const [rfiExpiryDate, setRfiExpiryDate] = useState<Date | null>(null);
+    const [showRfiDatePicker, setShowRfiDatePicker] = useState(false);
+
+    const [submittingEntity, setSubmittingEntity] = useState(false);
+
+    useEffect(() => {
+        if (showCreateSnagModal && project?.id) {
+            getSnagAssignees(project.id)
+                .then(setSnagAssignees)
+                .catch(err => console.error("Error fetching snag assignees", err));
+        }
+    }, [showCreateSnagModal, project?.id]);
+
+    useEffect(() => {
+        if (showCreateRfiModal && project?.id) {
+            getRFIAssignees(project.id)
+                .then(setRfiAssignees)
+                .catch(err => console.error("Error fetching RFI assignees", err));
+        }
+    }, [showCreateRfiModal, project?.id]);
+
+    const handleStartCreateSnag = (photo: any) => {
+        setActiveActionFile(photo);
+        setSnagTitle('');
+        setSnagDesc('');
+        setSnagAssignedToId(null);
+        setShowCreateSnagModal(true);
+    };
+
+    const handleStartCreateRfi = (photo: any) => {
+        setActiveActionFile(photo);
+        setRfiTitle('');
+        setRfiDesc('');
+        setRfiAssignedToId(null);
+        setRfiExpiryDate(null);
+        setShowCreateRfiModal(true);
+    };
+
+    const handleCreateSnagFromPhoto = async () => {
+        if (!snagTitle.trim()) {
+            Alert.alert("Error", "Title is required");
+            return;
+        }
+        if (!snagAssignedToId) {
+            Alert.alert("Error", "Assignee is required");
+            return;
+        }
+        if (!activeActionFile) return;
+
+        setSubmittingEntity(true);
+        try {
+            const formData = new FormData();
+            formData.append('project_id', String(project.id));
+            formData.append('title', snagTitle.trim());
+            if (snagDesc.trim()) {
+                formData.append('description', snagDesc.trim());
+            }
+            formData.append('assigned_to', String(snagAssignedToId));
+            formData.append('photo_key', activeActionFile.file_url);
+
+            await createSnag(formData);
+            Alert.alert("Success", "Snag created successfully");
+            setShowCreateSnagModal(false);
+        } catch (error: any) {
+            console.error("Create Snag from photo error", error);
+            const errMsg = error.response?.data?.error || "Failed to create snag";
+            Alert.alert("Error", errMsg);
+        } finally {
+            setSubmittingEntity(false);
+        }
+    };
+
+    const handleCreateRfiFromPhoto = async () => {
+        if (!rfiTitle.trim()) {
+            Alert.alert("Error", "Title is required");
+            return;
+        }
+        if (!rfiAssignedToId) {
+            Alert.alert("Error", "Assignee is required");
+            return;
+        }
+        if (!activeActionFile) return;
+
+        setSubmittingEntity(true);
+        try {
+            const formData = new FormData();
+            formData.append('project_id', String(project.id));
+            formData.append('title', rfiTitle.trim());
+            if (rfiDesc.trim()) {
+                formData.append('description', rfiDesc.trim());
+            }
+            formData.append('assigned_to', String(rfiAssignedToId));
+            if (rfiExpiryDate) {
+                formData.append('expiry_date', rfiExpiryDate.toISOString());
+            }
+            formData.append('photo_key', activeActionFile.file_url);
+
+            await createRFI(formData);
+            Alert.alert("Success", "RFI created successfully");
+            setShowCreateRfiModal(false);
+        } catch (error: any) {
+            console.error("Create RFI from photo error", error);
+            const errMsg = error.response?.data?.error || "Failed to create RFI";
+            Alert.alert("Error", errMsg);
+        } finally {
+            setSubmittingEntity(false);
+        }
+    };
+
     const loadFiles = async (isRefetch = false) => {
         if (!project?.id) return;
         if (!isRefetch && folders.length === 0 && photos.length === 0) setLoading(true);
@@ -156,11 +281,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (selectedFolder) {
             setSortBy('newest');
             setLinkedRFIs([]); // Reset immediately
+            setLinkedSnags([]);
             fetchLinkedRFIs();
         } else {
             setSortBy('name');
             setActiveFolderTab('files');
             setLinkedRFIs([]);
+            setLinkedSnags([]);
         }
     }, [selectedFolder]);
 
@@ -174,6 +301,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             ]);
             setLinkedRFIs(rfiData);
             setLinkedSnags(snagData);
+            if (rfiData.length === 0 && snagData.length > 0) {
+                setActiveLinkedSubTab('snags');
+            } else {
+                setActiveLinkedSubTab('rfis');
+            }
         } catch (e) {
             console.error("fetchLinkedRFIs error", e);
         } finally {
@@ -1129,121 +1261,194 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 20 }} />
                                 ) : (
                                     <>
+                                        {/* Sub-tab selector */}
+                                        <View style={{ 
+                                            flexDirection: 'row', 
+                                            justifyContent: 'center', 
+                                            gap: 32, 
+                                            marginBottom: 16, 
+                                            borderBottomWidth: 1, 
+                                            borderBottomColor: colors.border,
+                                            paddingHorizontal: 16
+                                        }}>
+                                            <TouchableOpacity
+                                                onPress={() => setActiveLinkedSubTab('rfis')}
+                                                style={{ 
+                                                    paddingVertical: 10,
+                                                    paddingHorizontal: 8,
+                                                    position: 'relative'
+                                                }}
+                                            >
+                                                <Text style={{ 
+                                                    fontSize: 13, 
+                                                    fontWeight: '700', 
+                                                    color: activeLinkedSubTab === 'rfis' ? colors.primary : colors.textMuted 
+                                                }}>
+                                                    RFIs ({linkedRFIs.length})
+                                                </Text>
+                                                {activeLinkedSubTab === 'rfis' && (
+                                                    <View style={{ 
+                                                        position: 'absolute',
+                                                        bottom: 0,
+                                                        left: 0,
+                                                        right: 0,
+                                                        height: 3, 
+                                                        backgroundColor: colors.primary, 
+                                                        borderTopLeftRadius: 3,
+                                                        borderTopRightRadius: 3
+                                                    }} />
+                                                )}
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => setActiveLinkedSubTab('snags')}
+                                                style={{ 
+                                                    paddingVertical: 10,
+                                                    paddingHorizontal: 8,
+                                                    position: 'relative'
+                                                }}
+                                            >
+                                                <Text style={{ 
+                                                    fontSize: 13, 
+                                                    fontWeight: '700', 
+                                                    color: activeLinkedSubTab === 'snags' ? colors.primary : colors.textMuted 
+                                                }}>
+                                                    Snags ({linkedSnags.length})
+                                                </Text>
+                                                {activeLinkedSubTab === 'snags' && (
+                                                    <View style={{ 
+                                                        position: 'absolute',
+                                                        bottom: 0,
+                                                        left: 0,
+                                                        right: 0,
+                                                        height: 3, 
+                                                        backgroundColor: colors.primary, 
+                                                        borderTopLeftRadius: 3,
+                                                        borderTopRightRadius: 3
+                                                    }} />
+                                                )}
+                                            </TouchableOpacity>
+                                        </View>
+
                                         {/* Linked RFIs Section */}
-                                        {linkedRFIs.length > 0 && (
-                                            <View style={{ gap: 10 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', paddingHorizontal: 4 }}>Linked RFIs ({linkedRFIs.length})</Text>
-                                                {linkedRFIs.map((rfi) => (
-                                                    <TouchableOpacity
-                                                        key={rfi.id}
-                                                        onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
-                                                        style={{
-                                                            backgroundColor: colors.surface,
-                                                            borderRadius: 12,
-                                                            padding: 12,
-                                                            borderWidth: 1,
-                                                            borderColor: colors.border,
-                                                            flexDirection: 'row',
-                                                            alignItems: 'center',
-                                                            gap: 12
-                                                        }}
-                                                    >
-                                                        <View style={{ flex: 1 }}>
-                                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                                                                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{rfi.title}</Text>
-                                                                <View style={{
-                                                                    paddingHorizontal: 8,
-                                                                    paddingVertical: 2,
-                                                                    borderRadius: 6,
-                                                                    backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
-                                                                }}>
-                                                                    <Text style={{
-                                                                        fontSize: 9,
-                                                                        fontWeight: '800',
-                                                                        textTransform: 'uppercase',
-                                                                        color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444'
-                                                                    }}>{t(`projectRfi.statusLabel.${rfi.status}`)}</Text>
+                                        {activeLinkedSubTab === 'rfis' && (
+                                            linkedRFIs.length > 0 ? (
+                                                <View style={{ gap: 10 }}>
+                                                    {linkedRFIs.map((rfi) => (
+                                                        <TouchableOpacity
+                                                            key={rfi.id}
+                                                            onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                                            style={{
+                                                                backgroundColor: colors.surface,
+                                                                borderRadius: 12,
+                                                                padding: 12,
+                                                                borderWidth: 1,
+                                                                borderColor: colors.border,
+                                                                flexDirection: 'row',
+                                                                alignItems: 'center',
+                                                                gap: 12
+                                                            }}
+                                                        >
+                                                            <View style={{ flex: 1 }}>
+                                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{rfi.title}</Text>
+                                                                    <View style={{
+                                                                        paddingHorizontal: 8,
+                                                                        paddingVertical: 2,
+                                                                        borderRadius: 6,
+                                                                        backgroundColor: rfi.status === 'open' ? 'rgba(245,158,11,0.1)' : rfi.status === 'closed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
+                                                                    }}>
+                                                                        <Text style={{
+                                                                            fontSize: 9,
+                                                                            fontWeight: '800',
+                                                                            textTransform: 'uppercase',
+                                                                            color: rfi.status === 'open' ? '#f59e0b' : rfi.status === 'closed' ? '#22c55e' : '#ef4444'
+                                                                        }}>{t(`projectRfi.statusLabel.${rfi.status}`)}</Text>
+                                                                    </View>
+                                                                </View>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                                        <Feather name="calendar" size={10} color={colors.textMuted} />
+                                                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(rfi.createdAt).toLocaleDateString()}</Text>
+                                                                    </View>
+                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                                        <Feather name="user" size={10} color={colors.textMuted} />
+                                                                        <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || t('projectPhotos.unassigned')}</Text>
+                                                                    </View>
                                                                 </View>
                                                             </View>
-                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                                    <Feather name="calendar" size={10} color={colors.textMuted} />
-                                                                    <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(rfi.createdAt).toLocaleDateString()}</Text>
-                                                                </View>
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                                    <Feather name="user" size={10} color={colors.textMuted} />
-                                                                    <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{rfi.assignee?.name || t('projectPhotos.unassigned')}</Text>
-                                                                </View>
-                                                            </View>
-                                                        </View>
-                                                        <Feather name="chevron-right" size={16} color={colors.textMuted} />
-                                                    </TouchableOpacity>
-                                                ))}
-                                            </View>
+                                                            <Feather name="chevron-right" size={16} color={colors.textMuted} />
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </View>
+                                            ) : (
+                                                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                                                    <Feather name="link-2" size={32} color={colors.border} />
+                                                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>{t('projectPhotos.noRfisLinked')}</Text>
+                                                </View>
+                                            )
                                         )}
 
                                         {/* Linked Snags Section */}
-                                        {linkedSnags.length > 0 && (
-                                            <View style={{ gap: 10 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', paddingHorizontal: 4 }}>Linked Snags ({linkedSnags.length})</Text>
-                                                {linkedSnags.map((snag) => (
-                                                    <TouchableOpacity
-                                                        key={snag.id}
-                                                        onPress={() => router.setParams({ tab: 'snags', snagId: String(snag.id) })}
-                                                        style={{
-                                                            backgroundColor: colors.surface,
-                                                            borderRadius: 12,
-                                                            padding: 12,
-                                                            borderWidth: 1,
-                                                            borderColor: colors.border,
-                                                            flexDirection: 'row',
-                                                            alignItems: 'center',
-                                                            gap: 12
-                                                        }}
-                                                    >
-                                                        <View style={{ flex: 1 }}>
-                                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                                                                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{snag.title}</Text>
-                                                                <View style={{
-                                                                    paddingHorizontal: 8,
-                                                                    paddingVertical: 2,
-                                                                    borderRadius: 6,
-                                                                    backgroundColor: snag.status === 'amber' ? 'rgba(245,158,11,0.1)' : snag.status === 'green' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
-                                                                }}>
-                                                                    <Text style={{
-                                                                        fontSize: 9,
-                                                                        fontWeight: '800',
-                                                                        textTransform: 'uppercase',
-                                                                        color: snag.status === 'amber' ? '#f59e0b' : snag.status === 'green' ? '#22c55e' : '#ef4444'
+                                        {activeLinkedSubTab === 'snags' && (
+                                            linkedSnags.length > 0 ? (
+                                                <View style={{ gap: 10 }}>
+                                                    {linkedSnags.map((snag) => (
+                                                        <TouchableOpacity
+                                                            key={snag.id}
+                                                            onPress={() => router.setParams({ tab: 'snags', snagId: String(snag.id) })}
+                                                            style={{
+                                                                backgroundColor: colors.surface,
+                                                                borderRadius: 12,
+                                                                padding: 12,
+                                                                borderWidth: 1,
+                                                                borderColor: colors.border,
+                                                                flexDirection: 'row',
+                                                                alignItems: 'center',
+                                                                gap: 12
+                                                            }}
+                                                        >
+                                                            <View style={{ flex: 1 }}>
+                                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>{snag.title}</Text>
+                                                                    <View style={{
+                                                                        paddingHorizontal: 8,
+                                                                        paddingVertical: 2,
+                                                                        borderRadius: 6,
+                                                                        backgroundColor: snag.status === 'amber' ? 'rgba(245,158,11,0.1)' : snag.status === 'green' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
                                                                     }}>
-                                                                        {snag.status === 'amber' ? t('projectSnags.status.waiting') :
-                                                                         snag.status === 'green' ? t('projectSnags.status.completed') :
-                                                                         t('projectSnags.status.noAction')}
-                                                                    </Text>
+                                                                        <Text style={{
+                                                                            fontSize: 9,
+                                                                            fontWeight: '800',
+                                                                            textTransform: 'uppercase',
+                                                                            color: snag.status === 'amber' ? '#f59e0b' : snag.status === 'green' ? '#22c55e' : '#ef4444'
+                                                                        }}>
+                                                                            {snag.status === 'amber' ? t('projectSnags.status.waiting') :
+                                                                             snag.status === 'green' ? t('projectSnags.status.completed') :
+                                                                             t('projectSnags.status.noAction')}
+                                                                        </Text>
+                                                                    </View>
+                                                                </View>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                                        <Feather name="calendar" size={10} color={colors.textMuted} />
+                                                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(snag.createdAt).toLocaleDateString()}</Text>
+                                                                    </View>
+                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                                        <Feather name="user" size={10} color={colors.textMuted} />
+                                                                        <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{snag.assignee?.name || t('projectPhotos.unassigned')}</Text>
+                                                                    </View>
                                                                 </View>
                                                             </View>
-                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                                    <Feather name="calendar" size={10} color={colors.textMuted} />
-                                                                    <Text style={{ fontSize: 10, color: colors.textMuted }}>{new Date(snag.createdAt).toLocaleDateString()}</Text>
-                                                                </View>
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                                    <Feather name="user" size={10} color={colors.textMuted} />
-                                                                    <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>{snag.assignee?.name || t('projectPhotos.unassigned')}</Text>
-                                                                </View>
-                                                            </View>
-                                                        </View>
-                                                        <Feather name="chevron-right" size={16} color={colors.textMuted} />
-                                                    </TouchableOpacity>
-                                                ))}
-                                            </View>
-                                        )}
-
-                                        {linkedRFIs.length === 0 && linkedSnags.length === 0 && (
-                                            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                                                <Feather name="link-2" size={32} color={colors.border} />
-                                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>{t('projectPhotos.noRfisLinked')}</Text>
-                                            </View>
+                                                            <Feather name="chevron-right" size={16} color={colors.textMuted} />
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </View>
+                                            ) : (
+                                                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                                                    <Feather name="link-2" size={32} color={colors.border} />
+                                                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>No Snags Linked</Text>
+                                                </View>
+                                            )
                                         )}
                                     </>
                                 )}
@@ -2091,6 +2296,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 onRename={() => handleRenameFileAction(activeActionFile)}
                 onArchive={() => handleArchiveFile(activeActionFile)}
                 onUnarchive={() => handleUnarchivePhoto(activeActionFile)}
+                onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
+                onCreateSnag={() => handleStartCreateSnag(activeActionFile)}
                 showArchive={currentFolder?.name.toLowerCase().includes('confirmation')}
                 isArchived={currentFolder?.name.toLowerCase().includes('archive')}
                 fileName={activeActionFile?.file_name || ''}
@@ -2132,6 +2339,282 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 folderName={activeActionFolder?.name || ''}
                 processingAction={processing}
             />
+
+            {/* Create Snag Modal */}
+            <Modal visible={showCreateSnagModal} transparent animationType="slide" onRequestClose={() => setShowCreateSnagModal(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+                        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create Snag from Photo</Text>
+                                <TouchableOpacity onPress={() => setShowCreateSnagModal(false)}>
+                                    <Feather name="x" size={20} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TextInput
+                                    value={snagTitle}
+                                    onChangeText={setSnagTitle}
+                                    placeholder="Enter snag title"
+                                    placeholderTextColor={colors.textMuted}
+                                    style={{ height: 44, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                                <TextInput
+                                    value={snagDesc}
+                                    onChangeText={setSnagDesc}
+                                    placeholder="Enter snag description (optional)"
+                                    placeholderTextColor={colors.textMuted}
+                                    multiline
+                                    numberOfLines={3}
+                                    style={{ minHeight: 80, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, color: colors.text, fontSize: 13, textAlignVertical: 'top' }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assignee <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowSnagAssigneeDropdown(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: snagAssignedToId ? colors.primary : colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: snagAssignedToId ? colors.text : colors.textMuted }}>
+                                        {snagAssignedToId
+                                            ? snagAssignees.find(a => a.id === snagAssignedToId)?.name || "Select Assignee"
+                                            : "Select Assignee"}
+                                    </Text>
+                                    <Feather name="chevron-down" size={18} color={snagAssignedToId ? colors.primary : colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                                <TouchableOpacity
+                                    onPress={() => setShowCreateSnagModal(false)}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleCreateSnagFromPhoto}
+                                    disabled={submittingEntity}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
+                                        {submittingEntity ? "Creating..." : "Create Snag"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            {/* Snag Assignee Dropdown Picker Modal */}
+                            <Modal visible={showSnagAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowSnagAssigneeDropdown(false)}>
+                                <TouchableOpacity
+                                    activeOpacity={1}
+                                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}
+                                    onPress={() => setShowSnagAssigneeDropdown(false)}
+                                >
+                                    <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ maxHeight: '70%' }}>
+                                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+                                            </View>
+                                            <ScrollView keyboardShouldPersistTaps="handled">
+                                                {snagAssignees.map((a) => (
+                                                    <TouchableOpacity
+                                                        key={a.id}
+                                                        onPress={() => { setSnagAssignedToId(a.id); setShowSnagAssigneeDropdown(false); }}
+                                                        style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            paddingHorizontal: 16,
+                                                            paddingVertical: 14,
+                                                            borderBottomWidth: 1,
+                                                            borderBottomColor: colors.border,
+                                                            backgroundColor: snagAssignedToId === a.id ? colors.primary + '10' : 'transparent',
+                                                        }}
+                                                    >
+                                                        <Text style={{ fontSize: 14, color: colors.text, fontWeight: snagAssignedToId === a.id ? '600' : '400' }}>
+                                                            {a.name} ({a.role})
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            </Modal>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
+
+            {/* Create RFI Modal */}
+            <Modal visible={showCreateRfiModal} transparent animationType="slide" onRequestClose={() => setShowCreateRfiModal(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+                        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create RFI from Photo</Text>
+                                <TouchableOpacity onPress={() => setShowCreateRfiModal(false)}>
+                                    <Feather name="x" size={20} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TextInput
+                                    value={rfiTitle}
+                                    onChangeText={setRfiTitle}
+                                    placeholder="Enter RFI title"
+                                    placeholderTextColor={colors.textMuted}
+                                    style={{ height: 44, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                                <TextInput
+                                    value={rfiDesc}
+                                    onChangeText={setRfiDesc}
+                                    placeholder="Enter RFI description (optional)"
+                                    placeholderTextColor={colors.textMuted}
+                                    multiline
+                                    numberOfLines={3}
+                                    style={{ minHeight: 80, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, color: colors.text, fontSize: 13, textAlignVertical: 'top' }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assignee <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowRfiAssigneeDropdown(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: rfiAssignedToId ? colors.primary : colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: rfiAssignedToId ? colors.text : colors.textMuted }}>
+                                        {rfiAssignedToId
+                                            ? rfiAssignees.find(a => a.id === rfiAssignedToId)?.name || "Select Assignee"
+                                            : "Select Assignee"}
+                                    </Text>
+                                    <Feather name="chevron-down" size={18} color={rfiAssignedToId ? colors.primary : colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowRfiDatePicker(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: rfiExpiryDate ? rfiExpiryDate.toLocaleDateString() : "Select Date" }}>
+                                        {rfiExpiryDate ? rfiExpiryDate.toLocaleDateString() : "Select Date"}
+                                    </Text>
+                                    <Feather name="calendar" size={18} color={colors.textMuted} />
+                                </TouchableOpacity>
+                                {showRfiDatePicker && (
+                                    <DateTimePicker
+                                        value={rfiExpiryDate || new Date()}
+                                        mode="date"
+                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                        onChange={(event, date) => {
+                                            setShowRfiDatePicker(Platform.OS === 'ios');
+                                            if (date) {
+                                                setRfiExpiryDate(date);
+                                            }
+                                        }}
+                                    />
+                                )}
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                                <TouchableOpacity
+                                    onPress={() => setShowCreateRfiModal(false)}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleCreateRfiFromPhoto}
+                                    disabled={submittingEntity}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
+                                        {submittingEntity ? "Creating..." : "Create RFI"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            {/* RFI Assignee Dropdown Picker Modal */}
+                            <Modal visible={showRfiAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowRfiAssigneeDropdown(false)}>
+                                <TouchableOpacity
+                                    activeOpacity={1}
+                                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}
+                                    onPress={() => setShowRfiAssigneeDropdown(false)}
+                                >
+                                    <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ maxHeight: '70%' }}>
+                                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+                                            </View>
+                                            <ScrollView keyboardShouldPersistTaps="handled">
+                                                {rfiAssignees.map((a) => (
+                                                    <TouchableOpacity
+                                                        key={a.id}
+                                                        onPress={() => { setRfiAssignedToId(a.id); setShowRfiAssigneeDropdown(false); }}
+                                                        style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            paddingHorizontal: 16,
+                                                            paddingVertical: 14,
+                                                            borderBottomWidth: 1,
+                                                            borderBottomColor: colors.border,
+                                                            backgroundColor: rfiAssignedToId === a.id ? colors.primary + '10' : 'transparent',
+                                                        }}
+                                                    >
+                                                        <Text style={{ fontSize: 14, color: colors.text, fontWeight: rfiAssignedToId === a.id ? '600' : '400' }}>
+                                                            {a.name} ({a.role})
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            </Modal>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
         </View>
     );
 }

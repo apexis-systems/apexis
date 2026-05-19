@@ -16,6 +16,8 @@ interface FileActionMenuProps {
     onRename?: () => void;
     onArchive?: () => void;
     onUnarchive?: () => void;
+    onCreateRfi?: () => void;
+    onCreateSnag?: () => void;
     clientVisible: boolean;
     doNotFollow: boolean;
     canDelete: boolean;
@@ -40,6 +42,8 @@ export default function FileActionMenu({
     onRename,
     onArchive,
     onUnarchive,
+    onCreateRfi,
+    onCreateSnag,
     clientVisible,
     doNotFollow,
     canDelete,
@@ -74,6 +78,28 @@ export default function FileActionMenu({
                             </View>
 
                             <View style={styles.optionsContainer}>
+                                {onCreateRfi && (
+                                    <TouchableOpacity 
+                                        style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                        onPress={() => { !isProcessing && onCreateRfi(); !isProcessing && onClose(); }}
+                                        disabled={isProcessing}
+                                    >
+                                        <Feather name="help-circle" size={18} color={colors.primary} />
+                                        <Text style={[styles.optionText, { color: colors.text }]}>Create RFI</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {onCreateSnag && (
+                                    <TouchableOpacity 
+                                        style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                        onPress={() => { !isProcessing && onCreateSnag(); !isProcessing && onClose(); }}
+                                        disabled={isProcessing}
+                                    >
+                                        <Feather name="alert-triangle" size={18} color={colors.primary} />
+                                        <Text style={[styles.optionText, { color: colors.text }]}>Create Snag</Text>
+                                    </TouchableOpacity>
+                                )}
+
                                 {onShare && (
                                     <TouchableOpacity 
                                         style={[styles.option, isProcessing && { opacity: 0.5 }]} 
