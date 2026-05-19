@@ -80,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } else {
                     setUser(null);
                     Cookies.remove('token');
+                    window.location.href = '/login';
                 }
             } else if (type === 'superadmin' && currentToken === superadminToken) {
                 if (projectToken) {
@@ -88,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } else {
                     setUser(null);
                     Cookies.remove('token');
+                    window.location.href = '/auth/login';
                 }
             }
         }
