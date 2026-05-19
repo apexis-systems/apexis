@@ -6,12 +6,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck, CheckCircle2 } from 'lucide-react';
+import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck, CheckCircle2, Link2, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import FolderPickerDialog from './FolderPickerDialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -80,6 +81,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   
   const [selectedSnag, setSelectedSnag] = useState<Snag | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
   const [responseComment, setResponseComment] = useState('');
   const [responsePhotos, setResponsePhotos] = useState<File[]>([]);
   const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
@@ -108,6 +111,20 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   };
 
   useEffect(() => { load(); }, [project?.id]);
+
+  useEffect(() => {
+    if (initialSnagId && !loading) {
+      const target = snags.find(s => String(s.id) === String(initialSnagId));
+      if (target) {
+        setSelectedSnag(target);
+      }
+      // Clear the ID from URL to prevent loop on back navigation
+      const params = new URLSearchParams(window.location.search);
+      params.delete('snagId');
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
+    }
+  }, [initialSnagId, snags, loading]);
 
   useEffect(() => {
     if (selectedSnag) {
@@ -277,6 +294,25 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       toast.success(t('snag_updated_msg'));
     } catch (error) {
       toast.error(getApiErrorMessage(error, t('failed_update_snag')));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateLinks = async (ids: (string | number)[]) => {
+    if (!selectedSnag) return;
+    setSubmitting(true);
+    try {
+      const numericIds = ids.map(Number);
+      const form = new FormData();
+      form.append('folder_ids', numericIds.join(','));
+      const updated = await updateSnag(selectedSnag.id, form);
+      setSnags(prev => prev.map(s => s.id === selectedSnag.id ? { ...s, folder_ids: numericIds, linked_folders: updated.linked_folders } : s));
+      setSelectedSnag(prev => prev ? { ...prev, folder_ids: numericIds, linked_folders: updated.linked_folders } : null);
+      toast.success(t('links_updated_msg'));
+      setShowFolderPicker(false);
+    } catch (error) {
+      toast.error(t('failed_update_links') || 'Failed to update folder links');
     } finally {
       setSubmitting(false);
     }
@@ -592,38 +628,54 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <div className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", STATUS_CONFIG[selectedSnag.status].bg, STATUS_CONFIG[selectedSnag.status].text)}>
                     {t(STATUS_CONFIG[selectedSnag.status].key)}
                   </div>
-                  {(String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && !selectedSnag.response && (
+                  {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && (
                     <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-7 text-[10px]"
-                          onClick={() => {
-                            setNewTitle(selectedSnag.title);
-                            setNewDescription(selectedSnag.description || '');
-                            setNewAssignee(String(selectedSnag.assigned_to));
-                            setNewPhoto(null);
-                            setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
-                            setNewAudio(null);
-                            setAudioPreview(null);
-                            setRemoveExistingAudio(false);
-                            setIsEditing(true);
-                          }}
-                        >
-                          {t('edit_btn')}
-                        </Button>
-
                       <Button 
-                        variant="destructive" 
+                        variant="outline" 
                         size="sm" 
                         className="h-7 text-[10px]"
                         onClick={() => {
-                          handleDelete(selectedSnag);
-                          setSelectedSnag(null);
+                          setSelectedFolderIds(selectedSnag.folder_ids || []);
+                          setShowFolderPicker(true);
                         }}
                       >
-                        {t('delete_btn')}
+                        <Folder className="h-3 w-3 mr-1.5" />
+                        {t('link_btn')}
                       </Button>
+                      {!selectedSnag.response && (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 text-[10px]"
+                            onClick={() => {
+                              setNewTitle(selectedSnag.title);
+                              setNewDescription(selectedSnag.description || '');
+                              setNewAssignee(String(selectedSnag.assigned_to));
+                              setNewPhoto(null);
+                              setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
+                              setNewAudio(null);
+                              setAudioPreview(null);
+                              setRemoveExistingAudio(false);
+                              setIsEditing(true);
+                            }}
+                          >
+                            {t('edit_btn')}
+                          </Button>
+
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            className="h-7 text-[10px]"
+                            onClick={() => {
+                              handleDelete(selectedSnag);
+                              setSelectedSnag(null);
+                            }}
+                          >
+                            {t('delete_btn')}
+                          </Button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -661,6 +713,30 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     <p className="font-medium">{selectedSnag.creator?.name || '—'}</p>
                   </div>
                 </div>
+
+                {selectedSnag.linked_folders && selectedSnag.linked_folders.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('linked_folders_title')}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedSnag.linked_folders.map((f: any) => (
+                        <button 
+                          key={f.id} 
+                          onClick={() => {
+                            setSelectedSnag(null);
+                            const params = new URLSearchParams(window.location.search);
+                            params.set('tab', f.folder_type === 'photo' ? 'photos' : 'documents');
+                            params.set('folder', String(f.id));
+                            router.push(`?${params.toString()}`);
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
+                        >
+                          <Folder className="h-2.5 w-2.5" />
+                          {f.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {(selectedSnag.response || (selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
                   <div className="p-3 bg-accent/5 rounded-lg border border-accent/10">
@@ -847,6 +923,22 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           {viewPhoto && <img src={viewPhoto} alt="Snag detail" className="w-full rounded-md" />}
         </DialogContent>
       </Dialog>
+
+      <FolderPickerDialog 
+          open={showFolderPicker}
+          onOpenChange={setShowFolderPicker}
+          project={project}
+          selectedFolderIds={selectedFolderIds}
+          submitting={submitting}
+          onSelect={async (ids) => {
+              setSelectedFolderIds(ids.map(Number));
+              if (selectedSnag && !isEditing) {
+                  await handleUpdateLinks(ids);
+              } else {
+                  setShowFolderPicker(false);
+              }
+          }}
+      />
     </div>
   );
 };

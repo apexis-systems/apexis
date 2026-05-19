@@ -57,6 +57,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
                 defaultValue: null,
             },
+            folder_ids: {
+                type: DataTypes.JSON,
+                allowNull: true,
+                defaultValue: [],
+            },
         },
         {
             tableName: "snags",
