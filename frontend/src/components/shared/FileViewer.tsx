@@ -20,9 +20,11 @@ interface FileViewerProps {
   onUpdate?: (updatedFile: any) => void;
   targetType?: 'document' | 'photo' | string;
   projectId?: string | number;
+  onCreateSnag?: (photo: any) => void;
+  onCreateRfi?: (photo: any) => void;
 }
 
-const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId }: FileViewerProps) => {
+const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi }: FileViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [downloading, setDownloading] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -249,6 +251,24 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               </div>
               
               <div className="flex items-center gap-1.5 pr-2">
+                {onCreateRfi && isImage && (
+                  <Button 
+                    variant="ghost" 
+                    className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
+                    onClick={() => onCreateRfi(currentFile)}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> RFI
+                  </Button>
+                )}
+                {onCreateSnag && isImage && (
+                  <Button 
+                    variant="ghost" 
+                    className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
+                    onClick={() => onCreateSnag(currentFile)}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Snag
+                  </Button>
+                )}
                 <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title="View Original">
                   <ExternalLink className="h-4 w-4" />
                 </Button>
