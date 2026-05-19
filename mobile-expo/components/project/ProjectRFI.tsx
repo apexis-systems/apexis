@@ -28,8 +28,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Accelerometer } from 'expo-sensors';
 import { Project, User } from '@/types';
 import {
-  getRFIs, createRFI, updateRFIStatus, RFI, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI,
-  getRFIById, markRFISeen
+  getRFIs, createRFI, updateRFIStatus, RFI, ConversationMessage, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI,
+  getRFIById, markRFISeen, getRFIMessages, sendRFIMessage
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -70,6 +70,15 @@ const statusConfig = (t: any) => ({
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CAMERA_HEIGHT = (SCREEN_W / 3) * 4;
 
+const mergeUniqueMessages = (messages: ConversationMessage[]) => {
+  const seen = new Set<number>();
+  return messages.filter((message) => {
+    if (seen.has(message.id)) return false;
+    seen.add(message.id);
+    return true;
+  });
+};
+
 export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Props) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -104,6 +113,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [responseBody, setResponseBody] = useState('');
   const [updatingResponse, setUpdatingResponse] = useState(false);
+  const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [messageAttachment, setMessageAttachment] = useState<string | null>(null);
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
 
@@ -306,12 +320,24 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     }
   }, [selectedRFI?.id]);
 
+  useEffect(() => {
+    if (responseImages.length > 0) {
+      const latest = responseImages[responseImages.length - 1];
+      setMessageAttachment(latest);
+    }
+  }, [responseImages]);
+
   const selectedImageCount = selectedImages.filter(uri => !isAudio(uri)).length;
   const hasSelectedAudio = !!selectedAudio;
   const responseImageCount = responseImages.filter(uri => !isAudio(uri)).length;
   const hasPendingResponseAudio = responseImages.some(isAudio);
   const hasExistingResponseImage = !!selectedRFI?.responsePhotoUrls?.some(uri => !isAudio(uri));
   const hasExistingResponseAudio = !!selectedRFI?.responsePhotoUrls?.some(isAudio);
+  const isConversationParticipant = !!selectedRFI && (
+    String(selectedRFI.assigned_to) === String(user?.id) ||
+    String(selectedRFI.created_by) === String(user?.id) ||
+    String(selectedRFI.creator?.id) === String(user?.id)
+  );
 
   const projectId = Number(project.id);
 
@@ -352,14 +378,26 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       setSelectedRFI(prev => (prev && prev.id === data.rfi.id) ? data.rfi : prev);
     };
 
+    const onRFIDeleted = (data: { rfiId: number }) => {
+      setRfis(prev => prev.filter(r => r.id !== data.rfiId));
+      setSelectedRFI(prev => (prev && prev.id === data.rfiId) ? null : prev);
+    };
+
     socket.on('rfi-seen', onRFISeen);
     socket.on('rfi-updated', onRFIUpdated);
+    socket.on('rfi-deleted', onRFIDeleted);
+    socket.on('rfi-conversation-message', ({ itemType, itemId, message }: { itemType: 'rfi' | 'snag'; itemId: number; message: ConversationMessage }) => {
+      if (itemType !== 'rfi' || !selectedRFI || selectedRFI.id !== itemId) return;
+      setConversationMessages(prev => mergeUniqueMessages([...prev, message]));
+    });
 
     return () => {
       socket.off('rfi-seen', onRFISeen);
       socket.off('rfi-updated', onRFIUpdated);
+      socket.off('rfi-deleted', onRFIDeleted);
+      socket.off('rfi-conversation-message');
     };
-  }, [socket, projectId]);
+  }, [socket, projectId, selectedRFI?.id]);
 
   useEffect(() => {
     if (selectedRFI && String(selectedRFI.assigned_to) === String(user?.id) && !selectedRFI.seen_at) {
@@ -369,6 +407,23 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       }).catch(err => console.error("Failed to mark RFI as seen:", err));
     }
   }, [selectedRFI?.id, user?.id]);
+
+  useEffect(() => {
+    if (!selectedRFI) {
+      setConversationMessages([]);
+      setMessageText('');
+      setMessageAttachment(null);
+      return;
+    }
+
+    setLoadingMessages(true);
+    getRFIMessages(selectedRFI.id)
+      .then((messages) => setConversationMessages(mergeUniqueMessages(messages)))
+      .catch(err => {
+        console.error("getRFIMessages error", err);
+      })
+      .finally(() => setLoadingMessages(false));
+  }, [selectedRFI?.id]);
 
   const fetchAssignees = useCallback(async () => {
     try {
@@ -742,7 +797,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleUpdateResponse error', err);
-      Alert.alert(t('projectRfi.error'), t('projectRfi.failedToUpdateResponse'));
+      Alert.alert(t('projectRfi.error'), t('projectRfi.failedToSendMessage'));
     } finally {
 
       setUpdatingResponse(false);
@@ -768,6 +823,38 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       Alert.alert(t('projectRfi.error'), t('projectRfi.failedToUpdateStatus'));
     }
 
+  };
+
+  const sendConversationMessage = async () => {
+    if (!selectedRFI) return;
+    if (!messageText.trim() && !messageAttachment) return;
+
+    setUpdatingResponse(true);
+    try {
+      const formData = new FormData();
+      if (messageText.trim()) formData.append('text', messageText.trim());
+
+      if (messageAttachment) {
+        let filename = messageAttachment.split('/').pop() || `message_${Date.now()}.jpg`;
+        if (isAudio(messageAttachment) && !filename.includes('.')) filename += '.m4a';
+        const match = /\.(\w+)$/.exec(filename);
+        let type = isAudio(filename) ? 'audio/m4a' : 'image/jpeg';
+        if (match) {
+          type = isAudio(filename) ? `audio/${match[1]}` : `image/${match[1]}`;
+        }
+        formData.append('file', { uri: messageAttachment, name: filename, type } as any);
+      }
+
+      const message = await sendRFIMessage(selectedRFI.id, formData);
+      setConversationMessages(prev => mergeUniqueMessages([...prev, message]));
+      setMessageText('');
+      setMessageAttachment(null);
+    } catch (err) {
+      console.error('sendConversationMessage error', err);
+      Alert.alert(t('projectRfi.error'), t('projectRfi.failedToUpdateResponse'));
+    } finally {
+      setUpdatingResponse(false);
+    }
   };
 
   const filteredRfis = rfis.filter(r => {
@@ -1164,213 +1251,192 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </View>
                     )}
 
-                    {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
-                      <View style={{ marginBottom: 20, padding: 16, backgroundColor: colors.primary + '08', borderRadius: 16, borderWidth: 1, borderColor: colors.primary + '20' }}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, marginBottom: 8, textTransform: 'uppercase' }}>{t('projectRfi.response')}</Text>
-                        {selectedRFI.response ? <Text style={{ fontSize: 14, color: colors.text, lineHeight: 22, marginBottom: 12 }}>{selectedRFI.response}</Text> : null}
-
-                        {/* Existing Response Photos */}
-                        {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
-                          <View style={{ gap: 10 }}>
-                            {/* Images Row */}
-                            {selectedRFI.responsePhotoUrls.filter(u => !isAudio(u)).length > 0 && (
-                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                                {selectedRFI.responsePhotoUrls.map((uri, idx) => {
-                                  if (isAudio(uri)) return null;
-                                  return (
-                                    <View key={idx} style={{ position: 'relative' }}>
-                                      <TouchableOpacity onPress={() => setPreviewImage(uri)}>
-                                        <Image source={{ uri }} style={{ width: 100, height: 100, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
-                                      </TouchableOpacity>
-                                      {String(selectedRFI.assigned_to) === String(user.id) && (
-                                        <TouchableOpacity
-                                          onPress={() => {
-                                            const key = selectedRFI.response_photos?.[idx];
-                                            if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                            const newUrls = [...selectedRFI.responsePhotoUrls!];
-                                            const newPhotos = [...(selectedRFI.response_photos || [])];
-                                            newUrls.splice(idx, 1);
-                                            newPhotos.splice(idx, 1);
-                                            setSelectedRFI({ ...selectedRFI, responsePhotoUrls: newUrls, response_photos: newPhotos });
-                                          }}
-                                          style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
-                                        >
-                                          <Feather name="x" size={14} color="#fff" />
-                                        </TouchableOpacity>
-                                      )}
-                                    </View>
-                                  );
-                                })}
-                              </View>
-                            )}
-
-                            {/* Audios Column */}
-                            {selectedRFI.responsePhotoUrls.map((uri, idx) => {
-                              if (!isAudio(uri)) return null;
-                              return (
-                                <View key={idx} style={{
+                    <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.response')}</Text>
+                      {loadingMessages ? (
+                        <ActivityIndicator color={colors.primary} />
+                      ) : conversationMessages.length === 0 ? (
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectRfi.noMessagesYet')}</Text>
+                      ) : (
+                        <View style={{ gap: 10 }}>
+                          {conversationMessages.map((message) => {
+                            const isMine = String(message.sender_id) === String(user.id);
+                            return (
+                              <View key={message.id} style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                                <View style={{
+                                  maxWidth: '86%',
                                   padding: 12,
-                                  borderWidth: 1,
-                                  borderColor: colors.primary + '20',
                                   borderRadius: 16,
-                                  backgroundColor: colors.background,
-                                  width: '100%',
-                                  position: 'relative',
-                                  shadowColor: colors.primary,
-                                  shadowOffset: { width: 0, height: 2 },
-                                  shadowOpacity: 0.05,
-                                  shadowRadius: 4,
-                                  elevation: 3
+                                  backgroundColor: isMine ? colors.primary : colors.surface,
+                                  borderWidth: 1,
+                                  borderColor: isMine ? colors.primary : colors.border,
                                 }}>
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectRfi.voiceResponse')}</Text>
-                                  </View>
-
-                                  <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                  {String(selectedRFI.assigned_to) === String(user.id) && (
-                                    <TouchableOpacity
-                                      onPress={() => {
-                                        const key = selectedRFI.response_photos?.[idx];
-                                        if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                        const newUrls = [...selectedRFI.responsePhotoUrls!];
-                                        const newPhotos = [...(selectedRFI.response_photos || [])];
-                                        newUrls.splice(idx, 1);
-                                        newPhotos.splice(idx, 1);
-                                        setSelectedRFI({ ...selectedRFI, responsePhotoUrls: newUrls, response_photos: newPhotos });
-                                      }}
-                                      style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
-                                    >
-                                      <Feather name="x" size={14} color="#fff" />
+                                  <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : colors.textMuted, marginBottom: 4 }}>
+                                    {message.sender?.name || (isMine ? 'You' : 'User')}
+                                  </Text>
+                                  {message.text ? <Text style={{ fontSize: 13, color: isMine ? '#fff' : colors.text }}>{message.text}</Text> : null}
+                                  {message.attachment_type === 'image' && message.downloadUrl ? (
+                                    <TouchableOpacity onPress={() => setPreviewImage(message.downloadUrl!)}>
+                                      <Image source={{ uri: message.downloadUrl }} style={{ width: 160, height: 160, borderRadius: 12, marginTop: 8 }} />
                                     </TouchableOpacity>
-                                  )}
+                                  ) : null}
+                                  {message.attachment_type === 'audio' && message.downloadUrl ? (
+                                    <View style={{ marginTop: 8 }}>
+                                      <VoiceNotePlayer uri={message.downloadUrl} isMe={isMine} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                    </View>
+                                  ) : null}
+                                  <Text style={{ fontSize: 10, color: isMine ? 'rgba(255,255,255,0.8)' : colors.textMuted, marginTop: 6 }}>
+                                    {new Date(message.createdAt).toLocaleString()}
+                                  </Text>
                                 </View>
-                              );
-                            })}
-                          </View>
-                        )}
-                      </View>
-                    )}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
 
-                    {String(selectedRFI.assigned_to) === String(user.id) && (
-                      <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{selectedRFI.response ? t('projectRfi.updateResponse') : t('projectRfi.provideResponse')}</Text>
-
-
+                    {isConversationParticipant && (
+                      <View style={{ gap: 10, marginTop: 6 }}>
                         {selectedRFI.status !== 'closed' ? (
                           <>
-                            <TextInput
-                              value={responseBody}
-                              onChangeText={setResponseBody}
-                              placeholder={t('projectRfi.typeResponsePlaceholder')}
-                              placeholderTextColor={colors.textMuted}
-
-                              multiline
-                              style={{
-                                minHeight: 100,
-                                backgroundColor: colors.surface,
-                                borderRadius: 12,
-                                padding: 12,
-                                color: colors.text,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                textAlignVertical: 'top'
-                              }}
-                            />
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                              {responseImages.map((uri, idx) => (
-                                <View key={idx} style={{ position: 'relative' }}>
-                                  {isAudio(uri) ? (
-                                    <View style={{
-                                      padding: 12,
-                                      paddingRight: 32,
-                                      borderWidth: 1,
-                                      borderColor: colors.border,
-                                      borderRadius: 16,
-                                      backgroundColor: colors.surface,
-                                      width: SCREEN_W - 64,
-                                      minHeight: 64,
-                                      justifyContent: 'center',
-                                      shadowColor: '#000',
-                                      shadowOffset: { width: 0, height: 2 },
-                                      shadowOpacity: 0.05,
-                                      shadowRadius: 3,
-                                      elevation: 2
-                                    }}>
-                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectRfi.voiceResponse')}</Text>
-                                      </View>
-
-                                      <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                    </View>
+                            <View style={{
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                              borderRadius: 20,
+                              backgroundColor: colors.surface,
+                              padding: 12,
+                              gap: 10
+                            }}>
+                              {messageAttachment ? (
+                                <View style={{
+                                  borderRadius: 16,
+                                  borderWidth: 1,
+                                  borderColor: colors.border,
+                                  backgroundColor: colors.background,
+                                  padding: 10,
+                                  gap: 10
+                                }}>
+                                  {isAudio(messageAttachment) ? (
+                                    <VoiceNotePlayer uri={messageAttachment} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
                                   ) : (
-                                    <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }} />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                      <Image source={{ uri: messageAttachment }} style={{ width: 72, height: 72, borderRadius: 14, borderWidth: 1, borderColor: colors.border }} />
+                                      <View style={{ flex: 1, gap: 8 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('projectRfi.photo')}</Text>
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                          <TouchableOpacity
+                                            onPress={pickResponsePhotos}
+                                            style={{
+                                              height: 34,
+                                              paddingHorizontal: 12,
+                                              borderRadius: 10,
+                                              borderWidth: 1,
+                                              borderColor: colors.border,
+                                              backgroundColor: colors.surface,
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              flexDirection: 'row',
+                                              gap: 6
+                                            }}
+                                          >
+                                            <Feather name="edit-2" size={14} color={colors.text} />
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>Edit</Text>
+                                          </TouchableOpacity>
+                                          <TouchableOpacity
+                                            onPress={() => setMessageAttachment(null)}
+                                            style={{
+                                              height: 34,
+                                              paddingHorizontal: 12,
+                                              borderRadius: 10,
+                                              backgroundColor: '#fee2e2',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              flexDirection: 'row',
+                                              gap: 6
+                                            }}
+                                          >
+                                            <Feather name="trash-2" size={14} color="#ef4444" />
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Remove</Text>
+                                          </TouchableOpacity>
+                                        </View>
+                                      </View>
+                                    </View>
                                   )}
-                                  <TouchableOpacity
-                                    onPress={() => setResponseImages(prev => prev.filter((_, i) => i !== idx))}
-                                    style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
-                                  >
-                                    <Feather name="x" size={14} color="#fff" />
-                                  </TouchableOpacity>
-                                  {!isAudio(uri) && (
+                                  {isAudio(messageAttachment) ? (
                                     <TouchableOpacity
-                                      onPress={() => { setCameraMode('response'); setAnnotatingImageIndex(idx); }}
-                                      style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 8 }}
+                                      onPress={() => setMessageAttachment(null)}
+                                      style={{ alignSelf: 'flex-end', flexDirection: 'row', gap: 6, alignItems: 'center' }}
                                     >
-                                      <Feather name="edit-2" size={12} color="#fff" />
+                                      <Feather name="trash-2" size={14} color="#ef4444" />
+                                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Remove</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                </View>
+                              ) : null}
+                              <TextInput
+                                value={messageText}
+                                onChangeText={setMessageText}
+                                placeholder={t('projectRfi.typeResponsePlaceholder')}
+                                placeholderTextColor={colors.textMuted}
+                                multiline
+                                style={{
+                                  minHeight: 88,
+                                  color: colors.text,
+                                  textAlignVertical: 'top',
+                                  fontSize: 14
+                                }}
+                              />
+                              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
+                                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                  {!messageAttachment && !isVoiceRecording && (
+                                    <TouchableOpacity
+                                      onPress={pickResponsePhotos}
+                                      style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 14,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: colors.background
+                                      }}
+                                    >
+                                      <Feather name="camera" size={20} color={colors.textMuted} />
                                     </TouchableOpacity>
                                   )}
+                                  {!messageAttachment && (
+                                    <View style={{ flex: 1, minHeight: 40, justifyContent: 'center' }}>
+                                      <VoiceNoteRecorder
+                                        colors={colors}
+                                        onRecordingStateChange={setIsVoiceRecording}
+                                        onSend={(uri) => setMessageAttachment(uri)}
+                                        embedded
+                                      />
+                                    </View>
+                                  )}
                                 </View>
-                              ))}
-                              {!responseImageCount && !hasExistingResponseImage && (
-                                <TouchableOpacity
-                                  onPress={pickResponsePhotos}
-                                  style={{
-                                    width: 80, height: 80, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
-                                    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
-                                  }}
-                                >
-                                  <Feather name="camera" size={24} color={colors.textMuted} />
-                                </TouchableOpacity>
-                              )}
-
+                                {!isVoiceRecording && (
+                                  <TouchableOpacity
+                                    onPress={sendConversationMessage}
+                                    disabled={updatingResponse || (!messageText.trim() && !messageAttachment)}
+                                    style={{
+                                      backgroundColor: colors.primary,
+                                      minWidth: 132,
+                                      height: 44,
+                                      paddingHorizontal: 18,
+                                      borderRadius: 14,
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      opacity: (updatingResponse || (!messageText.trim() && !messageAttachment)) ? 0.6 : 1
+                                    }}
+                                  >
+                                    {updatingResponse ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.sendMessage')}</Text>}
+                                  </TouchableOpacity>
+                                )}
+                              </View>
                             </View>
-
-                            {/* Voice Recording Section */}
-                            <View style={{
-                              marginTop: 12,
-                              marginBottom: 8,
-                              minHeight: 44,
-                              justifyContent: 'center'
-                            }}>
-                              {!hasPendingResponseAudio && !hasExistingResponseAudio && (
-                                <VoiceNoteRecorder
-                                  colors={colors}
-                                  onRecordingStateChange={() => { }}
-                                  onSend={(uri) => {
-                                    setResponseImages(prev => {
-                                      const filtered = prev.filter(p => !isAudio(p));
-                                      return [...filtered, uri];
-                                    });
-                                  }}
-                                />
-                              )}
-                            </View>
-                            <TouchableOpacity
-                              onPress={() => handleUpdateResponse()}
-                              disabled={updatingResponse || (responseBody === (selectedRFI.response || '') && responseImages.length === 0 && removedResponsePhotos.length === 0)}
-                              style={{
-                                backgroundColor: colors.primary,
-                                height: 48,
-                                borderRadius: 12,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                opacity: (updatingResponse || (responseBody === (selectedRFI.response || '') && responseImages.length === 0 && removedResponsePhotos.length === 0)) ? 0.6 : 1
-                              }}
-                            >
-                              {updatingResponse ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{t('projectRfi.submitResponse')}</Text>}
-                            </TouchableOpacity>
 
                           </>
                         ) : (

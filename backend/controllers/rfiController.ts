@@ -631,6 +631,12 @@ export const deleteRFI = async (req: Request, res: Response) => {
             skipNotifications: true
         });
 
+        try {
+            getIO().to(`project-${rfi.project_id}`).emit('rfi-deleted', { rfiId: Number(id) });
+        } catch (e) {
+            console.error('Socket emit error (deleteRFI):', e);
+        }
+
         res.json({ message: 'RFI moved to trash successfully' });
     } catch (err) {
         console.error('deleteRFI error:', err);

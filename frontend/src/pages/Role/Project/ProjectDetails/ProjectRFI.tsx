@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
@@ -8,7 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-    X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2,
+    X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2, Pencil,
     AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,13 +20,16 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { getApiErrorMessage } from '@/helpers/apiError';
 import {
-    RFI, RFIStatus, getRFIs, createRFI, updateRFIStatus, getRFIAssignees, updateRFIResponse,
+    RFI, RFIStatus, ConversationMessage, getRFIs, createRFI, updateRFIStatus, getRFIAssignees,
     deleteRFI,
     updateRFI,
     getRFIById,
-    markRFISeen
+    markRFISeen,
+    getRFIMessages,
+    sendRFIMessage,
+    RFIAssignee,
 } from '@/services/rfiService';
-import { getAssignees, Assignee } from '@/services/snagService';
+import { Assignee } from '@/services/snagService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import FolderPickerDialog from './FolderPickerDialog';
 import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
@@ -44,12 +47,22 @@ const isAudio = (url: string) => {
 
 const isAudioFile = (file: File) => file.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(file.name);
 
+const mergeUniqueMessages = (messages: ConversationMessage[]) => {
+  const seen = new Set<string>();
+  return messages.filter((message) => {
+    const idStr = String(message.id);
+    if (seen.has(idStr)) return false;
+    seen.add(idStr);
+    return true;
+  });
+};
+
 interface ProjectRFIProps {
     project: Project;
     onUpdate?: () => void;
 }
 
-const STATUS_CONFIG: Record<RFIStatus, { icon: any; color: string; bg: string; key: string }> = {
+const STATUS_CONFIG: Record<RFIStatus, { icon: React.ElementType; color: string; bg: string; key: string }> = {
     open: { icon: AlertCircle, color: 'text-amber-500', bg: 'bg-amber-500/10', key: 'open_status' },
     closed: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-600/10', key: 'closed_status' },
     overdue: { icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10', key: 'overdue_status' },
@@ -64,7 +77,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const initialRfiId = searchParams?.get('rfiId');
 
     const [rfis, setRfis] = useState<RFI[]>([]);
-    const [assignees, setAssignees] = useState<Assignee[]>([]);
+    const [assignees, setAssignees] = useState<RFIAssignee[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<'all' | RFIStatus>('all');
     const [creatorFilter, setCreatorFilter] = useState<string>('all');
@@ -87,16 +100,19 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
     const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null);
     const [existingAudioKey, setExistingAudioKey] = useState<string | null>(null);
-    const [responseBody, setResponseBody] = useState('');
-    const [responsePhotos, setResponsePhotos] = useState<File[]>([]);
-    const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
+    const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    const [messageText, setMessageText] = useState('');
+    const [messageFile, setMessageFile] = useState<File | null>(null);
+    const [messagePreview, setMessagePreview] = useState<string | null>(null);
+    const [isVoiceRecording, setIsVoiceRecording] = useState(false);
     const [annotatingIdx, setAnnotatingIdx] = useState<number | null>(null);
     const [isEditing, setIsEditing] = useState(false);
-    const [removedResponsePhotos, setRemovedResponsePhotos] = useState<string[]>([]);
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
     const [showFolderPicker, setShowFolderPicker] = useState(false);
     const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -130,20 +146,14 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         setAnnotatingIdx(null);
     };
 
-    useEffect(() => {
-        if (selectedRFI) {
-            setResponseBody(selectedRFI.response || '');
-            setRemovedResponsePhotos([]);
-            setResponsePhotos([]);
-            setResponsePhotoPreviews([]);
-        }
-    }, [selectedRFI?.id]);
-
     const hasExistingFormAudio = !!existingAudioUrl && !audioPreview;
-    const hasPendingResponseImage = responsePhotos.some(file => !isAudioFile(file));
-    const hasPendingResponseAudio = responsePhotos.some(isAudioFile);
-    const hasExistingResponseImage = !!selectedRFI?.responsePhotoUrls?.some(url => !isAudio(url));
-    const hasExistingResponseAudio = !!selectedRFI?.responsePhotoUrls?.some(isAudio);
+
+    const isConversationParticipant = !!selectedRFI && (
+        String(selectedRFI.assigned_to) === String(user?.id) ||
+        String(selectedRFI.created_by) === String(user?.id) ||
+        String(selectedRFI.creator?.id) === String(user?.id)
+    );
+    const isConversationClosed = selectedRFI?.status === 'closed';
 
     useEffect(() => {
         if (selectedRFI && String(selectedRFI.assigned_to) === String(user?.id) && !selectedRFI.seen_at) {
@@ -154,13 +164,41 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         }
     }, [selectedRFI?.id, user?.id]);
 
+    useEffect(() => {
+        if (!selectedRFI) {
+            setConversationMessages([]);
+            setMessageText('');
+            setMessageFile(null);
+            setMessagePreview(null);
+            return;
+        }
+
+        setLoadingMessages(true);
+        getRFIMessages(selectedRFI.id)
+            .then(messages => setConversationMessages(mergeUniqueMessages(messages)))
+            .catch(() => toast.error(t('failed_update_response')))
+            .finally(() => setLoadingMessages(false));
+    }, [selectedRFI?.id]);
+
+    const scrollToBottom = () => {
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+    };
+
+    useEffect(() => {
+        if (!loadingMessages) {
+            setTimeout(scrollToBottom, 100);
+        }
+    }, [conversationMessages, loadingMessages]);
+
     const load = async (silent = false) => {
         if (!project?.id) return;
         if (!silent) setLoading(true);
         try {
             const [rfiData, assigneeData] = await Promise.all([
-                getRFIs(project.id as any),
-                getRFIAssignees(project.id as any),
+                getRFIs(project.id),
+                getRFIAssignees(project.id),
             ]);
             setRfis(rfiData);
             setAssignees(assigneeData);
@@ -198,14 +236,31 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             setSelectedRFI(prev => (prev && prev.id === data.rfi.id) ? data.rfi : prev);
         };
 
+        const onConversationMessage = (data: { itemType: 'rfi' | 'snag', itemId: number, message: ConversationMessage }) => {
+            if (data.itemType !== 'rfi') return;
+            setConversationMessages(prev => {
+                if (!selectedRFI || selectedRFI.id !== data.itemId) return prev;
+                return mergeUniqueMessages([...prev, data.message]);
+            });
+        };
+
+        const onRFIDeleted = (data: { rfiId: number }) => {
+            setRfis(prev => prev.filter(r => r.id !== data.rfiId));
+            setSelectedRFI(prev => (prev && prev.id === data.rfiId) ? null : prev);
+        };
+
         socket.on('rfi-seen', onRFSeen);
         socket.on('rfi-updated', onRFIUpdated);
+        socket.on('rfi-deleted', onRFIDeleted);
+        socket.on('rfi-conversation-message', onConversationMessage);
 
         return () => {
             socket.off('rfi-seen', onRFSeen);
             socket.off('rfi-updated', onRFIUpdated);
+            socket.off('rfi-deleted', onRFIDeleted);
+            socket.off('rfi-conversation-message', onConversationMessage);
         };
-    }, [socket, project?.id]);
+    }, [socket, project?.id, selectedRFI?.id]);
 
     useEffect(() => {
         if (initialRfiId) {
@@ -254,14 +309,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         });
     };
 
-    const removePhoto = (idx: number, isResponse = false) => {
-        if (isResponse) {
-            setResponsePhotos(prev => prev.filter((_, i) => i !== idx));
-            setResponsePhotoPreviews(prev => prev.filter((_, i) => i !== idx));
-        } else {
-            setNewPhotos((prev: File[]) => prev.filter((_, i) => i !== idx));
-            setPhotoPreviews((prev: string[]) => prev.filter((_, i) => i !== idx));
-        }
+    const removePhoto = (idx: number) => {
+        setNewPhotos((prev: File[]) => prev.filter((_, i) => i !== idx));
+        setPhotoPreviews((prev: string[]) => prev.filter((_, i) => i !== idx));
     };
 
     const addRFI = async () => {
@@ -385,34 +435,38 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         setSelectedFolderIds([]);
     };
 
-    const handleUpdateResponse = async () => {
+    const handleSendMessage = async () => {
         if (!selectedRFI) return;
+        if (!messageText.trim() && !messageFile) return;
         setSubmitting(true);
         try {
             const form = new FormData();
-            // Only append text response if non-empty; otherwise backend treats undefined
-            // and won't overwrite an existing response with an empty string
-            if (responseBody.trim()) {
-                form.append('response', responseBody.trim());
-            }
-            responsePhotos.forEach(p => form.append('photos', p));
-            if (removedResponsePhotos.length > 0) {
-                form.append('removedPhotos', JSON.stringify(removedResponsePhotos));
-            }
-            
-            const updated = await updateRFIResponse(selectedRFI.id, form);
-            toast.success(t('response_updated_msg'));
-            setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
-            setSelectedRFI(updated);
-            setResponseBody(updated.response || '');
-            setResponsePhotos([]);
-            setResponsePhotoPreviews([]);
-            if (onUpdate) onUpdate();
+            if (messageText.trim()) form.append('text', messageText.trim());
+            if (messageFile) form.append('file', messageFile);
+
+            const message = await sendRFIMessage(selectedRFI.id, form);
+            setConversationMessages(prev => mergeUniqueMessages([...prev, message]));
+            setMessageText('');
+            setMessageFile(null);
+            setMessagePreview(null);
         } catch (error) {
             toast.error(getApiErrorMessage(error, t('failed_update_response')));
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const handleMessageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const isAllowed = file.type.startsWith('image/') || file.type.startsWith('audio/');
+        if (!isAllowed) {
+            toast.error('Only image and audio attachments are supported');
+            return;
+        }
+        setMessageFile(file);
+        setMessagePreview(URL.createObjectURL(file));
+        e.target.value = '';
     };
 
     const handleStatusUpdate = async (id: number, status: RFIStatus) => {
@@ -456,7 +510,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-secondary/20 rounded-xl border border-border">
                     <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">{t('status_label')}</label>
-                        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as 'all' | RFIStatus)}>
                             <SelectTrigger className="h-9 text-xs bg-background">
                                 <SelectValue placeholder={t('all_status')} />
                             </SelectTrigger>
@@ -738,7 +792,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                 {t('link_btn')}
                                             </Button>
                                         )}
-                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && !selectedRFI.response && (
+                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && (
                                             <>
                                                 <Button 
                                                     variant="outline" 
@@ -819,7 +873,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     <div>
                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('linked_folders_title')}</p>
                                         <div className="flex flex-wrap gap-2">
-                                            {selectedRFI.linked_folders.map((f: any) => (
+                                            {selectedRFI.linked_folders.map((f: { id: number; name: string; folder_type: string }) => (
                                                 <button 
                                                     key={f.id} 
                                                     onClick={() => {
@@ -865,166 +919,148 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 )}
 
-                                {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
-                                    <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
-                                        <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">{t('response_title')}</p>
-                                        {selectedRFI.response && <p className="text-sm text-foreground whitespace-pre-wrap mb-3">{selectedRFI.response}</p>}
-                                        {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {selectedRFI.responsePhotoUrls.map((url, idx) => (
-                                                    isAudio(url) ? (
-                                                        <div key={idx} className="col-span-3 rounded-xl border border-accent/20 bg-card p-4 shadow-sm relative group">
-                                                            <div className="flex items-center gap-2 mb-3">
-                                                                <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                                                                <span className="text-[9px] font-bold text-accent uppercase tracking-widest">{t('voice_response_label')}</span>
-                                                            </div>
-                                                            <VoiceNotePlayer url={url} isMe={false} />
-                                                            {String(selectedRFI.assigned_to) === String(user?.id) && (
-                                                                <button 
-                                                                    onClick={() => {
-                                                                        const key = selectedRFI.response_photos?.[idx];
-                                                                        if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                                                        // Optimistic UI update
-                                                                        const newUrls = [...(selectedRFI.responsePhotoUrls || [])];
-                                                                        newUrls.splice(idx, 1);
-                                                                        const newPhotos = [...(selectedRFI.response_photos || [])];
-                                                                        newPhotos.splice(idx, 1);
-                                                                        setSelectedRFI({ ...selectedRFI, responsePhotoUrls: newUrls, response_photos: newPhotos });
-                                                                    }}
-                                                                    className="absolute top-2 right-2 bg-destructive/90 hover:bg-destructive p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                >
-                                                                    <X className="h-3 w-3 text-white" />
-                                                                </button>
+                                <div className="space-y-3 pt-4 border-t border-border">
+                                    <style>{`
+                                        .no-scrollbar::-webkit-scrollbar {
+                                            display: none;
+                                        }
+                                    `}</style>
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('response_title')}</p>
+                                    <div 
+                                        ref={chatContainerRef} 
+                                        className="space-y-3 max-h-[340px] overflow-y-auto pr-1 no-scrollbar" 
+                                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                                    >
+                                        {loadingMessages ? (
+                                            <div className="flex items-center text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('loading')}</div>
+                                        ) : conversationMessages.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground">No messages yet.</p>
+                                        ) : (
+                                            conversationMessages.map((message) => {
+                                                const isMine = String(message.sender_id) === String(user?.id);
+                                                return (
+                                                    <div key={message.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
+                                                        <div className={cn("max-w-[80%] rounded-2xl border px-3 py-2 shadow-sm", isMine ? "bg-accent text-accent-foreground border-accent/40" : "bg-card border-border")}>
+                                                            <p className={cn("text-[10px] font-bold mb-1", isMine ? "text-accent-foreground/80" : "text-muted-foreground")}>
+                                                                {message.sender?.name || (isMine ? 'You' : 'User')}
+                                                            </p>
+                                                            {message.text && <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>}
+                                                            {message.attachment_type === 'image' && message.downloadUrl && (
+                                                                <img
+                                                                    src={message.downloadUrl}
+                                                                    alt={message.file_name || 'Message attachment'}
+                                                                    className="mt-2 max-h-56 rounded-lg border border-black/5 cursor-pointer"
+                                                                    onClick={() => setViewPhoto(message.downloadUrl!)}
+                                                                />
                                                             )}
-                                                        </div>
-                                                    ) : (
-                                                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-border group">
-                                                            <img src={url} alt="Response photo" className="w-full h-full object-cover cursor-pointer" onClick={() => setViewPhoto(url)} />
-                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                                                                <ZoomIn className="h-4 w-4 text-white" />
-                                                            </div>
-                                                            {String(selectedRFI.assigned_to) === String(user?.id) && (
-                                                                <button 
-                                                                    onClick={() => {
-                                                                        const key = selectedRFI.response_photos?.[idx];
-                                                                        if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                                                        // Optimistic UI update
-                                                                        const newUrls = [...(selectedRFI.responsePhotoUrls || [])];
-                                                                        newUrls.splice(idx, 1);
-                                                                        const newPhotos = [...(selectedRFI.response_photos || [])];
-                                                                        newPhotos.splice(idx, 1);
-                                                                        setSelectedRFI({ ...selectedRFI, responsePhotoUrls: newUrls, response_photos: newPhotos });
-                                                                    }}
-                                                                    className="absolute top-1 right-1 bg-destructive/90 hover:bg-destructive p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                >
-                                                                    <X className="h-2 w-2 text-white" />
-                                                                </button>
+                                                            {message.attachment_type === 'audio' && message.downloadUrl && (
+                                                                <div className="mt-2">
+                                                                    <VoiceNotePlayer url={message.downloadUrl} isMe={isMine} />
+                                                                </div>
                                                             )}
+                                                            <p className={cn("mt-2 text-[10px]", isMine ? "text-accent-foreground/70" : "text-muted-foreground")}>
+                                                                {new Date(message.createdAt).toLocaleString()}
+                                                            </p>
                                                         </div>
-                                                    )
-                                                ))}
-                                            </div>
+                                                    </div>
+                                                );
+                                            })
                                         )}
                                     </div>
-                                )}
 
-                                {String(selectedRFI.assigned_to) === String(user?.id) && selectedRFI.status !== 'closed' && (
-                                    <div className="space-y-3 pt-4 border-t border-border">
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                        {(selectedRFI.response || (selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) ? t('update_response_title') : t('provide_response_title')}
-                                        </p>
-                                        <Textarea 
-                                            placeholder={t('rfi_response_placeholder')} 
-                                            value={responseBody} 
-                                            onChange={e => setResponseBody(e.target.value)}
-                                            className="min-h-[100px] text-sm"
-                                        />
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('response_attachments_label')}</label>
-                                            <div className="flex flex-wrap gap-2">
-                                                {responsePhotoPreviews.map((src, idx) => {
-                                                    const isAudioFile = responsePhotos[idx]?.type.startsWith('audio/');
-                                                    return (
-                                                        <div key={idx} className={`relative ${isAudioFile ? 'w-full max-w-md' : 'w-20 h-20'} rounded-xl overflow-hidden border border-border group bg-card shadow-sm hover:shadow-md transition-all`}>
-                                                            {isAudioFile ? (
-                                                                <div className="p-4 pr-10 flex flex-col gap-2">
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                                                                        <span className="text-[9px] font-bold text-accent uppercase tracking-tighter">{t('voice_response_label')}</span>
+                                    {isConversationParticipant && (
+                                        isConversationClosed ? (
+                                            <div className="rounded-xl border border-border bg-secondary/20 px-3 py-3 text-xs text-muted-foreground">
+                                                {t('closed_status')} - messages are disabled.
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
+                                                {messagePreview && (
+                                                    <div className={cn("rounded-2xl border border-border bg-secondary/20 p-3", messageFile && isAudioFile(messageFile) ? "" : "")}>
+                                                        {messageFile && isAudioFile(messageFile) ? (
+                                                            <VoiceNotePlayer url={messagePreview} isMe={false} />
+                                                        ) : (
+                                                            <div className="flex items-center gap-3">
+                                                                <img src={messagePreview} alt="Message preview" className="w-20 h-20 rounded-xl object-cover border border-border" />
+                                                                <div className="flex flex-col gap-2">
+                                                                    <p className="text-sm font-semibold">{t('photo')}</p>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <label className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-medium cursor-pointer hover:bg-secondary/40 transition-colors">
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                            Edit
+                                                                            <input type="file" accept="image/*" className="hidden" onChange={handleMessageFileSelect} />
+                                                                        </label>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setMessageFile(null);
+                                                                                setMessagePreview(null);
+                                                                            }}
+                                                                            className="inline-flex items-center gap-1 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/15 transition-colors"
+                                                                        >
+                                                                            <X className="h-3.5 w-3.5" />
+                                                                            Remove
+                                                                        </button>
                                                                     </div>
-                                                                    <VoiceNotePlayer url={src} isMe={false} />
                                                                 </div>
-                                                            ) : (
-                                                                <img src={src} alt="Preview" className="w-full h-full object-cover" />
-                                                            )}
-                                                            <button 
-                                                                onClick={() => removePhoto(idx, true)} 
-                                                                className={`absolute top-2 right-2 bg-destructive/90 hover:bg-destructive p-1.5 rounded-full shadow-sm ${isAudioFile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity z-10`}
-                                                            >
-                                                                <X className="h-3 w-3 text-white" />
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })}
-                                                <div className="flex items-center gap-2">
-                                                    {!hasPendingResponseImage && !hasExistingResponseImage && (
-                                                        <label className="w-16 h-16 border-dashed border-2 border-border rounded-lg flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors">
-                                                            <ImagePlus className="h-4 w-4 text-muted-foreground" />
-                                                            <input 
-                                                                type="file" 
-                                                                multiple 
-                                                                accept="image/*" 
-                                                                className="hidden" 
-                                                                onChange={(e) => {
-                                                                    const files = Array.from(e.target.files || []);
-                                                                    if (files.length === 0) return;
-                                                                    const file = files[0];
-                                                                    setResponsePhotos(prev => [...prev.filter(isAudioFile), file]);
-                                                                    const r = new FileReader();
-                                                                    r.onload = () => {
-                                                                        setResponsePhotoPreviews(prev => {
-                                                                            const filtered = prev.filter((_, idx) => {
-                                                                                const file = responsePhotos[idx];
-                                                                                return file ? isAudioFile(file) : false;
-                                                                            });
-                                                                            return [...filtered, r.result as string];
-                                                                        });
-                                                                    };
-                                                                    r.readAsDataURL(file);
-                                                                }} 
-                                                            />
-                                                        </label>
-                                                    )}
-                                                    {!hasPendingResponseAudio && !hasExistingResponseAudio && (
-                                                        <div className="flex items-center justify-center px-2">
-                                                            <VoiceNoteRecorder 
-                                                                onSend={(file) => {
-                                                                    const url = URL.createObjectURL(file);
-                                                                    setResponsePhotos(prev => [...prev.filter(f => !isAudioFile(f)), file]);
-                                                                    setResponsePhotoPreviews(prev => {
-                                                                        const filtered = prev.filter((_, idx) => {
-                                                                            const existingFile = responsePhotos[idx];
-                                                                            return existingFile ? !isAudioFile(existingFile) : false;
-                                                                        });
-                                                                        return [...filtered, url];
-                                                                    });
-                                                                }}
-                                                            />
-                                                        </div>
+                                                            </div>
+                                                        )}
+                                                        {messageFile && isAudioFile(messageFile) ? (
+                                                            <div className="flex justify-end mt-2">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setMessageFile(null);
+                                                                        setMessagePreview(null);
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/15 transition-colors"
+                                                                >
+                                                                    <X className="h-3.5 w-3.5" />
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                )}
+                                                <Textarea
+                                                    placeholder={t('rfi_response_placeholder')}
+                                                    value={messageText}
+                                                    onChange={e => setMessageText(e.target.value)}
+                                                    className="min-h-[96px] resize-none text-sm border-0 bg-transparent shadow-none focus-visible:ring-0 p-0"
+                                                />
+                                                <div className="flex items-end gap-3">
+                                                    <div className="flex flex-1 items-center gap-3">
+                                                        {!messageFile && !isVoiceRecording && (
+                                                            <label className="w-11 h-11 rounded-xl border border-border bg-background flex items-center justify-center cursor-pointer hover:bg-secondary/30 transition-colors shrink-0">
+                                                                <ImagePlus className="h-4 w-4 text-muted-foreground" />
+                                                                <input type="file" accept="image/*,audio/*" className="hidden" onChange={handleMessageFileSelect} />
+                                                            </label>
+                                                        )}
+                                                        {!messageFile && (
+                                                            <div className="flex-1 min-w-0">
+                                                                <VoiceNoteRecorder
+                                                                    onRecordingStateChange={setIsVoiceRecording}
+                                                                    onSend={(file) => {
+                                                                        setMessageFile(file);
+                                                                        setMessagePreview(URL.createObjectURL(file));
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {!isVoiceRecording && (
+                                                        <Button
+                                                            onClick={handleSendMessage}
+                                                            disabled={submitting || (!messageText.trim() && !messageFile)}
+                                                            className="min-w-[140px] h-11 rounded-xl bg-accent text-accent-foreground"
+                                                        >
+                                                            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
+                                                            Send message
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </div>
-                                        </div>
-                                        <Button 
-                                            onClick={handleUpdateResponse} 
-                                            disabled={submitting || (responseBody === (selectedRFI.response || '') && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
-                                            className="w-full bg-accent text-accent-foreground"
-                                        >
-                                            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
-                                            {t('submit_response_btn')}
-                                        </Button>
-                                    </div>
-                                )}
+                                        )
+                                    )}
+                                </div>
 
                                 {String(selectedRFI.assigned_to) === String(user?.id) && (
                                     <div className="pt-4 border-t border-border space-y-3">

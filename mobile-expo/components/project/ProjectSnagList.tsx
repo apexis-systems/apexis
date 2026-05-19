@@ -42,13 +42,16 @@ import { Project } from "@/types";
 import {
     Snag,
     SnagStatus,
+    ConversationMessage,
     getSnags,
     updateSnagStatus,
     deleteSnagApi,
     updateSnag,
     getAssignees,
     Assignee,
-    markSnagSeen
+    markSnagSeen,
+    getSnagMessages,
+    sendSnagMessage
 } from "@/services/snagService";
 import * as ImagePicker from 'expo-image-picker';
 import FullScreenImageModal from "@/components/shared/FullScreenImageModal";
@@ -74,6 +77,15 @@ interface Props {
 }
 
 const STATUS_CYCLE: SnagStatus[] = ["amber", "green", "red"];
+
+const mergeUniqueMessages = (messages: ConversationMessage[]) => {
+    const seen = new Set<number>();
+    return messages.filter((message) => {
+        if (seen.has(message.id)) return false;
+        seen.add(message.id);
+        return true;
+    });
+};
 
 
 export default function ProjectSnagList({ project, initialSnagId }: Props) {
@@ -120,6 +132,11 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [responseComment, setResponseComment] = useState("");
     const [responsePhotos, setResponsePhotos] = useState<string[]>([]);
     const [removedResponsePhotos, setRemovedResponsePhotos] = useState<string[]>([]);
+    const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    const [messageText, setMessageText] = useState("");
+    const [messageAttachment, setMessageAttachment] = useState<string | null>(null);
+    const [isVoiceRecording, setIsVoiceRecording] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [showFolderPicker, setShowFolderPicker] = useState(false);
     const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
@@ -243,10 +260,22 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         }
     }, [selectedSnag?.id]);
 
+    useEffect(() => {
+        if (responsePhotos.length > 0) {
+            const latest = responsePhotos[responsePhotos.length - 1];
+            setMessageAttachment(latest);
+        }
+    }, [responsePhotos]);
+
     const hasPendingResponseImage = responsePhotos.some(uri => !isAudio(uri));
     const hasPendingResponseAudio = responsePhotos.some(isAudio);
     const hasExistingResponseImage = !!selectedSnag?.responsePhotoUrls?.some(uri => !isAudio(uri));
     const hasExistingResponseAudio = !!selectedSnag?.responsePhotoUrls?.some(isAudio);
+    const isConversationParticipant = !!selectedSnag && (
+        String(selectedSnag.assigned_to) === String(user?.id) ||
+        String(selectedSnag.created_by) === String(user?.id) ||
+        String(selectedSnag.creator?.id) === String(user?.id)
+    );
 
     // ── Fetch data ─────────────────────────────────────────────────────────────
 
@@ -294,14 +323,26 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             setSelectedSnag(prev => (prev && prev.id === data.snag.id) ? data.snag : prev);
         };
 
+        const onSnagDeleted = (data: { snagId: number }) => {
+            setSnags(prev => prev.filter(s => s.id !== data.snagId));
+            setSelectedSnag(prev => (prev && prev.id === data.snagId) ? null : prev);
+        };
+
         socket.on('snag-seen', onSnagSeen);
         socket.on('snag-updated', onSnagUpdated);
+        socket.on('snag-deleted', onSnagDeleted);
+        socket.on('snag-conversation-message', ({ itemType, itemId, message }: { itemType: 'rfi' | 'snag'; itemId: number; message: ConversationMessage }) => {
+            if (itemType !== 'snag' || !selectedSnag || selectedSnag.id !== itemId) return;
+            setConversationMessages(prev => mergeUniqueMessages([...prev, message]));
+        });
 
         return () => {
             socket.off('snag-seen', onSnagSeen);
             socket.off('snag-updated', onSnagUpdated);
+            socket.off('snag-deleted', onSnagDeleted);
+            socket.off('snag-conversation-message');
         };
-    }, [socket, projectId]);
+    }, [socket, projectId, selectedSnag?.id]);
 
     useEffect(() => {
         if (selectedSnag && String(selectedSnag.assigned_to) === String(user?.id) && !selectedSnag.seen_at) {
@@ -311,6 +352,21 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             }).catch(err => console.error("Failed to mark snag as seen:", err));
         }
     }, [selectedSnag?.id, user?.id]);
+
+    useEffect(() => {
+        if (!selectedSnag) {
+            setConversationMessages([]);
+            setMessageText("");
+            setMessageAttachment(null);
+            return;
+        }
+
+        setLoadingMessages(true);
+        getSnagMessages(selectedSnag.id)
+            .then((messages) => setConversationMessages(mergeUniqueMessages(messages)))
+            .catch(err => console.error("getSnagMessages error", err))
+            .finally(() => setLoadingMessages(false));
+    }, [selectedSnag?.id]);
 
     useFocusEffect(
         useCallback(() => {
@@ -394,7 +450,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             }
         } catch (error) {
             console.error("handleUpdateStatus error", error);
-            Alert.alert(t('projectSnags.errorTitle') as string, t('projectSnags.errorStatusUpdate') as string);
+            Alert.alert(t('projectSnags.errorTitle') as string, t('projectSnags.failedToSendMessage') as string);
         } finally {
 
             setSubmitting(false);
@@ -425,6 +481,38 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 },
             },
         ]);
+    };
+
+    const sendConversationMessage = async () => {
+        if (!selectedSnag) return;
+        if (!messageText.trim() && !messageAttachment) return;
+
+        setSubmitting(true);
+        try {
+            const formData = new FormData();
+            if (messageText.trim()) formData.append('text', messageText.trim());
+
+            if (messageAttachment) {
+                let filename = messageAttachment.split('/').pop() || `message_${Date.now()}.jpg`;
+                if (isAudio(messageAttachment) && !filename.includes('.')) filename += '.m4a';
+                const match = /\.(\w+)$/.exec(filename);
+                let type = isAudio(filename) ? 'audio/m4a' : 'image/jpeg';
+                if (match) {
+                    type = isAudio(filename) ? `audio/${match[1]}` : `image/${match[1]}`;
+                }
+                formData.append('file', { uri: messageAttachment, name: filename, type } as any);
+            }
+
+            const message = await sendSnagMessage(selectedSnag.id, formData);
+            setConversationMessages(prev => mergeUniqueMessages([...prev, message]));
+            setMessageText("");
+            setMessageAttachment(null);
+        } catch (error) {
+            console.error("sendConversationMessage error", error);
+            Alert.alert(t('projectSnags.errorTitle') as string, t('projectSnags.failedToSendMessage') as string);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
 
@@ -1203,182 +1291,193 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 </View>
                                             )}
 
-                                            {(selectedSnag.response || (selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
-                                                <View style={{ padding: 12, backgroundColor: colors.primary + '08', borderRadius: 12, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
-                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, marginBottom: 4, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
-                                                    {selectedSnag.response ? <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text> : null}
-
-                                                    {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
-                                                        <View style={{ marginTop: 10, gap: 10 }}>
-                                                            {/* Images Row */}
-                                                            {selectedSnag.responsePhotoUrls.filter(url => !isAudio(url)).length > 0 && (
-                                                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                                                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                                                                        {selectedSnag.responsePhotoUrls.filter(url => !isAudio(url)).map((url, i) => (
-                                                                            <TouchableOpacity key={i} onPress={() => setViewPhoto(url)} style={{ position: 'relative' }}>
-                                                                                <Image source={{ uri: url }} style={{ width: 80, height: 80, borderRadius: 8 }} />
-                                                                                {String(selectedSnag.assigned_to) === String(user?.id) && (
-                                                                                    <TouchableOpacity
-                                                                                        onPress={() => {
-                                                                                            const absoluteIdx = selectedSnag.responsePhotoUrls!.indexOf(url);
-                                                                                            const key = selectedSnag.response_photos?.[absoluteIdx];
-                                                                                            if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                                                                            const newUrls = [...selectedSnag.responsePhotoUrls!];
-                                                                                            const newPhotos = [...(selectedSnag.response_photos || [])];
-                                                                                            newUrls.splice(absoluteIdx, 1);
-                                                                                            newPhotos.splice(absoluteIdx, 1);
-                                                                                            setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
-                                                                                        }}
-                                                                                        style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
-                                                                                    >
-                                                                                        <Feather name="x" size={10} color="#fff" />
-                                                                                    </TouchableOpacity>
-                                                                                )}
+                                            <View style={{ gap: 10 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
+                                                {loadingMessages ? (
+                                                    <ActivityIndicator color={colors.primary} />
+                                                ) : conversationMessages.length === 0 ? (
+                                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.noMessagesYet')}</Text>
+                                                ) : (
+                                                    <View style={{ gap: 10 }}>
+                                                        {conversationMessages.map((message) => {
+                                                            const isMine = String(message.sender_id) === String(user?.id);
+                                                            return (
+                                                                <View key={message.id} style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                                                                    <View style={{
+                                                                        maxWidth: '86%',
+                                                                        padding: 12,
+                                                                        borderRadius: 16,
+                                                                        backgroundColor: isMine ? colors.primary : colors.surface,
+                                                                        borderWidth: 1,
+                                                                        borderColor: isMine ? colors.primary : colors.border
+                                                                    }}>
+                                                                        <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : colors.textMuted, marginBottom: 4 }}>
+                                                                            {message.sender?.name || (isMine ? 'You' : 'User')}
+                                                                        </Text>
+                                                                        {message.text ? <Text style={{ fontSize: 13, color: isMine ? '#fff' : colors.text }}>{message.text}</Text> : null}
+                                                                        {message.attachment_type === 'image' && message.downloadUrl ? (
+                                                                            <TouchableOpacity onPress={() => setViewPhoto(message.downloadUrl!)}>
+                                                                                <Image source={{ uri: message.downloadUrl }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
                                                                             </TouchableOpacity>
-                                                                        ))}
+                                                                        ) : null}
+                                                                        {message.attachment_type === 'audio' && message.downloadUrl ? (
+                                                                            <View style={{ marginTop: 8 }}>
+                                                                                <VoiceNotePlayer uri={message.downloadUrl} isMe={isMine} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                                            </View>
+                                                                        ) : null}
+                                                                        <Text style={{ fontSize: 10, color: isMine ? 'rgba(255,255,255,0.8)' : colors.textMuted, marginTop: 6 }}>
+                                                                            {new Date(message.createdAt).toLocaleString()}
+                                                                        </Text>
                                                                     </View>
-                                                                </ScrollView>
-                                                            )}
+                                                                </View>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                )}
+                                            </View>
 
-                                                            {/* Audios Column */}
-                                                            {selectedSnag.responsePhotoUrls.filter(url => isAudio(url)).map((url, i) => (
-                                                                <View key={i} style={{
-                                                                    padding: 10, borderWidth: 1, borderColor: colors.primary + '20', borderRadius: 12,
-                                                                    backgroundColor: colors.background, width: '100%', position: 'relative'
-                                                                }}>
-                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                                        <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceResponseHeader').toUpperCase()}</Text>
+                                            {/* Response Section */}
+                                            {isConversationParticipant && (
+                                                <View style={{ gap: 10, marginTop: 6 }}>
+                                                    {selectedSnag.status !== 'green' ? (
+                                                        <>
+                                                            <View style={{
+                                                                borderWidth: 1,
+                                                                borderColor: colors.border,
+                                                                borderRadius: 20,
+                                                                backgroundColor: colors.surface,
+                                                                padding: 12,
+                                                                gap: 10
+                                                            }}>
+                                                                {messageAttachment ? (
+                                                                    <View style={{
+                                                                        borderRadius: 16,
+                                                                        borderWidth: 1,
+                                                                        borderColor: colors.border,
+                                                                        backgroundColor: colors.background,
+                                                                        padding: 10,
+                                                                        gap: 10
+                                                                    }}>
+                                                                        {isAudio(messageAttachment) ? (
+                                                                            <VoiceNotePlayer uri={messageAttachment} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                                        ) : (
+                                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                                                <Image source={{ uri: messageAttachment }} style={{ width: 72, height: 72, borderRadius: 14, borderWidth: 1, borderColor: colors.border }} />
+                                                                                <View style={{ flex: 1, gap: 8 }}>
+                                                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{t('projectSnags.photo')}</Text>
+                                                                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                                                        <TouchableOpacity
+                                                                                            onPress={pickResponsePhotos}
+                                                                                            style={{
+                                                                                                height: 34,
+                                                                                                paddingHorizontal: 12,
+                                                                                                borderRadius: 10,
+                                                                                                borderWidth: 1,
+                                                                                                borderColor: colors.border,
+                                                                                                backgroundColor: colors.surface,
+                                                                                                alignItems: 'center',
+                                                                                                justifyContent: 'center',
+                                                                                                flexDirection: 'row',
+                                                                                                gap: 6
+                                                                                            }}
+                                                                                        >
+                                                                                            <Feather name="edit-2" size={14} color={colors.text} />
+                                                                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>Edit</Text>
+                                                                                        </TouchableOpacity>
+                                                                                        <TouchableOpacity
+                                                                                            onPress={() => setMessageAttachment(null)}
+                                                                                            style={{
+                                                                                                height: 34,
+                                                                                                paddingHorizontal: 12,
+                                                                                                borderRadius: 10,
+                                                                                                backgroundColor: '#fee2e2',
+                                                                                                alignItems: 'center',
+                                                                                                justifyContent: 'center',
+                                                                                                flexDirection: 'row',
+                                                                                                gap: 6
+                                                                                            }}
+                                                                                        >
+                                                                                            <Feather name="trash-2" size={14} color="#ef4444" />
+                                                                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Remove</Text>
+                                                                                        </TouchableOpacity>
+                                                                                    </View>
+                                                                                </View>
+                                                                            </View>
+                                                                        )}
+                                                                        {isAudio(messageAttachment) ? (
+                                                                            <TouchableOpacity
+                                                                                onPress={() => setMessageAttachment(null)}
+                                                                                style={{ alignSelf: 'flex-end', flexDirection: 'row', gap: 6, alignItems: 'center' }}
+                                                                            >
+                                                                                <Feather name="trash-2" size={14} color="#ef4444" />
+                                                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Remove</Text>
+                                                                            </TouchableOpacity>
+                                                                        ) : null}
                                                                     </View>
-
-                                                                    <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                                                    {String(selectedSnag.assigned_to) === String(user?.id) && (
+                                                                ) : null}
+                                                                <TextInput
+                                                                    value={messageText}
+                                                                    onChangeText={setMessageText}
+                                                                    placeholder={t('projectSnags.responsePlaceholder') as string}
+                                                                    placeholderTextColor={colors.textMuted}
+                                                                    multiline
+                                                                    style={{
+                                                                        minHeight: 88,
+                                                                        color: colors.text,
+                                                                        textAlignVertical: 'top',
+                                                                        fontSize: 14
+                                                                    }}
+                                                                />
+                                                                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
+                                                                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                                        {!messageAttachment && !isVoiceRecording && (
+                                                                            <TouchableOpacity
+                                                                                onPress={pickResponsePhotos}
+                                                                                style={{
+                                                                                    width: 44,
+                                                                                    height: 44,
+                                                                                    borderRadius: 14,
+                                                                                    borderWidth: 1,
+                                                                                    borderColor: colors.border,
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    backgroundColor: colors.background
+                                                                                }}
+                                                                            >
+                                                                                <Feather name="camera" size={20} color={colors.textMuted} />
+                                                                            </TouchableOpacity>
+                                                                        )}
+                                                                        {!messageAttachment && (
+                                                                            <View style={{ flex: 1, minHeight: 40, justifyContent: 'center' }}>
+                                                                                <VoiceNoteRecorder
+                                                                                    colors={colors}
+                                                                                    onRecordingStateChange={setIsVoiceRecording}
+                                                                                    onSend={(uri) => setMessageAttachment(uri)}
+                                                                                    embedded
+                                                                                />
+                                                                            </View>
+                                                                        )}
+                                                                    </View>
+                                                                    {!isVoiceRecording && (
                                                                         <TouchableOpacity
-                                                                            onPress={() => {
-                                                                                const audioUrls = selectedSnag.responsePhotoUrls!.filter(url => isAudio(url));
-                                                                                const indexInAll = selectedSnag.responsePhotoUrls!.indexOf(url);
-                                                                                const key = selectedSnag.response_photos?.[indexInAll];
-                                                                                if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                                                                const newUrls = [...selectedSnag.responsePhotoUrls!];
-                                                                                newUrls.splice(indexInAll, 1);
-                                                                                const newPhotos = [...(selectedSnag.response_photos || [])];
-                                                                                newPhotos.splice(indexInAll, 1);
-                                                                                setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                                                            onPress={sendConversationMessage}
+                                                                            disabled={submitting || (!messageText.trim() && !messageAttachment)}
+                                                                            style={{
+                                                                                backgroundColor: colors.primary,
+                                                                                height: 44,
+                                                                                minWidth: 132,
+                                                                                paddingHorizontal: 18,
+                                                                                borderRadius: 14,
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                opacity: (submitting || (!messageText.trim() && !messageAttachment)) ? 0.6 : 1
                                                                             }}
-                                                                            style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3, zIndex: 10 }}
                                                                         >
-                                                                            <Feather name="x" size={10} color="#fff" />
+                                                                            {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('projectSnags.sendMessage')}</Text>}
                                                                         </TouchableOpacity>
                                                                     )}
                                                                 </View>
-                                                            ))}
-                                                        </View>
-                                                    )}
-                                                </View>
-                                            )}
-
-                                            {/* Response Section */}
-                                            {String(selectedSnag.assigned_to) === String(user?.id) && (
-                                                <View style={{ gap: 10, marginTop: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
-                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{selectedSnag.response ? t('projectSnags.updateResponse') : t('projectSnags.provideResponse')}</Text>
-
-
-                                                    {selectedSnag.status !== 'green' ? (
-                                                        <>
-                                                            <TextInput
-                                                                value={responseComment}
-                                                                onChangeText={setResponseComment}
-                                                                placeholder={t('projectSnags.responsePlaceholder') as string}
-                                                                placeholderTextColor={colors.textMuted}
-
-                                                                multiline
-                                                                style={{
-                                                                    minHeight: 70,
-                                                                    backgroundColor: colors.surface,
-                                                                    borderRadius: 10,
-                                                                    padding: 10,
-                                                                    color: colors.text,
-                                                                    borderWidth: 1,
-                                                                    borderColor: colors.border,
-                                                                    textAlignVertical: 'top',
-                                                                    fontSize: 13
-                                                                }}
-                                                            />
-                                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                                                                {responsePhotos.map((uri, i) => (
-                                                                    <View key={i} style={{ position: 'relative' }}>
-                                                                        {isAudio(uri) ? (
-                                                                            <View style={{
-                                                                                padding: 10, paddingRight: 32, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
-                                                                                backgroundColor: colors.surface, width: SCREEN_W - 80, minHeight: 64, justifyContent: 'center'
-                                                                            }}>
-                                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                                                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>{t('projectSnags.voiceResponseHeader').toUpperCase()}</Text>
-                                                                                </View>
-                                                                                <VoiceNotePlayer uri={uri} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                                                            </View>
-                                                                        ) : (
-                                                                            <Image source={{ uri }} style={{ width: 70, height: 70, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} />
-                                                                        )}
-                                                                        <TouchableOpacity
-                                                                            onPress={() => setResponsePhotos(prev => prev.filter((_, idx) => idx !== i))}
-                                                                            style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', borderRadius: 10, padding: 2, zIndex: 10 }}
-                                                                        >
-                                                                            <Feather name="x" size={12} color="#fff" />
-                                                                        </TouchableOpacity>
-                                                                        {!isAudio(uri) && (
-                                                                            <TouchableOpacity
-                                                                                onPress={() => setAnnotatingImageIndex(i)}
-                                                                                style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', padding: 5, borderRadius: 8 }}
-                                                                            >
-                                                                                <Feather name="edit-2" size={10} color="#fff" />
-                                                                            </TouchableOpacity>
-                                                                        )}
-                                                                    </View>
-                                                                ))}
-                                                                {!hasPendingResponseImage && !hasExistingResponseImage && (
-                                                                    <TouchableOpacity
-                                                                        onPress={pickResponsePhotos}
-                                                                        style={{
-                                                                            width: 70, height: 70, borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border,
-                                                                            alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface
-                                                                        }}
-                                                                    >
-                                                                        <Feather name="camera" size={20} color={colors.textMuted} />
-                                                                    </TouchableOpacity>
-                                                                )}
                                                             </View>
-
-                                                            <View style={{ marginTop: 12, marginBottom: 8 }}>
-                                                                {!hasPendingResponseAudio && !hasExistingResponseAudio && (
-                                                                    <VoiceNoteRecorder
-                                                                        colors={colors}
-                                                                        onRecordingStateChange={() => { }}
-                                                                        onSend={(uri) => {
-                                                                            setResponsePhotos(prev => {
-                                                                                const filtered = prev.filter(p => !isAudio(p));
-                                                                                return [...filtered, uri];
-                                                                            });
-                                                                        }}
-                                                                    />
-                                                                )}
-                                                            </View>
-
-                                                            <TouchableOpacity
-                                                                onPress={() => handleUpdateStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos, removedResponsePhotos)}
-                                                                disabled={submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
-                                                                style={{
-                                                                    backgroundColor: colors.primary,
-                                                                    height: 42,
-                                                                    borderRadius: 10,
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    opacity: (submitting || (responseComment === (selectedSnag.response || "") && responsePhotos.length === 0 && removedResponsePhotos.length === 0)) ? 0.6 : 1
-                                                                }}
-                                                            >
-                                                                {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('projectSnags.submitResponse')}</Text>}
-                                                            </TouchableOpacity>
 
                                                         </>
                                                     ) : (
@@ -1394,7 +1493,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                             {STATUS_CYCLE.map(s => (
                                                                 <TouchableOpacity
                                                                     key={s}
-                                                                    onPress={() => handleUpdateStatus(selectedSnag, s, responseComment, responsePhotos, removedResponsePhotos)}
+                                                                    onPress={() => handleUpdateStatus(selectedSnag, s)}
                                                                     style={{
                                                                         flex: 1, height: 34, borderRadius: 8,
                                                                         backgroundColor: selectedSnag.status === s ? STATUS_CONFIG[s].bg : colors.surface,

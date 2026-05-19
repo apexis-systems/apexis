@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { getIO } from "../socket.ts";
 import "multer";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { PutObjectCommand, GetObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
@@ -287,7 +288,13 @@ export const createSnag = async (req: Request, res: Response) => {
         { model: users, as: "creator", attributes: ["id", "name"] },
       ],
     });
-    res.status(201).json({ snag: await withPresignedUrl(full!) });
+    const snagWithUrls = await withPresignedUrl(full!);
+    try {
+      getIO().to(`project-${(snag as any).project_id}`).emit('snag-updated', { snag: snagWithUrls });
+    } catch (e) {
+      console.error('Socket emit error (createSnag):', e);
+    }
+    res.status(201).json({ snag: snagWithUrls });
   } catch (err) {
     console.error("createSnag error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -403,7 +410,25 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
         skipNotifications: true
       });
     }
-    res.json({ snag: await withPresignedUrl(snag) });
+    const full = await snags.findByPk((snag as any).id, {
+      attributes: [
+        "id", "project_id", "title", "description", "photo_url", 
+        "audio_url",
+        "assigned_to", "status", "response", "response_photos", 
+        "created_by", "createdAt", "updatedAt", "folder_ids"
+      ],
+      include: [
+        { model: users, as: "assignee", attributes: ["id", "name"] },
+        { model: users, as: "creator", attributes: ["id", "name"] },
+      ],
+    });
+    const snagWithUrls = await withPresignedUrl(full || snag);
+    try {
+      getIO().to(`project-${(snag as any).project_id}`).emit('snag-updated', { snag: snagWithUrls });
+    } catch (e) {
+      console.error('Socket emit error (updateSnagStatus):', e);
+    }
+    res.json({ snag: snagWithUrls });
 
     // Notify assignee and creator if status changed by someone else
     const notifyIds = new Set<number>();
@@ -514,6 +539,12 @@ export const deleteSnag = async (req: Request, res: Response) => {
       metadata: { snagId: id, type: 'snags' },
       skipNotifications: true
     });
+
+    try {
+      getIO().to(`project-${snag.project_id}`).emit('snag-deleted', { snagId: Number(id) });
+    } catch (e) {
+      console.error('Socket emit error (deleteSnag):', e);
+    }
 
     res.json({ message: "Moved to trash" });
   } catch (err) {
@@ -702,7 +733,14 @@ export const updateSnag = async (req: Request | any, res: Response) => {
       ],
     });
 
-    res.json({ snag: await withPresignedUrl(full!) });
+    const snagWithUrls = await withPresignedUrl(full!);
+    try {
+      getIO().to(`project-${snag.project_id}`).emit('snag-updated', { snag: snagWithUrls });
+    } catch (e) {
+      console.error('Socket emit error (updateSnag):', e);
+    }
+
+    res.json({ snag: snagWithUrls });
   } catch (err) {
     console.error("updateSnag error:", err);
     res.status(500).json({ error: "Internal server error" });

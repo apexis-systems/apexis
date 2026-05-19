@@ -331,6 +331,7 @@
         },
         "projectSnags": {
             "successTitle": "విజయం",
+            "errorTitle": "లోపం",
             "by": "ద్వారా",
             "status": {
                 "waiting": "అనుమతి కోసం వేచి ఉంది",
@@ -386,6 +387,9 @@
             "voiceNoteHeader": "వాయిస్ నోట్",
             "voiceResponseHeader": "వాయిస్ ప్రతిస్పందన",
             "submitResponse": "స్పందనను సమర్పించండి",
+            "noMessagesYet": "ఇంకా సందేశాలు లేవు",
+            "sendMessage": "సందేశాన్ని పంపండి",
+            "failedToSendMessage": "సందేశాన్ని పంపడం విఫలమైంది",
             "linkedFolders": "లింక్ చేయబడిన ఫోల్డర్‌లు"
         },
         "te": "తెలుగు",
@@ -428,6 +432,9 @@
             "updateResponse": "ప్రతిస్పందనను నవీకరించండి",
             "provideResponse": "ప్రతిస్పందనను అందించండి",
             "typeResponsePlaceholder": "మీ ప్రతిస్పందనను ఇక్కడ టైప్ చేయండి...",
+            "noMessagesYet": "ఇంకా సందేశాలు లేవు",
+            "sendMessage": "సందేశాన్ని పంపండి",
+            "failedToSendMessage": "సందేశాన్ని పంపడం విఫలమైంది",
             "closedRfiNoUpdate": "మూసివేయబడిన RFIలను నవీకరించడం సాధ్యం కాదు",
             "updateStatus": "స్థితిని నవీకరించండి",
             "titleLabel": "శీర్షిక *",

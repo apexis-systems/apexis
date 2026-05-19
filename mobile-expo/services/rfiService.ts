@@ -1,5 +1,23 @@
 import { PrivateAxios } from '@/helpers/PrivateAxios';
 
+export interface ConversationMessage {
+    id: number;
+    item_type: 'rfi' | 'snag';
+    item_id: number;
+    project_id: number;
+    sender_id: number;
+    text?: string | null;
+    attachment_type?: 'image' | 'audio' | null;
+    file_url?: string | null;
+    file_name?: string | null;
+    file_type?: string | null;
+    file_size?: string | null;
+    downloadUrl?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    sender?: { id: number; name: string; role?: string; profile_pic?: string | null };
+}
+
 export interface RFI {
     id: number;
     project_id: number;
@@ -129,3 +147,24 @@ export const markRFISeen = async (id: number): Promise<{ seen_at: string }> => {
     }
 };
 
+export const getRFIMessages = async (id: number): Promise<ConversationMessage[]> => {
+    try {
+        const res = await PrivateAxios.get(`/rfis/${id}/messages`);
+        return res.data.messages || [];
+    } catch (error) {
+        console.error("getRFIMessages Error", error);
+        throw error;
+    }
+};
+
+export const sendRFIMessage = async (id: number, formData: FormData): Promise<ConversationMessage> => {
+    try {
+        const res = await PrivateAxios.post(`/rfis/${id}/messages`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data.message;
+    } catch (error) {
+        console.error("sendRFIMessage Error", error);
+        throw error;
+    }
+};
