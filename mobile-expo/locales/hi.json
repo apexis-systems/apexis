@@ -331,6 +331,7 @@
         },
         "projectSnags": {
             "successTitle": "सफलता",
+            "errorTitle": "त्रुटि",
             "by": "द्वारा",
             "status": {
                 "waiting": "अनुमति की प्रतीक्षा है",
@@ -385,7 +386,10 @@
             "completedSnagNoUpdate": "पूरे किए गए स्नैग को अपडेट नहीं किया जा सकता",
             "submitResponse": "प्रतिक्रिया सबमिट करें",
             "voiceNoteHeader": "वॉयस नोट",
-            "voiceResponseHeader": "वॉयस प्रतिक्रिया"
+            "voiceResponseHeader": "वॉयस प्रतिक्रिया",
+            "noMessagesYet": "अभी तक कोई संदेश नहीं है",
+            "sendMessage": "संदेश भेजें",
+            "failedToSendMessage": "संदेश भेजने में विफल"
         },
         "te": "తెలుగు",
         "months": {
@@ -427,6 +431,9 @@
             "updateResponse": "प्रतिक्रिया अपडेट करें",
             "provideResponse": "प्रतिक्रिया दें",
             "typeResponsePlaceholder": "अपनी प्रतिक्रिया यहाँ लिखें...",
+            "noMessagesYet": "अभी तक कोई संदेश नहीं है",
+            "sendMessage": "संदेश भेजें",
+            "failedToSendMessage": "संदेश भेजने में विफल",
             "closedRfiNoUpdate": "बंद RFI को अपडेट नहीं किया जा सकता",
             "updateStatus": "स्थिति अपडेट करें",
             "titleLabel": "शीर्षक *",

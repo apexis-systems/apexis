@@ -163,6 +163,14 @@ db.users.hasMany(db.chat_messages, { foreignKey: 'sender_id' });
 db.chat_messages.belongsTo(db.chat_messages, { as: 'parent', foreignKey: 'parent_id' });
 db.chat_messages.hasMany(db.chat_messages, { as: 'replies', foreignKey: 'parent_id' });
 
+// Project <-> ConversationMessage
+db.conversation_messages.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.conversation_messages, { foreignKey: 'project_id' });
+
+// User <-> ConversationMessage (Sender)
+db.conversation_messages.belongsTo(db.users, { foreignKey: 'sender_id', as: 'sender' });
+db.users.hasMany(db.conversation_messages, { foreignKey: 'sender_id' });
+
 // User <-> Notification
 db.notifications.belongsTo(db.users, { foreignKey: 'user_id' });
 db.users.hasMany(db.notifications, { foreignKey: 'user_id' });
@@ -197,6 +205,7 @@ export const activities = db.activities;
 export const rooms = db.rooms;
 export const room_members = db.room_members;
 export const chat_messages = db.chat_messages;
+export const conversation_messages = db.conversation_messages;
 export const notifications = db.notifications;
 export const transactions = db.transactions;
 

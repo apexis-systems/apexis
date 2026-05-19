@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck, CheckCircle2, Link2, Folder } from 'lucide-react';
+import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck, CheckCircle2, Link2, Folder, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,9 +18,9 @@ import { cn } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getApiErrorMessage } from '@/helpers/apiError';
 import {
-  Snag, SnagStatus, Assignee,
+  Snag, SnagStatus, Assignee, ConversationMessage,
   getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees,
-  updateSnag, markSnagSeen
+  updateSnag, markSnagSeen, getSnagMessages, sendSnagMessage
 } from '@/services/snagService';
 import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
@@ -36,6 +36,16 @@ const isAudio = (url: string) => {
 };
 
 const isAudioFile = (file: File) => file.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(file.name);
+
+const mergeUniqueMessages = (messages: ConversationMessage[]) => {
+  const seen = new Set<string>();
+  return messages.filter((message) => {
+    const idStr = String(message.id);
+    if (seen.has(idStr)) return false;
+    seen.add(idStr);
+    return true;
+  });
+};
 
 interface ProjectSnagListProps {
   project: Project;
@@ -83,13 +93,15 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [isEditing, setIsEditing] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
-  const [responseComment, setResponseComment] = useState('');
-  const [responsePhotos, setResponsePhotos] = useState<File[]>([]);
-  const [responsePhotoPreviews, setResponsePhotoPreviews] = useState<string[]>([]);
-  const [removedResponsePhotos, setRemovedResponsePhotos] = useState<string[]>([]);
+  const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [messageFile, setMessageFile] = useState<File | null>(null);
+  const [messagePreview, setMessagePreview] = useState<string | null>(null);
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const responseFileInputRef = useRef<HTMLInputElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -98,8 +110,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     setLoading(true);
     try {
       const [snagData, assigneeData] = await Promise.all([
-        getSnags(project.id as any),
-        getAssignees(project.id as any),
+        getSnags(project.id),
+        getAssignees(project.id),
       ]);
       setSnags(snagData);
       setAssignees(assigneeData);
@@ -126,20 +138,13 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     }
   }, [initialSnagId, snags, loading]);
 
-  useEffect(() => {
-    if (selectedSnag) {
-      setResponseComment(selectedSnag.response || '');
-      setRemovedResponsePhotos([]);
-      setResponsePhotos([]);
-      setResponsePhotoPreviews([]);
-    }
-  }, [selectedSnag?.id]);
-
   const hasExistingSnagAudio = isEditing && !!selectedSnag?.audioDownloadUrl && !removeExistingAudio && !audioPreview;
-  const hasPendingResponseImage = responsePhotos.some(file => !isAudioFile(file));
-  const hasPendingResponseAudio = responsePhotos.some(isAudioFile);
-  const hasExistingResponseImage = !!selectedSnag?.responsePhotoUrls?.some(url => !isAudio(url));
-  const hasExistingResponseAudio = !!selectedSnag?.responsePhotoUrls?.some(isAudio);
+  const isConversationParticipant = !!selectedSnag && (
+    String(selectedSnag.assigned_to) === String(user?.id) ||
+    String(selectedSnag.created_by) === String(user?.id) ||
+    String(selectedSnag.creator?.id) === String(user?.id)
+  );
+  const isConversationClosed = selectedSnag?.status === 'green';
 
   useEffect(() => {
     if (selectedSnag && String(selectedSnag.assigned_to) === String(user?.id) && !selectedSnag.seen_at) {
@@ -149,6 +154,34 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       }).catch(err => console.error("Failed to mark snag as seen:", err));
     }
   }, [selectedSnag?.id, user?.id]);
+
+  useEffect(() => {
+    if (!selectedSnag) {
+      setConversationMessages([]);
+      setMessageText('');
+      setMessageFile(null);
+      setMessagePreview(null);
+      return;
+    }
+
+    setLoadingMessages(true);
+    getSnagMessages(selectedSnag.id)
+      .then(messages => setConversationMessages(mergeUniqueMessages(messages)))
+      .catch(() => toast.error(t('failed_update_status')))
+      .finally(() => setLoadingMessages(false));
+  }, [selectedSnag?.id]);
+
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  };
+
+  useEffect(() => {
+    if (!loadingMessages) {
+      setTimeout(scrollToBottom, 100);
+    }
+  }, [conversationMessages, loadingMessages]);
 
   const { socket } = useSocket();
 
@@ -175,46 +208,87 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       setSelectedSnag(prev => (prev && prev.id === data.snag.id) ? data.snag : prev);
     };
 
+    const onConversationMessage = (data: { itemType: 'rfi' | 'snag', itemId: number, message: ConversationMessage }) => {
+      if (data.itemType !== 'snag') return;
+      setConversationMessages(prev => {
+        if (!selectedSnag || selectedSnag.id !== data.itemId) return prev;
+        return mergeUniqueMessages([...prev, data.message]);
+      });
+    };
+
+    const onSnagDeleted = (data: { snagId: number }) => {
+      setSnags(prev => prev.filter(s => s.id !== data.snagId));
+      setSelectedSnag(prev => (prev && prev.id === data.snagId) ? null : prev);
+    };
+
     socket.on('snag-seen', onSnagSeen);
     socket.on('snag-updated', onSnagUpdated);
+    socket.on('snag-deleted', onSnagDeleted);
+    socket.on('snag-conversation-message', onConversationMessage);
 
     return () => {
       socket.off('snag-seen', onSnagSeen);
       socket.off('snag-updated', onSnagUpdated);
+      socket.off('snag-deleted', onSnagDeleted);
+      socket.off('snag-conversation-message', onConversationMessage);
     };
-  }, [socket, project?.id]);
+  }, [socket, project?.id, selectedSnag?.id]);
 
   // ── Status cycle ────────────────────────────────────────────────────────────
 
-  const cycleStatus = async (snag: Snag, nextStatus?: SnagStatus, comment?: string, files?: File[], removedPhotos?: string[]) => {
+  const cycleStatus = async (snag: Snag, nextStatus?: SnagStatus) => {
     const idx = STATUS_CYCLE.indexOf(snag.status);
     const next = nextStatus || STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
-    const prevStatus = snag.status;
 
     setSubmitting(true);
     try {
       const form = new FormData();
       form.append('status', next);
-      if (comment) form.append('response', comment);
-      if (files) files.forEach(f => form.append('photos', f));
-      if (removedPhotos && removedPhotos.length > 0) {
-        form.append('removedPhotos', JSON.stringify(removedPhotos));
-      }
 
       const updated = await updateSnagStatus(snag.id, form);
       setSnags(prev => prev.map(s => s.id === snag.id ? updated : s));
       setSelectedSnag(updated);
       
       toast.success(t('status_updated_to_msg').replace('{label}', t(STATUS_CONFIG[next].key)));
-      setResponseComment(updated.response || '');
-      setResponsePhotos([]);
-      setResponsePhotoPreviews([]);
-      setRemovedResponsePhotos([]);
     } catch (error) {
       toast.error(t('failed_update_status'));
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSendMessage = async () => {
+    if (!selectedSnag) return;
+    if (!messageText.trim() && !messageFile) return;
+
+    setSubmitting(true);
+    try {
+      const form = new FormData();
+      if (messageText.trim()) form.append('text', messageText.trim());
+      if (messageFile) form.append('file', messageFile);
+      const message = await sendSnagMessage(selectedSnag.id, form);
+      setConversationMessages(prev => mergeUniqueMessages([...prev, message]));
+      setMessageText('');
+      setMessageFile(null);
+      setMessagePreview(null);
+    } catch (error) {
+      toast.error(t('failed_update_status'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleMessageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const isAllowed = file.type.startsWith('image/') || file.type.startsWith('audio/');
+    if (!isAllowed) {
+      toast.error('Only image and audio attachments are supported');
+      return;
+    }
+    setMessageFile(file);
+    setMessagePreview(URL.createObjectURL(file));
+    e.target.value = '';
   };
 
   // ── Photo pick ──────────────────────────────────────────────────────────────
@@ -353,7 +427,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-secondary/20 rounded-xl border border-border">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">{t('status_label')}</label>
-              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as 'all' | SnagStatus)}>
                 <SelectTrigger className="h-9 text-xs bg-background">
                   <SelectValue placeholder={t('all_status')} />
                 </SelectTrigger>
@@ -718,7 +792,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <div>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('linked_folders_title')}</p>
                     <div className="flex flex-wrap gap-2">
-                      {selectedSnag.linked_folders.map((f: any) => (
+                      {selectedSnag.linked_folders.map((f: { id: number; name: string; folder_type: string }) => (
                         <button 
                           key={f.id} 
                           onClick={() => {
@@ -738,66 +812,147 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   </div>
                 )}
 
-                {(selectedSnag.response || (selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
-                  <div className="p-3 bg-accent/5 rounded-lg border border-accent/10">
-                    <p className="text-[10px] font-bold text-accent uppercase mb-1">{t('last_response_title')}</p>
-                    {selectedSnag.response && <p className="text-xs">{selectedSnag.response}</p>}
-                    {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
-                      <div className="grid grid-cols-3 gap-2 mt-2">
-                        {selectedSnag.responsePhotoUrls.map((url, i) => (
-                          isAudio(url) ? (
-                            <div key={i} className="col-span-3 p-3 rounded-lg border border-border bg-card relative group">
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                                <span className="text-[9px] font-bold text-accent uppercase tracking-widest">{t('voice_response_label')}</span>
+                <div className="pt-4 border-t border-border space-y-3">
+                  <style>{`
+                    .no-scrollbar::-webkit-scrollbar {
+                      display: none;
+                    }
+                  `}</style>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('response_title')}</p>
+                  <div 
+                    ref={chatContainerRef} 
+                    className="space-y-3 max-h-[320px] overflow-y-auto pr-1 no-scrollbar" 
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  >
+                    {loadingMessages ? (
+                      <div className="flex items-center text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('loading')}</div>
+                    ) : conversationMessages.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No messages yet.</p>
+                    ) : (
+                      conversationMessages.map((message) => {
+                        const isMine = String(message.sender_id) === String(user?.id);
+                        return (
+                          <div key={message.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
+                            <div className={cn("max-w-[80%] rounded-2xl border px-3 py-2 shadow-sm", isMine ? "bg-accent text-accent-foreground border-accent/40" : "bg-card border-border")}>
+                              <p className={cn("text-[10px] font-bold mb-1", isMine ? "text-accent-foreground/80" : "text-muted-foreground")}>
+                                {message.sender?.name || (isMine ? 'You' : 'User')}
+                              </p>
+                              {message.text && <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>}
+                              {message.attachment_type === 'image' && message.downloadUrl && (
+                                <img src={message.downloadUrl} alt={message.file_name || 'Attachment'} className="mt-2 max-h-56 rounded-lg border border-black/5 cursor-pointer" onClick={() => setViewPhoto(message.downloadUrl!)} />
+                              )}
+                              {message.attachment_type === 'audio' && message.downloadUrl && (
+                                <div className="mt-2">
+                                  <VoiceNotePlayer url={message.downloadUrl} isMe={isMine} />
+                                </div>
+                              )}
+                              <p className={cn("mt-2 text-[10px]", isMine ? "text-accent-foreground/70" : "text-muted-foreground")}>
+                                {new Date(message.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {isConversationParticipant && (
+                  <div className="pt-4 border-t border-border space-y-3">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Conversation</p>
+                    {isConversationClosed ? (
+                      <div className="rounded-xl border border-border bg-secondary/20 px-3 py-3 text-xs text-muted-foreground">
+                        {t('completed_status')} - messages are disabled.
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-border bg-card p-3 space-y-3">
+                        {messagePreview && (
+                          <div className="rounded-2xl border border-border bg-secondary/20 p-3">
+                            {messageFile && isAudioFile(messageFile) ? (
+                              <VoiceNotePlayer url={messagePreview} isMe={false} />
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <img src={messagePreview} className="w-20 h-20 rounded-xl object-cover border border-border" />
+                                <div className="flex flex-col gap-2">
+                                  <p className="text-sm font-semibold">{t('photo')}</p>
+                                  <div className="flex items-center gap-2">
+                                    <label className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-medium cursor-pointer hover:bg-secondary/40 transition-colors">
+                                      <Pencil className="h-3.5 w-3.5" />
+                                      Edit
+                                      <input type="file" accept="image/*" className="hidden" onChange={handleMessageFileSelect} />
+                                    </label>
+                                    <button
+                                      onClick={() => {
+                                        setMessageFile(null);
+                                        setMessagePreview(null);
+                                      }}
+                                      className="inline-flex items-center gap-1 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/15 transition-colors"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
-                              <VoiceNotePlayer url={url} isMe={false} />
-                              {String(selectedSnag.assigned_to) === String(user?.id) && (
-                                <button 
+                            )}
+                            {messageFile && isAudioFile(messageFile) ? (
+                              <div className="flex justify-end mt-2">
+                                <button
                                   onClick={() => {
-                                    const key = selectedSnag.response_photos?.[i];
-                                    if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                    const newUrls = [...(selectedSnag.responsePhotoUrls || [])];
-                                    newUrls.splice(i, 1);
-                                    const newPhotos = [...(selectedSnag.response_photos || [])];
-                                    newPhotos.splice(i, 1);
-                                    setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                                    setMessageFile(null);
+                                    setMessagePreview(null);
                                   }}
-                                  className="absolute top-2 right-2 bg-destructive/90 hover:bg-destructive p-1.5 rounded-full shadow-sm opacity-100 transition-opacity z-10"
+                                  className="inline-flex items-center gap-1 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/15 transition-colors"
                                 >
-                                  <X className="h-3 w-3 text-white" />
+                                  <X className="h-3.5 w-3.5" />
+                                  Remove
                                 </button>
-                              )}
-                            </div>
-                          ) : (
-                            <div key={i} className="relative aspect-square rounded border border-border overflow-hidden group">
-                              <img src={url} alt="Response" className="w-full h-full object-cover cursor-pointer" onClick={() => setViewPhoto(url)} />
-                              {String(selectedSnag.assigned_to) === String(user?.id) && (
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const key = selectedSnag.response_photos?.[i];
-                                    if (key) setRemovedResponsePhotos(prev => [...prev, key]);
-                                    const newUrls = [...(selectedSnag.responsePhotoUrls || [])];
-                                    newUrls.splice(i, 1);
-                                    const newPhotos = [...(selectedSnag.response_photos || [])];
-                                    newPhotos.splice(i, 1);
-                                    setSelectedSnag({ ...selectedSnag, responsePhotoUrls: newUrls, response_photos: newPhotos });
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                        <Textarea 
+                          placeholder={t('add_comment_placeholder')} 
+                          className="min-h-[96px] resize-none text-sm border-0 bg-transparent shadow-none focus-visible:ring-0 p-0" 
+                          value={messageText}
+                          onChange={e => setMessageText(e.target.value)}
+                        />
+                        <div className="flex items-end gap-3">
+                          <div className="flex flex-1 items-center gap-3">
+                            {!messageFile && !isVoiceRecording && (
+                              <label className="w-11 h-11 rounded-xl border border-border bg-background flex items-center justify-center hover:bg-secondary/30 transition-colors cursor-pointer shrink-0">
+                                <ImagePlus className="h-4 w-4 text-muted-foreground" />
+                                <input type="file" accept="image/*,audio/*" className="hidden" onChange={handleMessageFileSelect} />
+                              </label>
+                            )}
+                            {!messageFile && (
+                              <div className="flex-1 min-w-0">
+                                <VoiceNoteRecorder 
+                                  onRecordingStateChange={setIsVoiceRecording}
+                                  onSend={(file) => {
+                                    setMessageFile(file);
+                                    setMessagePreview(URL.createObjectURL(file));
                                   }}
-                                  className="absolute top-1 right-1 bg-destructive/90 hover:bg-destructive p-1 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                                >
-                                  <X className="h-3 w-3 text-white" />
-                                </button>
-                              )}
-                            </div>
-                          )
-                        ))}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          {!isVoiceRecording && (
+                            <Button 
+                              className="min-w-[140px] h-11 rounded-xl bg-accent hover:bg-accent/90" 
+                              onClick={handleSendMessage}
+                              disabled={submitting || (!messageText.trim() && !messageFile)}
+                            >
+                              {submitting ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <MessageSquare className="h-3 w-3 mr-2" />}
+                              Send message
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Respond Section */}
                 {String(selectedSnag.assigned_to) === String(user?.id) && (
                   <div className="pt-4 border-t border-border space-y-3">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('update_status_respond_title')}</p>
@@ -808,107 +963,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                           size="sm" 
                           variant={selectedSnag.status === s ? 'default' : 'outline'}
                           className={cn("flex-1 text-[10px] h-8", selectedSnag.status === s && STATUS_CONFIG[s].bg && STATUS_CONFIG[s].text)}
-                          onClick={() => cycleStatus(selectedSnag, s, responseComment, responsePhotos, removedResponsePhotos)}
+                          onClick={() => cycleStatus(selectedSnag, s)}
                         >
                           {t(STATUS_CONFIG[s].key).split(' ')[0]}
                         </Button>
                       ))}
                     </div>
-                    <Textarea 
-                      placeholder={t('add_comment_placeholder')} 
-                      className="text-xs min-h-[60px]" 
-                      value={responseComment}
-                      onChange={e => setResponseComment(e.target.value)}
-                    />
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-2">
-                        {responsePhotoPreviews.map((src, i) => {
-                          const isAudioFile = responsePhotos[i]?.type.startsWith('audio/');
-                          return (
-                            <div key={i} className={`relative ${isAudioFile ? 'w-full max-w-sm' : 'w-12 h-12'} rounded border border-border overflow-hidden group bg-card`}>
-                              {isAudioFile ? (
-                                <div className="p-2 pr-8 flex flex-col gap-1">
-                                  <div className="flex items-center gap-1.5 mb-1">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                                    <span className="text-[8px] font-bold text-accent uppercase tracking-tighter">{t('voice_response_label')}</span>
-                                  </div>
-                                  <VoiceNotePlayer url={src} isMe={false} />
-                                </div>
-                              ) : (
-                                <img src={src} className="w-full h-full object-cover" />
-                              )}
-                              <button 
-                                onClick={() => {
-                                  setResponsePhotos(prev => prev.filter((_, idx) => idx !== i));
-                                  setResponsePhotoPreviews(prev => prev.filter((_, idx) => idx !== i));
-                                }}
-                                className={`absolute top-1 right-1 bg-destructive/90 hover:bg-destructive p-1 rounded-full shadow-sm ${isAudioFile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity z-10`}
-                              >
-                                <X className="h-3 w-3 text-white" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                        <div className="flex items-center gap-2">
-                          {!hasPendingResponseImage && !hasExistingResponseImage && (
-                            <button 
-                              className="w-12 h-12 border-2 border-dashed border-border rounded flex items-center justify-center hover:border-accent/50 transition-colors"
-                              onClick={() => responseFileInputRef.current?.click()}
-                            >
-                              <Plus className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          )}
-                          {!hasPendingResponseAudio && !hasExistingResponseAudio && (
-                            <div className="flex items-center justify-center">
-                              <VoiceNoteRecorder 
-                                onSend={(file) => {
-                                  const url = URL.createObjectURL(file);
-                                  setResponsePhotos(prev => [...prev.filter(f => !isAudioFile(f)), file]);
-                                  setResponsePhotoPreviews(prev => [...prev.filter((_, idx) => {
-                                    const existingFile = responsePhotos[idx];
-                                    return existingFile ? !isAudioFile(existingFile) : false;
-                                  }), url]);
-                                }}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <input 
-                        ref={responseFileInputRef} 
-                        type="file" 
-                        multiple 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          if (files.length === 0) return;
-                          const file = files[0];
-                          
-                          setResponsePhotos(prev => {
-                            const filtered = prev.filter(isAudioFile);
-                            return [...filtered, file];
-                          });
-
-                          const r = new FileReader();
-                          r.onload = () => {
-                            setResponsePhotoPreviews(prev => {
-                              const filtered = prev.filter(p => p.startsWith('blob:'));
-                              return [...filtered, r.result as string];
-                            });
-                          };
-                          r.readAsDataURL(file);
-                        }}
-                      />
-                    </div>
-                    <Button 
-                      className="w-full text-xs h-9 bg-accent hover:bg-accent/90" 
-                      onClick={() => cycleStatus(selectedSnag, selectedSnag.status, responseComment, responsePhotos, removedResponsePhotos)}
-                      disabled={submitting || (responseComment === (selectedSnag.response || '') && responsePhotos.length === 0 && removedResponsePhotos.length === 0)}
-                    >
-                      {submitting ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <MessageSquare className="h-3 w-3 mr-2" />}
-                      {t('post_response_btn')}
-                    </Button>
                   </div>
                 )}
               </div>

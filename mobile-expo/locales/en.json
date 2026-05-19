@@ -331,6 +331,7 @@
         },
         "projectSnags": {
             "successTitle": "Success",
+            "errorTitle": "Error",
             "by": "by",
             "status": {
                 "waiting": "Waiting for Clearance",
@@ -385,7 +386,10 @@
             "completedSnagNoUpdate": "Completed snags cannot be updated",
             "voiceNoteHeader": "Voice Note",
             "voiceResponseHeader": "Voice Response",
-            "submitResponse": "Submit Response"
+            "submitResponse": "Submit Response",
+            "noMessagesYet": "No messages yet",
+            "sendMessage": "Send message",
+            "failedToSendMessage": "Failed to send message"
         },
         "months": {
             "january": "January",
@@ -426,6 +430,9 @@
             "updateResponse": "Update Response",
             "provideResponse": "Provide Response",
             "typeResponsePlaceholder": "Type your response here...",
+            "noMessagesYet": "No messages yet",
+            "sendMessage": "Send message",
+            "failedToSendMessage": "Failed to send message",
             "closedRfiNoUpdate": "Closed RFIs cannot be updated",
             "updateStatus": "Update Status",
             "titleLabel": "Title *",

@@ -2,6 +2,24 @@ import { PrivateAxios } from '@/helpers/PrivateAxios';
 
 export type SnagStatus = 'amber' | 'green' | 'red';
 
+export interface ConversationMessage {
+    id: number;
+    item_type: 'rfi' | 'snag';
+    item_id: number;
+    project_id: number;
+    sender_id: number;
+    text?: string | null;
+    attachment_type?: 'image' | 'audio' | null;
+    file_url?: string | null;
+    file_name?: string | null;
+    file_type?: string | null;
+    file_size?: string | null;
+    downloadUrl?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    sender?: { id: number; name: string; role?: string; profile_pic?: string | null };
+}
+
 export interface Snag {
     id: number;
     project_id: number;
@@ -113,6 +131,28 @@ export const getFolderSnags = async (folderId: string | number): Promise<Snag[]>
         return res.data.snags || [];
     } catch (error) {
         console.error("getFolderSnags Error", error);
+        throw error;
+    }
+};
+
+export const getSnagMessages = async (id: number): Promise<ConversationMessage[]> => {
+    try {
+        const res = await PrivateAxios.get(`/snags/${id}/messages`);
+        return res.data.messages || [];
+    } catch (error) {
+        console.error("getSnagMessages Error", error);
+        throw error;
+    }
+};
+
+export const sendSnagMessage = async (id: number, formData: FormData): Promise<ConversationMessage> => {
+    try {
+        const res = await PrivateAxios.post(`/snags/${id}/messages`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data.message;
+    } catch (error) {
+        console.error("sendSnagMessage Error", error);
         throw error;
     }
 };

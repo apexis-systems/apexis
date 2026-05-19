@@ -14,6 +14,7 @@ const ADMIN_DIRECT_PUSH_TYPES = new Set([
     'rfi_assigned',
     'rfi_comment',
     'snag_assigned',
+    'snag_comment',
     'broadcast',
 ]);
 

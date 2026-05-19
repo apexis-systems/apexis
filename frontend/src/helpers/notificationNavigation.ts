@@ -47,6 +47,7 @@ export const handleNotificationNavigation = (type: string, data: any, userRole: 
         case 'snag_assigned':
         case 'snag_creation_admin':
         case 'snag_status_update':
+        case 'snag_comment':
             tab = 'snags';
             if (snagId) extraParams += `&snagId=${snagId}`;
             break;

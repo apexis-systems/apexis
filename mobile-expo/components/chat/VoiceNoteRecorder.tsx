@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TouchableOpacity, Text, Animated, StyleSheet, Platform } from 'react-native';
+import { View, TouchableOpacity, Text, Animated } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
@@ -8,9 +8,10 @@ interface VoiceNoteRecorderProps {
     colors: any;
     onSend: (uri: string, duration: number) => void;
     onRecordingStateChange: (isRecording: boolean) => void;
+    embedded?: boolean;
 }
 
-export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChange }: VoiceNoteRecorderProps) {
+export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChange, embedded = false }: VoiceNoteRecorderProps) {
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [duration, setDuration] = useState(0);
@@ -140,12 +141,20 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
     };
 
     return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 3 ,paddingBottom: 10 }}>
+        <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            flex: embedded ? 1 : 1,
+            width: embedded ? undefined : '100%',
+            paddingRight: embedded ? 0 : 3,
+            paddingBottom: embedded ? 0 : 10,
+        }}>
             {isRecording ? (
                 <View style={{ 
                     flexDirection: 'row', 
                     alignItems: 'center', 
-                    flex: 1, 
+                    flex: 1,
+                    minWidth: embedded ? 0 : undefined,
                     justifyContent: 'space-between', 
                     paddingHorizontal: 12,
                     height: 44,
@@ -158,7 +167,6 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
                     shadowOpacity: 0.1,
                     shadowRadius: 2,
                     elevation: 2,
-                    
                 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -207,19 +215,19 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
             <TouchableOpacity
                 onPress={isRecording ? () => stopRecording(false) : startRecording}
                 style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
+                    width: embedded ? 40 : 44,
+                    height: embedded ? 40 : 44,
+                    borderRadius: embedded ? 20 : 22,
                     backgroundColor: isRecording ? '#22c55e' : colors.primary,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    marginLeft: 10,
+                    marginLeft: embedded ? 8 : 10,
                     shadowColor: isRecording ? '#22c55e' : colors.primary,
                     shadowOffset: { width: 0, height: 2 },
                     shadowOpacity: 0.3,
                     shadowRadius: 3,
                     elevation: 4,
-                    transform: isRecording ? [{ scale: 1.1 }] : [{ scale: 1 }]
+                    transform: isRecording && !embedded ? [{ scale: 1.1 }] : [{ scale: 1 }]
                 }}
             >
                 <Ionicons 
