@@ -1255,10 +1255,46 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.response')}</Text>
                       {loadingMessages ? (
                         <ActivityIndicator color={colors.primary} />
-                      ) : conversationMessages.length === 0 ? (
+                      ) : (conversationMessages.length === 0 && !selectedRFI?.response && (!selectedRFI?.responsePhotoUrls || selectedRFI.responsePhotoUrls.length === 0)) ? (
                         <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectRfi.noMessagesYet')}</Text>
                       ) : (
                         <View style={{ gap: 10 }}>
+                          {/* Legacy Response Block */}
+                          {(selectedRFI?.response || (selectedRFI?.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
+                            <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+                              <View style={{
+                                maxWidth: '86%',
+                                padding: 12,
+                                borderRadius: 16,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                              }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
+                                  Response
+                                </Text>
+                                {selectedRFI.response ? (
+                                  <Text style={{ fontSize: 13, color: colors.text }}>{selectedRFI.response}</Text>
+                                ) : null}
+                                {selectedRFI.responsePhotoUrls?.map((url, idx) => {
+                                  const isAudioFile = isAudio(url);
+                                  if (isAudioFile) {
+                                    return (
+                                      <View key={idx} style={{ marginTop: 8 }}>
+                                        <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                      </View>
+                                    );
+                                  } else {
+                                    return (
+                                      <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
+                                        <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
+                                      </TouchableOpacity>
+                                    );
+                                  }
+                                })}
+                              </View>
+                            </View>
+                          )}
                           {conversationMessages.map((message) => {
                             const isMine = String(message.sender_id) === String(user.id);
                             return (

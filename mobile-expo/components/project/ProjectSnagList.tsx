@@ -1295,10 +1295,46 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
                                                 {loadingMessages ? (
                                                     <ActivityIndicator color={colors.primary} />
-                                                ) : conversationMessages.length === 0 ? (
+                                                ) : (conversationMessages.length === 0 && !selectedSnag?.response && (!selectedSnag?.responsePhotoUrls || selectedSnag.responsePhotoUrls.length === 0)) ? (
                                                     <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.noMessagesYet')}</Text>
                                                 ) : (
                                                     <View style={{ gap: 10 }}>
+                                                        {/* Legacy Response Block */}
+                                                        {(selectedSnag?.response || (selectedSnag?.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
+                                                            <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+                                                                <View style={{
+                                                                    maxWidth: '86%',
+                                                                    padding: 12,
+                                                                    borderRadius: 16,
+                                                                    backgroundColor: colors.surface,
+                                                                    borderWidth: 1,
+                                                                    borderColor: colors.border,
+                                                                }}>
+                                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
+                                                                        Response
+                                                                    </Text>
+                                                                    {selectedSnag.response ? (
+                                                                        <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text>
+                                                                    ) : null}
+                                                                    {selectedSnag.responsePhotoUrls?.map((url, idx) => {
+                                                                        const isAudioFile = isAudio(url);
+                                                                        if (isAudioFile) {
+                                                                            return (
+                                                                                <View key={idx} style={{ marginTop: 8 }}>
+                                                                                    <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                                                </View>
+                                                                            );
+                                                                        } else {
+                                                                            return (
+                                                                                <TouchableOpacity key={idx} onPress={() => setViewPhoto(url)}>
+                                                                                    <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
+                                                                                </TouchableOpacity>
+                                                                            );
+                                                                        }
+                                                                    })}
+                                                                </View>
+                                                            </View>
+                                                        )}
                                                         {conversationMessages.map((message) => {
                                                             const isMine = String(message.sender_id) === String(user?.id);
                                                             return (
