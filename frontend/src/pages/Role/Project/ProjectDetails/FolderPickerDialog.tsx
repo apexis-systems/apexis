@@ -124,6 +124,36 @@ const FolderPickerDialog = ({
         setCurrentParentId(null);
     };
 
+    const isAnyDescendantSelected = (parentId: string | number | null): boolean => {
+        if (parentId === null) return false;
+        const descendants = new Set<string>();
+        const queue = [String(parentId)];
+        while (queue.length > 0) {
+            const currentId = queue.shift()!;
+            folders.forEach(f => {
+                if (f.parent_id && String(f.parent_id) === currentId) {
+                    const childId = String(f.id);
+                    if (!descendants.has(childId)) {
+                        descendants.add(childId);
+                        queue.push(childId);
+                    }
+                }
+            });
+        }
+        return currentSelected.some(id => descendants.has(String(id)));
+    };
+
+    const shouldIncludeParent = currentParentId !== null && !isAnyDescendantSelected(currentParentId);
+
+    const effectiveSelection = 
+        shouldIncludeParent && !currentSelected.some(id => String(id) === String(currentParentId))
+            ? [...currentSelected, currentParentId]
+            : currentSelected;
+
+    const hasChanges = 
+        effectiveSelection.length !== selectedFolderIds.length || 
+        !selectedFolderIds.every(id => effectiveSelection.some(tId => String(tId) === String(id)));
+
     return (
         <Dialog open={open} onOpenChange={(val) => {
             onOpenChange(val);
@@ -137,7 +167,7 @@ const FolderPickerDialog = ({
                 <DialogHeader className="flex flex-row items-center justify-between border-b pb-3">
                     <DialogTitle className="text-sm font-semibold">Link RFI or Snag to Folders</DialogTitle>
                 </DialogHeader>
-
+ 
                 {/* Tabs */}
                 <div className="flex gap-2 p-1 bg-secondary/50 rounded-lg">
                     <button
@@ -159,14 +189,14 @@ const FolderPickerDialog = ({
                         Photos
                     </button>
                 </div>
-
+ 
                 <div className="max-h-[320px] overflow-y-auto py-1 space-y-3 pr-1">
                     {/* Breadcrumbs */}
                     <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted rounded-lg text-[10px] text-muted-foreground font-semibold truncate">
                         <FolderIcon className="h-3 w-3" />
                         <span>{getBreadcrumbs()}</span>
                     </div>
-
+ 
                     <div className="grid grid-cols-4 gap-2.5">
                         {currentParentId !== null && (
                             <button
@@ -179,9 +209,9 @@ const FolderPickerDialog = ({
                                 </span>
                             </button>
                         )}
-
+ 
                         {getFoldersInCurrentLevel().map(folder => {
-                            const isSelected = currentSelected.includes(folder.id);
+                            const isSelected = effectiveSelection.some(tId => String(tId) === String(folder.id));
                             return (
                                 <div
                                     key={folder.id}
@@ -207,7 +237,7 @@ const FolderPickerDialog = ({
                                             <div className="h-3 w-3 rounded-full border-2 border-muted-foreground/40 group-hover:border-muted-foreground" />
                                         )}
                                     </button>
-
+ 
                                     <FolderIcon className={cn("h-5 w-5 text-primary group-hover:scale-105 transition-transform", isSelected && "text-accent")} />
                                     <span className="text-[10px] font-semibold leading-tight max-h-[24px] overflow-hidden text-ellipsis line-clamp-2 px-1">
                                         {folder.name}
@@ -215,7 +245,7 @@ const FolderPickerDialog = ({
                                 </div>
                             );
                         })}
-
+ 
                         <button
                             onClick={() => setShowNewFolderModal(true)}
                             className="flex flex-col items-center justify-center p-3 rounded-xl border border-dashed border-border hover:bg-muted transition-colors aspect-square text-center gap-1.5"
@@ -226,7 +256,7 @@ const FolderPickerDialog = ({
                             </span>
                         </button>
                     </div>
-
+ 
                     {getFoldersInCurrentLevel().length === 0 && currentParentId !== null && (
                         <div className="flex flex-col items-center justify-center py-6 gap-2">
                             <FolderMinus className="h-8 w-8 text-muted-foreground/30" />
@@ -236,19 +266,19 @@ const FolderPickerDialog = ({
                         </div>
                     )}
                 </div>
-
+ 
                 <div className="pt-2 border-t border-border flex items-center justify-between">
                     <p className="text-[10px] text-muted-foreground font-medium">
-                        {currentSelected?.length || 0} folder(s) selected
+                        {effectiveSelection?.length || 0} folder(s) selected
                     </p>
                 </div>
-
+ 
                 <DialogFooter className="flex gap-2">
                     <Button variant="ghost" onClick={() => onOpenChange(false)} size="sm" disabled={submitting} className="text-xs">Cancel</Button>
                     <Button
-                        onClick={() => onSelect(currentSelected)}
+                        onClick={() => onSelect(effectiveSelection)}
                         size="sm"
-                        disabled={submitting}
+                        disabled={submitting || !hasChanges}
                         className="bg-accent text-accent-foreground hover:bg-accent/90 text-xs"
                     >
                         {submitting && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
