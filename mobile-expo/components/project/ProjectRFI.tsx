@@ -1484,7 +1484,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </View>
                     )}
 
-                    {String(selectedRFI.assigned_to) === String(user.id) && (
+                    {isConversationParticipant && (
                       <View style={{ gap: 12 }}>
                         <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.updateStatus')}</Text>
                         <View style={{ flexDirection: 'row', gap: 10 }}>

@@ -301,8 +301,11 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
 
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
-        if (Number(rfi.assigned_to) !== Number(authUser.user_id)) {
-            return res.status(403).json({ error: 'Only the assignee can update RFI status' });
+        if (
+            Number(rfi.assigned_to) !== Number(authUser.user_id) &&
+            Number(rfi.created_by) !== Number(authUser.user_id)
+        ) {
+            return res.status(403).json({ error: 'Only the assignee or creator can update RFI status' });
         }
 
         (rfi as any).status = status;
@@ -482,8 +485,11 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        if (Number(rfi.assigned_to) !== Number(authUser.user_id)) {
-            return res.status(403).json({ error: 'Only the assignee can update the response' });
+        if (
+            Number(rfi.assigned_to) !== Number(authUser.user_id) &&
+            Number(rfi.created_by) !== Number(authUser.user_id)
+        ) {
+            return res.status(403).json({ error: 'Only the assignee or creator can update the response' });
         }
 
         // Handle response photo uploads: Smart Replace (one image, one audio)

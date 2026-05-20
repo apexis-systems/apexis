@@ -994,7 +994,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   </div>
                 )}
 
-                {String(selectedSnag.assigned_to) === String(user?.id) && (
+                {isConversationParticipant && (
                   <div className="pt-4 border-t border-border space-y-3">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('update_status_respond_title')}</p>
                     <div className="flex gap-2">
