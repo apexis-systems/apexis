@@ -314,9 +314,12 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
     const snag = await snags.findByPk(id);
     if (!snag) return res.status(404).json({ error: "Snag not found" });
 
-    // Only the assigned user can change the status
-    if (Number(snag.assigned_to) !== Number(authUser.user_id)) {
-      return res.status(403).json({ error: "Only the assigned person can update the status" });
+    // Only the assigned user or creator can change the status
+    if (
+      Number(snag.assigned_to) !== Number(authUser.user_id) &&
+      Number(snag.created_by) !== Number(authUser.user_id)
+    ) {
+      return res.status(403).json({ error: "Only the assignee or creator can update the status" });
     }
 
     (snag as any).status = status;

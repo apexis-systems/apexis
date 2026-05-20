@@ -68,10 +68,8 @@ const getValidatedItem = async (itemType: "rfi" | "snag", itemId: number, authUs
   }
 
   const isParticipant = canParticipate(item, authUser.user_id);
-  const isProjectAdmin = authUser.role === "admin" && authUser.organization_id === project.organization_id;
-  const isSuperadmin = authUser.role === "superadmin";
 
-  if (!isParticipant && !isProjectAdmin && !isSuperadmin) {
+  if (!isParticipant) {
     return { error: "Forbidden", status: 403 as const };
   }
 
