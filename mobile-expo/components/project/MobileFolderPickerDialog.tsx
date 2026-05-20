@@ -135,6 +135,37 @@ export default function MobileFolderPickerDialog({
         setCurrentParentId(null);
     };
 
+    const isAnyDescendantSelected = (parentId: string | number | null): boolean => {
+        if (parentId === null) return false;
+        const folders = activeTab === 'document' ? docFolders : photoFolders;
+        const descendants = new Set<string>();
+        const queue = [String(parentId)];
+        while (queue.length > 0) {
+            const currentId = queue.shift()!;
+            folders.forEach(f => {
+                if (f.parent_id && String(f.parent_id) === currentId) {
+                    const childId = String(f.id);
+                    if (!descendants.has(childId)) {
+                        descendants.add(childId);
+                        queue.push(childId);
+                    }
+                }
+            });
+        }
+        return tempSelection.some(id => descendants.has(String(id)));
+    };
+
+    const shouldIncludeParent = currentParentId !== null && !isAnyDescendantSelected(currentParentId);
+
+    const effectiveSelection = 
+        shouldIncludeParent && !tempSelection.some(id => String(id) === String(currentParentId))
+            ? [...tempSelection, currentParentId]
+            : tempSelection;
+
+    const hasChanges = 
+        effectiveSelection.length !== selectedFolderIds.length || 
+        !selectedFolderIds.every(id => effectiveSelection.some(tId => String(tId) === String(id)));
+
     return (
         <Modal visible={visible} transparent animationType="slide">
             <View style={styles.modalOverlay}>
@@ -142,13 +173,13 @@ export default function MobileFolderPickerDialog({
                     <View style={styles.header}>
                         <View>
                             <Text style={[styles.title, { color: colors.text }]}>{t('projectRfi.linkFolders')}</Text>
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('projectRfi.foldersSelected', { count: tempSelection.length })}</Text>
+                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('projectRfi.foldersSelected', { count: effectiveSelection.length })}</Text>
                         </View>
                         <TouchableOpacity onPress={onClose}>
                             <Feather name="x" size={20} color={colors.text} />
                         </TouchableOpacity>
                     </View>
-
+ 
                     <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
                         <TouchableOpacity 
                             onPress={() => handleTabChange('document')}
@@ -163,7 +194,7 @@ export default function MobileFolderPickerDialog({
                             <Text style={[styles.tabText, { color: activeTab === 'photo' ? colors.primary : colors.textMuted }]}>{t('projectRfi.photos')}</Text>
                         </TouchableOpacity>
                     </View>
-
+ 
                     <ScrollView style={styles.scrollContainer}>
                         {loading ? (
                             <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 20 }} />
@@ -176,7 +207,7 @@ export default function MobileFolderPickerDialog({
                                         {getBreadcrumbs()}
                                     </Text>
                                 </View>
-
+ 
                                 <View style={styles.gridContainer}>
                                     {currentParentId !== null && (
                                         <TouchableOpacity
@@ -195,9 +226,9 @@ export default function MobileFolderPickerDialog({
                                             </Text>
                                         </TouchableOpacity>
                                     )}
-
+ 
                                     {getFoldersInCurrentLevel().map(folder => {
-                                        const isSelected = tempSelection.includes(folder.id);
+                                        const isSelected = effectiveSelection.some(tId => String(tId) === String(folder.id));
                                         return (
                                             <TouchableOpacity
                                                 key={folder.id}
@@ -221,7 +252,7 @@ export default function MobileFolderPickerDialog({
                                                         color={isSelected ? colors.primary : colors.textMuted} 
                                                     />
                                                 </TouchableOpacity>
-
+ 
                                                 <Feather name="folder" size={22} color={colors.primary} />
                                                 <Text 
                                                     numberOfLines={2} 
@@ -232,7 +263,7 @@ export default function MobileFolderPickerDialog({
                                             </TouchableOpacity>
                                         );
                                     })}
-
+ 
                                     <TouchableOpacity
                                         onPress={() => setShowNewFolderModal(true)}
                                         style={[
@@ -248,7 +279,7 @@ export default function MobileFolderPickerDialog({
                                             New Folder
                                         </Text>
                                     </TouchableOpacity>
-
+ 
                                     {getFoldersInCurrentLevel().length === 0 && currentParentId !== null && (
                                         <View style={styles.emptyContainer}>
                                             <Feather name="folder-minus" size={32} color={colors.border} />
@@ -261,18 +292,18 @@ export default function MobileFolderPickerDialog({
                             </View>
                         )}
                     </ScrollView>
-
+ 
                     <View style={styles.footer}>
                         <TouchableOpacity onPress={onClose} style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}>
                             <Text style={{ color: colors.textMuted }}>{t('projectRfi.cancel')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            onPress={() => onConfirm(tempSelection)} 
-                            disabled={submitting}
+                            onPress={() => onConfirm(effectiveSelection)} 
+                            disabled={submitting || !hasChanges}
                             style={[
                                 styles.button, 
                                 styles.confirmButton,
-                                submitting && { opacity: 0.7 }
+                                (submitting || !hasChanges) && { opacity: 0.5 }
                             ]}
                         >
                             {submitting ? (

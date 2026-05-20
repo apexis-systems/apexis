@@ -282,11 +282,11 @@ export default function MobileMoveToFolderDialog({
                         </TouchableOpacity>
                         <TouchableOpacity 
                             onPress={handleMove} 
-                            disabled={loading || targetFolder === undefined} 
+                            disabled={loading || targetFolder === undefined || currentParentId === null} 
                             style={[
                                 styles.button, 
                                 styles.moveButton,
-                                (loading || targetFolder === undefined) && { opacity: 0.5 }
+                                (loading || targetFolder === undefined || currentParentId === null) && { opacity: 0.5 }
                             ]}
                         >
                             <Text style={{ color: '#fff', fontWeight: 'bold' }}>{loading ? 'Moving...' : 'Move Here'}</Text>
