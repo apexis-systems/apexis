@@ -15,6 +15,7 @@ import {
   projects,
   folders,
   sequelize,
+  file_snag_links
 } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { logActivity } from "../utils/activityUtils.ts";
@@ -99,7 +100,7 @@ export const getSnags = async (req: Request, res: Response) => {
       where: { project_id: Number(project_id) },
       attributes: [
         "id", "project_id", "title", "description", "photo_url", "audio_url",
-        "assigned_to", "status", "response", "response_photos", 
+        "assigned_to", "status", "response", "response_photos",
         "created_by", "createdAt", "updatedAt", "seen_at", "folder_ids"
       ],
       include: [
@@ -123,7 +124,7 @@ export const createSnag = async (req: Request, res: Response) => {
     const authUser = (req as any).user;
     if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-    const { project_id, title, description, assigned_to, folder_ids, photo_key } = req.body;
+    const { project_id, title, description, assigned_to, folder_ids, photo_key, source_file_id } = req.body;
     if (!project_id || !title)
       return res
         .status(400)
@@ -224,6 +225,13 @@ export const createSnag = async (req: Request, res: Response) => {
       folder_ids: parsedFolderIds,
     });
 
+    if (source_file_id) {
+      await file_snag_links.create({
+        file_id: Number(source_file_id),
+        snag_id: snag.id
+      });
+    }
+
     await logActivity({
       projectId: Number(project_id),
       userId: authUser.user_id,
@@ -278,9 +286,9 @@ export const createSnag = async (req: Request, res: Response) => {
 
     const full = await snags.findByPk((snag as any).id, {
       attributes: [
-        "id", "project_id", "title", "description", "photo_url", 
+        "id", "project_id", "title", "description", "photo_url",
         "audio_url",
-        "assigned_to", "status", "response", "response_photos", 
+        "assigned_to", "status", "response", "response_photos",
         "created_by", "createdAt", "updatedAt", "folder_ids"
       ],
       include: [
@@ -346,10 +354,10 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
 
     // 2. Handle new uploads with Smart Replace
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-      const hasNewAudio = req.files.some((f:any) => f.mimetype.startsWith('audio/'));
-      const hasNewImage = req.files.some((f:any) => f.mimetype.startsWith('image/'));
-      const imageCount = req.files.filter((f:any) => f.mimetype.startsWith('image/')).length;
-      const audioCount = req.files.filter((f:any) => f.mimetype.startsWith('audio/')).length;
+      const hasNewAudio = req.files.some((f: any) => f.mimetype.startsWith('audio/'));
+      const hasNewImage = req.files.some((f: any) => f.mimetype.startsWith('image/'));
+      const imageCount = req.files.filter((f: any) => f.mimetype.startsWith('image/')).length;
+      const audioCount = req.files.filter((f: any) => f.mimetype.startsWith('audio/')).length;
 
       if (imageCount > 1 || audioCount > 1) {
         return res.status(400).json({ error: 'Snag responses support only one image and one voice note.' });
@@ -357,7 +365,7 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
 
       // If new audio is being uploaded, remove existing audio from the response
       if (hasNewAudio) {
-        currentResponsePhotos = currentResponsePhotos.filter((p:any) => {
+        currentResponsePhotos = currentResponsePhotos.filter((p: any) => {
           const isAudio = p.match(/\.(m4a|webm|mp3|wav|aac|ogg|3gp|caf)(\?.*)?$/i);
           return !isAudio;
         });
@@ -365,7 +373,7 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
 
       // If new image is being uploaded, remove existing images from the response
       if (hasNewImage) {
-        currentResponsePhotos = currentResponsePhotos.filter((p:any) => {
+        currentResponsePhotos = currentResponsePhotos.filter((p: any) => {
           const isImage = p.match(/\.(jpg|jpeg|png|gif|webp|heic)(\?.*)?$/i);
           return !isImage;
         });
@@ -398,7 +406,7 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
         currentResponsePhotos.push(key);
       }
     }
-    
+
     (snag as any).response_photos = currentResponsePhotos;
 
     await snag.save();
@@ -415,9 +423,9 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
     }
     const full = await snags.findByPk((snag as any).id, {
       attributes: [
-        "id", "project_id", "title", "description", "photo_url", 
+        "id", "project_id", "title", "description", "photo_url",
         "audio_url",
-        "assigned_to", "status", "response", "response_photos", 
+        "assigned_to", "status", "response", "response_photos",
         "created_by", "createdAt", "updatedAt", "folder_ids"
       ],
       include: [
@@ -531,6 +539,10 @@ export const deleteSnag = async (req: Request, res: Response) => {
     if (snag.response) {
       return res.status(400).json({ error: "Cannot delete snag because a response has already been generated" });
     }
+
+    await file_snag_links.destroy({
+      where: { snag_id: id }
+    });
 
     await snag.destroy();
 
@@ -725,9 +737,9 @@ export const updateSnag = async (req: Request | any, res: Response) => {
 
     const full = await snags.findByPk(id, {
       attributes: [
-        "id", "project_id", "title", "description", "photo_url", 
+        "id", "project_id", "title", "description", "photo_url",
         "audio_url",
-        "assigned_to", "status", "response", "response_photos", 
+        "assigned_to", "status", "response", "response_photos",
         "created_by", "createdAt", "updatedAt", "folder_ids"
       ],
       include: [

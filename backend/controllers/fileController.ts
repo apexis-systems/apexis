@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import 'multer';
 import db from "../models/index.ts";
-const { files, folders, project_members, activities, users, organizations, projects } = db;
+const { files, folders, project_members, activities, users, organizations, projects, file_links, file_rfi_links, file_snag_links } = db;
 
 import { Op } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
@@ -518,6 +518,24 @@ export const deleteFile = async (req: Request, res: Response) => {
             metadata: { fileId: file.id, type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
         });
 
+        await file_links.destroy({
+            where: {
+                [Op.or]: [
+                    { file_id_1: fileId },
+                    { file_id_2: fileId }
+                ]
+            },
+            transaction: t
+        });
+        await file_rfi_links.destroy({
+            where: { file_id: fileId },
+            transaction: t
+        });
+        await file_snag_links.destroy({
+            where: { file_id: fileId },
+            transaction: t
+        });
+
         await file.destroy({ transaction: t });
 
         await t.commit();
@@ -586,6 +604,24 @@ export const bulkDeleteFiles = async (req: Request, res: Response) => {
                 type: 'delete',
                 description: `Moved ${file.file_name} to trash`,
                 metadata: { fileId: file.id, type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
+            });
+
+            await file_links.destroy({
+                where: {
+                    [Op.or]: [
+                        { file_id_1: file.id },
+                        { file_id_2: file.id }
+                    ]
+                },
+                transaction: t
+            });
+            await file_rfi_links.destroy({
+                where: { file_id: file.id },
+                transaction: t
+            });
+            await file_snag_links.destroy({
+                where: { file_id: file.id },
+                transaction: t
             });
 
             await file.destroy({ transaction: t });

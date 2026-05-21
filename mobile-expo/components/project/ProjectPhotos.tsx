@@ -7,9 +7,10 @@ import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getProjectFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
 import { getMemberForTag, getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
@@ -21,6 +22,7 @@ import { setActiveProjectContext } from '@/utils/projectSelection';
 import { formatFileSize } from '@/helpers/format';
 import { groupItemsByMonth } from '@/helpers/grouping';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
+import LinkFileModal from '../shared/LinkFileModal';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
@@ -87,6 +89,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [showViewerUI, setShowViewerUI] = useState(true);
     const [downloading, setDownloading] = useState(false);
     const flatListRef = useRef<FlatList>(null);
+    const [viewerActiveTab, setViewerActiveTab] = useState<'discussion'|'links'>('discussion');
+    const [showLinkModal, setShowLinkModal] = useState(false);
+    const [linkedItems, setLinkedItems] = useState<any[]>([]);
 
     // Comment state
     const [photoComments, setPhotoComments] = useState<CommentThread[]>([]);
@@ -181,6 +186,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }
             formData.append('assigned_to', String(snagAssignedToId));
             formData.append('photo_key', activeActionFile.file_url);
+            formData.append('source_file_id', String(activeActionFile.id));
 
             await createSnag(formData);
             Alert.alert("Success", "Snag created successfully");
@@ -218,6 +224,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 formData.append('expiry_date', rfiExpiryDate.toISOString());
             }
             formData.append('photo_key', activeActionFile.file_url);
+            formData.append('source_file_id', String(activeActionFile.id));
 
             await createRFI(formData);
             Alert.alert("Success", "RFI created successfully");
@@ -428,7 +435,70 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }, 50);
             return () => clearTimeout(t);
         }
-    }, [viewerOpen]);
+    }, [viewerOpen, sortedPhotos, viewerIndex]);
+
+    const fetchLinkedItems = useCallback(async () => {
+        if (viewerOpen && sortedPhotos[viewerIndex]?.id) {
+            try {
+                const data = await getLinkedItems(sortedPhotos[viewerIndex].id);
+                setLinkedItems(data.links || []);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }, [viewerOpen, viewerIndex, sortedPhotos]);
+
+    useEffect(() => {
+        fetchLinkedItems();
+    }, [fetchLinkedItems]);
+
+    const handleLinkFile = async (targetId: number) => {
+        if (!sortedPhotos[viewerIndex]?.id) return;
+        try {
+            await linkFiles(sortedPhotos[viewerIndex].id, targetId);
+            setShowLinkModal(false);
+            fetchLinkedItems();
+            Alert.alert(t('projectPhotos.success'), 'File linked successfully.');
+        } catch (e: any) {
+            Alert.alert(t('projectPhotos.error'), e.response?.data?.error || 'Failed to link file.');
+        }
+    };
+
+    const handleRemoveLink = async (targetType: string, targetId: number) => {
+        if (!sortedPhotos[viewerIndex]?.id) return;
+        try {
+            await deleteLink(sortedPhotos[viewerIndex].id, targetType, targetId);
+            fetchLinkedItems();
+        } catch (e: any) {
+            Alert.alert(t('projectPhotos.error'), e.response?.data?.error || 'Failed to remove link.');
+        }
+    };
+
+    const handleLinkItemClick = async (item: any) => {
+        if (item.type === 'file') {
+            if (item.file_type?.startsWith('image/')) {
+                const idx = sortedPhotos.findIndex(p => p.id === item.id);
+                if (idx !== -1) {
+                    setViewerIndex(idx);
+                } else {
+                    if (item.file_url) {
+                        WebBrowser.openBrowserAsync(item.file_url);
+                    }
+                }
+            } else {
+                if (item.file_url) {
+                    WebBrowser.openBrowserAsync(item.file_url);
+                }
+            }
+        } else {
+            setViewerOpen(false);
+            if (item.type === 'rfi') {
+                router.setParams({ tab: 'rfi', rfiId: String(item.id) });
+            } else if (item.type === 'snag') {
+                router.setParams({ tab: 'snags', snagId: String(item.id) });
+            }
+        }
+    };
 
     // ── Reload comments when swiping to a new photo ───────────────────────────
     useEffect(() => {
@@ -2055,6 +2125,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     {viewerIndex + 1} / {sortedPhotos.length}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8 }}>
+                                        <Feather name="link" size={20} color="#fff" />
+                                    </TouchableOpacity>
                                     <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
                                         <Feather name="share-2" size={20} color="#fff" />
                                     </TouchableOpacity>
@@ -2163,48 +2236,81 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     </View>
 
                                     <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
-                                        <Text style={{ color: '#aaa', fontSize: 10, fontWeight: '700', marginBottom: 6 }}>
-                                            💬 {t('projectPhotos.comments')} ({photoComments.length})
-                                        </Text>
-                                        {commentLoading ? (
-                                            <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
-                                        ) : (
-                                            <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
-                                                {photoComments.length === 0 && (
-                                                    <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>{t('projectPhotos.noComments')}</Text>
-                                                )}
-                                                {photoComments.map((c: any) => (
-                                                    <View key={c.id} style={{ marginBottom: 8 }}>
-                                                        <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
-                                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                                <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || t('projectPhotos.user')}</Text>
-                                                                <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                                    <Text style={{ color: '#888', fontSize: 9 }}>↩ {t('projectPhotos.reply')}</Text>
-                                                                </TouchableOpacity>
-                                                            </View>
-                                                            <Text style={{ color: '#ddd', fontSize: 11 }}>
-                                                                {renderCommentText(c.text)}
-                                                            </Text>
-                                                        </View>
-                                                        {c.replies?.map((r: any) => (
-                                                            <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
-                                                                <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || t('projectPhotos.user')}</Text>
-                                                                <Text style={{ color: '#ccc', fontSize: 10 }}>
-                                                                    {renderCommentText(r.text)}
-                                                                </Text>
+                                        <View style={{ flexDirection: 'row', gap: 16, marginBottom: 8 }}>
+                                            <TouchableOpacity onPress={() => setViewerActiveTab('discussion')}>
+                                                <Text style={{ color: viewerActiveTab === 'discussion' ? '#fff' : '#aaa', fontSize: 10, fontWeight: '700' }}>
+                                                    💬 {t('projectPhotos.comments')} ({photoComments.length})
+                                                </Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity onPress={() => setViewerActiveTab('links')}>
+                                                <Text style={{ color: viewerActiveTab === 'links' ? '#fff' : '#aaa', fontSize: 10, fontWeight: '700' }}>
+                                                    🔗 Links ({linkedItems.length})
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        {viewerActiveTab === 'discussion' ? (
+                                            <>
+                                                {commentLoading ? (
+                                                    <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
+                                                ) : (
+                                                    <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
+                                                        {photoComments.length === 0 && (
+                                                            <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>{t('projectPhotos.noComments')}</Text>
+                                                        )}
+                                                        {photoComments.map((c: any) => (
+                                                            <View key={c.id} style={{ marginBottom: 8 }}>
+                                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
+                                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || t('projectPhotos.user')}</Text>
+                                                                        <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                                                                            <Text style={{ color: '#888', fontSize: 9 }}>↩ {t('projectPhotos.reply')}</Text>
+                                                                        </TouchableOpacity>
+                                                                    </View>
+                                                                    <Text style={{ color: '#ddd', fontSize: 11 }}>
+                                                                        {renderCommentText(c.text)}
+                                                                    </Text>
+                                                                </View>
+                                                                {c.replies?.map((r: any) => (
+                                                                    <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
+                                                                        <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || t('projectPhotos.user')}</Text>
+                                                                        <Text style={{ color: '#ccc', fontSize: 10 }}>
+                                                                            {renderCommentText(r.text)}
+                                                                        </Text>
+                                                                    </View>
+                                                                ))}
                                                             </View>
                                                         ))}
+                                                    </ScrollView>
+                                                )}
+                                                {replyTo && (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                        <Text style={{ color: colors.primary, fontSize: 9 }}>{t('projectPhotos.replyingTo')}</Text>
+                                                        <TouchableOpacity onPress={() => setReplyTo(null)}>
+                                                            <Text style={{ color: '#888', fontSize: 9 }}>✕ {t('projectPhotos.cancel')}</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
+                                                {linkedItems.length === 0 && (
+                                                    <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>No linked items.</Text>
+                                                )}
+                                                {linkedItems.map((item: any, idx) => (
+                                                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                                                        <TouchableOpacity 
+                                                            style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}
+                                                            onPress={() => handleLinkItemClick(item)}
+                                                        >
+                                                            <Feather name={item.type === 'file' ? (item.file_type?.startsWith('image/') ? 'image' : 'file-text') : item.type === 'rfi' ? 'help-circle' : 'alert-circle'} size={14} color={colors.primary} style={{ marginRight: 6 }} />
+                                                            <Text style={{ color: '#fff', fontSize: 11 }} numberOfLines={1}>{item.title || item.name}</Text>
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity onPress={() => handleRemoveLink(item.type, item.id)}>
+                                                            <Feather name="x" size={14} color="#ef4444" />
+                                                        </TouchableOpacity>
                                                     </View>
                                                 ))}
                                             </ScrollView>
-                                        )}
-                                        {replyTo && (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                <Text style={{ color: colors.primary, fontSize: 9 }}>{t('projectPhotos.replyingTo')}</Text>
-                                                <TouchableOpacity onPress={() => setReplyTo(null)}>
-                                                    <Text style={{ color: '#888', fontSize: 9 }}>✕ {t('projectPhotos.cancel')}</Text>
-                                                </TouchableOpacity>
-                                            </View>
                                         )}
                                         {showMentions && (
                                             <View style={{ position: 'absolute', bottom: 50, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000 }}>
@@ -2252,6 +2358,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     </View>
                 </GestureHandlerRootView>
             </Modal>
+
+            <LinkFileModal
+                visible={showLinkModal}
+                onClose={() => setShowLinkModal(false)}
+                onLink={handleLinkFile}
+                projectId={project?.id}
+                currentFileId={sortedPhotos[viewerIndex]?.id}
+            />
 
             {/* Rename Folder Modal */}
             <Modal visible={showEditFolder} transparent animationType="fade">

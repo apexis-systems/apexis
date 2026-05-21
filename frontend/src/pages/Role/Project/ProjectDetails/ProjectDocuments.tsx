@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCircle2, CheckCheck } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-
+import { useUsage } from '@/contexts/UsageContext';
+import { createRFI, getRFIAssignees } from '@/services/rfiService';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -38,6 +42,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { socket } = useSocket();
+  const { checkLimit } = useUsage();
   const [docs, setDocs] = useState<any[]>([]);
   const [selectedFolder, setRawSelectedFolder] = useState<string | null>(
     searchParams?.get('folder') || searchParams?.get('folderId') || null
@@ -50,6 +55,69 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [shareItem, setShareItem] = useState<any | null>(null);
   const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
   const [initialFileId, setInitialFileId] = useState<string | null>(searchParams?.get('fileId') || searchParams?.get('documentId') || null);
+
+  const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
+  const [showCreateRfiDialog, setShowCreateRfiDialog] = useState(false);
+  const [rfiTitle, setRfiTitle] = useState('');
+  const [rfiDescription, setRfiDescription] = useState('');
+  const [rfiAssignee, setRfiAssignee] = useState('');
+  const [rfiExpiryDate, setRfiExpiryDate] = useState('');
+  const [rfiAssigneesList, setRfiAssigneesList] = useState<any[]>([]);
+  const [submittingEntity, setSubmittingEntity] = useState(false);
+
+  useEffect(() => {
+    if (showCreateRfiDialog && project?.id) {
+      getRFIAssignees(project.id)
+        .then(setRfiAssigneesList)
+        .catch(err => console.error("Error fetching rfi assignees:", err));
+    }
+  }, [showCreateRfiDialog, project?.id]);
+
+  const handleStartCreateRfi = (doc: any) => {
+    setViewerState(prev => ({ ...prev, open: false }));
+    setSelectedDoc(doc);
+    setShowCreateRfiDialog(true);
+  };
+
+  const handleCreateRfiFromDoc = async () => {
+    if (!rfiTitle.trim()) { toast.error(t('title_required_msg') || 'Title is required'); return; }
+    if (!rfiAssignee) { toast.error(t('assignee_required_msg') || 'Assignee is required'); return; }
+    if (!selectedDoc) return;
+
+    if (!checkLimit('rfis')) {
+      toast.error(t('rfi_limit_msg') || 'RFI limit reached. Please upgrade.', {
+        action: {
+          label: t('upgrade_label') || 'Upgrade',
+          onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
+        },
+        duration: 5000,
+      });
+      return;
+    }
+
+    setSubmittingEntity(true);
+    try {
+      const form = new FormData();
+      form.append('project_id', String(project.id));
+      form.append('title', rfiTitle.trim());
+      if (rfiDescription.trim()) form.append('description', rfiDescription.trim());
+      form.append('assigned_to', rfiAssignee);
+      if (rfiExpiryDate) form.append('expiry_date', new Date(rfiExpiryDate).toISOString());
+      form.append('source_file_id', String(selectedDoc.id));
+
+      await createRFI(form);
+      toast.success(t('rfi_created_msg') || 'RFI created successfully');
+      setShowCreateRfiDialog(false);
+      setRfiTitle('');
+      setRfiDescription('');
+      setRfiAssignee('');
+      setRfiExpiryDate('');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to create RFI');
+    } finally {
+      setSubmittingEntity(false);
+    }
+  };
 
   // Selection state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -743,6 +811,13 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                               <Archive className="h-2.5 w-2.5 text-amber-600" />
                             </button>
                           )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }}
+                            className="rounded-full p-1 hover:bg-secondary transition-colors"
+                            title="Create RFI"
+                          >
+                            <Plus className="h-2.5 w-2.5 text-muted-foreground" />
+                          </button>
                         </>
                       )}
                 </div>
@@ -841,6 +916,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           <Archive className="h-3.5 w-3.5 text-amber-600" />
                         </button>
                       )}
+                      <button onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="rounded-md p-1 hover:bg-secondary" title="Create RFI">
+                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
                     </>
                   )}
                 </div>
@@ -858,6 +936,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         user={user}
         targetType="document"
         projectId={project.id}
+        onCreateRfi={handleStartCreateRfi}
       />
 
       {
@@ -997,6 +1076,59 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         }}
         type="document"
       />
+
+      <Dialog open={showCreateRfiDialog} onOpenChange={setShowCreateRfiDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create RFI from Document</DialogTitle>
+            <DialogDescription>
+              Create a new RFI linked to this document.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="rfi-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Title <span className="text-destructive">*</span></label>
+              <Input
+                id="rfi-title"
+                value={rfiTitle}
+                onChange={(e) => setRfiTitle(e.target.value)}
+                placeholder="Enter RFI title"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="rfi-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description</label>
+              <Textarea
+                id="rfi-desc"
+                value={rfiDescription}
+                onChange={(e) => setRfiDescription(e.target.value)}
+                placeholder="Enter RFI description"
+                rows={3}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assignee <span className="text-destructive">*</span></label>
+              <Select value={rfiAssignee} onValueChange={setRfiAssignee}>
+                <SelectTrigger className="h-10 text-xs bg-background">
+                  <SelectValue placeholder="Select Assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rfiAssigneesList.map((assignee) => (
+                    <SelectItem key={assignee.id} value={String(assignee.id)}>
+                      {assignee.name} ({assignee.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowCreateRfiDialog(false)} disabled={submittingEntity}>Cancel</Button>
+            <Button onClick={handleCreateRfiFromDoc} disabled={submittingEntity}>
+              {submittingEntity ? 'Creating...' : 'Create RFI'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showDeleteConflict} onOpenChange={setShowDeleteConflict}>
         <DialogContent className="sm:max-w-[400px]">
