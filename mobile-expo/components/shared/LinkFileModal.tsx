@@ -25,13 +25,14 @@ interface LinkFileModalProps {
     onLink: (fileId: number) => Promise<void>;
     projectId: string | number;
     currentFileId?: number;
+    handleLinkItemClick: (item: any) => void;
 }
 
-export default function LinkFileModal({ visible, onClose, onLink, projectId, currentFileId }: LinkFileModalProps) {
+export default function LinkFileModal({ visible, onClose, onLink, projectId, currentFileId, handleLinkItemClick }: LinkFileModalProps) {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const { t } = useTranslation();
-    
+
     const [files, setFiles] = useState<any[]>([]);
     const [folders, setFolders] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -41,14 +42,19 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
     const [activeTab, setActiveTab] = useState<'document' | 'photo'>('document');
     const [currentParentId, setCurrentParentId] = useState<string | number | null>(null);
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
+    const [mainTab, setMainTab] = useState<'linked' | 'link'>('linked');
+    const [linkedSubTab, setLinkedSubTab] = useState<string>('rfi');
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         if (visible && projectId) {
             loadFiles();
+            setSelectedIds(new Set());
         } else {
             setSearchQuery('');
             setCurrentParentId(null);
             setLinkedItems([]);
+            setSelectedIds(new Set());
         }
     }, [visible, projectId]);
 
@@ -56,13 +62,8 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
         setLoading(true);
         try {
             const data = await getProjectFiles(projectId);
-            if (data.fileData) {
-                setFiles(data.fileData);
-            }
-            if (data.folderData) {
-                setFolders(data.folderData);
-            }
-
+            if (data.fileData) setFiles(data.fileData);
+            if (data.folderData) setFolders(data.folderData);
             if (currentFileId) {
                 const linkData = await getLinkedItems(currentFileId);
                 setLinkedItems(linkData.links || []);
@@ -87,18 +88,32 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
         }
     };
 
+    const handleConfirmLink = async () => {
+        if (selectedIds.size === 0) return;
+        setLinkingId(-1); // use -1 as "bulk linking" sentinel
+        try {
+            await Promise.all(Array.from(selectedIds).map(id => onLink(id)));
+            if (currentFileId) {
+                const linkData = await getLinkedItems(currentFileId);
+                setLinkedItems(linkData.links || []);
+            }
+            setSelectedIds(new Set());
+        } finally {
+            setLinkingId(null);
+        }
+    };
+
     const handleRemoveLink = async (item: any) => {
         if (!currentFileId) return;
         const targetType = item.type || item.target_type;
         const targetId = item.id || item.target_id;
-        
         setUnlinkingId(targetId);
         try {
             await deleteLink(currentFileId, targetType, targetId);
             const linkData = await getLinkedItems(currentFileId);
             setLinkedItems(linkData.links || []);
         } catch (error) {
-            console.error("Failed to remove link:", error);
+            console.error('Failed to remove link:', error);
         } finally {
             setUnlinkingId(null);
         }
@@ -109,741 +124,392 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
         setCurrentParentId(null);
     };
 
-    const getValidFolders = () => {
-        return folders.filter(f => {
-            const nameLower = f.name.toLowerCase();
-            return nameLower !== 'archive' && nameLower !== 'confirmation' && nameLower !== 'confirmations';
+    const getValidFolders = () =>
+        folders.filter(f => {
+            const n = f.name.toLowerCase();
+            return n !== 'archive' && n !== 'confirmation' && n !== 'confirmations';
         });
-    };
 
     const getFoldersInCurrentLevel = () => {
         const valid = getValidFolders().filter(f => f.folder_type === activeTab);
         return valid.filter(f => String(f.parent_id ?? 'null') === String(currentParentId ?? 'null'));
     };
 
-    const getFilesInCurrentLevel = () => {
-        return files.filter(f => {
-            // Must not be the current file itself
+    const getFilesInCurrentLevel = () =>
+        files.filter(f => {
             if (String(f.id) === String(currentFileId)) return false;
-            
-            // Check folder matching
             if (currentParentId === null) {
-                // At root level, the file should have no folder_id, or its folder is missing,
-                // and it matches the current tab type
                 if (f.folder_id !== null && f.folder_id !== undefined) {
-                    const folderExists = folders.some(fold => String(fold.id) === String(f.folder_id));
-                    if (folderExists) return false;
+                    if (folders.some(fold => String(fold.id) === String(f.folder_id))) return false;
                 }
-                const fileTypeTab = f.file_type?.startsWith('image/') ? 'photo' : 'document';
-                return fileTypeTab === activeTab;
+                return (f.file_type?.startsWith('image/') ? 'photo' : 'document') === activeTab;
             } else {
-                // Inside a folder, file's folder_id must match currentParentId
                 if (String(f.folder_id) !== String(currentParentId)) return false;
-
-                // Tab-specific check to prevent mixed-type folders from leaking documents into photos (or vice-versa)
-                const isImg = f.file_type?.startsWith('image/') || f.file_name?.toLowerCase().endsWith('.jpg') || f.file_name?.toLowerCase().endsWith('.png') || f.file_name?.toLowerCase().endsWith('.jpeg');
-                const fileTypeTab = isImg ? 'photo' : 'document';
-                return fileTypeTab === activeTab;
+                const isImg = f.file_type?.startsWith('image/') ||
+                    f.file_name?.toLowerCase().endsWith('.jpg') ||
+                    f.file_name?.toLowerCase().endsWith('.png') ||
+                    f.file_name?.toLowerCase().endsWith('.jpeg');
+                return (isImg ? 'photo' : 'document') === activeTab;
             }
         });
-    };
 
-    const getFilteredSearchFiles = () => {
-        return files.filter(f => {
+    const getFilteredSearchFiles = () =>
+        files.filter(f => {
             if (String(f.id) === String(currentFileId)) return false;
             if (!f.file_name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-
-            const isImg = f.file_type?.startsWith('image/') || f.file_name?.toLowerCase().endsWith('.jpg') || f.file_name?.toLowerCase().endsWith('.png') || f.file_name?.toLowerCase().endsWith('.jpeg');
-            const fileTypeTab = isImg ? 'photo' : 'document';
-            return fileTypeTab === activeTab;
+            const isImg = f.file_type?.startsWith('image/') ||
+                f.file_name?.toLowerCase().endsWith('.jpg') ||
+                f.file_name?.toLowerCase().endsWith('.png') ||
+                f.file_name?.toLowerCase().endsWith('.jpeg');
+            return (isImg ? 'photo' : 'document') === activeTab;
         });
-    };
 
     const getBreadcrumbs = () => {
         const tabLabel = activeTab === 'document' ? t('linkFile.documentsTab') : t('linkFile.photosTab');
         if (currentParentId === null) return tabLabel;
-
         const path: string[] = [];
         let current = folders.find(f => String(f.id) === String(currentParentId));
         while (current) {
             path.unshift(current.name);
             current = folders.find(f => String(f.id) === String(current.parent_id));
         }
-        return tabLabel + " > " + path.join(" > ");
+        return tabLabel + ' > ' + path.join(' > ');
     };
 
     const goUp = () => {
         if (currentParentId === null) return;
         const currentFolderObj = folders.find(f => String(f.id) === String(currentParentId));
-        const parentId = currentFolderObj ? (currentFolderObj.parent_id ?? null) : null;
-        setCurrentParentId(parentId);
+        setCurrentParentId(currentFolderObj ? (currentFolderObj.parent_id ?? null) : null);
     };
 
     const renderFileGridItem = (item: any) => {
-        const isLinking = linkingId === item.id;
-        const isImage = item.file_type?.startsWith('image/') || item.file_name?.toLowerCase().endsWith('.jpg') || item.file_name?.toLowerCase().endsWith('.png') || item.file_name?.toLowerCase().endsWith('.jpeg');
         const isAlreadyLinked = linkedItems.some(link => link.type === 'file' && String(link.id) === String(item.id));
+        const isSelected = selectedIds.has(item.id);
+        const isImage = item.file_type?.startsWith('image/') ||
+            item.file_name?.toLowerCase().endsWith('.jpg') ||
+            item.file_name?.toLowerCase().endsWith('.png') ||
+            item.file_name?.toLowerCase().endsWith('.jpeg');
+
+        const toggleSelect = () => {
+            if (isAlreadyLinked) return;
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                return next;
+            });
+        };
+
+        const checkboxColor = isAlreadyLinked ? colors.textMuted : colors.primary;
+        const checked = isAlreadyLinked || isSelected;
+
+        const CheckBox = (
+            <View style={{
+                width: 20, height: 20, borderRadius: 5,
+                borderWidth: 2,
+                borderColor: checked ? checkboxColor : 'rgba(255,255,255,0.5)',
+                backgroundColor: checked ? checkboxColor : 'transparent',
+                alignItems: 'center', justifyContent: 'center',
+            }}>
+                {checked && <Feather name="check" size={12} color="#fff" />}
+            </View>
+        );
 
         if (isImage) {
             return (
-                <View
-                    key={item.id}
-                    style={{
-                        width: '30.5%',
-                        height: 125,
-                        backgroundColor: colors.surface,
-                        borderRadius: 12,
-                        overflow: 'hidden',
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        marginBottom: 12,
-                        position: 'relative',
-                        justifyContent: 'space-between'
-                    }}
-                >
-                    {/* Photo Preview Background */}
+                <TouchableOpacity key={item.id} onPress={toggleSelect} activeOpacity={0.85}
+                    style={{ width: '30.5%', height: 125, backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: isSelected ? 2 : 1, borderColor: isSelected ? colors.primary : colors.border, marginBottom: 12, position: 'relative' }}>
                     <View style={{ ...StyleSheet.absoluteFillObject }}>
-                        {item.downloadUrl ? (
-                            <Image
-                                source={item.downloadUrl}
-                                style={{ width: '100%', height: '100%' }}
-                                contentFit="cover"
-                                transition={200}
-                            />
-                        ) : (
-                            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-                                <Feather name="image" size={24} color={colors.textMuted} />
-                            </View>
-                        )}
+                        {item.downloadUrl
+                            ? <Image source={item.downloadUrl} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={200} />
+                            : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}><Feather name="image" size={24} color={colors.textMuted} /></View>}
                     </View>
-
-                    {/* Translucent overlay at the bottom containing file details and link action */}
-                    <View style={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.65)',
-                        padding: 6,
-                        alignItems: 'center'
-                    }}>
-                        <Text
-                            style={{ color: '#fff', fontSize: 9, fontWeight: '600', textAlign: 'center', marginBottom: 6, width: '100%' }}
-                            numberOfLines={1}
-                        >
-                            {item.file_name}
-                        </Text>
-                        
-                        <TouchableOpacity
-                            style={{
-                                backgroundColor: isAlreadyLinked ? 'rgba(255, 255, 255, 0.15)' : colors.primary,
-                                paddingVertical: 4,
-                                paddingHorizontal: 12,
-                                borderRadius: 6,
-                                width: '100%',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderWidth: isAlreadyLinked ? 1 : 0,
-                                borderColor: isAlreadyLinked ? 'rgba(255,255,255,0.2)' : 'transparent'
-                            }}
-                            onPress={() => !isAlreadyLinked && handleLink(item.id)}
-                            disabled={isLinking || isAlreadyLinked}
-                        >
-                            {isLinking ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                                <Text style={{ color: isAlreadyLinked ? colors.textMuted : '#fff', fontSize: 10, fontWeight: 'bold' }}>
-                                    {isAlreadyLinked ? t('linkFile.linked') : t('linkFile.link')}
-                                </Text>
-                            )}
-                        </TouchableOpacity>
+                    {/* Checkbox top-right */}
+                    <View style={{ position: 'absolute', top: 6, right: 6 }}>{CheckBox}</View>
+                    {/* Name bottom */}
+                    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 6, paddingVertical: 5 }}>
+                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '600', textAlign: 'center' }} numberOfLines={1}>{item.file_name}</Text>
                     </View>
-                </View>
+                </TouchableOpacity>
             );
         } else {
             return (
-                <View
-                    key={item.id}
-                    style={{
-                        width: '30.5%',
-                        height: 125,
-                        backgroundColor: colors.surface,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        padding: 8,
-                        marginBottom: 12,
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}
-                >
-                    {/* Document Icon Container */}
-                    <View style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        backgroundColor: colors.background,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginTop: 4
-                    }}>
-                        <Feather
-                            name={item.file_type?.includes('pdf') ? 'file' : 'file-text'}
-                            size={20}
-                            color={colors.primary}
-                        />
+                <TouchableOpacity key={item.id} onPress={toggleSelect} activeOpacity={0.85}
+                    style={{ width: '30.5%', height: 125, backgroundColor: colors.surface, borderRadius: 12, borderWidth: isSelected ? 2 : 1, borderColor: isSelected ? colors.primary : colors.border, padding: 8, marginBottom: 12, justifyContent: 'center', alignItems: 'center', gap:12, position: 'relative' }}>
+                    {/* Checkbox top-right */}
+                    <View style={{ position: 'absolute', top: 6, right: 6 }}>{CheckBox}</View>
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                        <Feather name={item.file_type?.includes('pdf') ? 'file' : 'file-text'} size={20} color={isSelected ? colors.primary : colors.textMuted} />
                     </View>
-
-                    {/* File Name */}
-                    <Text
-                        style={{
-                            color: colors.text,
-                            fontSize: 10,
-                            fontWeight: '600',
-                            textAlign: 'center',
-                            marginVertical: 4,
-                            lineHeight: 12,
-                            width: '100%'
-                        }}
-                        numberOfLines={2}
-                    >
+                    <Text style={{ color: colors.text, fontSize: 10, fontWeight: '600', textAlign: 'center', lineHeight: 12, width: '100%' }} numberOfLines={2}>
                         {item.file_name}
                     </Text>
-
-                    {/* Action Button */}
-                    <TouchableOpacity
-                        style={{
-                            backgroundColor: isAlreadyLinked ? 'rgba(255, 255, 255, 0.08)' : colors.primary,
-                            paddingVertical: 5,
-                            borderRadius: 6,
-                            width: '100%',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: isAlreadyLinked ? 1 : 0,
-                            borderColor: isAlreadyLinked ? colors.border : 'transparent'
-                        }}
-                        onPress={() => !isAlreadyLinked && handleLink(item.id)}
-                        disabled={isLinking || isAlreadyLinked}
-                    >
-                        {isLinking ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                            <Text style={{ color: isAlreadyLinked ? colors.textMuted : '#fff', fontSize: 10, fontWeight: 'bold' }}>
-                                {isAlreadyLinked ? t('linkFile.linked') : t('linkFile.link')}
-                            </Text>
-                        )}
-                    </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
             );
         }
     };
 
-    const getLinkedDocs = () => {
-        return linkedItems.filter(item => 
-            (item.type === 'file' || item.target_type === 'file') && 
-            !(item.file_type?.startsWith('image/') || 
-              item.title?.toLowerCase().endsWith('.jpg') || 
-              item.title?.toLowerCase().endsWith('.png') || 
-              item.title?.toLowerCase().endsWith('.jpeg') ||
-              item.file_name?.toLowerCase().endsWith('.jpg') || 
-              item.file_name?.toLowerCase().endsWith('.png') || 
-              item.file_name?.toLowerCase().endsWith('.jpeg') ||
-              item.name?.toLowerCase().endsWith('.jpg') ||
-              item.name?.toLowerCase().endsWith('.png') ||
-              item.name?.toLowerCase().endsWith('.jpeg'))
-        );
+    const isFilePhoto = (item: any) => {
+        const name = (item.title || item.file_name || item.name || '').toLowerCase();
+        return item.file_type?.startsWith('image/') ||
+            name.endsWith('.jpg') || name.endsWith('.jpeg') ||
+            name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
     };
 
-    const getLinkedPhotos = () => {
-        return linkedItems.filter(item => 
-            (item.type === 'file' || item.target_type === 'file') && 
-            (item.file_type?.startsWith('image/') || 
-             item.title?.toLowerCase().endsWith('.jpg') || 
-             item.title?.toLowerCase().endsWith('.png') || 
-             item.title?.toLowerCase().endsWith('.jpeg') ||
-             item.file_name?.toLowerCase().endsWith('.jpg') || 
-             item.file_name?.toLowerCase().endsWith('.png') || 
-             item.file_name?.toLowerCase().endsWith('.jpeg') ||
-             item.name?.toLowerCase().endsWith('.jpg') ||
-             item.name?.toLowerCase().endsWith('.png') ||
-             item.name?.toLowerCase().endsWith('.jpeg'))
-        );
-    };
+    const linkedDocs = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && !isFilePhoto(i));
+    const linkedPhotos = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && isFilePhoto(i));
+    const linkedRFIs = linkedItems.filter(i => i.type === 'rfi' || i.target_type === 'rfi');
+    const linkedSnags = linkedItems.filter(i => i.type === 'snag' || i.target_type === 'snag');
 
-    const getLinkedRFIs = () => {
-        return linkedItems.filter(item => item.type === 'rfi' || item.target_type === 'rfi');
-    };
+    const linkedSubTabs = [
+        ...(linkedRFIs.length > 0 ? [{ key: 'rfi', label: `RFI (${linkedRFIs.length})`, color: '#fb7185', icon: 'help-circle' as const }] : []),
+        ...(linkedSnags.length > 0 ? [{ key: 'snag', label: `Snags (${linkedSnags.length})`, color: '#fb923c', icon: 'alert-triangle' as const }] : []),
+        ...(linkedPhotos.length > 0 ? [{ key: 'photo', label: `Photos (${linkedPhotos.length})`, color: '#34d399', icon: 'image' as const }] : []),
+        ...(linkedDocs.length > 0 ? [{ key: 'doc', label: `Docs (${linkedDocs.length})`, color: '#60a5fa', icon: 'file-text' as const }] : []),
+    ];
 
-    const getLinkedSnags = () => {
-        return linkedItems.filter(item => item.type === 'snag' || item.target_type === 'snag');
-    };
+    const activeLinkedSubTab = linkedSubTabs.find(s => s.key === linkedSubTab)
+        ? linkedSubTab
+        : (linkedSubTabs[0]?.key || 'rfi');
+
+    const renderLinkedGrid = (items: any[]) => (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 16 }}>
+            {items.map(item => {
+                const key = item.id || item.target_id;
+                const name = item.title || item.file_name || item.name || item.subject || '—';
+                const isRFI = item.type === 'rfi' || item.target_type === 'rfi';
+                const isSnag = item.type === 'snag' || item.target_type === 'snag';
+                const isPhoto = !isRFI && !isSnag && isFilePhoto(item);
+                const accent = isRFI ? '#fb7185' : isSnag ? '#fb923c' : isPhoto ? '#34d399' : '#60a5fa';
+                const bg = isRFI ? 'rgba(251,113,133,0.08)' : isSnag ? 'rgba(251,146,60,0.08)' : isPhoto ? 'rgba(52,211,153,0.08)' : 'rgba(96,165,250,0.08)';
+                const iconName: any = isRFI ? 'help-circle' : isSnag ? 'alert-triangle' : isPhoto ? 'image' : 'file-text';
+                return (
+                    <View key={key} style={{ width: '47%' }}>
+                        <TouchableOpacity
+                            onPress={() => handleLinkItemClick(item)}
+                            activeOpacity={0.8}
+                            style={{ backgroundColor: bg, borderWidth: 1, borderColor: accent + '44', borderRadius: 10, padding: 10, minHeight: 78, justifyContent: 'space-between' }}
+                        >
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Feather name={iconName} size={20} color={accent} />
+                                <TouchableOpacity onPress={() => handleRemoveLink(item)} disabled={unlinkingId === key} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                                    {unlinkingId === key
+                                        ? <ActivityIndicator size="small" color="#ef4444" style={{ width: 14, height: 14 }} />
+                                        : <Feather name="trash-2" size={13} color="#ef4444" />}
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={{ fontSize: 11, color: colors.text, marginTop: 8 }} numberOfLines={2}>{name}</Text>
+                        </TouchableOpacity>
+                    </View>
+                );
+            })}
+        </View>
+    );
 
     const foldersInCurrentLevel = getFoldersInCurrentLevel();
     const filesInCurrentLevel = getFilesInCurrentLevel();
 
     return (
-        <Modal
-            visible={visible}
-            animationType="slide"
-            onRequestClose={onClose}
-            transparent={false}
-            statusBarTranslucent={true}
-        >
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={{ flex: 1, backgroundColor: colors.background }}
-            >
-                <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: currentFileId ? 0 : insets.bottom }}>
+        <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false} statusBarTranslucent={true}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
+                <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+
                     {/* Header */}
-                    <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingHorizontal: 16,
-                        paddingVertical: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: colors.border,
-                        backgroundColor: colors.surface
-                    }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface }}>
                         <TouchableOpacity onPress={onClose} style={{ marginRight: 16 }}>
                             <Feather name="arrow-left" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text, flex: 1 }}>{t('linkFile.title')}</Text>
                     </View>
 
-                    {/* Search Bar */}
-                    <View style={{ padding: 16, backgroundColor: colors.background }}>
-                        <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: colors.surface,
-                            borderRadius: 10,
-                            paddingHorizontal: 12,
-                            height: 44,
-                            borderWidth: 1,
-                            borderColor: colors.border
-                        }}>
-                            <Feather name="search" size={18} color={colors.textMuted} />
-                            <TextInput
-                                style={{ flex: 1, marginLeft: 8, color: colors.text, fontSize: 14 }}
-                                placeholder={t('linkFile.searchPlaceholder')}
-                                placeholderTextColor={colors.textMuted}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
-                            {searchQuery ? (
-                                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                    <Feather name="x" size={16} color={colors.textMuted} />
-                                </TouchableOpacity>
-                            ) : null}
-                        </View>
+                    {/* Main Tabs */}
+                    <View style={{ flexDirection: 'row', backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                        {(['linked', 'link'] as const).map(tab => (
+                            <TouchableOpacity key={tab} onPress={() => setMainTab(tab)}
+                                style={{ flex: 1, alignItems: 'center', paddingVertical: 13, borderBottomWidth: 2, borderBottomColor: mainTab === tab ? colors.primary : 'transparent' }}>
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: mainTab === tab ? colors.primary : colors.textMuted }}>
+                                    {tab === 'linked'
+                                        ? `${t('linkFile.linkedItems')}${linkedItems.length > 0 ? ` (${linkedItems.length})` : ''}`
+                                        : 'Link a File'}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
                     </View>
 
-                    {/* Tabs */}
-                    {!searchQuery && (
-                        <View style={{
-                            flexDirection: 'row',
-                            borderBottomWidth: 1,
-                            borderBottomColor: colors.border,
-                            backgroundColor: colors.surface
-                        }}>
-                            <TouchableOpacity
-                                onPress={() => handleTabChange('document')}
-                                style={{
-                                    flex: 1,
-                                    alignItems: 'center',
-                                    paddingVertical: 12,
-                                    borderBottomWidth: 2,
-                                    borderBottomColor: activeTab === 'document' ? colors.primary : 'transparent'
-                                }}
-                            >
-                                <Text style={{
-                                    fontSize: 14,
-                                    fontWeight: '600',
-                                    color: activeTab === 'document' ? colors.primary : colors.textMuted
-                                }}>
-                                    {t('linkFile.documentsTab')}
-                                </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => handleTabChange('photo')}
-                                style={{
-                                    flex: 1,
-                                    alignItems: 'center',
-                                    paddingVertical: 12,
-                                    borderBottomWidth: 2,
-                                    borderBottomColor: activeTab === 'photo' ? colors.primary : 'transparent'
-                                }}
-                            >
-                                <Text style={{
-                                    fontSize: 14,
-                                    fontWeight: '600',
-                                    color: activeTab === 'photo' ? colors.primary : colors.textMuted
-                                }}>
-                                    {t('linkFile.photosTab')}
-                                </Text>
-                            </TouchableOpacity>
+                    {/* ── LINKED ITEMS TAB ── */}
+                    {mainTab === 'linked' && (
+                        <View style={{ flex: 1 }}>
+                            {loading ? (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                    <ActivityIndicator size="large" color={colors.primary} />
+                                </View>
+                            ) : linkedItems.length === 0 ? (
+                                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                                    <Feather name="link" size={40} color={colors.textMuted} />
+                                    <Text style={{ color: colors.textMuted, fontSize: 14 }}>{t('linkFile.noItemsLinked')}</Text>
+                                </View>
+                            ) : (
+                                <View style={{ flex: 1 }}>
+                                    {/* Sub-tabs — only non-empty ones */}
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                                        style={{ maxHeight: 46, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}
+                                        contentContainerStyle={{ paddingHorizontal: 12 }}>
+                                        {linkedSubTabs.map(st => (
+                                            <TouchableOpacity key={st.key} onPress={() => setLinkedSubTab(st.key)}
+                                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: activeLinkedSubTab === st.key ? st.color : 'transparent' }}>
+                                                <Feather name={st.icon} size={13} color={activeLinkedSubTab === st.key ? st.color : colors.textMuted} />
+                                                <Text style={{ fontSize: 13, fontWeight: '600', color: activeLinkedSubTab === st.key ? st.color : colors.textMuted }}>{st.label}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                    {/* Grid content */}
+                                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+                                        {activeLinkedSubTab === 'rfi' && renderLinkedGrid(linkedRFIs)}
+                                        {activeLinkedSubTab === 'snag' && renderLinkedGrid(linkedSnags)}
+                                        {activeLinkedSubTab === 'photo' && renderLinkedGrid(linkedPhotos)}
+                                        {activeLinkedSubTab === 'doc' && renderLinkedGrid(linkedDocs)}
+                                    </ScrollView>
+                                </View>
+                            )}
                         </View>
                     )}
 
-                    {/* Breadcrumbs */}
-                    {!searchQuery && (
-                        <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            paddingHorizontal: 16,
-                            paddingVertical: 10,
-                            backgroundColor: colors.surface,
-                            borderBottomWidth: 1,
-                            borderBottomColor: colors.border
-                        }}>
-                            <Feather name="folder" size={14} color={colors.textMuted} style={{ marginRight: 6 }} />
-                            <Text numberOfLines={1} style={{
-                                fontSize: 12,
-                                fontWeight: '600',
-                                color: colors.textMuted,
-                                flex: 1
-                            }}>
-                                {getBreadcrumbs()}
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* Loading or Content */}
-                    {loading ? (
-                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                            <ActivityIndicator size="large" color={colors.primary} />
-                        </View>
-                    ) : searchQuery ? (
-                        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
-                            <Text style={{
-                                fontSize: 12,
-                                fontWeight: '700',
-                                color: colors.textMuted,
-                                marginBottom: 12,
-                                textTransform: 'uppercase',
-                                letterSpacing: 0.5
-                            }}>
-                                {t('linkFile.searchResults')}
-                            </Text>
-                            <FlatList
-                                data={getFilteredSearchFiles()}
-                                keyExtractor={(item) => String(item.id)}
-                                numColumns={3}
-                                columnWrapperStyle={{ gap: 12 }}
-                                renderItem={({ item }) => renderFileGridItem(item)}
-                                contentContainerStyle={{ paddingBottom: 40 }}
-                                ListEmptyComponent={
-                                    <View style={{ alignItems: 'center', marginTop: 40, gap: 10 }}>
-                                        <Feather name="search" size={36} color={colors.textMuted} />
-                                        <Text style={{ color: colors.textMuted, fontSize: 14 }}>{t('linkFile.noFilesMatching', { query: searchQuery })}</Text>
-                                    </View>
-                                }
-                            />
-                        </View>
-                    ) : (
-                        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} style={{ flex: 1 }}>
-                            {/* Folders Grid */}
-                            {(currentParentId !== null || foldersInCurrentLevel.length > 0) && (
-                                <View style={{
-                                    flexDirection: 'row',
-                                    flexWrap: 'wrap',
-                                    gap: 12,
-                                    padding: 16,
-                                    justifyContent: 'flex-start'
-                                }}>
-                                    {currentParentId !== null && (
-                                        <TouchableOpacity
-                                            onPress={goUp}
-                                            style={{
-                                                width: '30%',
-                                                height: 90,
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                padding: 8,
-                                                borderRadius: 12,
-                                                borderWidth: 1,
-                                                borderColor: colors.border,
-                                                borderStyle: 'dashed',
-                                                backgroundColor: colors.surface,
-                                                marginBottom: 4
-                                            }}
-                                        >
-                                            <Feather name="corner-left-up" size={24} color={colors.primary} />
-                                            <Text numberOfLines={1} style={{
-                                                fontSize: 11,
-                                                fontWeight: '600',
-                                                color: colors.text,
-                                                marginTop: 8,
-                                                textAlign: 'center'
-                                            }}>
-                                                Go Up
-                                            </Text>
+                    {/* ── LINK A FILE TAB ── */}
+                    {mainTab === 'link' && (
+                        <View style={{ flex: 1 }}>
+                            {/* Search Bar */}
+                            <View style={{ padding: 12, backgroundColor: colors.background }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 12, height: 42, borderWidth: 1, borderColor: colors.border }}>
+                                    <Feather name="search" size={16} color={colors.textMuted} />
+                                    <TextInput
+                                        style={{ flex: 1, marginLeft: 8, color: colors.text, fontSize: 14 }}
+                                        placeholder={t('linkFile.searchPlaceholder')}
+                                        placeholderTextColor={colors.textMuted}
+                                        value={searchQuery}
+                                        onChangeText={setSearchQuery}
+                                    />
+                                    {searchQuery ? (
+                                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                            <Feather name="x" size={16} color={colors.textMuted} />
                                         </TouchableOpacity>
-                                    )}
+                                    ) : null}
+                                </View>
+                            </View>
 
-                                    {foldersInCurrentLevel.map(folder => (
-                                        <TouchableOpacity
-                                            key={folder.id}
-                                            onPress={() => setCurrentParentId(folder.id)}
-                                            style={{
-                                                width: '30%',
-                                                height: 90,
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                padding: 8,
-                                                borderRadius: 12,
-                                                borderWidth: 1,
-                                                borderColor: colors.border,
-                                                backgroundColor: colors.surface,
-                                                marginBottom: 4
-                                            }}
-                                        >
-                                            <Feather name="folder" size={24} color={colors.primary} />
-                                            <Text numberOfLines={2} style={{
-                                                fontSize: 11,
-                                                fontWeight: '600',
-                                                color: colors.text,
-                                                marginTop: 8,
-                                                textAlign: 'center',
-                                                lineHeight: 13
-                                            }}>
-                                                {folder.name}
+                            {/* Document / Photo sub-tabs */}
+                            {!searchQuery && (
+                                <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface }}>
+                                    {(['document', 'photo'] as const).map(tab => (
+                                        <TouchableOpacity key={tab} onPress={() => handleTabChange(tab)}
+                                            style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: activeTab === tab ? colors.primary : 'transparent' }}>
+                                            <Text style={{ fontSize: 14, fontWeight: '600', color: activeTab === tab ? colors.primary : colors.textMuted }}>
+                                                {tab === 'document' ? t('linkFile.documentsTab') : t('linkFile.photosTab')}
                                             </Text>
                                         </TouchableOpacity>
                                     ))}
                                 </View>
                             )}
 
-                            {/* Files Section */}
-                            {filesInCurrentLevel.length > 0 ? (
-                                <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-                                    <Text style={{
-                                        fontSize: 12,
-                                        fontWeight: '700',
-                                        color: colors.textMuted,
-                                        marginBottom: 12,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: 0.5
-                                    }}>
-                                        {t('linkFile.filesSection')}
-                                    </Text>
-                                    <View style={{
-                                        flexDirection: 'row',
-                                        flexWrap: 'wrap',
-                                        gap: 12,
-                                        justifyContent: 'flex-start'
-                                    }}>
-                                        {filesInCurrentLevel.map(item => renderFileGridItem(item))}
-                                    </View>
-                                </View>
-                            ) : null}
-
-                            {foldersInCurrentLevel.length === 0 && filesInCurrentLevel.length === 0 && (
-                                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 12 }}>
-                                    <Feather name="folder-minus" size={48} color={colors.textMuted} />
-                                    <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '500' }}>
-                                        {currentParentId === null ? t('linkFile.noFilesFound') : t('linkFile.folderEmpty')}
-                                    </Text>
+                            {/* Breadcrumbs */}
+                            {!searchQuery && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                                    <Feather name="folder" size={13} color={colors.textMuted} style={{ marginRight: 6 }} />
+                                    <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textMuted, flex: 1 }}>{getBreadcrumbs()}</Text>
                                 </View>
                             )}
-                        </ScrollView>
+
+                            {/* File content */}
+                            {loading ? (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                    <ActivityIndicator size="large" color={colors.primary} />
+                                </View>
+                            ) : searchQuery ? (
+                                <FlatList
+                                    data={getFilteredSearchFiles()}
+                                    keyExtractor={item => String(item.id)}
+                                    numColumns={3}
+                                    columnWrapperStyle={{ gap: 12 }}
+                                    renderItem={({ item }) => renderFileGridItem(item)}
+                                    contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+                                    ListEmptyComponent={
+                                        <View style={{ alignItems: 'center', marginTop: 40, gap: 10 }}>
+                                            <Feather name="search" size={36} color={colors.textMuted} />
+                                            <Text style={{ color: colors.textMuted, fontSize: 14 }}>{t('linkFile.noFilesMatching', { query: searchQuery })}</Text>
+                                        </View>
+                                    }
+                                />
+                            ) : (
+                                <ScrollView contentContainerStyle={{ paddingBottom: 40 }} style={{ flex: 1 }}>
+                                    {(currentParentId !== null || foldersInCurrentLevel.length > 0) && (
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, padding: 16 }}>
+                                            {currentParentId !== null && (
+                                                <TouchableOpacity onPress={goUp}
+                                                    style={{ width: '30%', height: 90, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', backgroundColor: colors.surface }}>
+                                                    <Feather name="corner-left-up" size={24} color={colors.primary} />
+                                                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 8 }}>Go Up</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                            {foldersInCurrentLevel.map(folder => (
+                                                <TouchableOpacity key={folder.id} onPress={() => setCurrentParentId(folder.id)}
+                                                    style={{ width: '30%', height: 90, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+                                                    <Feather name="folder" size={24} color={colors.primary} />
+                                                    <Text numberOfLines={2} style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 8, textAlign: 'center' }}>{folder.name}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+                                    {filesInCurrentLevel.length > 0 && (
+                                        <View style={{ paddingHorizontal: 16 }}>
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                                                {filesInCurrentLevel.map(item => renderFileGridItem(item))}
+                                            </View>
+                                        </View>
+                                    )}
+                                    {foldersInCurrentLevel.length === 0 && filesInCurrentLevel.length === 0 && (
+                                        <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 12 }}>
+                                            <Feather name="folder-minus" size={48} color={colors.textMuted} />
+                                            <Text style={{ color: colors.textMuted, fontSize: 14 }}>
+                                                {currentParentId === null ? t('linkFile.noFilesFound') : t('linkFile.folderEmpty')}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </ScrollView>
+                            )}
+                        </View>
                     )}
 
-                    {/* Premium bottom Linked Items Workspace tray */}
-                    {currentFileId && (() => {
-                        const linkedDocs = getLinkedDocs();
-                        const linkedPhotos = getLinkedPhotos();
-                        const linkedRFIs = getLinkedRFIs();
-                        const linkedSnags = getLinkedSnags();
-                        const totalLinks = linkedItems.length;
-
-                        return (
-                            <View style={{
-                                borderTopWidth: 1,
-                                borderTopColor: colors.border,
-                                backgroundColor: colors.surface,
-                                paddingTop: 12,
-                                paddingBottom: Platform.OS === 'ios' ? insets.bottom + 8 : 16,
-                                paddingHorizontal: 16,
-                                maxHeight: 220,
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: -4 },
-                                shadowOpacity: 0.1,
-                                shadowRadius: 6,
-                                elevation: 8
-                            }}>
-                                {/* Title and Header */}
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Feather name="link" size={14} color={colors.primary} />
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
-                                            {t('linkFile.linkedItems')}
-                                        </Text>
-                                        {totalLinks > 0 && (
-                                            <View style={{
-                                                backgroundColor: colors.primary,
-                                                borderRadius: 10,
-                                                paddingHorizontal: 6,
-                                                paddingVertical: 1.5,
-                                                alignItems: 'center',
-                                                justifyContent: 'center'
-                                            }}>
-                                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#fff' }}>
-                                                    {totalLinks}
-                                                </Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                </View>
-
-                                {totalLinks === 0 ? (
-                                    <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 20 }}>
-                                        <Text style={{ fontSize: 11, color: colors.textMuted, fontStyle: 'italic' }}>
-                                            {t('linkFile.noItemsLinked')}
-                                        </Text>
-                                    </View>
+                    {/* ── Sticky Bottom Bar: shown when files are selected ── */}
+                    {selectedIds.size > 0 && (
+                        <View style={{
+                            flexDirection: 'row',
+                            gap: 12,
+                            paddingHorizontal: 16,
+                            paddingVertical: 12,
+                            paddingBottom: insets.bottom + 12,
+                            borderTopWidth: 1,
+                            borderTopColor: colors.border,
+                            backgroundColor: colors.surface,
+                        }}>
+                            <TouchableOpacity
+                                onPress={() => setSelectedIds(new Set())}
+                                style={{ flex: 1, height: 46, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={handleConfirmLink}
+                                disabled={linkingId === -1}
+                                style={{ flex: 2, height: 46, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                {linkingId === -1 ? (
+                                    <ActivityIndicator size="small" color="#fff" />
                                 ) : (
-                                    <ScrollView 
-                                        style={{ maxHeight: 150 }}
-                                        showsVerticalScrollIndicator={true}
-                                        contentContainerStyle={{ gap: 8, paddingBottom: 8 }}
-                                    >
-                                        {/* Render Linked Documents */}
-                                        {linkedDocs.map(item => (
-                                            <View key={`doc-${item.id || item.target_id}`} style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                                                borderWidth: 1,
-                                                borderColor: 'rgba(255, 255, 255, 0.05)',
-                                                borderRadius: 8,
-                                                paddingHorizontal: 12,
-                                                paddingVertical: 8,
-                                            }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                                                    <Feather name="file-text" size={13} color="#60a5fa" />
-                                                    <Text style={{ fontSize: 12, color: colors.text, flex: 1 }} numberOfLines={1}>
-                                                        {item.title || item.file_name || item.name || t('linkFile.unnamedDocument')}
-                                                    </Text>
-                                                </View>
-                                                <TouchableOpacity 
-                                                    onPress={() => handleRemoveLink(item)}
-                                                    disabled={unlinkingId === (item.id || item.target_id)}
-                                                    style={{ padding: 4 }}
-                                                >
-                                                    {unlinkingId === (item.id || item.target_id) ? (
-                                                        <ActivityIndicator size="small" color={colors.primary} style={{ width: 14, height: 14 }} />
-                                                    ) : (
-                                                        <Feather name="trash-2" size={13} color="#ef4444" />
-                                                    )}
-                                                </TouchableOpacity>
-                                            </View>
-                                        ))}
-
-                                        {/* Render Linked Photos */}
-                                        {linkedPhotos.map(item => (
-                                            <View key={`photo-${item.id || item.target_id}`} style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                                                borderWidth: 1,
-                                                borderColor: 'rgba(255, 255, 255, 0.05)',
-                                                borderRadius: 8,
-                                                paddingHorizontal: 12,
-                                                paddingVertical: 8,
-                                            }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                                                    <Feather name="image" size={13} color="#34d399" />
-                                                    <Text style={{ fontSize: 12, color: colors.text, flex: 1 }} numberOfLines={1}>
-                                                        {item.title || item.file_name || item.name || t('linkFile.unnamedPhoto')}
-                                                    </Text>
-                                                </View>
-                                                <TouchableOpacity 
-                                                    onPress={() => handleRemoveLink(item)}
-                                                    disabled={unlinkingId === (item.id || item.target_id)}
-                                                    style={{ padding: 4 }}
-                                                >
-                                                    {unlinkingId === (item.id || item.target_id) ? (
-                                                        <ActivityIndicator size="small" color={colors.primary} style={{ width: 14, height: 14 }} />
-                                                    ) : (
-                                                        <Feather name="trash-2" size={13} color="#ef4444" />
-                                                    )}
-                                                </TouchableOpacity>
-                                            </View>
-                                        ))}
-
-                                        {/* Render Linked RFIs */}
-                                        {linkedRFIs.map(item => (
-                                            <View key={`rfi-${item.id || item.target_id}`} style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                                                borderWidth: 1,
-                                                borderColor: 'rgba(255, 255, 255, 0.05)',
-                                                borderRadius: 8,
-                                                paddingHorizontal: 12,
-                                                paddingVertical: 8,
-                                            }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                                                    <Feather name="help-circle" size={13} color="#fb7185" />
-                                                    <Text style={{ fontSize: 12, color: colors.text, flex: 1 }} numberOfLines={1}>
-                                                        {item.title || item.name || item.subject || t('linkFile.unnamedRfi')}
-                                                    </Text>
-                                                </View>
-                                                <TouchableOpacity 
-                                                    onPress={() => handleRemoveLink(item)}
-                                                    disabled={unlinkingId === (item.id || item.target_id)}
-                                                    style={{ padding: 4 }}
-                                                >
-                                                    {unlinkingId === (item.id || item.target_id) ? (
-                                                        <ActivityIndicator size="small" color={colors.primary} style={{ width: 14, height: 14 }} />
-                                                    ) : (
-                                                        <Feather name="trash-2" size={13} color="#ef4444" />
-                                                    )}
-                                                </TouchableOpacity>
-                                            </View>
-                                        ))}
-
-                                        {/* Render Linked Snags */}
-                                        {linkedSnags.map(item => (
-                                            <View key={`snag-${item.id || item.target_id}`} style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                                                borderWidth: 1,
-                                                borderColor: 'rgba(255, 255, 255, 0.05)',
-                                                borderRadius: 8,
-                                                paddingHorizontal: 12,
-                                                paddingVertical: 8,
-                                            }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                                                    <Feather name="alert-triangle" size={13} color="#fb923c" />
-                                                    <Text style={{ fontSize: 12, color: colors.text, flex: 1 }} numberOfLines={1}>
-                                                        {item.title || item.name || t('linkFile.unnamedSnag')}
-                                                    </Text>
-                                                </View>
-                                                <TouchableOpacity 
-                                                    onPress={() => handleRemoveLink(item)}
-                                                    disabled={unlinkingId === (item.id || item.target_id)}
-                                                    style={{ padding: 4 }}
-                                                >
-                                                    {unlinkingId === (item.id || item.target_id) ? (
-                                                        <ActivityIndicator size="small" color={colors.primary} style={{ width: 14, height: 14 }} />
-                                                    ) : (
-                                                        <Feather name="trash-2" size={13} color="#ef4444" />
-                                                    )}
-                                                </TouchableOpacity>
-                                            </View>
-                                        ))}
-                                    </ScrollView>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>
+                                        Link {selectedIds.size} file{selectedIds.size > 1 ? 's' : ''}
+                                    </Text>
                                 )}
-                            </View>
-                        );
-                    })()}
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
             </KeyboardAvoidingView>
         </Modal>
