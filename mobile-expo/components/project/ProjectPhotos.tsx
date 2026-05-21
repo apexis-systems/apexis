@@ -1885,7 +1885,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                         itemStyle={{ fontSize: 18, color: colors.text }}
                                                                         onValueChange={(itemValue) => setTempMonth(itemValue)}
                                                                         dropdownIconColor={colors.text}
-                                                                        mode="dropdown"
+                                                                        mode="dialog"
                                                                     >
                                                                         {allMonths.map(m => {
                                                                             const isAvailable = availableMonthsByYear[tempYear]?.has(m);
@@ -1906,7 +1906,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                         itemStyle={{ fontSize: 18, color: colors.text }}
                                                                         onValueChange={(itemValue) => setTempYear(itemValue)}
                                                                         dropdownIconColor={colors.text}
-                                                                        mode="dropdown"
+                                                                        mode="dialog"
                                                                     >
                                                                         {availableYears.map(y => (
                                                                             <Picker.Item key={y} label={y} value={y} color={Platform.OS === 'android' ? '#000000' : colors.text} />
