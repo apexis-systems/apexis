@@ -37,7 +37,7 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
     const handleRegenerate = async (reportId: number) => {
         setRegeneratingId(reportId);
         try {
-            await regenerateReport(reportId);
+            await regenerateReport(reportId, project.id);
             Alert.alert(t('projectReports.weekly.success') || 'Success', t('projectReports.daily.regenerateSuccess') || 'Report regenerated successfully');
             await fetchReports();
         } catch (e: any) {
