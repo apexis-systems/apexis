@@ -333,29 +333,73 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     };
 
     const handleLinkItemClick = async (item: any) => {
-        if (item.type === 'file') {
-            const downloadUrl = item.downloadUrl || item.file_url;
-            if (downloadUrl) {
-                const isPdf = item.file_type?.includes('pdf') || item.file_name?.toLowerCase().endsWith('.pdf') || item.name?.toLowerCase().endsWith('.pdf');
-                if (isPdf) {
-                    const docToOpen = {
-                        ...item,
-                        file_name: item.name || item.file_name,
-                        downloadUrl: downloadUrl
-                    };
-                    openDoc(docToOpen);
+
+        const itemType = item.type || item.target_type;
+        const itemId = item.target_id || item.id;
+        if (!itemType || !itemId) return;
+
+        // Parse folderId from the S3 file_url path (e.g. "projects/1/folders/23/filename.pdf")
+        let targetFolderId: string | null = item.folder_id ? String(item.folder_id) : null;
+        if (!targetFolderId && item.file_url) {
+            const parts = item.file_url.split('/');
+            const folderIdx = parts.indexOf('folders');
+            if (folderIdx !== -1 && folderIdx + 1 < parts.length) {
+                targetFolderId = parts[folderIdx + 1];
+            }
+        }
+
+        if (itemType === 'file') {
+            const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+            const isPhoto = item.file_type?.startsWith('image/') ||
+                fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') ||
+                fileName.endsWith('.gif') || fileName.endsWith('.webp');
+
+            if (isPhoto) {
+                // It's an image — navigate to the photos tab and deep-link open it
+                setPdfViewerUrl(null);
+                setCurrentDoc(null);
+                router.setParams({
+                    tab: 'photos',
+                    folderId: String(targetFolderId || ''),
+                    fileId: String(itemId),
+                });
+            } else {
+                // It's a document/PDF
+                const targetDoc = docs.find(d => String(d.id) === String(itemId));
+                if (targetDoc) {
+                    if (String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
+                        // SAME FOLDER: open doc directly
+                        openDoc(targetDoc);
+                    } else {
+                        // DIFFERENT FOLDER: close current doc, navigate via router params
+                        setPdfViewerUrl(null);
+                        setCurrentDoc(null);
+                        router.setParams({
+                            tab: 'documents',
+                            folderId: String(targetFolderId || ''),
+                            fileId: String(itemId),
+                        });
+                    }
                 } else {
-                    WebBrowser.openBrowserAsync(downloadUrl);
+                    // Doc not yet loaded — navigate via router params
+                    setPdfViewerUrl(null);
+                    setCurrentDoc(null);
+                    router.setParams({
+                        tab: 'documents',
+                        folderId: String(targetFolderId || ''),
+                        fileId: String(itemId),
+                    });
                 }
             }
         } else {
+            // RFI or Snag
             setPdfViewerUrl(null);
             setCurrentDoc(null);
             setShowComments(false);
-            if (item.type === 'rfi') {
-                router.setParams({ tab: 'rfi', rfiId: String(item.id) });
-            } else if (item.type === 'snag') {
-                router.setParams({ tab: 'snags', snagId: String(item.id) });
+            if (itemType === 'rfi') {
+                router.setParams({ tab: 'rfi', rfiId: String(itemId) });
+            } else if (itemType === 'snag') {
+                router.setParams({ tab: 'snags', snagId: String(itemId) });
             }
         }
     };
@@ -2248,6 +2292,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         onLink={handleLinkFile}
                         projectId={project.id}
                         currentFileId={currentDoc.id}
+                        handleLinkItemClick={handleLinkItemClick}
                     />
                 )}
             </Modal>

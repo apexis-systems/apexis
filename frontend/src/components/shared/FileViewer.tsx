@@ -12,6 +12,7 @@ import LinkFileModal from './LinkFileModal';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface FileViewerProps {
   files: any[];
@@ -28,6 +29,7 @@ interface FileViewerProps {
 
 const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi }: FileViewerProps) => {
   const router = useRouter();
+  const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [downloading, setDownloading] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -73,21 +75,21 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const handleLinkFile = async (targetId: string | number) => {
     try {
       await linkFiles(currentFile.id, targetId);
-      toast.success('File linked successfully');
+      toast.success(t('file_linked_success'));
       setShowLinkModal(false);
       fetchLinks();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to link file');
+      toast.error(e.response?.data?.error || t('file_link_failed'));
     }
   };
 
   const handleRemoveLink = async (targetType: string, targetId: string | number) => {
     try {
       await deleteLink(currentFile.id, targetType, targetId);
-      toast.success('Link removed successfully');
+      toast.success(t('link_removed_success'));
       fetchLinks();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to remove link');
+      toast.error(e.response?.data?.error || t('link_remove_failed'));
     }
   };
 
@@ -232,7 +234,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
             {/* Sidebar Header */}
             <div className="p-6 border-b border-border/50 bg-background/50">
                <span className="text-[10px] font-black tracking-[0.2em] opacity-50 uppercase block mb-1">
-                File Details
+                {t('file_details')}
               </span>
               <h3 className="text-lg font-bold truncate leading-tight">
                 {currentFile.file_name}
@@ -245,26 +247,26 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               <div className="p-6 space-y-6 shrink-0">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Uploaded By</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">{t('uploaded_by')}</span>
                     <div className="flex items-center gap-2">
                       <UserIcon className="h-3.5 w-3.5 text-accent" />
-                      <span className="text-[11px] font-bold text-foreground">{currentFile.creator?.name || 'SYSTEM'}</span>
+                      <span className="text-[11px] font-bold text-foreground">{currentFile.creator?.name || t('system_label')}</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Date</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">{t('date')}</span>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3.5 w-3.5 text-accent" />
                       <span className="text-[11px] font-bold text-foreground">{formatDate(currentFile.createdAt)}</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Size</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">{t('size_label')}</span>
                     <span className="text-[11px] font-bold text-foreground ml-0.5">{formatFileSize(currentFile.file_size_mb)}</span>
                   </div>
                   {currentFile.location && (
                     <div className="flex flex-col gap-1 col-span-2">
-                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Location</span>
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">{t('location_label')}</span>
                       <div className="flex items-center gap-2">
                         <MapPin className="h-3.5 w-3.5 text-accent" />
                         <span className="text-[11px] font-bold text-foreground truncate">{currentFile.location}</span>
@@ -279,7 +281,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                      onClick={handleDownload}
                      disabled={downloading}
                    >
-                     <Download className="h-4 w-4 mr-2" /> {downloading ? 'DOWNLOADING...' : 'DOWNLOAD FILE'}
+                     <Download className="h-4 w-4 mr-2" /> {downloading ? t('downloading_label') : t('download_file')}
                    </Button>
                 </div>
               </div>
@@ -293,14 +295,14 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                       className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'discussion' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
                     >
                       {activeTab === 'discussion' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
-                      Discussion
+                      {t('discussion')}
                     </button>
                     <button 
                       onClick={() => setActiveTab('links')}
                       className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'links' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
                     >
                       {activeTab === 'links' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
-                      Links ({linkedItems.length})
+                      {t('links_label')} ({linkedItems.length})
                     </button>
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto">
@@ -309,7 +311,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     ) : (
                       <div className="space-y-3 pr-2">
                         {linkedItems.length === 0 ? (
-                          <div className="text-center py-8 text-xs text-muted-foreground">No linked items yet.</div>
+                          <div className="text-center py-8 text-xs text-muted-foreground">{t('no_linked_items')}</div>
                         ) : (
                           linkedItems.map((item, idx) => (
                             <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
@@ -322,10 +324,10 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                 {item.status && <div className="text-[10px] text-muted-foreground mt-0.5 capitalize">{item.status}</div>}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent" onClick={() => handleLinkItemClick(item)} title="View">
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent" onClick={() => handleLinkItemClick(item)} title={t('view_btn')}>
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveLink(item.type, item.id)} title="Remove Link">
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveLink(item.type, item.id)} title={t('remove_link')}>
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
@@ -358,7 +360,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
                     onClick={() => onCreateRfi(currentFile)}
                   >
-                    <Plus className="h-3.5 w-3.5" /> RFI
+                    <Plus className="h-3.5 w-3.5" /> {t('rfi_label')}
                   </Button>
                 )}
                 {onCreateSnag && (
@@ -367,7 +369,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
                     onClick={() => onCreateSnag(currentFile)}
                   >
-                    <Plus className="h-3.5 w-3.5" /> Snag
+                    <Plus className="h-3.5 w-3.5" /> {t('snag')}
                   </Button>
                 )}
                 <Button 
@@ -375,9 +377,9 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                   className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
                   onClick={() => setShowLinkModal(true)}
                 >
-                  <LinkIcon className="h-3.5 w-3.5" /> Link
+                  <LinkIcon className="h-3.5 w-3.5" /> {t('link')}
                 </Button>
-                <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title="View Original">
+                <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title={t('view_original')}>
                   <ExternalLink className="h-4 w-4" />
                 </Button>
                 
@@ -386,18 +388,18 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     <div className="h-4 w-[1px] bg-border/50 mx-1" />
                     <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => {
                       setZoom(z => { const nz = Math.max(z - 0.5, 1); if(nz <= 1) setPan({x:0, y:0}); return nz; });
-                    }} title="Zoom Out">
+                    }} title={t('zoom_out')}>
                       <ZoomOut className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setZoom(z => Math.min(z + 0.5, 5))} title="Zoom In">
+                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setZoom(z => Math.min(z + 0.5, 5))} title={t('zoom_in')}>
                       <ZoomIn className="h-4 w-4" />
                     </Button>
                     {isImage && (
-                      <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setRotation(r => (r + 90) % 360)} title="Rotate">
+                      <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setRotation(r => (r + 90) % 360)} title={t('rotate')}>
                         <RotateCw className="h-4 w-4" />
                       </Button>
                     )}
-                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
+                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? t('exit_fullscreen') : t('fullscreen')}>
                       {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                     </Button>
                   </>
@@ -480,7 +482,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                   </div>
                   <div className="space-y-2">
                     <p className="text-xl font-black tracking-tight">{currentFile.file_name}</p>
-                    <p className="text-sm text-muted-foreground font-medium">Preview not available for this file type</p>
+                    <p className="text-sm text-muted-foreground font-medium">{t('preview_not_available')}</p>
                   </div>
                 </div>
               )}
@@ -490,7 +492,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                 <div className="absolute inset-0 pointer-events-none z-[100] flex items-center justify-center overflow-hidden">
                   <div className="transform -rotate-[30deg] border-4 md:border-[10px] border-dashed border-red-500/20 rounded-xl md:rounded-3xl px-8 py-4 md:px-20 md:py-10 bg-red-500/[0.02] select-none">
                     <h1 className="text-red-500/25 text-4xl md:text-8xl lg:text-9xl font-black uppercase tracking-widest text-center whitespace-nowrap">
-                      Do Not Follow
+                      {t('do_not_follow_tag')}
                     </h1>
                   </div>
                 </div>
