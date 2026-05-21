@@ -7,9 +7,10 @@ import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getProjectFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, archiveFile, unarchiveFile, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
 import { getMemberForTag, getProjectMembers } from '@/services/projectService';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
@@ -21,6 +22,7 @@ import { setActiveProjectContext } from '@/utils/projectSelection';
 import { formatFileSize } from '@/helpers/format';
 import { groupItemsByMonth } from '@/helpers/grouping';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
+import LinkFileModal from '../shared/LinkFileModal';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
@@ -87,6 +89,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [showViewerUI, setShowViewerUI] = useState(true);
     const [downloading, setDownloading] = useState(false);
     const flatListRef = useRef<FlatList>(null);
+    const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
+    const [showLinkModal, setShowLinkModal] = useState(false);
+    const [linkedItems, setLinkedItems] = useState<any[]>([]);
 
     // Comment state
     const [photoComments, setPhotoComments] = useState<CommentThread[]>([]);
@@ -181,6 +186,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }
             formData.append('assigned_to', String(snagAssignedToId));
             formData.append('photo_key', activeActionFile.file_url);
+            formData.append('source_file_id', String(activeActionFile.id));
 
             await createSnag(formData);
             Alert.alert("Success", "Snag created successfully");
@@ -218,6 +224,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 formData.append('expiry_date', rfiExpiryDate.toISOString());
             }
             formData.append('photo_key', activeActionFile.file_url);
+            formData.append('source_file_id', String(activeActionFile.id));
 
             await createRFI(formData);
             Alert.alert("Success", "RFI created successfully");
@@ -314,7 +321,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     };
 
     useEffect(() => {
-        if (initialFileId && photos.length > 0) {
+        // Only auto-open viewer when it is NOT already open — prevents "1/0" black screen
+        // caused by this effect firing mid-session and switching selectedFolder unexpectedly
+        if (!viewerOpen && initialFileId && photos.length > 0) {
             const currentFolderPhotosForInit = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
             const visiblePhotosInit = user.role === 'client' ? currentFolderPhotosForInit.filter((p) => p.client_visible !== false) : currentFolderPhotosForInit;
             const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
@@ -329,10 +338,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             if (index !== -1) {
                 openViewer(index);
                 router.setParams({ fileId: '', photoId: '' });
-
             }
         }
-    }, [initialFileId, photos, selectedFolder, sortBy, user.role, router]);
+    }, [initialFileId, photos, selectedFolder, sortBy, user.role, router, viewerOpen]);
 
 
     const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
@@ -428,7 +436,112 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }, 50);
             return () => clearTimeout(t);
         }
-    }, [viewerOpen]);
+    }, [viewerOpen, sortedPhotos, viewerIndex]);
+
+    const fetchLinkedItems = useCallback(async () => {
+        if (viewerOpen && sortedPhotos[viewerIndex]?.id) {
+            try {
+                const data = await getLinkedItems(sortedPhotos[viewerIndex].id);
+                setLinkedItems(data.links || []);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }, [viewerOpen, viewerIndex, sortedPhotos]);
+
+    useEffect(() => {
+        fetchLinkedItems();
+    }, [fetchLinkedItems]);
+
+    const handleLinkFile = async (targetId: number) => {
+        if (!sortedPhotos[viewerIndex]?.id) return;
+        try {
+            await linkFiles(sortedPhotos[viewerIndex].id, targetId);
+            setShowLinkModal(false);
+            fetchLinkedItems();
+            Alert.alert(t('projectPhotos.success'), 'File linked successfully.');
+        } catch (e: any) {
+            Alert.alert(t('projectPhotos.error'), e.response?.data?.error || 'Failed to link file.');
+        }
+    };
+
+    const handleRemoveLink = async (targetType: string, targetId: number) => {
+        if (!sortedPhotos[viewerIndex]?.id) return;
+        try {
+            await deleteLink(sortedPhotos[viewerIndex].id, targetType, targetId);
+            fetchLinkedItems();
+        } catch (e: any) {
+            Alert.alert(t('projectPhotos.error'), e.response?.data?.error || 'Failed to remove link.');
+        }
+    };
+
+    const handleLinkItemClick = async (item: any) => {
+        setShowLinkModal(false);
+
+        const itemType = item.type || item.target_type;
+        const itemId = item.target_id || item.id;
+        if (!itemType || !itemId) return;
+
+        // Parse folderId from the S3 file_url path (e.g. "projects/1/folders/23/filename.pdf")
+        let targetFolderId: string | null = item.folder_id ? String(item.folder_id) : null;
+        if (!targetFolderId && item.file_url) {
+            const parts = item.file_url.split('/');
+            const folderIdx = parts.indexOf('folders');
+            if (folderIdx !== -1 && folderIdx + 1 < parts.length) {
+                targetFolderId = parts[folderIdx + 1];
+            }
+        }
+
+        if (itemType === 'file') {
+            const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+            const isPhoto = item.file_type?.startsWith('image/') ||
+                fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
+
+            if (isPhoto) {
+                // Try to find the photo in the current folder first
+                const idx = sortedPhotos.findIndex(p => String(p.id) === String(itemId));
+                if (idx !== -1) {
+                    // SAME FOLDER: viewer is already open — just slide to the new photo index
+                    setViewerIndex(idx);
+                } else {
+                    // DIFFERENT FOLDER: close viewer, switch folder, deep-link to photo
+                    // const targetPhoto = photos.find(p => String(p.id) === String(itemId));
+                    // const resolvedFolderId = targetPhoto?.folder_id != null
+                    //     ? String(targetPhoto.folder_id)
+                    //     : targetFolderId;
+                    // if (resolvedFolderId) {
+                    //     setViewerOpen(false);
+                    //     setSelectedFolder(resolvedFolderId);
+                    //     router.setParams({ photoId: String(itemId), fileId: String(itemId) });
+                    // }
+
+                    setViewerOpen(false);
+                    router.setParams({
+                        tab: 'photos',
+                        folderId: String(targetFolderId || ''),
+                        fileId: String(itemId),
+                    });
+                    // No fallback to WebBrowser — relative S3 URLs can't be opened in a browser
+                }
+            } else {
+                // It's a document/PDF — navigate to the documents tab and deep-link open it
+                setViewerOpen(false);
+                router.setParams({
+                    tab: 'documents',
+                    folderId: String(targetFolderId || ''),
+                    fileId: String(itemId),
+                });
+            }
+        } else {
+            // RFI or Snag
+            setViewerOpen(false);
+            if (itemType === 'rfi') {
+                router.setParams({ tab: 'rfi', rfiId: String(itemId) });
+            } else if (itemType === 'snag') {
+                router.setParams({ tab: 'snags', snagId: String(itemId) });
+            }
+        }
+    };
 
     // ── Reload comments when swiping to a new photo ───────────────────────────
     useEffect(() => {
@@ -1262,38 +1375,38 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 ) : (
                                     <>
                                         {/* Sub-tab selector */}
-                                        <View style={{ 
-                                            flexDirection: 'row', 
-                                            justifyContent: 'center', 
-                                            gap: 32, 
-                                            marginBottom: 16, 
-                                            borderBottomWidth: 1, 
+                                        <View style={{
+                                            flexDirection: 'row',
+                                            justifyContent: 'center',
+                                            gap: 32,
+                                            marginBottom: 16,
+                                            borderBottomWidth: 1,
                                             borderBottomColor: colors.border,
                                             paddingHorizontal: 16
                                         }}>
                                             <TouchableOpacity
                                                 onPress={() => setActiveLinkedSubTab('rfis')}
-                                                style={{ 
+                                                style={{
                                                     paddingVertical: 10,
                                                     paddingHorizontal: 8,
                                                     position: 'relative'
                                                 }}
                                             >
-                                                <Text style={{ 
-                                                    fontSize: 13, 
-                                                    fontWeight: '700', 
-                                                    color: activeLinkedSubTab === 'rfis' ? colors.primary : colors.textMuted 
+                                                <Text style={{
+                                                    fontSize: 13,
+                                                    fontWeight: '700',
+                                                    color: activeLinkedSubTab === 'rfis' ? colors.primary : colors.textMuted
                                                 }}>
                                                     RFIs ({linkedRFIs.length})
                                                 </Text>
                                                 {activeLinkedSubTab === 'rfis' && (
-                                                    <View style={{ 
+                                                    <View style={{
                                                         position: 'absolute',
                                                         bottom: 0,
                                                         left: 0,
                                                         right: 0,
-                                                        height: 3, 
-                                                        backgroundColor: colors.primary, 
+                                                        height: 3,
+                                                        backgroundColor: colors.primary,
                                                         borderTopLeftRadius: 3,
                                                         borderTopRightRadius: 3
                                                     }} />
@@ -1301,27 +1414,27 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             </TouchableOpacity>
                                             <TouchableOpacity
                                                 onPress={() => setActiveLinkedSubTab('snags')}
-                                                style={{ 
+                                                style={{
                                                     paddingVertical: 10,
                                                     paddingHorizontal: 8,
                                                     position: 'relative'
                                                 }}
                                             >
-                                                <Text style={{ 
-                                                    fontSize: 13, 
-                                                    fontWeight: '700', 
-                                                    color: activeLinkedSubTab === 'snags' ? colors.primary : colors.textMuted 
+                                                <Text style={{
+                                                    fontSize: 13,
+                                                    fontWeight: '700',
+                                                    color: activeLinkedSubTab === 'snags' ? colors.primary : colors.textMuted
                                                 }}>
                                                     Snags ({linkedSnags.length})
                                                 </Text>
                                                 {activeLinkedSubTab === 'snags' && (
-                                                    <View style={{ 
+                                                    <View style={{
                                                         position: 'absolute',
                                                         bottom: 0,
                                                         left: 0,
                                                         right: 0,
-                                                        height: 3, 
-                                                        backgroundColor: colors.primary, 
+                                                        height: 3,
+                                                        backgroundColor: colors.primary,
                                                         borderTopLeftRadius: 3,
                                                         borderTopRightRadius: 3
                                                     }} />
@@ -1423,8 +1536,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                             color: snag.status === 'amber' ? '#f59e0b' : snag.status === 'green' ? '#22c55e' : '#ef4444'
                                                                         }}>
                                                                             {snag.status === 'amber' ? t('projectSnags.status.waiting') :
-                                                                             snag.status === 'green' ? t('projectSnags.status.completed') :
-                                                                             t('projectSnags.status.noAction')}
+                                                                                snag.status === 'green' ? t('projectSnags.status.completed') :
+                                                                                    t('projectSnags.status.noAction')}
                                                                         </Text>
                                                                     </View>
                                                                 </View>
@@ -1750,7 +1863,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                 shadowRadius: 10,
                                                                 elevation: 20
                                                             }}>
-                                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 20 : 10 }}>
                                                                     <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
                                                                         <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectPhotos.cancel')}</Text>
                                                                     </TouchableOpacity>
@@ -1765,35 +1878,38 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                     </TouchableOpacity>
                                                                 </View>
 
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: Platform.OS === 'android' ? 20 : 0 }}>
                                                                     <Picker
                                                                         selectedValue={tempMonth}
-                                                                        style={{ flex: 1.2, height: 200 }}
+                                                                        style={{ flex: 1.2, height: Platform.OS === 'ios' ? 200 : 50 }}
                                                                         itemStyle={{ fontSize: 18, color: colors.text }}
                                                                         onValueChange={(itemValue) => setTempMonth(itemValue)}
+                                                                        dropdownIconColor={colors.text}
+                                                                        mode="dialog"
                                                                     >
                                                                         {allMonths.map(m => {
                                                                             const isAvailable = availableMonthsByYear[tempYear]?.has(m);
-                                                                            // Only render items that are available to prevent invalid selection
                                                                             if (!isAvailable) return null;
                                                                             return (
                                                                                 <Picker.Item
                                                                                     key={m}
                                                                                     label={m}
                                                                                     value={m}
-                                                                                    color={colors.text}
+                                                                                    color={Platform.OS === 'android' ? '#000000' : colors.text}
                                                                                 />
                                                                             );
                                                                         })}
                                                                     </Picker>
                                                                     <Picker
                                                                         selectedValue={tempYear}
-                                                                        style={{ flex: 0.8, height: 200 }}
+                                                                        style={{ flex: 0.8, height: Platform.OS === 'ios' ? 200 : 50 }}
                                                                         itemStyle={{ fontSize: 18, color: colors.text }}
                                                                         onValueChange={(itemValue) => setTempYear(itemValue)}
+                                                                        dropdownIconColor={colors.text}
+                                                                        mode="dialog"
                                                                     >
                                                                         {availableYears.map(y => (
-                                                                            <Picker.Item key={y} label={y} value={y} color={colors.text} />
+                                                                            <Picker.Item key={y} label={y} value={y} color={Platform.OS === 'android' ? '#000000' : colors.text} />
                                                                         ))}
                                                                     </Picker>
                                                                 </View>
@@ -2055,6 +2171,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     {viewerIndex + 1} / {sortedPhotos.length}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8 }}>
+                                        <Feather name="link" size={20} color="#fff" />
+                                    </TouchableOpacity>
                                     <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
                                         <Feather name="share-2" size={20} color="#fff" />
                                     </TouchableOpacity>
@@ -2163,9 +2282,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     </View>
 
                                     <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
-                                        <Text style={{ color: '#aaa', fontSize: 10, fontWeight: '700', marginBottom: 6 }}>
-                                            💬 {t('projectPhotos.comments')} ({photoComments.length})
-                                        </Text>
+                                        <View style={{ flexDirection: 'row', gap: 16, marginBottom: 8 }}>
+                                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+                                                💬 {t('projectPhotos.comments')} ({photoComments.length})
+                                            </Text>
+                                        </View>
                                         {commentLoading ? (
                                             <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
                                         ) : (
@@ -2251,6 +2372,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         )}
                     </View>
                 </GestureHandlerRootView>
+                <LinkFileModal
+                    visible={showLinkModal}
+                    onClose={() => setShowLinkModal(false)}
+                    onLink={handleLinkFile}
+                    projectId={project?.id}
+                    currentFileId={sortedPhotos[viewerIndex]?.id}
+                    handleLinkItemClick={handleLinkItemClick}
+                />
             </Modal>
 
             {/* Rename Folder Modal */}
@@ -2425,7 +2554,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}
                                     onPress={() => setShowSnagAssigneeDropdown(false)}
                                 >
-                                    <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ maxHeight: '70%' }}>
+                                    <TouchableOpacity activeOpacity={1} onPress={() => { }} style={{ maxHeight: '70%' }}>
                                         <View style={{ backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
                                             <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                                                 <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
@@ -2581,7 +2710,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}
                                     onPress={() => setShowRfiAssigneeDropdown(false)}
                                 >
-                                    <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ maxHeight: '70%' }}>
+                                    <TouchableOpacity activeOpacity={1} onPress={() => { }} style={{ maxHeight: '70%' }}>
                                         <View style={{ backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
                                             <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                                                 <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>

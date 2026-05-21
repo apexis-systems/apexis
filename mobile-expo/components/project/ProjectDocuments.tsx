@@ -12,13 +12,15 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
+import LinkFileModal from '../shared/LinkFileModal';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { WebView } from 'react-native-webview';
-import { getFolderRFIs } from '@/services/rfiService';
-import { getFolderSnags } from '@/services/snagService';
+import { getFolderRFIs, getRFIAssignees, createRFI } from '@/services/rfiService';
+import { getFolderSnags, getAssignees as getSnagAssignees, createSnag } from '@/services/snagService';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { getMemberForTag } from '@/services/projectService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -85,6 +87,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
     const [pdfViewerName, setPdfViewerName] = useState('');
     const [currentDoc, setCurrentDoc] = useState<any | null>(null);
+    const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
+    const [showLinkModal, setShowLinkModal] = useState(false);
+    const [linkedItems, setLinkedItems] = useState<any[]>([]);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [sharing, setSharing] = useState(false);
 
@@ -93,6 +98,132 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // Action Menu state
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
     const [activeActionFile, setActiveActionFile] = useState<any>(null);
+
+    // RFI & Snag creation from Docs
+    const [showCreateSnagModal, setShowCreateSnagModal] = useState(false);
+    const [snagTitle, setSnagTitle] = useState('');
+    const [snagDesc, setSnagDesc] = useState('');
+    const [snagAssignedToId, setSnagAssignedToId] = useState<number | null>(null);
+    const [snagAssignees, setSnagAssignees] = useState<any[]>([]);
+    const [showSnagAssigneeDropdown, setShowSnagAssigneeDropdown] = useState(false);
+
+    const [showCreateRfiModal, setShowCreateRfiModal] = useState(false);
+    const [rfiTitle, setRfiTitle] = useState('');
+    const [rfiDesc, setRfiDesc] = useState('');
+    const [rfiAssignedToId, setRfiAssignedToId] = useState<number | null>(null);
+    const [rfiAssignees, setRfiAssignees] = useState<any[]>([]);
+    const [showRfiAssigneeDropdown, setShowRfiAssigneeDropdown] = useState(false);
+    const [rfiExpiryDate, setRfiExpiryDate] = useState<Date | null>(null);
+    const [showRfiDatePicker, setShowRfiDatePicker] = useState(false);
+
+    const [submittingEntity, setSubmittingEntity] = useState(false);
+
+    useEffect(() => {
+        if (showCreateSnagModal && project?.id) {
+            getSnagAssignees(project.id)
+                .then(setSnagAssignees)
+                .catch(err => console.error("Error fetching snag assignees", err));
+        }
+    }, [showCreateSnagModal, project?.id]);
+
+    useEffect(() => {
+        if (showCreateRfiModal && project?.id) {
+            getRFIAssignees(project.id)
+                .then(setRfiAssignees)
+                .catch(err => console.error("Error fetching RFI assignees", err));
+        }
+    }, [showCreateRfiModal, project?.id]);
+
+    const handleStartCreateSnag = (file: any) => {
+        setActiveActionFile(file);
+        setSnagTitle('');
+        setSnagDesc('');
+        setSnagAssignedToId(null);
+        setShowCreateSnagModal(true);
+    };
+
+    const handleStartCreateRfi = (file: any) => {
+        setActiveActionFile(file);
+        setRfiTitle('');
+        setRfiDesc('');
+        setRfiAssignedToId(null);
+        setRfiExpiryDate(null);
+        setShowCreateRfiModal(true);
+    };
+
+    const handleCreateSnagFromDoc = async () => {
+        if (!snagTitle.trim()) {
+            Alert.alert("Error", "Title is required");
+            return;
+        }
+        if (!snagAssignedToId) {
+            Alert.alert("Error", "Assignee is required");
+            return;
+        }
+        if (!activeActionFile) return;
+
+        setSubmittingEntity(true);
+        try {
+            const formData = new FormData();
+            formData.append('project_id', String(project.id));
+            formData.append('title', snagTitle.trim());
+            if (snagDesc.trim()) {
+                formData.append('description', snagDesc.trim());
+            }
+            formData.append('assigned_to', String(snagAssignedToId));
+            formData.append('photo_key', activeActionFile.file_url);
+            formData.append('source_file_id', String(activeActionFile.id));
+
+            await createSnag(formData);
+            Alert.alert("Success", "Snag created successfully");
+            setShowCreateSnagModal(false);
+        } catch (error: any) {
+            console.error("Create Snag from doc error", error);
+            const errMsg = error.response?.data?.error || "Failed to create snag";
+            Alert.alert("Error", errMsg);
+        } finally {
+            setSubmittingEntity(false);
+        }
+    };
+
+    const handleCreateRfiFromDoc = async () => {
+        if (!rfiTitle.trim()) {
+            Alert.alert("Error", "Title is required");
+            return;
+        }
+        if (!rfiAssignedToId) {
+            Alert.alert("Error", "Assignee is required");
+            return;
+        }
+        if (!activeActionFile) return;
+
+        setSubmittingEntity(true);
+        try {
+            const formData = new FormData();
+            formData.append('project_id', String(project.id));
+            formData.append('title', rfiTitle.trim());
+            if (rfiDesc.trim()) {
+                formData.append('description', rfiDesc.trim());
+            }
+            formData.append('assigned_to', String(rfiAssignedToId));
+            if (rfiExpiryDate) {
+                formData.append('expiry_date', rfiExpiryDate.toISOString());
+            }
+            formData.append('photo_key', activeActionFile.file_url);
+            formData.append('source_file_id', String(activeActionFile.id));
+
+            await createRFI(formData);
+            Alert.alert("Success", "RFI created successfully");
+            setShowCreateRfiModal(false);
+        } catch (error: any) {
+            console.error("Create RFI from doc error", error);
+            const errMsg = error.response?.data?.error || "Failed to create RFI";
+            Alert.alert("Error", errMsg);
+        } finally {
+            setSubmittingEntity(false);
+        }
+    };
+
     const [folderMenuVisible, setFolderMenuVisible] = useState(false);
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
@@ -152,7 +283,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     useEffect(() => {
         if (!socket) return;
-        
+
         socket.on('file-seen', (data: { fileId: string | number, seen_at: string }) => {
             setDocs((prev) => prev.map((d) => String(d.id) === String(data.fileId) ? { ...d, seen_at: data.seen_at } : d));
         });
@@ -161,6 +292,117 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             socket.off('file-seen');
         };
     }, [socket]);
+
+    const fetchLinkedItems = useCallback(async () => {
+        if (pdfViewerUrl && currentDoc?.id) {
+            try {
+                const data = await getLinkedItems(currentDoc.id);
+                setLinkedItems(data.links || []);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }, [pdfViewerUrl, currentDoc]);
+
+    useEffect(() => {
+        if (pdfViewerUrl) {
+            fetchLinkedItems();
+        }
+    }, [pdfViewerUrl, fetchLinkedItems]);
+
+    const handleLinkFile = async (targetId: number) => {
+        if (!currentDoc?.id) return;
+        try {
+            await linkFiles(currentDoc.id, targetId);
+            setShowLinkModal(false);
+            fetchLinkedItems();
+            Alert.alert(t('projectDocuments.success'), 'File linked successfully.');
+        } catch (e: any) {
+            Alert.alert(t('projectDocuments.error'), e.response?.data?.error || 'Failed to link file.');
+        }
+    };
+
+    const handleRemoveLink = async (targetType: string, targetId: number) => {
+        if (!currentDoc?.id) return;
+        try {
+            await deleteLink(currentDoc.id, targetType, targetId);
+            fetchLinkedItems();
+        } catch (e: any) {
+            Alert.alert(t('projectDocuments.error'), e.response?.data?.error || 'Failed to remove link.');
+        }
+    };
+
+    const handleLinkItemClick = async (item: any) => {
+
+        const itemType = item.type || item.target_type;
+        const itemId = item.target_id || item.id;
+        if (!itemType || !itemId) return;
+
+        // Parse folderId from the S3 file_url path (e.g. "projects/1/folders/23/filename.pdf")
+        let targetFolderId: string | null = item.folder_id ? String(item.folder_id) : null;
+        if (!targetFolderId && item.file_url) {
+            const parts = item.file_url.split('/');
+            const folderIdx = parts.indexOf('folders');
+            if (folderIdx !== -1 && folderIdx + 1 < parts.length) {
+                targetFolderId = parts[folderIdx + 1];
+            }
+        }
+
+        if (itemType === 'file') {
+            const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+            const isPhoto = item.file_type?.startsWith('image/') ||
+                fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') ||
+                fileName.endsWith('.gif') || fileName.endsWith('.webp');
+
+            if (isPhoto) {
+                // It's an image — navigate to the photos tab and deep-link open it
+                setPdfViewerUrl(null);
+                setCurrentDoc(null);
+                router.setParams({
+                    tab: 'photos',
+                    folderId: String(targetFolderId || ''),
+                    fileId: String(itemId),
+                });
+            } else {
+                // It's a document/PDF
+                const targetDoc = docs.find(d => String(d.id) === String(itemId));
+                if (targetDoc) {
+                    if (String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
+                        // SAME FOLDER: open doc directly
+                        openDoc(targetDoc);
+                    } else {
+                        // DIFFERENT FOLDER: close current doc, navigate via router params
+                        setPdfViewerUrl(null);
+                        setCurrentDoc(null);
+                        router.setParams({
+                            tab: 'documents',
+                            folderId: String(targetFolderId || ''),
+                            fileId: String(itemId),
+                        });
+                    }
+                } else {
+                    // Doc not yet loaded — navigate via router params
+                    setPdfViewerUrl(null);
+                    setCurrentDoc(null);
+                    router.setParams({
+                        tab: 'documents',
+                        folderId: String(targetFolderId || ''),
+                        fileId: String(itemId),
+                    });
+                }
+            }
+        } else {
+            // RFI or Snag
+            setPdfViewerUrl(null);
+            setCurrentDoc(null);
+            setShowComments(false);
+            if (itemType === 'rfi') {
+                router.setParams({ tab: 'rfi', rfiId: String(itemId) });
+            } else if (itemType === 'snag') {
+                router.setParams({ tab: 'snags', snagId: String(itemId) });
+            }
+        }
+    };
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -594,8 +836,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             return (
                 <>
                     {groups.map((group) => (
-                        <View 
-                            key={group.title} 
+                        <View
+                            key={group.title}
                             style={{ marginBottom: 20 }}
                             onLayout={(e) => {
                                 const { y } = e.nativeEvent.layout;
@@ -635,11 +877,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
                     <Modal visible={showMonthPicker} transparent animationType="slide">
                         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                            <View style={{ 
-                                backgroundColor: colors.surface, 
-                                borderTopLeftRadius: 24, 
-                                borderTopRightRadius: 24, 
-                                padding: 24, 
+                            <View style={{
+                                backgroundColor: colors.surface,
+                                borderTopLeftRadius: 24,
+                                borderTopRightRadius: 24,
+                                padding: 24,
                                 paddingBottom: insets.bottom + 10,
                                 shadowColor: '#000',
                                 shadowOffset: { width: 0, height: -4 },
@@ -652,7 +894,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectDocuments.cancel')}</Text>
                                     </TouchableOpacity>
                                     <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>{t('projectDocuments.selectMonth')}</Text>
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         onPress={() => {
                                             const title = `${tempMonth} ${tempYear}`;
                                             scrollToMonth(title);
@@ -673,11 +915,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             const isAvailable = availableMonthsByYear[tempYear]?.has(m);
                                             if (!isAvailable) return null;
                                             return (
-                                                <Picker.Item 
-                                                    key={m} 
-                                                    label={m} 
-                                                    value={m} 
-                                                    color={colors.text} 
+                                                <Picker.Item
+                                                    key={m}
+                                                    label={m}
+                                                    value={m}
+                                                    color={colors.text}
                                                 />
                                             );
                                         })}
@@ -1301,10 +1543,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // Unified View
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView 
+            <ScrollView
                 ref={mainScrollRef}
-                style={{ flex: 1 }} 
-                contentContainerStyle={{ padding: 14 }} 
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 14 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
                 {(user.role === 'superadmin' || user.role === 'admin' || user.role === 'contributor') ? (
@@ -1431,38 +1673,38 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         ) : (
                             <>
                                 {/* Sub-tab selector */}
-                                <View style={{ 
-                                    flexDirection: 'row', 
-                                    justifyContent: 'center', 
-                                    gap: 32, 
-                                    marginBottom: 16, 
-                                    borderBottomWidth: 1, 
+                                <View style={{
+                                    flexDirection: 'row',
+                                    justifyContent: 'center',
+                                    gap: 32,
+                                    marginBottom: 16,
+                                    borderBottomWidth: 1,
                                     borderBottomColor: colors.border,
                                     paddingHorizontal: 16
                                 }}>
                                     <TouchableOpacity
                                         onPress={() => setActiveLinkedSubTab('rfis')}
-                                        style={{ 
+                                        style={{
                                             paddingVertical: 10,
                                             paddingHorizontal: 8,
                                             position: 'relative'
                                         }}
                                     >
-                                        <Text style={{ 
-                                            fontSize: 13, 
-                                            fontWeight: '700', 
-                                            color: activeLinkedSubTab === 'rfis' ? colors.primary : colors.textMuted 
+                                        <Text style={{
+                                            fontSize: 13,
+                                            fontWeight: '700',
+                                            color: activeLinkedSubTab === 'rfis' ? colors.primary : colors.textMuted
                                         }}>
                                             RFIs ({linkedRFIs.length})
                                         </Text>
                                         {activeLinkedSubTab === 'rfis' && (
-                                            <View style={{ 
+                                            <View style={{
                                                 position: 'absolute',
                                                 bottom: 0,
                                                 left: 0,
                                                 right: 0,
-                                                height: 3, 
-                                                backgroundColor: colors.primary, 
+                                                height: 3,
+                                                backgroundColor: colors.primary,
                                                 borderTopLeftRadius: 3,
                                                 borderTopRightRadius: 3
                                             }} />
@@ -1470,27 +1712,27 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         onPress={() => setActiveLinkedSubTab('snags')}
-                                        style={{ 
+                                        style={{
                                             paddingVertical: 10,
                                             paddingHorizontal: 8,
                                             position: 'relative'
                                         }}
                                     >
-                                        <Text style={{ 
-                                            fontSize: 13, 
-                                            fontWeight: '700', 
-                                            color: activeLinkedSubTab === 'snags' ? colors.primary : colors.textMuted 
+                                        <Text style={{
+                                            fontSize: 13,
+                                            fontWeight: '700',
+                                            color: activeLinkedSubTab === 'snags' ? colors.primary : colors.textMuted
                                         }}>
                                             Snags ({linkedSnags.length})
                                         </Text>
                                         {activeLinkedSubTab === 'snags' && (
-                                            <View style={{ 
+                                            <View style={{
                                                 position: 'absolute',
                                                 bottom: 0,
                                                 left: 0,
                                                 right: 0,
-                                                height: 3, 
-                                                backgroundColor: colors.primary, 
+                                                height: 3,
+                                                backgroundColor: colors.primary,
                                                 borderTopLeftRadius: 3,
                                                 borderTopRightRadius: 3
                                             }} />
@@ -1592,8 +1834,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                                     color: snag.status === 'amber' ? '#f59e0b' : snag.status === 'green' ? '#22c55e' : '#ef4444'
                                                                 }}>
                                                                     {snag.status === 'amber' ? t('projectSnags.status.waiting') :
-                                                                     snag.status === 'green' ? t('projectSnags.status.completed') :
-                                                                     t('projectSnags.status.noAction')}
+                                                                        snag.status === 'green' ? t('projectSnags.status.completed') :
+                                                                            t('projectSnags.status.noAction')}
                                                                 </Text>
                                                             </View>
                                                         </View>
@@ -1664,10 +1906,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             }}
                                         />
                                         <View style={{ marginBottom: 8 }}>
-                                            <Feather 
+                                            <Feather
                                                 name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : "folder"}
-                                                size={isConfirmationFolder ? 32 : 36} 
-                                                color={isArchiveFolder ? '#94a3b8' : (isConfirmationFolder ? '#fb923c' : colors.primary)} 
+                                                size={isConfirmationFolder ? 32 : 36}
+                                                color={isArchiveFolder ? '#94a3b8' : (isConfirmationFolder ? '#fb923c' : colors.primary)}
                                             />
                                         </View>
                                         {isSelected && (
@@ -1677,7 +1919,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         )}
                                         <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : colors.text), textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : (isConfirmationFolder ? "Confirmations" : folder.name)}</Text>
                                         <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
-                                            {subcount > 0 
+                                            {subcount > 0
                                                 ? t('projectDocuments.filesFoldersCount', { fileCount: count, folderCount: subcount })
                                                 : t('projectDocuments.filesOnlyCount', { count: count })}
                                         </Text>
@@ -1768,6 +2010,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             {pdfViewerName}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                                <Feather name="link" size={18} color="#fff" />
+                            </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => setShowComments(!showComments)}
                                 style={{ padding: 8, borderRadius: 20, backgroundColor: showComments ? colors.primary : 'rgba(255,255,255,0.1)' }}
@@ -1926,11 +2171,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             }}
                         >
                             <View style={{ padding: 16 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>💬 {t('projectDocuments.discussion')} ({docComments.length})</Text>
-                                    <TouchableOpacity onPress={() => setShowComments(false)} style={{ padding: 4 }}>
-                                        <Feather name="chevron-down" size={18} color="#aaa" />
-                                    </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
+                                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>
+                                        💬 {t('projectDocuments.discussion')} ({docComments.length})
+                                    </Text>
                                 </View>
 
                                 {commentLoading ? (
@@ -2039,6 +2283,17 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
                         </View>
                     </View>
+                )}
+
+                {showLinkModal && currentDoc?.id && (
+                    <LinkFileModal
+                        visible={showLinkModal}
+                        onClose={() => setShowLinkModal(false)}
+                        onLink={handleLinkFile}
+                        projectId={project.id}
+                        currentFileId={currentDoc.id}
+                        handleLinkItemClick={handleLinkItemClick}
+                    />
                 )}
             </Modal>
 
@@ -2225,31 +2480,31 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     const file = docs.find(d => d.id === id);
                                     return file && String(file.created_by) === String(user.id);
                                 }))) && selectedFiles.size > 0 && (
-                                    <>
-                                        <TouchableOpacity
-                                            onPress={() => handleBulkDoNotFollow(true)}
-                                            style={{ padding: 4 }}
-                                            disabled={processing !== null}
-                                        >
-                                            {processing === 'bulk_dnf' ? (
-                                                <ActivityIndicator size="small" color="#ef4444" />
-                                            ) : (
-                                                <Feather name="shield" size={18} color="#ef4444" />
-                                            )}
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            onPress={() => handleBulkDoNotFollow(false)}
-                                            style={{ padding: 4 }}
-                                            disabled={processing !== null}
-                                        >
-                                            {processing === 'bulk_dnf' ? (
-                                                <ActivityIndicator size="small" color={colors.primary} />
-                                            ) : (
-                                                <Feather name="shield-off" size={18} color={colors.primary} />
-                                            )}
-                                        </TouchableOpacity>
-                                    </>
-                                )}
+                                        <>
+                                            <TouchableOpacity
+                                                onPress={() => handleBulkDoNotFollow(true)}
+                                                style={{ padding: 4 }}
+                                                disabled={processing !== null}
+                                            >
+                                                {processing === 'bulk_dnf' ? (
+                                                    <ActivityIndicator size="small" color="#ef4444" />
+                                                ) : (
+                                                    <Feather name="shield" size={18} color="#ef4444" />
+                                                )}
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => handleBulkDoNotFollow(false)}
+                                                style={{ padding: 4 }}
+                                                disabled={processing !== null}
+                                            >
+                                                {processing === 'bulk_dnf' ? (
+                                                    <ActivityIndicator size="small" color={colors.primary} />
+                                                ) : (
+                                                    <Feather name="shield-off" size={18} color={colors.primary} />
+                                                )}
+                                            </TouchableOpacity>
+                                        </>
+                                    )}
 
                                 {/* Move Option - Admin only for folders, Admin/Contributor for files */}
                                 {((selectedFolders.size > 0 && (user.role === 'admin' || user.role === 'superadmin')) || (selectedFiles.size > 0)) && !currentFolder?.name.toLowerCase().includes('archive') && (
@@ -2369,6 +2624,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 </View>
             </Modal>
 
+
             <FileActionMenu
                 isVisible={actionMenuVisible}
                 onClose={() => setActionMenuVisible(false)}
@@ -2379,6 +2635,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onUnarchive={() => handleUnarchiveFile(activeActionFile)}
                 onShare={() => handleShareDoc(activeActionFile)}
                 onRename={() => handleRenameFileAction(activeActionFile)}
+                onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={activeActionFile?.do_not_follow === true}
                 canDelete={false} // Disable delete in Docs
@@ -2403,6 +2660,282 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 folderName={activeActionFolder?.name || ''}
                 processingAction={processing}
             />
+
+            {/* Create RFI Modal */}
+            <Modal visible={showCreateRfiModal} transparent animationType="slide" onRequestClose={() => setShowCreateRfiModal(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+                        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create RFI from Document</Text>
+                                <TouchableOpacity onPress={() => setShowCreateRfiModal(false)}>
+                                    <Feather name="x" size={20} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TextInput
+                                    value={rfiTitle}
+                                    onChangeText={setRfiTitle}
+                                    placeholder="Enter RFI title"
+                                    placeholderTextColor={colors.textMuted}
+                                    style={{ height: 44, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                                <TextInput
+                                    value={rfiDesc}
+                                    onChangeText={setRfiDesc}
+                                    placeholder="Enter RFI description (optional)"
+                                    placeholderTextColor={colors.textMuted}
+                                    multiline
+                                    numberOfLines={3}
+                                    style={{ minHeight: 80, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, color: colors.text, fontSize: 13, textAlignVertical: 'top' }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assignee <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowRfiAssigneeDropdown(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: rfiAssignedToId ? colors.primary : colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: rfiAssignedToId ? colors.text : colors.textMuted }}>
+                                        {rfiAssignedToId
+                                            ? rfiAssignees.find(a => a.id === rfiAssignedToId)?.name || "Select Assignee"
+                                            : "Select Assignee"}
+                                    </Text>
+                                    <Feather name="chevron-down" size={18} color={rfiAssignedToId ? colors.primary : colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowRfiDatePicker(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: rfiExpiryDate ? rfiExpiryDate.toLocaleDateString() : "Select Date" }}>
+                                        {rfiExpiryDate ? rfiExpiryDate.toLocaleDateString() : "Select Date"}
+                                    </Text>
+                                    <Feather name="calendar" size={18} color={colors.textMuted} />
+                                </TouchableOpacity>
+                                {showRfiDatePicker && (
+                                    <DateTimePicker
+                                        value={rfiExpiryDate || new Date()}
+                                        mode="date"
+                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                        onChange={(event, date) => {
+                                            setShowRfiDatePicker(Platform.OS === 'ios');
+                                            if (date) {
+                                                setRfiExpiryDate(date);
+                                            }
+                                        }}
+                                    />
+                                )}
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                                <TouchableOpacity
+                                    onPress={() => setShowCreateRfiModal(false)}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleCreateRfiFromDoc}
+                                    disabled={submittingEntity}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
+                                        {submittingEntity ? "Creating..." : "Create RFI"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            {/* RFI Assignee Dropdown Picker Modal */}
+                            <Modal visible={showRfiAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowRfiAssigneeDropdown(false)}>
+                                <TouchableOpacity
+                                    activeOpacity={1}
+                                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}
+                                    onPress={() => setShowRfiAssigneeDropdown(false)}
+                                >
+                                    <TouchableOpacity activeOpacity={1} onPress={() => { }} style={{ maxHeight: '70%' }}>
+                                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+                                            </View>
+                                            <ScrollView keyboardShouldPersistTaps="handled">
+                                                {rfiAssignees.map((a) => (
+                                                    <TouchableOpacity
+                                                        key={a.id}
+                                                        onPress={() => { setRfiAssignedToId(a.id); setShowRfiAssigneeDropdown(false); }}
+                                                        style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            paddingHorizontal: 16,
+                                                            paddingVertical: 14,
+                                                            borderBottomWidth: 1,
+                                                            borderBottomColor: colors.border,
+                                                            backgroundColor: rfiAssignedToId === a.id ? colors.primary + '10' : 'transparent',
+                                                        }}
+                                                    >
+                                                        <Text style={{ fontSize: 14, color: colors.text, fontWeight: rfiAssignedToId === a.id ? '600' : '400' }}>
+                                                            {a.name} ({a.role})
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            </Modal>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
+
+            {/* Create Snag Modal */}
+            <Modal visible={showCreateSnagModal} transparent animationType="slide" onRequestClose={() => setShowCreateSnagModal(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+                        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create Snag from Document</Text>
+                                <TouchableOpacity onPress={() => setShowCreateSnagModal(false)}>
+                                    <Feather name="x" size={20} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TextInput
+                                    value={snagTitle}
+                                    onChangeText={setSnagTitle}
+                                    placeholder="Enter snag title"
+                                    placeholderTextColor={colors.textMuted}
+                                    style={{ height: 44, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                                <TextInput
+                                    value={snagDesc}
+                                    onChangeText={setSnagDesc}
+                                    placeholder="Enter snag description (optional)"
+                                    placeholderTextColor={colors.textMuted}
+                                    multiline
+                                    numberOfLines={3}
+                                    style={{ minHeight: 80, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, color: colors.text, fontSize: 13, textAlignVertical: 'top' }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assignee <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowSnagAssigneeDropdown(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: snagAssignedToId ? colors.primary : colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: snagAssignedToId ? colors.text : colors.textMuted }}>
+                                        {snagAssignedToId
+                                            ? snagAssignees.find(a => a.id === snagAssignedToId)?.name || "Select Assignee"
+                                            : "Select Assignee"}
+                                    </Text>
+                                    <Feather name="chevron-down" size={18} color={snagAssignedToId ? colors.primary : colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                                <TouchableOpacity
+                                    onPress={() => setShowCreateSnagModal(false)}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleCreateSnagFromDoc}
+                                    disabled={submittingEntity}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
+                                        {submittingEntity ? "Creating..." : "Create Snag"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            {/* Snag Assignee Dropdown Picker Modal */}
+                            <Modal visible={showSnagAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowSnagAssigneeDropdown(false)}>
+                                <TouchableOpacity
+                                    activeOpacity={1}
+                                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}
+                                    onPress={() => setShowSnagAssigneeDropdown(false)}
+                                >
+                                    <TouchableOpacity activeOpacity={1} onPress={() => { }} style={{ maxHeight: '70%' }}>
+                                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+                                            </View>
+                                            <ScrollView keyboardShouldPersistTaps="handled">
+                                                {snagAssignees.map((a) => (
+                                                    <TouchableOpacity
+                                                        key={a.id}
+                                                        onPress={() => { setSnagAssignedToId(a.id); setShowSnagAssigneeDropdown(false); }}
+                                                        style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            paddingHorizontal: 16,
+                                                            paddingVertical: 14,
+                                                            borderBottomWidth: 1,
+                                                            borderBottomColor: colors.border,
+                                                            backgroundColor: snagAssignedToId === a.id ? colors.primary + '10' : 'transparent',
+                                                        }}
+                                                    >
+                                                        <Text style={{ fontSize: 14, color: colors.text, fontWeight: snagAssignedToId === a.id ? '600' : '400' }}>
+                                                            {a.name} ({a.role})
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            </Modal>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
         </View>
     );
 }

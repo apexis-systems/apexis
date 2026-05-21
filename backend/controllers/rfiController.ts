@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { S3Client, PutObjectCommand, GetObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { rfis, users, activities, projects, project_members, folders, sequelize } from '../models/index.ts';
+import { rfis, users, activities, projects, project_members, folders, sequelize, file_rfi_links } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
 import { logActivity } from "../utils/activityUtils.ts";
 import { addWatermark } from '../utils/watermark.ts';
@@ -110,7 +110,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        const { project_id, title, description, assigned_to, expiry_date, folder_ids, photo_key } = req.body;
+        const { project_id, title, description, assigned_to, expiry_date, folder_ids, photo_key, source_file_id } = req.body;
         if (!project_id || !title || !assigned_to) {
             return res.status(400).json({ error: 'project_id, title and assigned_to are required' });
         }
@@ -210,6 +210,13 @@ export const createRFI = async (req: Request | any, res: Response) => {
             folder_ids: folder_ids ? (Array.isArray(folder_ids) ? folder_ids.map(Number) : folder_ids.split(',').map((s: any) => Number(s.trim())).filter((n:any) => !isNaN(n))) : [],
         });
 
+        if (source_file_id) {
+            await file_rfi_links.create({
+                file_id: Number(source_file_id),
+                rfi_id: rfi.id
+            });
+        }
+
         await logActivity({
             projectId: Number(project_id),
             userId: authUser.user_id,
@@ -301,8 +308,11 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
 
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
-        if (Number(rfi.assigned_to) !== Number(authUser.user_id)) {
-            return res.status(403).json({ error: 'Only the assignee can update RFI status' });
+        if (
+            Number(rfi.assigned_to) !== Number(authUser.user_id) &&
+            Number(rfi.created_by) !== Number(authUser.user_id)
+        ) {
+            return res.status(403).json({ error: 'Only the assignee or creator can update RFI status' });
         }
 
         (rfi as any).status = status;
@@ -482,8 +492,11 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
 
-        if (Number(rfi.assigned_to) !== Number(authUser.user_id)) {
-            return res.status(403).json({ error: 'Only the assignee can update the response' });
+        if (
+            Number(rfi.assigned_to) !== Number(authUser.user_id) &&
+            Number(rfi.created_by) !== Number(authUser.user_id)
+        ) {
+            return res.status(403).json({ error: 'Only the assignee or creator can update the response' });
         }
 
         // Handle response photo uploads: Smart Replace (one image, one audio)
@@ -619,6 +632,10 @@ export const deleteRFI = async (req: Request, res: Response) => {
         if (rfi.response || (rfi.response_photos && rfi.response_photos.length > 0)) {
             return res.status(400).json({ error: 'Cannot delete RFI because a response has already been generated' });
         }
+
+        await file_rfi_links.destroy({
+            where: { rfi_id: id }
+        });
 
         await rfi.destroy();
 

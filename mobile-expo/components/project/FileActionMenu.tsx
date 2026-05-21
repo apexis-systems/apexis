@@ -3,6 +3,7 @@ import { View, TouchableOpacity, Modal, StyleSheet, Dimensions, TouchableWithout
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -58,6 +59,7 @@ export default function FileActionMenu({
     processingAction = null
 }: FileActionMenuProps) {
     const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
     const isProcessing = processingAction !== null;
 
     return (
@@ -85,7 +87,7 @@ export default function FileActionMenu({
                                         disabled={isProcessing}
                                     >
                                         <Feather name="help-circle" size={18} color={colors.primary} />
-                                        <Text style={[styles.optionText, { color: colors.text }]}>Create RFI</Text>
+                                        <Text style={[styles.optionText, { color: colors.text }]}>{t('fileActionMenu.createRfi')}</Text>
                                     </TouchableOpacity>
                                 )}
 
@@ -96,7 +98,7 @@ export default function FileActionMenu({
                                         disabled={isProcessing}
                                     >
                                         <Feather name="alert-triangle" size={18} color={colors.primary} />
-                                        <Text style={[styles.optionText, { color: colors.text }]}>Create Snag</Text>
+                                        <Text style={[styles.optionText, { color: colors.text }]}>{t('fileActionMenu.createSnag')}</Text>
                                     </TouchableOpacity>
                                 )}
 
@@ -107,7 +109,7 @@ export default function FileActionMenu({
                                         disabled={isProcessing}
                                     >
                                         <Feather name="share-2" size={18} color={colors.primary} />
-                                        <Text style={[styles.optionText, { color: colors.text }]}>Share</Text>
+                                        <Text style={[styles.optionText, { color: colors.text }]}>{t('fileActionMenu.share')}</Text>
                                     </TouchableOpacity>
                                 )}
 
@@ -118,7 +120,7 @@ export default function FileActionMenu({
                                         disabled={isProcessing}
                                     >
                                         <Feather name="edit-2" size={18} color={colors.primary} />
-                                        <Text style={[styles.optionText, { color: colors.text }]}>Rename</Text>
+                                        <Text style={[styles.optionText, { color: colors.text }]}>{t('fileActionMenu.rename')}</Text>
                                     </TouchableOpacity>
                                 )}
 
@@ -138,7 +140,7 @@ export default function FileActionMenu({
                                             />
                                         )}
                                         <Text style={[styles.optionText, { color: colors.text }]}>
-                                            {clientVisible ? "Hide Content" : "Show Content"}
+                                            {clientVisible ? t('fileActionMenu.hideContent') : t('fileActionMenu.showContent')}
                                         </Text>
                                     </TouchableOpacity>
                                 )}
@@ -159,7 +161,7 @@ export default function FileActionMenu({
                                             />
                                         )}
                                         <Text style={[styles.optionText, { color: colors.text }]}>
-                                            {doNotFollow ? "Follow File" : "Don't Follow"}
+                                            {doNotFollow ? t('fileActionMenu.followFile') : t('fileActionMenu.dontFollow')}
                                         </Text>
                                     </TouchableOpacity>
                                 )}
@@ -175,7 +177,7 @@ export default function FileActionMenu({
                                         ) : (
                                             <Feather name="archive" size={18} color="#f59e0b" />
                                         )}
-                                        <Text style={[styles.optionText, { color: colors.text }]}>Archive File</Text>
+                                        <Text style={[styles.optionText, { color: colors.text }]}>{t('fileActionMenu.archiveFile')}</Text>
                                     </TouchableOpacity>
                                 )}
 
@@ -190,7 +192,7 @@ export default function FileActionMenu({
                                         ) : (
                                             <Feather name="upload" size={18} color={colors.primary} />
                                         )}
-                                        <Text style={[styles.optionText, { color: colors.text }]}>Unarchive File</Text>
+                                        <Text style={[styles.optionText, { color: colors.text }]}>{t('fileActionMenu.unarchiveFile')}</Text>
                                     </TouchableOpacity>
                                 )}
 
@@ -205,7 +207,7 @@ export default function FileActionMenu({
                                         ) : (
                                             <Feather name="trash-2" size={18} color="#ef4444" />
                                         )}
-                                        <Text style={[styles.optionText, { color: "#ef4444" }]}>Delete File</Text>
+                                        <Text style={[styles.optionText, { color: "#ef4444" }]}>{t('fileActionMenu.deleteFile')}</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -215,7 +217,7 @@ export default function FileActionMenu({
                                 onPress={onClose}
                                 disabled={isProcessing}
                             >
-                                <Text style={[styles.cancelText, { color: colors.textMuted }]}>Cancel</Text>
+                                <Text style={[styles.cancelText, { color: colors.textMuted }]}>{t('fileActionMenu.cancel')}</Text>
                             </TouchableOpacity>
                         </View>
                     </TouchableWithoutFeedback>

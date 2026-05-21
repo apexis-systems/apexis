@@ -3,13 +3,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, RotateCw } from 'lucide-react';
+import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, RotateCw, Link as LinkIcon, Trash2 } from 'lucide-react';
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
-import { updateFile, downloadFile, markFileSeen } from '@/services/fileService';
+import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink } from '@/services/fileService';
+import LinkFileModal from './LinkFileModal';
+import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface FileViewerProps {
   files: any[];
@@ -25,6 +28,8 @@ interface FileViewerProps {
 }
 
 const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi }: FileViewerProps) => {
+  const router = useRouter();
+  const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [downloading, setDownloading] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -42,17 +47,75 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     setRotation(0);
   }, [currentIndex]);
 
-  useEffect(() => {
-    if (open) {
-      setCurrentIndex(initialIndex);
-    }
-  }, [open, initialIndex]);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkedItems, setLinkedItems] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'discussion'|'links'>('discussion');
 
   const currentFile = files[currentIndex];
   const isImage = currentFile?.file_type?.toLowerCase().includes('image') || 
                   ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
   const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') || 
                 currentFile?.file_name?.toLowerCase().endsWith('.pdf');
+
+  const fetchLinks = useCallback(async () => {
+    if (currentFile?.id) {
+      try {
+        const data = await getLinkedItems(currentFile.id);
+        setLinkedItems(data.links || []);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, [currentFile?.id]);
+
+  useEffect(() => {
+    if (open) fetchLinks();
+  }, [open, fetchLinks]);
+
+  const handleLinkFile = async (targetId: string | number) => {
+    try {
+      await linkFiles(currentFile.id, targetId);
+      toast.success(t('file_linked_success'));
+      setShowLinkModal(false);
+      fetchLinks();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('file_link_failed'));
+    }
+  };
+
+  const handleRemoveLink = async (targetType: string, targetId: string | number) => {
+    try {
+      await deleteLink(currentFile.id, targetType, targetId);
+      toast.success(t('link_removed_success'));
+      fetchLinks();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('link_remove_failed'));
+    }
+  };
+
+  const handleLinkItemClick = (item: any) => {
+    if (item.type === 'file') {
+      const idx = files.findIndex(f => f.id === item.id);
+      if (idx !== -1) {
+        setCurrentIndex(idx);
+      } else {
+        if (item.url) {
+          window.open(item.url, '_blank');
+        }
+      }
+    } else {
+      onOpenChange(false);
+      if (item.url) {
+        router.push(item.url);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      setCurrentIndex(initialIndex);
+    }
+  }, [open, initialIndex]);
 
   // Mark as seen if assigned to current user
   useEffect(() => {
@@ -171,7 +234,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
             {/* Sidebar Header */}
             <div className="p-6 border-b border-border/50 bg-background/50">
                <span className="text-[10px] font-black tracking-[0.2em] opacity-50 uppercase block mb-1">
-                File Details
+                {t('file_details')}
               </span>
               <h3 className="text-lg font-bold truncate leading-tight">
                 {currentFile.file_name}
@@ -184,26 +247,26 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               <div className="p-6 space-y-6 shrink-0">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Uploaded By</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">{t('uploaded_by')}</span>
                     <div className="flex items-center gap-2">
                       <UserIcon className="h-3.5 w-3.5 text-accent" />
-                      <span className="text-[11px] font-bold text-foreground">{currentFile.creator?.name || 'SYSTEM'}</span>
+                      <span className="text-[11px] font-bold text-foreground">{currentFile.creator?.name || t('system_label')}</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Date</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">{t('date')}</span>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3.5 w-3.5 text-accent" />
                       <span className="text-[11px] font-bold text-foreground">{formatDate(currentFile.createdAt)}</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Size</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">{t('size_label')}</span>
                     <span className="text-[11px] font-bold text-foreground ml-0.5">{formatFileSize(currentFile.file_size_mb)}</span>
                   </div>
                   {currentFile.location && (
                     <div className="flex flex-col gap-1 col-span-2">
-                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Location</span>
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">{t('location_label')}</span>
                       <div className="flex items-center gap-2">
                         <MapPin className="h-3.5 w-3.5 text-accent" />
                         <span className="text-[11px] font-bold text-foreground truncate">{currentFile.location}</span>
@@ -218,7 +281,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                      onClick={handleDownload}
                      disabled={downloading}
                    >
-                     <Download className="h-4 w-4 mr-2" /> {downloading ? 'DOWNLOADING...' : 'DOWNLOAD FILE'}
+                     <Download className="h-4 w-4 mr-2" /> {downloading ? t('downloading_label') : t('download_file')}
                    </Button>
                 </div>
               </div>
@@ -226,13 +289,53 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               {/* Comments Section (Fills remaining height) */}
               <div className="flex-1 flex flex-col min-h-0 border-t border-border/50">
                 <div className="px-6 py-4 flex flex-col h-full overflow-hidden">
-                  <div className="flex items-center gap-2 mb-4 shrink-0">
-                    <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                    <span className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">Discussion</span>
+                  <div className="flex items-center gap-4 mb-4 shrink-0 border-b border-border/50 pb-2">
+                    <button 
+                      onClick={() => setActiveTab('discussion')}
+                      className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'discussion' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                    >
+                      {activeTab === 'discussion' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
+                      {t('discussion')}
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('links')}
+                      className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'links' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                    >
+                      {activeTab === 'links' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
+                      {t('links_label')} ({linkedItems.length})
+                    </button>
                   </div>
-                  {/* Internal Area for Comments */}
-                  <div className="flex-1 min-h-0">
-                    <CommentThread targetId={currentFile.id} targetType={targetType} projectId={projectId || currentFile.project_id} />
+                  <div className="flex-1 min-h-0 overflow-y-auto">
+                    {activeTab === 'discussion' ? (
+                      <CommentThread targetId={currentFile.id} targetType={targetType} projectId={projectId || currentFile.project_id} />
+                    ) : (
+                      <div className="space-y-3 pr-2">
+                        {linkedItems.length === 0 ? (
+                          <div className="text-center py-8 text-xs text-muted-foreground">{t('no_linked_items')}</div>
+                        ) : (
+                          linkedItems.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
+                              <div 
+                                className="flex-1 min-w-0 pr-2 cursor-pointer hover:opacity-85 transition-opacity"
+                                onClick={() => handleLinkItemClick(item)}
+                              >
+                                <div className="text-[10px] uppercase font-bold text-accent mb-1 tracking-wider">{item.type}</div>
+                                <div className="text-sm font-semibold truncate text-foreground">{item.title}</div>
+                                {item.status && <div className="text-[10px] text-muted-foreground mt-0.5 capitalize">{item.status}</div>}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent" onClick={() => handleLinkItemClick(item)} title={t('view_btn')}>
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveLink(item.type, item.id)} title={t('remove_link')}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -251,25 +354,32 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               </div>
               
               <div className="flex items-center gap-1.5 pr-2">
-                {onCreateRfi && isImage && (
+                {onCreateRfi && (
                   <Button 
                     variant="ghost" 
                     className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
                     onClick={() => onCreateRfi(currentFile)}
                   >
-                    <Plus className="h-3.5 w-3.5" /> RFI
+                    <Plus className="h-3.5 w-3.5" /> {t('rfi_label')}
                   </Button>
                 )}
-                {onCreateSnag && isImage && (
+                {onCreateSnag && (
                   <Button 
                     variant="ghost" 
                     className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
                     onClick={() => onCreateSnag(currentFile)}
                   >
-                    <Plus className="h-3.5 w-3.5" /> Snag
+                    <Plus className="h-3.5 w-3.5" /> {t('snag')}
                   </Button>
                 )}
-                <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title="View Original">
+                <Button 
+                  variant="ghost" 
+                  className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
+                  onClick={() => setShowLinkModal(true)}
+                >
+                  <LinkIcon className="h-3.5 w-3.5" /> {t('link')}
+                </Button>
+                <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title={t('view_original')}>
                   <ExternalLink className="h-4 w-4" />
                 </Button>
                 
@@ -278,18 +388,18 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     <div className="h-4 w-[1px] bg-border/50 mx-1" />
                     <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => {
                       setZoom(z => { const nz = Math.max(z - 0.5, 1); if(nz <= 1) setPan({x:0, y:0}); return nz; });
-                    }} title="Zoom Out">
+                    }} title={t('zoom_out')}>
                       <ZoomOut className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setZoom(z => Math.min(z + 0.5, 5))} title="Zoom In">
+                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setZoom(z => Math.min(z + 0.5, 5))} title={t('zoom_in')}>
                       <ZoomIn className="h-4 w-4" />
                     </Button>
                     {isImage && (
-                      <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setRotation(r => (r + 90) % 360)} title="Rotate">
+                      <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setRotation(r => (r + 90) % 360)} title={t('rotate')}>
                         <RotateCw className="h-4 w-4" />
                       </Button>
                     )}
-                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
+                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? t('exit_fullscreen') : t('fullscreen')}>
                       {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                     </Button>
                   </>
@@ -372,7 +482,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                   </div>
                   <div className="space-y-2">
                     <p className="text-xl font-black tracking-tight">{currentFile.file_name}</p>
-                    <p className="text-sm text-muted-foreground font-medium">Preview not available for this file type</p>
+                    <p className="text-sm text-muted-foreground font-medium">{t('preview_not_available')}</p>
                   </div>
                 </div>
               )}
@@ -382,7 +492,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                 <div className="absolute inset-0 pointer-events-none z-[100] flex items-center justify-center overflow-hidden">
                   <div className="transform -rotate-[30deg] border-4 md:border-[10px] border-dashed border-red-500/20 rounded-xl md:rounded-3xl px-8 py-4 md:px-20 md:py-10 bg-red-500/[0.02] select-none">
                     <h1 className="text-red-500/25 text-4xl md:text-8xl lg:text-9xl font-black uppercase tracking-widest text-center whitespace-nowrap">
-                      Do Not Follow
+                      {t('do_not_follow_tag')}
                     </h1>
                   </div>
                 </div>
@@ -391,6 +501,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           </div>
         </div>
       </DialogContent>
+      {showLinkModal && (
+        <LinkFileModal
+          open={showLinkModal}
+          onOpenChange={setShowLinkModal}
+          projectId={projectId || currentFile?.project_id}
+          currentFileId={currentFile?.id}
+          onLink={handleLinkFile}
+        />
+      )}
     </Dialog>
   );
 };

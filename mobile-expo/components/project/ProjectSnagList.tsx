@@ -159,16 +159,16 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
 
     //zoom 
-    const zoomShared = useSharedValue(0); // 0–1 for expo-camera
-    const startZoom = useSharedValue(0);
-    const MIN_ZOOM = Platform.OS === 'ios' ? 0.5 : 1.0;
-    const [zoomDisplay, setZoomDisplay] = useState(Platform.OS === 'ios' ? '0.5x' : '1.0x'); // live label
-    const [cameraZoom, setCameraZoom] = useState(0); // Standard React state for camera zoom prop
+    const MIN_ZOOM = 0.5;
+    const MAX_ZOOM_FACTOR = 10;
+    const DEFAULT_ZOOM = (1.0 - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
+
+    const zoomShared = useSharedValue(DEFAULT_ZOOM); // 0–1 for expo-camera
+    const startZoom = useSharedValue(DEFAULT_ZOOM);
+    const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+    const [cameraZoom, setCameraZoom] = useState(DEFAULT_ZOOM); // Standard React state for camera zoom prop
     const zoomLabelOpacity = useSharedValue(0);
     let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // Max real-world zoom multiplier each platform supports
-    const MAX_ZOOM_FACTOR = Platform.OS === 'ios' ? 10 : 10;
 
     // Converts 0-1 internal value → display string like "2.3x"
     const toDisplayZoom = (val: number) => {
@@ -1295,10 +1295,46 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
                                                 {loadingMessages ? (
                                                     <ActivityIndicator color={colors.primary} />
-                                                ) : conversationMessages.length === 0 ? (
+                                                ) : (conversationMessages.length === 0 && !selectedSnag?.response && (!selectedSnag?.responsePhotoUrls || selectedSnag.responsePhotoUrls.length === 0)) ? (
                                                     <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.noMessagesYet')}</Text>
                                                 ) : (
                                                     <View style={{ gap: 10 }}>
+                                                        {/* Legacy Response Block */}
+                                                        {(selectedSnag?.response || (selectedSnag?.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
+                                                            <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+                                                                <View style={{
+                                                                    maxWidth: '86%',
+                                                                    padding: 12,
+                                                                    borderRadius: 16,
+                                                                    backgroundColor: colors.surface,
+                                                                    borderWidth: 1,
+                                                                    borderColor: colors.border,
+                                                                }}>
+                                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
+                                                                        Response
+                                                                    </Text>
+                                                                    {selectedSnag.response ? (
+                                                                        <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text>
+                                                                    ) : null}
+                                                                    {selectedSnag.responsePhotoUrls?.map((url, idx) => {
+                                                                        const isAudioFile = isAudio(url);
+                                                                        if (isAudioFile) {
+                                                                            return (
+                                                                                <View key={idx} style={{ marginTop: 8 }}>
+                                                                                    <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                                                </View>
+                                                                            );
+                                                                        } else {
+                                                                            return (
+                                                                                <TouchableOpacity key={idx} onPress={() => setViewPhoto(url)}>
+                                                                                    <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
+                                                                                </TouchableOpacity>
+                                                                            );
+                                                                        }
+                                                                    })}
+                                                                </View>
+                                                            </View>
+                                                        )}
                                                         {conversationMessages.map((message) => {
                                                             const isMine = String(message.sender_id) === String(user?.id);
                                                             return (
@@ -1572,7 +1608,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                         </Animated.View>
                                                         {/* Direct Zoom Buttons */}
                                                         <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
-                                                            {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                                            {[0.5, 1, 2].map(factor => (
                                                                 <TouchableOpacity
                                                                     key={factor}
                                                                     onPress={() => handleManualZoom(factor)}

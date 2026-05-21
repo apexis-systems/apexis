@@ -132,3 +132,33 @@ export const unarchiveFile = async (fileId: string | number, folderId?: string |
         throw error;
     }
 };
+
+export const linkFiles = async (fileId: string | number, targetFileId: string | number) => {
+    try {
+        const response = await PrivateAxios.post(`/files/${fileId}/link`, { targetFileId });
+        return response.data;
+    } catch (error) {
+        console.error("linkFiles Error", error);
+        throw error;
+    }
+};
+
+export const getLinkedItems = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/files/${fileId}/links`);
+        return response.data;
+    } catch (error) {
+        console.error("getLinkedItems Error", error);
+        throw error;
+    }
+};
+
+export const deleteLink = async (fileId: string | number, targetType: string, targetId: string | number) => {
+    try {
+        const response = await PrivateAxios.delete(`/files/${fileId}/link/${targetType}/${targetId}`);
+        return response.data;
+    } catch (error) {
+        console.error("deleteLink Error", error);
+        throw error;
+    }
+};

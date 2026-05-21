@@ -793,7 +793,7 @@ export default function ChatDetail() {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuItem onClick={takeConfirmationScreenshot} className="text-xs cursor-pointer">
-                                                            Confirm as Confirmation
+                                                            Take as Confirmation
                                                         </DropdownMenuItem>
                                                         {isMe && msg.type === 'text' && (
                                                             <DropdownMenuItem onClick={() => { setEditingMessage(msg); setMessage(msg.text); setReplyTo(null); setTimeout(() => inputRef.current?.focus(), 100); }} className="text-xs cursor-pointer">

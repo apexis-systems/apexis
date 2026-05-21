@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, bulkUpdateFolders, createFolder } from '@/services/folderService';
 import { bulkUpdateFiles } from '@/services/fileService';
 import { Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 interface MoveToFolderDialogProps {
     visible: boolean;
@@ -31,6 +32,7 @@ export default function MobileMoveToFolderDialog({
     onConfirm
 }: MoveToFolderDialogProps) {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const [folders, setFolders] = useState<any[]>([]);
     const [targetFolder, setTargetFolder] = useState<string | null | undefined>(undefined);
     const [currentParentId, setCurrentParentId] = useState<string | null>(null);
@@ -113,7 +115,7 @@ export default function MobileMoveToFolderDialog({
             setShowNewFolderModal(false);
             setNewFolderName('');
         } catch (err) {
-            Alert.alert("Error", "Failed to create folder");
+            Alert.alert(t('moveToFolder.errorHeader'), t('moveToFolder.errorCreateFolder'));
         } finally {
             setSubmittingFolder(false);
         }
@@ -164,14 +166,14 @@ export default function MobileMoveToFolderDialog({
     };
 
     const getBreadcrumbs = () => {
-        if (currentParentId === null) return "Root Folder";
+        if (currentParentId === null) return t('moveToFolder.rootFolder');
         const path: string[] = [];
         let current = folders.find(f => String(f.id) === String(currentParentId));
         while (current) {
             path.unshift(current.name);
             current = folders.find(f => String(f.id) === String(current.parent_id));
         }
-        return "Root > " + path.join(" > ");
+        return t('moveToFolder.rootFolder') + " > " + path.join(" > ");
     };
 
     const goUp = () => {
@@ -187,7 +189,7 @@ export default function MobileMoveToFolderDialog({
             <View style={styles.modalOverlay}>
                 <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
                     <View style={styles.header}>
-                        <Text style={[styles.title, { color: colors.text }]}>Move to Folder</Text>
+                        <Text style={[styles.title, { color: colors.text }]}>{t('moveToFolder.title')}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                             {/* <TouchableOpacity onPress={() => setShowNewFolderModal(true)} style={{ padding: 4 }}>
                                 <Feather name="folder-plus" size={20} color={colors.primary} />
@@ -220,7 +222,7 @@ export default function MobileMoveToFolderDialog({
                                         numberOfLines={1} 
                                         style={[styles.folderName, { color: colors.text }]}
                                     >
-                                        Go Up
+                                        {t('moveToFolder.goUp')}
                                     </Text>
                                 </TouchableOpacity>
                             )}
@@ -261,7 +263,7 @@ export default function MobileMoveToFolderDialog({
                                     numberOfLines={1} 
                                     style={[styles.folderName, { color: colors.text }]}
                                 >
-                                    New Folder
+                                    {t('moveToFolder.newFolder')}
                                 </Text>
                             </TouchableOpacity>
 
@@ -269,7 +271,7 @@ export default function MobileMoveToFolderDialog({
                                 <View style={styles.emptyContainer}>
                                     <Feather name="folder-minus" size={32} color={colors.border} />
                                     <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                                        This folder is empty
+                                        {t('moveToFolder.folderEmpty')}
                                     </Text>
                                 </View>
                             )}
@@ -278,18 +280,18 @@ export default function MobileMoveToFolderDialog({
 
                     <View style={styles.footer}>
                         <TouchableOpacity onPress={onClose} style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}>
-                            <Text style={{ color: colors.textMuted }}>Cancel</Text>
+                            <Text style={{ color: colors.textMuted }}>{t('moveToFolder.cancel')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
                             onPress={handleMove} 
-                            disabled={loading || targetFolder === undefined} 
+                            disabled={loading || targetFolder === undefined || currentParentId === null} 
                             style={[
                                 styles.button, 
                                 styles.moveButton,
-                                (loading || targetFolder === undefined) && { opacity: 0.5 }
+                                (loading || targetFolder === undefined || currentParentId === null) && { opacity: 0.5 }
                             ]}
                         >
-                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>{loading ? 'Moving...' : 'Move Here'}</Text>
+                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>{loading ? t('moveToFolder.moving') : t('moveToFolder.moveHere')}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -298,12 +300,12 @@ export default function MobileMoveToFolderDialog({
                 {showNewFolderModal && (
                     <View style={[StyleSheet.absoluteFill, { zIndex: 999, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 }]}>
                         <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 16 }}>Create New Folder</Text>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 16 }}>{t('moveToFolder.createNewFolder')}</Text>
                             
                             <TextInput
                                 value={newFolderName}
                                 onChangeText={setNewFolderName}
-                                placeholder="Folder Name"
+                                placeholder={t('moveToFolder.folderNamePlaceholder')}
                                 placeholderTextColor={colors.textMuted}
                                 autoFocus
                                 style={{
@@ -332,7 +334,7 @@ export default function MobileMoveToFolderDialog({
                                         justifyContent: 'center',
                                     }}
                                 >
-                                    <Text style={{ color: colors.textMuted, fontWeight: '700', fontSize: 13 }}>Cancel</Text>
+                                    <Text style={{ color: colors.textMuted, fontWeight: '700', fontSize: 13 }}>{t('moveToFolder.cancel')}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     onPress={submitNewFolder}
@@ -348,7 +350,7 @@ export default function MobileMoveToFolderDialog({
                                     }}
                                 >
                                     <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-                                        {submittingFolder ? 'Creating...' : 'Create'}
+                                        {submittingFolder ? t('moveToFolder.creating') : t('moveToFolder.create')}
                                     </Text>
                                 </TouchableOpacity>
                             </View>

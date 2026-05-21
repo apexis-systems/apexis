@@ -251,7 +251,7 @@ const MoveToFolderDialog = ({
                     <Button variant="outline" onClick={() => onOpenChange(false)} size="sm" className="text-xs">
                         Cancel
                     </Button>
-                    <Button onClick={handleMove} disabled={loading} size="sm" className="text-xs">
+                    <Button onClick={handleMove} disabled={loading || currentParentId === null} size="sm" className="text-xs">
                         {loading ? 'Moving...' : 'Move Here'}
                     </Button>
                 </DialogFooter>

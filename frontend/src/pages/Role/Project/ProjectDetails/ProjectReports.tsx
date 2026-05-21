@@ -35,7 +35,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
   const handleRegenerate = async (reportId: number) => {
     setRegeneratingId(reportId);
     try {
-      await regenerateReport(reportId);
+      await regenerateReport(reportId, project.id);
       toast.success(t('report_regenerated_success') || 'Report regenerated successfully');
       fetchReports();
     } catch (e) {

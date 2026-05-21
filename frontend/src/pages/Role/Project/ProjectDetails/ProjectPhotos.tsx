@@ -118,14 +118,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   };
 
   const handleCreateSnagFromPhoto = async () => {
-    if (!snagTitle.trim()) { toast.error(t('title_required_msg') || 'Title is required'); return; }
-    if (!snagAssignee) { toast.error(t('assignee_required_msg') || 'Assignee is required'); return; }
+    if (!snagTitle.trim()) { toast.error(t('title_required_msg')); return; }
+    if (!snagAssignee) { toast.error(t('assignee_required_msg')); return; }
     if (!selectedPhoto) return;
 
     if (!checkLimit('snags')) {
-      toast.error(t('snag_limit_msg') || 'Snag limit reached. Please upgrade.', {
+      toast.error(t('snag_limit_msg'), {
         action: {
-          label: t('upgrade_label') || 'Upgrade',
+          label: t('upgrade_label'),
           onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
         },
         duration: 5000,
@@ -143,27 +143,27 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       form.append('photo_key', selectedPhoto.file_url);
 
       await createSnag(form);
-      toast.success(t('snag_added_msg') || 'Snag created successfully');
+      toast.success(t('snag_added_msg'));
       setShowCreateSnagDialog(false);
       setSnagTitle('');
       setSnagDescription('');
       setSnagAssignee('');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to create snag');
+      toast.error(error.response?.data?.error || t('failed_create_snag'));
     } finally {
       setSubmittingEntity(false);
     }
   };
 
   const handleCreateRfiFromPhoto = async () => {
-    if (!rfiTitle.trim()) { toast.error(t('title_required_msg') || 'Title is required'); return; }
-    if (!rfiAssignee) { toast.error(t('assignee_required_msg') || 'Assignee is required'); return; }
+    if (!rfiTitle.trim()) { toast.error(t('title_required_msg')); return; }
+    if (!rfiAssignee) { toast.error(t('assignee_required_msg')); return; }
     if (!selectedPhoto) return;
 
     if (!checkLimit('rfis')) {
-      toast.error(t('rfi_limit_msg') || 'RFI limit reached. Please upgrade.', {
+      toast.error(t('rfi_limit_msg'), {
         action: {
-          label: t('upgrade_label') || 'Upgrade',
+          label: t('upgrade_label'),
           onClick: () => router.push(`/${user?.role || 'admin'}/billing`)
         },
         duration: 5000,
@@ -182,14 +182,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       form.append('photo_key', selectedPhoto.file_url);
 
       await createRFI(form);
-      toast.success(t('rfi_created_msg') || 'RFI created successfully');
+      toast.success(t('rfi_created_msg'));
       setShowCreateRfiDialog(false);
       setRfiTitle('');
       setRfiDescription('');
       setRfiAssignee('');
       setRfiExpiryDate('');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to create RFI');
+      toast.error(error.response?.data?.error || t('failed_create_rfi'));
     } finally {
       setSubmittingEntity(false);
     }
@@ -398,10 +398,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const handleUnarchivePhoto = async (photoId: number) => {
     try {
       await unarchiveFile(photoId, null);
-      toast.success(t('photo_unarchived_success') || 'Photo unarchived successfully');
+      toast.success(t('photo_unarchived_success'));
       await importFolders();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('failed_to_unarchive_photo') || 'Failed to unarchive photo');
+      toast.error(e.response?.data?.error || t('failed_to_unarchive_photo'));
     }
   };
 
@@ -417,7 +417,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const handleCreateFolder = async (name: string) => {
     const lname = name.toLowerCase();
     if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
-      toast.error(t("archive_name_reserved") || "The name 'Archive' or 'Confirmations' is reserved for system use");
+      toast.error(t('archive_name_reserved'));
       return;
     }
     try {
@@ -436,7 +436,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     if (!editFolder) return;
     const lname = newName.toLowerCase();
     if (lname === 'archive' || lname === 'confirmation' || lname === 'confirmations') {
-      toast.error(t("archive_name_reserved") || "The name 'Archive' or 'Confirmations' is reserved for system use");
+      toast.error(t('archive_name_reserved'));
       return;
     }
     try {
@@ -558,7 +558,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
 
   const handleBulkDelete = async () => {
     if (selectedFiles.size === 0) {
-      toast.info(t('select_photo_delete') || 'Please select at least one photo to delete');
+      toast.info(t('select_photo_delete'));
       return;
     }
 
@@ -578,7 +578,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     });
 
     if (inProtectedFolder) {
-      toast.error(t('protected_folder_delete_error') || "Files in system folders (Archive/Confirmations) cannot be deleted.");
+      toast.error(t('protected_folder_delete_error'));
       return;
     }
 
@@ -587,20 +587,20 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     });
 
     if (unauthorized) {
-      toast.error(t('unauthorized_delete_error') || "You can only delete photos that you originally uploaded.");
+      toast.error(t('unauthorized_delete_error'));
       return;
     }
 
-    const confirmMsg = t('confirm_delete_multiple_photos')?.replace('{count}', String(selectedFiles.size)) || `Move these ${selectedFiles.size} photos to Trash? They can be recovered later from Settings for 30 days.`;
+    const confirmMsg = t('confirm_delete_multiple_photos').replace('{count}', String(selectedFiles.size));
     if (!confirm(confirmMsg)) return;
 
     try {
       await bulkDeleteFiles(Array.from(selectedFiles));
-      toast.success(t('photos_deleted_msg') || 'Selected photos deleted successfully');
+      toast.success(t('photos_deleted_msg'));
       setPhotos((prev) => prev.filter((p) => !selectedFiles.has(p.id)));
       clearSelection();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('failed_delete_photos') || 'Failed to delete photos');
+      toast.error(e.response?.data?.error || t('failed_delete_photos'));
     }
   };
 
@@ -727,7 +727,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               activeFolderTab === 'rfi' ? "text-accent" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {t('linked_rfi_and_snag_tab') || 'Linked RFIs & Snags'}
+            {t('linked_rfi_and_snag_tab')}
             {activeFolderTab === 'rfi' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
         </div>
@@ -799,7 +799,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     <FolderIcon className="h-8 w-8 text-accent" />
                   )}
                   <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
-                    {isConfirmationFolder ? "Confirmations" : folder.name}
+                    {isConfirmationFolder ? t('confirmations_folder_name') : folder.name}
                   </span>
                   <div className="flex items-center gap-1 mt-0.5">
                     <span className="text-[9px] text-muted-foreground mr-1">
@@ -888,7 +888,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                           {(String(photo.created_by) === String(user.id)) && (
                             <>
                               {currentFolder?.name.toLowerCase().includes('archive') ? (
-                                <button onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-blue-500/10" title={t('unarchive_photo_tip') || 'Unarchive photo'}>
+                                <button onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }} className="rounded-md p-1 hover:bg-blue-500/10" title={t('unarchive_photo_tip')}>
                                   <Archive className="h-3.5 w-3.5 text-blue-500" />
                                 </button>
                               ) : currentFolder?.name.toLowerCase().includes('confirmation') ? (
@@ -911,10 +911,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }}>
-                                Create RFI
+                                {t('create_rfi')}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }}>
-                                Create Snag
+                                {t('create_snag')}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -987,7 +987,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                             <button
                               onClick={(e) => { e.stopPropagation(); handleUnarchivePhoto(photo.id); }}
                               className="rounded-full p-1 hover:bg-blue-500/10 transition-colors"
-                              title={t('unarchive_photo_tip') || 'Unarchive photo'}
+                              title={t('unarchive_photo_tip')}
                             >
                               <Archive className="h-2.5 w-2.5 text-blue-500" />
                             </button>
@@ -1019,10 +1019,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }}>
-                            Create RFI
+                            {t('create_rfi')}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }}>
-                            Create Snag
+                            {t('create_snag')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1057,36 +1057,36 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           <Dialog open={showCreateSnagDialog} onOpenChange={setShowCreateSnagDialog}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Create Snag from Photo</DialogTitle>
+                <DialogTitle>{t('create_snag_photo_title')}</DialogTitle>
                 <DialogDescription>
-                  Create a new snag linked to this photo. Fill in the details below.
+                  {t('create_snag_photo_desc')}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="snag-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Title <span className="text-destructive">*</span></label>
+                  <label htmlFor="snag-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('title_label')} <span className="text-destructive">*</span></label>
                   <Input
                     id="snag-title"
                     value={snagTitle}
                     onChange={(e) => setSnagTitle(e.target.value)}
-                    placeholder="Enter snag title"
+                    placeholder={t('enter_snag_title')}
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="snag-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description</label>
+                  <label htmlFor="snag-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('description_label')}</label>
                   <Textarea
                     id="snag-desc"
                     value={snagDescription}
                     onChange={(e) => setSnagDescription(e.target.value)}
-                    placeholder="Enter snag description"
+                    placeholder={t('enter_snag_desc')}
                     rows={3}
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assignee <span className="text-destructive">*</span></label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('assignee_label')} <span className="text-destructive">*</span></label>
                   <Select value={snagAssignee} onValueChange={setSnagAssignee}>
                     <SelectTrigger className="h-10 text-xs bg-background">
-                      <SelectValue placeholder="Select Assignee" />
+                      <SelectValue placeholder={t('select_assignee')} />
                     </SelectTrigger>
                     <SelectContent>
                       {snagAssigneesList.map((assignee) => (
@@ -1100,10 +1100,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowCreateSnagDialog(false)}>
-                  Cancel
+                  {t('cancel')}
                 </Button>
                 <Button onClick={handleCreateSnagFromPhoto} disabled={submittingEntity}>
-                  {submittingEntity ? 'Creating...' : 'Create Snag'}
+                  {submittingEntity ? t('creating_btn') : t('create_snag_btn')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1113,36 +1113,36 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           <Dialog open={showCreateRfiDialog} onOpenChange={setShowCreateRfiDialog}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Create RFI from Photo</DialogTitle>
+                <DialogTitle>{t('create_rfi_photo_title')}</DialogTitle>
                 <DialogDescription>
-                  Create a new RFI linked to this photo. Fill in the details below.
+                  {t('create_rfi_photo_desc')}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="rfi-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Title <span className="text-destructive">*</span></label>
+                  <label htmlFor="rfi-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('title_label')} <span className="text-destructive">*</span></label>
                   <Input
                     id="rfi-title"
                     value={rfiTitle}
                     onChange={(e) => setRfiTitle(e.target.value)}
-                    placeholder="Enter RFI title"
+                    placeholder={t('enter_rfi_title')}
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="rfi-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description</label>
+                  <label htmlFor="rfi-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('description_label')}</label>
                   <Textarea
                     id="rfi-desc"
                     value={rfiDescription}
                     onChange={(e) => setRfiDescription(e.target.value)}
-                    placeholder="Enter RFI description"
+                    placeholder={t('enter_rfi_desc')}
                     rows={3}
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assignee <span className="text-destructive">*</span></label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('assignee_label')} <span className="text-destructive">*</span></label>
                   <Select value={rfiAssignee} onValueChange={setRfiAssignee}>
                     <SelectTrigger className="h-10 text-xs bg-background">
-                      <SelectValue placeholder="Select Assignee" />
+                      <SelectValue placeholder={t('select_assignee')} />
                     </SelectTrigger>
                     <SelectContent>
                       {rfiAssigneesList.map((assignee) => (
@@ -1154,7 +1154,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   </Select>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="rfi-expiry" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Expiry Date</label>
+                  <label htmlFor="rfi-expiry" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('expiry_date_label')}</label>
                   <Input
                     id="rfi-expiry"
                     type="date"
@@ -1165,10 +1165,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowCreateRfiDialog(false)}>
-                  Cancel
+                  {t('cancel')}
                 </Button>
                 <Button onClick={handleCreateRfiFromPhoto} disabled={submittingEntity}>
-                  {submittingEntity ? 'Creating...' : 'Create RFI'}
+                  {submittingEntity ? t('creating_btn') : t('create_rfi_btn')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1231,7 +1231,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     className="h-8 px-2 text-[10px] font-semibold text-destructive hover:text-destructive/80 hover:bg-destructive/10"
                     onClick={handleBulkDelete}
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" /> {t('delete_btn') || 'Delete'}
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> {t('delete_btn')}
                   </Button>
                 )}
                 {(user.role === 'admin' || user.role === 'superadmin') && (

@@ -270,6 +270,103 @@ export const getOrgUsers = async (req: Request, res: Response) => {
     }
 };
 
+export const getProjectsUsers = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        // Fetch user from DB to get their TRUE base role and primary organization
+        const dbUser = await users.findByPk(authUser.user_id);
+        if (!dbUser) return res.status(404).json({ error: "User not found" });
+
+        const baseRole = dbUser.role;
+        const primaryOrgId = dbUser.organization_id;
+
+        // Fetch all projects created by this user
+        const userProjects = await projects.findAll({
+            where: { created_by: authUser.user_id },
+            attributes: ['id', 'name']
+        });
+
+        const projectIds = userProjects.map((p: any) => p.id);
+
+        if (projectIds.length === 0) {
+            return res.status(200).json({ users: [] });
+        }
+
+        // Fetch the contributors and clients in those projects
+        const memberships = await project_members.findAll({
+            where: {
+                project_id: { [Op.in]: projectIds },
+                role: { [Op.in]: ['contributor', 'client'] }
+            },
+            attributes: ['user_id']
+        });
+
+        const memberUserIds = [...new Set(memberships.map((m: any) => m.user_id))];
+
+        if (memberUserIds.length === 0) {
+            return res.status(200).json({ users: [] });
+        }
+
+        const rawUsers = await users.findAll({
+            where: { id: { [Op.in]: memberUserIds } },
+            attributes: ['id', 'name', 'email', 'phone_number', 'role', 'profile_pic', 'is_primary', 'email_verified', 'phone_verified', 'createdAt', 'organization_id'],
+            include: [
+                { model: organizations, attributes: ['name'] },
+                { 
+                    model: project_members, 
+                    attributes: ['role', 'project_id'],
+                    where: { project_id: { [Op.in]: projectIds } },
+                    required: false,
+                    include: [{ model: projects, attributes: ['name'] }]
+                }
+            ]
+        });
+
+        const projectUsers = await Promise.all(rawUsers.map(async (u: any) => {
+            const userJson = u.toJSON();
+            
+            // Find projects created by this user that are also accessible to the requester
+            const createdProjects = await projects.findAll({
+                where: { 
+                    created_by: u.id,
+                    id: { [Op.in]: projectIds }
+                },
+                attributes: ['id', 'name']
+            });
+
+            createdProjects.forEach((p: any) => {
+                // Check if already in project_members
+                const exists = userJson.project_members.some((pm: any) => pm.project_id === p.id);
+                if (!exists) {
+                    userJson.project_members.push({
+                        role: 'admin',
+                        project_id: p.id,
+                        project: { name: p.name }
+                    });
+                }
+            });
+
+            if (userJson.id === authUser.user_id) {
+                userJson.role = 'admin';
+            } else {
+                userJson.role = userJson.project_members?.[0]?.role;
+            }
+
+            return userJson;
+        }));
+
+        res.status(200).json({ users: projectUsers });
+    } catch (error) {
+        console.error("Get Projects Users Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const deleteUser = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
