@@ -2237,80 +2237,49 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                                     <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingTop: 8, maxHeight: 200 }}>
                                         <View style={{ flexDirection: 'row', gap: 16, marginBottom: 8 }}>
-                                            <TouchableOpacity onPress={() => setViewerActiveTab('discussion')}>
-                                                <Text style={{ color: viewerActiveTab === 'discussion' ? '#fff' : '#aaa', fontSize: 10, fontWeight: '700' }}>
-                                                    💬 {t('projectPhotos.comments')} ({photoComments.length})
-                                                </Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity onPress={() => setViewerActiveTab('links')}>
-                                                <Text style={{ color: viewerActiveTab === 'links' ? '#fff' : '#aaa', fontSize: 10, fontWeight: '700' }}>
-                                                    🔗 Links ({linkedItems.length})
-                                                </Text>
-                                            </TouchableOpacity>
+                                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+                                                💬 {t('projectPhotos.comments')} ({photoComments.length})
+                                            </Text>
                                         </View>
-                                        {viewerActiveTab === 'discussion' ? (
-                                            <>
-                                                {commentLoading ? (
-                                                    <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
-                                                ) : (
-                                                    <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
-                                                        {photoComments.length === 0 && (
-                                                            <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>{t('projectPhotos.noComments')}</Text>
-                                                        )}
-                                                        {photoComments.map((c: any) => (
-                                                            <View key={c.id} style={{ marginBottom: 8 }}>
-                                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
-                                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || t('projectPhotos.user')}</Text>
-                                                                        <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                                            <Text style={{ color: '#888', fontSize: 9 }}>↩ {t('projectPhotos.reply')}</Text>
-                                                                        </TouchableOpacity>
-                                                                    </View>
-                                                                    <Text style={{ color: '#ddd', fontSize: 11 }}>
-                                                                        {renderCommentText(c.text)}
-                                                                    </Text>
-                                                                </View>
-                                                                {c.replies?.map((r: any) => (
-                                                                    <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
-                                                                        <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || t('projectPhotos.user')}</Text>
-                                                                        <Text style={{ color: '#ccc', fontSize: 10 }}>
-                                                                            {renderCommentText(r.text)}
-                                                                        </Text>
-                                                                    </View>
-                                                                ))}
-                                                            </View>
-                                                        ))}
-                                                    </ScrollView>
-                                                )}
-                                                {replyTo && (
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 9 }}>{t('projectPhotos.replyingTo')}</Text>
-                                                        <TouchableOpacity onPress={() => setReplyTo(null)}>
-                                                            <Text style={{ color: '#888', fontSize: 9 }}>✕ {t('projectPhotos.cancel')}</Text>
-                                                        </TouchableOpacity>
-                                                    </View>
-                                                )}
-                                            </>
+                                        {commentLoading ? (
+                                            <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
                                         ) : (
                                             <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
-                                                {linkedItems.length === 0 && (
-                                                    <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>No linked items.</Text>
+                                                {photoComments.length === 0 && (
+                                                    <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>{t('projectPhotos.noComments')}</Text>
                                                 )}
-                                                {linkedItems.map((item: any, idx) => (
-                                                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8, marginBottom: 8 }}>
-                                                        <TouchableOpacity 
-                                                            style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}
-                                                            onPress={() => handleLinkItemClick(item)}
-                                                        >
-                                                            <Feather name={item.type === 'file' ? (item.file_type?.startsWith('image/') ? 'image' : 'file-text') : item.type === 'rfi' ? 'help-circle' : 'alert-circle'} size={14} color={colors.primary} style={{ marginRight: 6 }} />
-                                                            <Text style={{ color: '#fff', fontSize: 11 }} numberOfLines={1}>{item.title || item.name}</Text>
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity onPress={() => handleRemoveLink(item.type, item.id)}>
-                                                            <Feather name="x" size={14} color="#ef4444" />
-                                                        </TouchableOpacity>
+                                                {photoComments.map((c: any) => (
+                                                    <View key={c.id} style={{ marginBottom: 8 }}>
+                                                        <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 }}>
+                                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                                                                <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || t('projectPhotos.user')}</Text>
+                                                                <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                                                                    <Text style={{ color: '#888', fontSize: 9 }}>↩ {t('projectPhotos.reply')}</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                            <Text style={{ color: '#ddd', fontSize: 11 }}>
+                                                                {renderCommentText(c.text)}
+                                                            </Text>
+                                                        </View>
+                                                        {c.replies?.map((r: any) => (
+                                                            <View key={r.id} style={{ marginLeft: 12, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 6 }}>
+                                                                <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '700', marginBottom: 1 }}>{r.user?.name || t('projectPhotos.user')}</Text>
+                                                                <Text style={{ color: '#ccc', fontSize: 10 }}>
+                                                                    {renderCommentText(r.text)}
+                                                                </Text>
+                                                            </View>
+                                                        ))}
                                                     </View>
                                                 ))}
                                             </ScrollView>
+                                        )}
+                                        {replyTo && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                <Text style={{ color: colors.primary, fontSize: 9 }}>{t('projectPhotos.replyingTo')}</Text>
+                                                <TouchableOpacity onPress={() => setReplyTo(null)}>
+                                                    <Text style={{ color: '#888', fontSize: 9 }}>✕ {t('projectPhotos.cancel')}</Text>
+                                                </TouchableOpacity>
+                                            </View>
                                         )}
                                         {showMentions && (
                                             <View style={{ position: 'absolute', bottom: 50, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000 }}>
@@ -2357,15 +2326,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         )}
                     </View>
                 </GestureHandlerRootView>
+                <LinkFileModal
+                    visible={showLinkModal}
+                    onClose={() => setShowLinkModal(false)}
+                    onLink={handleLinkFile}
+                    projectId={project?.id}
+                    currentFileId={sortedPhotos[viewerIndex]?.id}
+                />
             </Modal>
-
-            <LinkFileModal
-                visible={showLinkModal}
-                onClose={() => setShowLinkModal(false)}
-                onLink={handleLinkFile}
-                projectId={project?.id}
-                currentFileId={sortedPhotos[viewerIndex]?.id}
-            />
 
             {/* Rename Folder Modal */}
             <Modal visible={showEditFolder} transparent animationType="fade">

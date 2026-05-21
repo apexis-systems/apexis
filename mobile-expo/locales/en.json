@@ -864,6 +864,65 @@
             "organizations": "Organizations",
             "projects": "Projects",
             "users": "Users"
+        },
+        "linkFile": {
+            "title": "Link File",
+            "searchPlaceholder": "Search files...",
+            "documentsTab": "Documents",
+            "photosTab": "Photos",
+            "linkedItems": "Linked Items",
+            "noItemsLinked": "No items linked to this file yet.",
+            "unnamedDocument": "Unnamed Document",
+            "unnamedPhoto": "Unnamed Photo",
+            "unnamedRfi": "Unnamed RFI",
+            "unnamedSnag": "Unnamed Snag",
+            "link": "Link",
+            "linked": "Linked",
+            "linking": "Linking...",
+            "removing": "Removing...",
+            "noFilesFound": "No files or folders found",
+            "folderEmpty": "This folder is empty",
+            "filesSection": "Files",
+            "searchResults": "Search Results",
+            "noFilesMatching": "No files found matching \"{{query}}\""
+        },
+        "moveToFolder": {
+            "title": "Move to Folder",
+            "cancel": "Cancel",
+            "moveHere": "Move Here",
+            "moving": "Moving...",
+            "goUp": "Go Up",
+            "newFolder": "New Folder",
+            "rootFolder": "Root Folder",
+            "folderEmpty": "This folder is empty",
+            "createNewFolder": "Create New Folder",
+            "folderNamePlaceholder": "Folder Name",
+            "create": "Create",
+            "creating": "Creating...",
+            "errorCreateFolder": "Failed to create folder",
+            "errorHeader": "Error"
+        },
+        "fileActionMenu": {
+            "createRfi": "Create RFI",
+            "createSnag": "Create Snag",
+            "share": "Share",
+            "rename": "Rename",
+            "hideContent": "Hide Content",
+            "showContent": "Show Content",
+            "followFile": "Follow File",
+            "dontFollow": "Don't Follow",
+            "archiveFile": "Archive File",
+            "unarchiveFile": "Unarchive File",
+            "deleteFile": "Delete File",
+            "cancel": "Cancel"
+        },
+        "folderActionMenu": {
+            "folderLabel": "Folder: {{name}}",
+            "hideFolder": "Hide Folder",
+            "showFolder": "Show Folder",
+            "renameFolder": "Rename Folder",
+            "deleteFolder": "Delete Folder",
+            "cancel": "Cancel"
         }
     }
 }
