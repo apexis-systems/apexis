@@ -12,13 +12,15 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
+import LinkFileModal from '../shared/LinkFileModal';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { WebView } from 'react-native-webview';
-import { getFolderRFIs } from '@/services/rfiService';
-import { getFolderSnags } from '@/services/snagService';
+import { getFolderRFIs, getRFIAssignees, createRFI } from '@/services/rfiService';
+import { getFolderSnags, getAssignees as getSnagAssignees, createSnag } from '@/services/snagService';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
 import { getMemberForTag } from '@/services/projectService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -85,6 +87,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
     const [pdfViewerName, setPdfViewerName] = useState('');
     const [currentDoc, setCurrentDoc] = useState<any | null>(null);
+    const [viewerActiveTab, setViewerActiveTab] = useState<'discussion'|'links'>('discussion');
+    const [showLinkModal, setShowLinkModal] = useState(false);
+    const [linkedItems, setLinkedItems] = useState<any[]>([]);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [sharing, setSharing] = useState(false);
 
@@ -93,6 +98,132 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // Action Menu state
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
     const [activeActionFile, setActiveActionFile] = useState<any>(null);
+
+    // RFI & Snag creation from Docs
+    const [showCreateSnagModal, setShowCreateSnagModal] = useState(false);
+    const [snagTitle, setSnagTitle] = useState('');
+    const [snagDesc, setSnagDesc] = useState('');
+    const [snagAssignedToId, setSnagAssignedToId] = useState<number | null>(null);
+    const [snagAssignees, setSnagAssignees] = useState<any[]>([]);
+    const [showSnagAssigneeDropdown, setShowSnagAssigneeDropdown] = useState(false);
+
+    const [showCreateRfiModal, setShowCreateRfiModal] = useState(false);
+    const [rfiTitle, setRfiTitle] = useState('');
+    const [rfiDesc, setRfiDesc] = useState('');
+    const [rfiAssignedToId, setRfiAssignedToId] = useState<number | null>(null);
+    const [rfiAssignees, setRfiAssignees] = useState<any[]>([]);
+    const [showRfiAssigneeDropdown, setShowRfiAssigneeDropdown] = useState(false);
+    const [rfiExpiryDate, setRfiExpiryDate] = useState<Date | null>(null);
+    const [showRfiDatePicker, setShowRfiDatePicker] = useState(false);
+
+    const [submittingEntity, setSubmittingEntity] = useState(false);
+
+    useEffect(() => {
+        if (showCreateSnagModal && project?.id) {
+            getSnagAssignees(project.id)
+                .then(setSnagAssignees)
+                .catch(err => console.error("Error fetching snag assignees", err));
+        }
+    }, [showCreateSnagModal, project?.id]);
+
+    useEffect(() => {
+        if (showCreateRfiModal && project?.id) {
+            getRFIAssignees(project.id)
+                .then(setRfiAssignees)
+                .catch(err => console.error("Error fetching RFI assignees", err));
+        }
+    }, [showCreateRfiModal, project?.id]);
+
+    const handleStartCreateSnag = (file: any) => {
+        setActiveActionFile(file);
+        setSnagTitle('');
+        setSnagDesc('');
+        setSnagAssignedToId(null);
+        setShowCreateSnagModal(true);
+    };
+
+    const handleStartCreateRfi = (file: any) => {
+        setActiveActionFile(file);
+        setRfiTitle('');
+        setRfiDesc('');
+        setRfiAssignedToId(null);
+        setRfiExpiryDate(null);
+        setShowCreateRfiModal(true);
+    };
+
+    const handleCreateSnagFromDoc = async () => {
+        if (!snagTitle.trim()) {
+            Alert.alert("Error", "Title is required");
+            return;
+        }
+        if (!snagAssignedToId) {
+            Alert.alert("Error", "Assignee is required");
+            return;
+        }
+        if (!activeActionFile) return;
+
+        setSubmittingEntity(true);
+        try {
+            const formData = new FormData();
+            formData.append('project_id', String(project.id));
+            formData.append('title', snagTitle.trim());
+            if (snagDesc.trim()) {
+                formData.append('description', snagDesc.trim());
+            }
+            formData.append('assigned_to', String(snagAssignedToId));
+            formData.append('photo_key', activeActionFile.file_url);
+            formData.append('source_file_id', String(activeActionFile.id));
+
+            await createSnag(formData);
+            Alert.alert("Success", "Snag created successfully");
+            setShowCreateSnagModal(false);
+        } catch (error: any) {
+            console.error("Create Snag from doc error", error);
+            const errMsg = error.response?.data?.error || "Failed to create snag";
+            Alert.alert("Error", errMsg);
+        } finally {
+            setSubmittingEntity(false);
+        }
+    };
+
+    const handleCreateRfiFromDoc = async () => {
+        if (!rfiTitle.trim()) {
+            Alert.alert("Error", "Title is required");
+            return;
+        }
+        if (!rfiAssignedToId) {
+            Alert.alert("Error", "Assignee is required");
+            return;
+        }
+        if (!activeActionFile) return;
+
+        setSubmittingEntity(true);
+        try {
+            const formData = new FormData();
+            formData.append('project_id', String(project.id));
+            formData.append('title', rfiTitle.trim());
+            if (rfiDesc.trim()) {
+                formData.append('description', rfiDesc.trim());
+            }
+            formData.append('assigned_to', String(rfiAssignedToId));
+            if (rfiExpiryDate) {
+                formData.append('expiry_date', rfiExpiryDate.toISOString());
+            }
+            formData.append('photo_key', activeActionFile.file_url);
+            formData.append('source_file_id', String(activeActionFile.id));
+
+            await createRFI(formData);
+            Alert.alert("Success", "RFI created successfully");
+            setShowCreateRfiModal(false);
+        } catch (error: any) {
+            console.error("Create RFI from doc error", error);
+            const errMsg = error.response?.data?.error || "Failed to create RFI";
+            Alert.alert("Error", errMsg);
+        } finally {
+            setSubmittingEntity(false);
+        }
+    };
+
     const [folderMenuVisible, setFolderMenuVisible] = useState(false);
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
@@ -161,6 +292,73 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             socket.off('file-seen');
         };
     }, [socket]);
+
+    const fetchLinkedItems = useCallback(async () => {
+        if (pdfViewerUrl && currentDoc?.id) {
+            try {
+                const data = await getLinkedItems(currentDoc.id);
+                setLinkedItems(data.links || []);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }, [pdfViewerUrl, currentDoc]);
+
+    useEffect(() => {
+        if (pdfViewerUrl) {
+            fetchLinkedItems();
+        }
+    }, [pdfViewerUrl, fetchLinkedItems]);
+
+    const handleLinkFile = async (targetId: number) => {
+        if (!currentDoc?.id) return;
+        try {
+            await linkFiles(currentDoc.id, targetId);
+            setShowLinkModal(false);
+            fetchLinkedItems();
+            Alert.alert(t('projectDocuments.success'), 'File linked successfully.');
+        } catch (e: any) {
+            Alert.alert(t('projectDocuments.error'), e.response?.data?.error || 'Failed to link file.');
+        }
+    };
+
+    const handleRemoveLink = async (targetType: string, targetId: number) => {
+        if (!currentDoc?.id) return;
+        try {
+            await deleteLink(currentDoc.id, targetType, targetId);
+            fetchLinkedItems();
+        } catch (e: any) {
+            Alert.alert(t('projectDocuments.error'), e.response?.data?.error || 'Failed to remove link.');
+        }
+    };
+
+    const handleLinkItemClick = async (item: any) => {
+        if (item.type === 'file') {
+            const downloadUrl = item.downloadUrl || item.file_url;
+            if (downloadUrl) {
+                const isPdf = item.file_type?.includes('pdf') || item.file_name?.toLowerCase().endsWith('.pdf') || item.name?.toLowerCase().endsWith('.pdf');
+                if (isPdf) {
+                    const docToOpen = {
+                        ...item,
+                        file_name: item.name || item.file_name,
+                        downloadUrl: downloadUrl
+                    };
+                    openDoc(docToOpen);
+                } else {
+                    WebBrowser.openBrowserAsync(downloadUrl);
+                }
+            }
+        } else {
+            setPdfViewerUrl(null);
+            setCurrentDoc(null);
+            setShowComments(false);
+            if (item.type === 'rfi') {
+                router.setParams({ tab: 'rfi', rfiId: String(item.id) });
+            } else if (item.type === 'snag') {
+                router.setParams({ tab: 'snags', snagId: String(item.id) });
+            }
+        }
+    };
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -1768,6 +1966,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             {pdfViewerName}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                                <Feather name="link" size={18} color="#fff" />
+                            </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => setShowComments(!showComments)}
                                 style={{ padding: 8, borderRadius: 20, backgroundColor: showComments ? colors.primary : 'rgba(255,255,255,0.1)' }}
@@ -1926,28 +2127,36 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             }}
                         >
                             <View style={{ padding: 16 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>💬 {t('projectDocuments.discussion')} ({docComments.length})</Text>
-                                    <TouchableOpacity onPress={() => setShowComments(false)} style={{ padding: 4 }}>
-                                        <Feather name="chevron-down" size={18} color="#aaa" />
+                                <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
+                                    <TouchableOpacity onPress={() => setViewerActiveTab('discussion')}>
+                                        <Text style={{ color: viewerActiveTab === 'discussion' ? '#fff' : '#aaa', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>
+                                            💬 {t('projectDocuments.discussion')} ({docComments.length})
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => setViewerActiveTab('links')}>
+                                        <Text style={{ color: viewerActiveTab === 'links' ? '#fff' : '#aaa', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>
+                                            🔗 Links ({linkedItems.length})
+                                        </Text>
                                     </TouchableOpacity>
                                 </View>
 
-                                {commentLoading ? (
-                                    <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
-                                ) : (
-                                    <ScrollView
-                                        style={{ maxHeight: SCREEN_H * 0.35 }}
-                                        contentContainerStyle={{ paddingBottom: 10 }}
-                                        showsVerticalScrollIndicator={true}
-                                        keyboardShouldPersistTaps="handled"
-                                    >
-                                        {docComments.length === 0 && (
-                                            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
-                                        )}
-                                        {docComments.map((c: any) => (
-                                            <View key={c.id} style={{ marginBottom: 12 }}>
-                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                                {viewerActiveTab === 'discussion' ? (
+                                    <>
+                                        {commentLoading ? (
+                                            <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
+                                        ) : (
+                                            <ScrollView
+                                                style={{ maxHeight: SCREEN_H * 0.35 }}
+                                                contentContainerStyle={{ paddingBottom: 10 }}
+                                                showsVerticalScrollIndicator={true}
+                                                keyboardShouldPersistTaps="handled"
+                                            >
+                                                {docComments.length === 0 && (
+                                                    <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
+                                                )}
+                                                {docComments.map((c: any) => (
+                                                    <View key={c.id} style={{ marginBottom: 12 }}>
+                                                        <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
                                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                                                         <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || t('projectDocuments.user')}</Text>
                                                         <TouchableOpacity onPress={() => setReplyTo(c.id)}>
@@ -2019,6 +2228,36 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     </TouchableOpacity>
                                 </View>
                                 <View style={{ height: Math.max(insets.bottom, 10) }} />
+                            </>
+                        ) : (
+                            <>
+                                <ScrollView style={{ maxHeight: SCREEN_H * 0.35 }} showsVerticalScrollIndicator={false}>
+                                    {linkedItems.length === 0 && (
+                                        <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>No linked items yet. Tap the 🔗 button above to link a file.</Text>
+                                    )}
+                                    {linkedItems.map((item: any, idx) => (
+                                        <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                                            <TouchableOpacity 
+                                                style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}
+                                                onPress={() => handleLinkItemClick(item)}
+                                            >
+                                                <Feather
+                                                    name={item.type === 'file' ? (item.file_type?.startsWith('image/') ? 'image' : 'file-text') : item.type === 'rfi' ? 'help-circle' : 'alert-circle'}
+                                                    size={16}
+                                                    color={colors.primary}
+                                                    style={{ marginRight: 8 }}
+                                                />
+                                                <Text style={{ color: '#eee', fontSize: 12 }} numberOfLines={1}>{item.title || item.name}</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity onPress={() => handleRemoveLink(item.type, item.id)} style={{ padding: 4 }}>
+                                                <Feather name="x" size={16} color="#ef4444" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                                <View style={{ height: Math.max(insets.bottom, 10) }} />
+                            </>
+                        )}
                             </View>
                         </KeyboardAvoidingView>
                     )}
@@ -2369,6 +2608,16 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 </View>
             </Modal>
 
+            {showLinkModal && currentDoc?.id && (
+                <LinkFileModal
+                    visible={showLinkModal}
+                    onClose={() => setShowLinkModal(false)}
+                    onLink={handleLinkFile}
+                    projectId={project.id}
+                    currentFileId={currentDoc.id}
+                />
+            )}
+
             <FileActionMenu
                 isVisible={actionMenuVisible}
                 onClose={() => setActionMenuVisible(false)}
@@ -2379,6 +2628,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onUnarchive={() => handleUnarchiveFile(activeActionFile)}
                 onShare={() => handleShareDoc(activeActionFile)}
                 onRename={() => handleRenameFileAction(activeActionFile)}
+                onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={activeActionFile?.do_not_follow === true}
                 canDelete={false} // Disable delete in Docs
@@ -2403,6 +2653,282 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 folderName={activeActionFolder?.name || ''}
                 processingAction={processing}
             />
+
+            {/* Create RFI Modal */}
+            <Modal visible={showCreateRfiModal} transparent animationType="slide" onRequestClose={() => setShowCreateRfiModal(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+                        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create RFI from Document</Text>
+                                <TouchableOpacity onPress={() => setShowCreateRfiModal(false)}>
+                                    <Feather name="x" size={20} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TextInput
+                                    value={rfiTitle}
+                                    onChangeText={setRfiTitle}
+                                    placeholder="Enter RFI title"
+                                    placeholderTextColor={colors.textMuted}
+                                    style={{ height: 44, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                                <TextInput
+                                    value={rfiDesc}
+                                    onChangeText={setRfiDesc}
+                                    placeholder="Enter RFI description (optional)"
+                                    placeholderTextColor={colors.textMuted}
+                                    multiline
+                                    numberOfLines={3}
+                                    style={{ minHeight: 80, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, color: colors.text, fontSize: 13, textAlignVertical: 'top' }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assignee <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowRfiAssigneeDropdown(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: rfiAssignedToId ? colors.primary : colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: rfiAssignedToId ? colors.text : colors.textMuted }}>
+                                        {rfiAssignedToId
+                                            ? rfiAssignees.find(a => a.id === rfiAssignedToId)?.name || "Select Assignee"
+                                            : "Select Assignee"}
+                                    </Text>
+                                    <Feather name="chevron-down" size={18} color={rfiAssignedToId ? colors.primary : colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Expiry Date</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowRfiDatePicker(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: rfiExpiryDate ? rfiExpiryDate.toLocaleDateString() : "Select Date" }}>
+                                        {rfiExpiryDate ? rfiExpiryDate.toLocaleDateString() : "Select Date"}
+                                    </Text>
+                                    <Feather name="calendar" size={18} color={colors.textMuted} />
+                                </TouchableOpacity>
+                                {showRfiDatePicker && (
+                                    <DateTimePicker
+                                        value={rfiExpiryDate || new Date()}
+                                        mode="date"
+                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                        onChange={(event, date) => {
+                                            setShowRfiDatePicker(Platform.OS === 'ios');
+                                            if (date) {
+                                                setRfiExpiryDate(date);
+                                            }
+                                        }}
+                                    />
+                                )}
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                                <TouchableOpacity
+                                    onPress={() => setShowCreateRfiModal(false)}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleCreateRfiFromDoc}
+                                    disabled={submittingEntity}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
+                                        {submittingEntity ? "Creating..." : "Create RFI"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            {/* RFI Assignee Dropdown Picker Modal */}
+                            <Modal visible={showRfiAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowRfiAssigneeDropdown(false)}>
+                                <TouchableOpacity
+                                    activeOpacity={1}
+                                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}
+                                    onPress={() => setShowRfiAssigneeDropdown(false)}
+                                >
+                                    <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ maxHeight: '70%' }}>
+                                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+                                            </View>
+                                            <ScrollView keyboardShouldPersistTaps="handled">
+                                                {rfiAssignees.map((a) => (
+                                                    <TouchableOpacity
+                                                        key={a.id}
+                                                        onPress={() => { setRfiAssignedToId(a.id); setShowRfiAssigneeDropdown(false); }}
+                                                        style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            paddingHorizontal: 16,
+                                                            paddingVertical: 14,
+                                                            borderBottomWidth: 1,
+                                                            borderBottomColor: colors.border,
+                                                            backgroundColor: rfiAssignedToId === a.id ? colors.primary + '10' : 'transparent',
+                                                        }}
+                                                    >
+                                                        <Text style={{ fontSize: 14, color: colors.text, fontWeight: rfiAssignedToId === a.id ? '600' : '400' }}>
+                                                            {a.name} ({a.role})
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            </Modal>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
+
+            {/* Create Snag Modal */}
+            <Modal visible={showCreateSnagModal} transparent animationType="slide" onRequestClose={() => setShowCreateSnagModal(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+                        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create Snag from Document</Text>
+                                <TouchableOpacity onPress={() => setShowCreateSnagModal(false)}>
+                                    <Feather name="x" size={20} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Title <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TextInput
+                                    value={snagTitle}
+                                    onChangeText={setSnagTitle}
+                                    placeholder="Enter snag title"
+                                    placeholderTextColor={colors.textMuted}
+                                    style={{ height: 44, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 16 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Description</Text>
+                                <TextInput
+                                    value={snagDesc}
+                                    onChangeText={setSnagDesc}
+                                    placeholder="Enter snag description (optional)"
+                                    placeholderTextColor={colors.textMuted}
+                                    multiline
+                                    numberOfLines={3}
+                                    style={{ minHeight: 80, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, color: colors.text, fontSize: 13, textAlignVertical: 'top' }}
+                                />
+                            </View>
+
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>Assignee <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowSnagAssigneeDropdown(true)}
+                                    style={{
+                                        height: 44,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: snagAssignedToId ? colors.primary : colors.border,
+                                        paddingHorizontal: 12,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: colors.background,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, color: snagAssignedToId ? colors.text : colors.textMuted }}>
+                                        {snagAssignedToId
+                                            ? snagAssignees.find(a => a.id === snagAssignedToId)?.name || "Select Assignee"
+                                            : "Select Assignee"}
+                                    </Text>
+                                    <Feather name="chevron-down" size={18} color={snagAssignedToId ? colors.primary : colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                                <TouchableOpacity
+                                    onPress={() => setShowCreateSnagModal(false)}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleCreateSnagFromDoc}
+                                    disabled={submittingEntity}
+                                    style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
+                                        {submittingEntity ? "Creating..." : "Create Snag"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            {/* Snag Assignee Dropdown Picker Modal */}
+                            <Modal visible={showSnagAssigneeDropdown} animationType="fade" transparent onRequestClose={() => setShowSnagAssigneeDropdown(false)}>
+                                <TouchableOpacity
+                                    activeOpacity={1}
+                                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}
+                                    onPress={() => setShowSnagAssigneeDropdown(false)}
+                                >
+                                    <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ maxHeight: '70%' }}>
+                                        <View style={{ backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Assign To</Text>
+                                            </View>
+                                            <ScrollView keyboardShouldPersistTaps="handled">
+                                                {snagAssignees.map((a) => (
+                                                    <TouchableOpacity
+                                                        key={a.id}
+                                                        onPress={() => { setSnagAssignedToId(a.id); setShowSnagAssigneeDropdown(false); }}
+                                                        style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            paddingHorizontal: 16,
+                                                            paddingVertical: 14,
+                                                            borderBottomWidth: 1,
+                                                            borderBottomColor: colors.border,
+                                                            backgroundColor: snagAssignedToId === a.id ? colors.primary + '10' : 'transparent',
+                                                        }}
+                                                    >
+                                                        <Text style={{ fontSize: 14, color: colors.text, fontWeight: snagAssignedToId === a.id ? '600' : '400' }}>
+                                                            {a.name} ({a.role})
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            </Modal>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
         </View>
     );
 }

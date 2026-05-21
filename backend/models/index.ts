@@ -90,6 +90,24 @@ db.files.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
 db.files.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
 db.users.hasMany(db.files, { foreignKey: 'created_by' });
 
+// File <-> FileLink
+db.files.hasMany(db.file_links, { foreignKey: 'file_id_1', as: 'links_source' });
+db.files.hasMany(db.file_links, { foreignKey: 'file_id_2', as: 'links_target' });
+db.file_links.belongsTo(db.files, { foreignKey: 'file_id_1', as: 'file_1' });
+db.file_links.belongsTo(db.files, { foreignKey: 'file_id_2', as: 'file_2' });
+
+// File <-> FileRfiLink
+db.files.hasMany(db.file_rfi_links, { foreignKey: 'file_id' });
+db.file_rfi_links.belongsTo(db.files, { foreignKey: 'file_id' });
+db.rfis.hasMany(db.file_rfi_links, { foreignKey: 'rfi_id' });
+db.file_rfi_links.belongsTo(db.rfis, { foreignKey: 'rfi_id' });
+
+// File <-> FileSnagLink
+db.files.hasMany(db.file_snag_links, { foreignKey: 'file_id' });
+db.file_snag_links.belongsTo(db.files, { foreignKey: 'file_id' });
+db.snags.hasMany(db.file_snag_links, { foreignKey: 'snag_id' });
+db.file_snag_links.belongsTo(db.snags, { foreignKey: 'snag_id' });
+
 // File <-> Comment
 db.comments.belongsTo(db.files, { foreignKey: 'file_id' });
 db.files.hasMany(db.comments, { foreignKey: 'file_id' });
@@ -208,6 +226,9 @@ export const chat_messages = db.chat_messages;
 export const conversation_messages = db.conversation_messages;
 export const notifications = db.notifications;
 export const transactions = db.transactions;
+export const file_links = db.file_links;
+export const file_rfi_links = db.file_rfi_links;
+export const file_snag_links = db.file_snag_links;
 
 export { sequelize, Sequelize };
 export default db;

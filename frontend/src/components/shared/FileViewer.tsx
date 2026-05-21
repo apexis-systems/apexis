@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, RotateCw } from 'lucide-react';
+import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, RotateCw, Link as LinkIcon, Trash2 } from 'lucide-react';
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
-import { updateFile, downloadFile, markFileSeen } from '@/services/fileService';
+import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink } from '@/services/fileService';
+import LinkFileModal from './LinkFileModal';
+import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
@@ -25,6 +27,7 @@ interface FileViewerProps {
 }
 
 const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi }: FileViewerProps) => {
+  const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [downloading, setDownloading] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -42,17 +45,75 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     setRotation(0);
   }, [currentIndex]);
 
-  useEffect(() => {
-    if (open) {
-      setCurrentIndex(initialIndex);
-    }
-  }, [open, initialIndex]);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkedItems, setLinkedItems] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'discussion'|'links'>('discussion');
 
   const currentFile = files[currentIndex];
   const isImage = currentFile?.file_type?.toLowerCase().includes('image') || 
                   ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
   const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') || 
                 currentFile?.file_name?.toLowerCase().endsWith('.pdf');
+
+  const fetchLinks = useCallback(async () => {
+    if (currentFile?.id) {
+      try {
+        const data = await getLinkedItems(currentFile.id);
+        setLinkedItems(data.links || []);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, [currentFile?.id]);
+
+  useEffect(() => {
+    if (open) fetchLinks();
+  }, [open, fetchLinks]);
+
+  const handleLinkFile = async (targetId: string | number) => {
+    try {
+      await linkFiles(currentFile.id, targetId);
+      toast.success('File linked successfully');
+      setShowLinkModal(false);
+      fetchLinks();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to link file');
+    }
+  };
+
+  const handleRemoveLink = async (targetType: string, targetId: string | number) => {
+    try {
+      await deleteLink(currentFile.id, targetType, targetId);
+      toast.success('Link removed successfully');
+      fetchLinks();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to remove link');
+    }
+  };
+
+  const handleLinkItemClick = (item: any) => {
+    if (item.type === 'file') {
+      const idx = files.findIndex(f => f.id === item.id);
+      if (idx !== -1) {
+        setCurrentIndex(idx);
+      } else {
+        if (item.url) {
+          window.open(item.url, '_blank');
+        }
+      }
+    } else {
+      onOpenChange(false);
+      if (item.url) {
+        router.push(item.url);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      setCurrentIndex(initialIndex);
+    }
+  }, [open, initialIndex]);
 
   // Mark as seen if assigned to current user
   useEffect(() => {
@@ -226,13 +287,53 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               {/* Comments Section (Fills remaining height) */}
               <div className="flex-1 flex flex-col min-h-0 border-t border-border/50">
                 <div className="px-6 py-4 flex flex-col h-full overflow-hidden">
-                  <div className="flex items-center gap-2 mb-4 shrink-0">
-                    <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                    <span className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">Discussion</span>
+                  <div className="flex items-center gap-4 mb-4 shrink-0 border-b border-border/50 pb-2">
+                    <button 
+                      onClick={() => setActiveTab('discussion')}
+                      className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'discussion' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                    >
+                      {activeTab === 'discussion' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
+                      Discussion
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('links')}
+                      className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'links' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                    >
+                      {activeTab === 'links' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
+                      Links ({linkedItems.length})
+                    </button>
                   </div>
-                  {/* Internal Area for Comments */}
-                  <div className="flex-1 min-h-0">
-                    <CommentThread targetId={currentFile.id} targetType={targetType} projectId={projectId || currentFile.project_id} />
+                  <div className="flex-1 min-h-0 overflow-y-auto">
+                    {activeTab === 'discussion' ? (
+                      <CommentThread targetId={currentFile.id} targetType={targetType} projectId={projectId || currentFile.project_id} />
+                    ) : (
+                      <div className="space-y-3 pr-2">
+                        {linkedItems.length === 0 ? (
+                          <div className="text-center py-8 text-xs text-muted-foreground">No linked items yet.</div>
+                        ) : (
+                          linkedItems.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
+                              <div 
+                                className="flex-1 min-w-0 pr-2 cursor-pointer hover:opacity-85 transition-opacity"
+                                onClick={() => handleLinkItemClick(item)}
+                              >
+                                <div className="text-[10px] uppercase font-bold text-accent mb-1 tracking-wider">{item.type}</div>
+                                <div className="text-sm font-semibold truncate text-foreground">{item.title}</div>
+                                {item.status && <div className="text-[10px] text-muted-foreground mt-0.5 capitalize">{item.status}</div>}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent" onClick={() => handleLinkItemClick(item)} title="View">
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveLink(item.type, item.id)} title="Remove Link">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -251,7 +352,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               </div>
               
               <div className="flex items-center gap-1.5 pr-2">
-                {onCreateRfi && isImage && (
+                {onCreateRfi && (
                   <Button 
                     variant="ghost" 
                     className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
@@ -260,7 +361,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     <Plus className="h-3.5 w-3.5" /> RFI
                   </Button>
                 )}
-                {onCreateSnag && isImage && (
+                {onCreateSnag && (
                   <Button 
                     variant="ghost" 
                     className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
@@ -269,6 +370,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     <Plus className="h-3.5 w-3.5" /> Snag
                   </Button>
                 )}
+                <Button 
+                  variant="ghost" 
+                  className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md" 
+                  onClick={() => setShowLinkModal(true)}
+                >
+                  <LinkIcon className="h-3.5 w-3.5" /> Link
+                </Button>
                 <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title="View Original">
                   <ExternalLink className="h-4 w-4" />
                 </Button>
@@ -391,6 +499,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           </div>
         </div>
       </DialogContent>
+      {showLinkModal && (
+        <LinkFileModal
+          open={showLinkModal}
+          onOpenChange={setShowLinkModal}
+          projectId={projectId || currentFile?.project_id}
+          currentFileId={currentFile?.id}
+          onLink={handleLinkFile}
+        />
+      )}
     </Dialog>
   );
 };

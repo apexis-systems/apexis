@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { uploadFile, uploadScans, listFiles, deleteFile, bulkDeleteFiles, viewFile, bulkUpdateFiles, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, confirmScreenshot } from "../controllers/fileController.ts";
+import { linkFiles, getLinkedItems, deleteLink } from "../controllers/linkController.ts";
 import { verifyToken, isNotClient } from "../middleware/verifyToken.ts";
 import { checkLimit } from "../middleware/checkLimit.ts";
 
@@ -29,5 +30,9 @@ router.put("/:fileId/archive", archiveFile);
 router.put("/:fileId/unarchive", unarchiveFile);
 router.patch("/:fileId/seen", markFileSeen);
 router.delete("/:fileId", deleteFile);
+
+router.post("/:id/link", linkFiles);
+router.get("/:id/links", getLinkedItems);
+router.delete("/:id/link/:targetType/:targetId", deleteLink);
 
 export default router;
