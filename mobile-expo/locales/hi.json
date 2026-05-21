@@ -859,6 +859,65 @@
             "organizations": "संगठन",
             "projects": "प्रोजेक्ट",
             "users": "उपयोगकर्ता"
+        },
+        "linkFile": {
+            "title": "फ़ाइल लिंक करें",
+            "searchPlaceholder": "फ़ाइलें खोजें...",
+            "documentsTab": "दस्तावेज़",
+            "photosTab": "फ़ोटो",
+            "linkedItems": "लिंक किए गए आइटम",
+            "noItemsLinked": "इस फ़ाइल से अभी तक कोई आइटम लिंक नहीं किया गया है।",
+            "unnamedDocument": "अनाम दस्तावेज़",
+            "unnamedPhoto": "अनाम फ़ोटो",
+            "unnamedRfi": "अनाम RFI",
+            "unnamedSnag": "अनाम स्नेग",
+            "link": "लिंक करें",
+            "linked": "लिंक किया गया",
+            "linking": "लिंक किया जा रहा है...",
+            "removing": "हटाया जा रहा है...",
+            "noFilesFound": "कोई फ़ाइल या फ़ोल्डर नहीं मिला",
+            "folderEmpty": "यह फ़ोल्डर खाली है",
+            "filesSection": "फ़ाइलें",
+            "searchResults": "खोज परिणाम",
+            "noFilesMatching": "\"{{query}}\" से मेल खाने वाली कोई फ़ाइल नहीं मिली"
+        },
+        "moveToFolder": {
+            "title": "फ़ोल्डर में स्थानांतरित करें",
+            "cancel": "रद्द करें",
+            "moveHere": "यहाँ स्थानांतरित करें",
+            "moving": "स्थानांतरित किया जा रहा है...",
+            "goUp": "ऊपर जाएँ",
+            "newFolder": "नया फ़ोल्डर",
+            "rootFolder": "मुख्य फ़ोल्डर",
+            "folderEmpty": "यह फ़ोल्डर खाली है",
+            "createNewFolder": "नया फ़ोल्डर बनाएँ",
+            "folderNamePlaceholder": "फ़ोल्डर का नाम",
+            "create": "बनाएँ",
+            "creating": "बनाया जा रहा है...",
+            "errorCreateFolder": "फ़ोल्डर बनाने में विफल",
+            "errorHeader": "त्रुटि"
+        },
+        "fileActionMenu": {
+            "createRfi": "RFI बनाएँ",
+            "createSnag": "स्नेग बनाएँ",
+            "share": "साझा करें",
+            "rename": "नाम बदलें",
+            "hideContent": "सामग्री छिपाएँ",
+            "showContent": "सामग्री दिखाएँ",
+            "followFile": "फ़ाइल फ़ॉलो करें",
+            "dontFollow": "फ़ॉलो न करें",
+            "archiveFile": "फ़ाइल आर्काइव करें",
+            "unarchiveFile": "फ़ाइल अनआर्काइव करें",
+            "deleteFile": "फ़ाइल हटाएँ",
+            "cancel": "रद्द करें"
+        },
+        "folderActionMenu": {
+            "folderLabel": "फ़ोल्डर: {{name}}",
+            "hideFolder": "फ़ोल्डर छिपाएँ",
+            "showFolder": "फ़ोल्डर दिखाएँ",
+            "renameFolder": "फ़ोल्डर का नाम बदलें",
+            "deleteFolder": "फ़ोल्डर हटाएँ",
+            "cancel": "रद्द करें"
         }
     }
 }

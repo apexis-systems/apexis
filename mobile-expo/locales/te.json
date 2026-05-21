@@ -859,6 +859,65 @@
             "organizations": "సంస్థలు",
             "projects": "ప్రాజెక్ట్‌లు",
             "users": "వినియోగదారులు"
+        },
+        "linkFile": {
+            "title": "ఫైల్ లింక్ చేయి",
+            "searchPlaceholder": "ఫైల్‌లను శోధించండి...",
+            "documentsTab": "పత్రాలు",
+            "photosTab": "ఫోటోలు",
+            "linkedItems": "లింక్ చేయబడిన సంఖ్య",
+            "noItemsLinked": "ఈ ఫైల్‌కు ఇంకా ఏ అంశాలు లింక్ చేయబడలేదు.",
+            "unnamedDocument": "పేరులేని పత్రం",
+            "unnamedPhoto": "పేరులేని ఫోటో",
+            "unnamedRfi": "పేరులేని RFI",
+            "unnamedSnag": "పేరులేని స్నాగ్",
+            "link": "లింక్",
+            "linked": "లింక్ చేయబడింది",
+            "linking": "లింక్ చేస్తోంది...",
+            "removing": "తొలగిస్తోంది...",
+            "noFilesFound": "ఫైల్‌లు లేదా ఫోల్డర్‌లు ఏవీ కనుగొనబడలేదు",
+            "folderEmpty": "ఈ ఫోల్డర్ ఖాళీగా ఉంది",
+            "filesSection": "ఫైల్‌లు",
+            "searchResults": "శోధన ఫలితాలు",
+            "noFilesMatching": "\"{{query}}\"తో సరిపోలే ఫైల్‌లు ఏవీ కనిపించలేదు"
+        },
+        "moveToFolder": {
+            "title": "ఫోల్డర్‌కు తరలించు",
+            "cancel": "రద్దు చేయి",
+            "moveHere": "ఇక్కడికి తరలించు",
+            "moving": "తరలిస్తోంది...",
+            "goUp": "పైకి వెళ్ళు",
+            "newFolder": "కొత్త ఫోల్డర్",
+            "rootFolder": "ప్రధాన ఫోల్డర్",
+            "folderEmpty": "ఈ ఫోల్డర్ ఖాళీగా ఉంది",
+            "createNewFolder": "కొత్త ఫోల్డర్‌ను సృష్టించండి",
+            "folderNamePlaceholder": "ఫోల్డర్ పేరు",
+            "create": "సృష్టించు",
+            "creating": "సృష్టిస్తోంది...",
+            "errorCreateFolder": "ఫోల్డర్‌ను సృష్టించడం విఫలమైంది",
+            "errorHeader": "లోపం"
+        },
+        "fileActionMenu": {
+            "createRfi": "RFI సృష్టించు",
+            "createSnag": "స్నాగ్ సృష్టించు",
+            "share": "షేర్ చేయి",
+            "rename": "పేరు మార్చు",
+            "hideContent": "కంటెంట్‌ను దాచు",
+            "showContent": "కంటెంట్‌ను చూపించు",
+            "followFile": "ఫైల్‌ను ఫాలో చేయి",
+            "dontFollow": "ఫాలో చేయవద్దు",
+            "archiveFile": "ఫైల్‌ను ఆర్కైవ్ చేయి",
+            "unarchiveFile": "ఫైల్‌ను అన్-ఆర్కైవ్ చేయి",
+            "deleteFile": "ఫైల్‌ను తొలగించు",
+            "cancel": "రద్దు చేయి"
+        },
+        "folderActionMenu": {
+            "folderLabel": "ఫోల్డర్: {{name}}",
+            "hideFolder": "ఫోల్డర్‌ను దాచు",
+            "showFolder": "ఫోల్డర్‌ను చూపించు",
+            "renameFolder": "ఫోల్డర్ పేరు మార్చు",
+            "deleteFolder": "ఫోల్డర్‌ను తొలగించు",
+            "cancel": "రద్దు చేయి"
         }
     }
 }

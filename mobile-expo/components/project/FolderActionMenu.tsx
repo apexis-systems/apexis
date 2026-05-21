@@ -3,6 +3,7 @@ import { View, TouchableOpacity, Modal, StyleSheet, Dimensions, TouchableWithout
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ export default function FolderActionMenu({
     processingAction = null
 }: FolderActionMenuProps) {
     const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
     const isProcessing = processingAction !== null;
 
     return (
@@ -45,7 +47,7 @@ export default function FolderActionMenu({
                         <View style={[styles.menuContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                             <View style={[styles.header, { borderBottomColor: colors.border }]}>
                                 <Text numberOfLines={1} style={[styles.folderName, { color: colors.textMuted }]}>
-                                    Folder: {folderName}
+                                    {t('folderActionMenu.folderLabel', { name: folderName })}
                                 </Text>
                             </View>
 
@@ -66,7 +68,7 @@ export default function FolderActionMenu({
                                             />
                                         )}
                                         <Text style={[styles.optionText, { color: colors.text }]}>
-                                            {clientVisible ? "Hide Folder" : "Show Folder"}
+                                            {clientVisible ? t('folderActionMenu.hideFolder') : t('folderActionMenu.showFolder')}
                                         </Text>
                                     </TouchableOpacity>
                                 )}
@@ -81,7 +83,7 @@ export default function FolderActionMenu({
                                                     disabled={isProcessing}
                                                 >
                                                     <Feather name="edit-2" size={18} color={colors.primary} />
-                                                    <Text style={[styles.optionText, { color: colors.text }]}>Rename Folder</Text>
+                                                    <Text style={[styles.optionText, { color: colors.text }]}>{t('folderActionMenu.renameFolder')}</Text>
                                                 </TouchableOpacity>
                                                 <TouchableOpacity 
                                                     style={[styles.option, styles.deleteOption, isProcessing && { opacity: 0.5 }]} 
@@ -89,7 +91,7 @@ export default function FolderActionMenu({
                                                     disabled={isProcessing}
                                                 >
                                                     <Feather name="trash-2" size={18} color="#ef4444" />
-                                                    <Text style={[styles.optionText, { color: "#ef4444" }]}>Delete Folder</Text>
+                                                    <Text style={[styles.optionText, { color: "#ef4444" }]}>{t('folderActionMenu.deleteFolder')}</Text>
                                                 </TouchableOpacity>
                                             </>
                                         )}
@@ -102,7 +104,7 @@ export default function FolderActionMenu({
                                 onPress={onClose}
                                 disabled={isProcessing}
                             >
-                                <Text style={[styles.cancelText, { color: colors.textMuted }]}>Cancel</Text>
+                                <Text style={[styles.cancelText, { color: colors.textMuted }]}>{t('folderActionMenu.cancel')}</Text>
                             </TouchableOpacity>
                         </View>
                     </TouchableWithoutFeedback>
