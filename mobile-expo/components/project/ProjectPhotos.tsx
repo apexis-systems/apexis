@@ -1863,7 +1863,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                 shadowRadius: 10,
                                                                 elevation: 20
                                                             }}>
-                                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 20 : 10 }}>
                                                                     <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
                                                                         <Text style={{ fontSize: 16, color: colors.primary }}>{t('projectPhotos.cancel')}</Text>
                                                                     </TouchableOpacity>
@@ -1878,35 +1878,38 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                     </TouchableOpacity>
                                                                 </View>
 
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: Platform.OS === 'android' ? 20 : 0 }}>
                                                                     <Picker
                                                                         selectedValue={tempMonth}
-                                                                        style={{ flex: 1.2, height: 200 }}
+                                                                        style={{ flex: 1.2, height: Platform.OS === 'ios' ? 200 : 50 }}
                                                                         itemStyle={{ fontSize: 18, color: colors.text }}
                                                                         onValueChange={(itemValue) => setTempMonth(itemValue)}
+                                                                        dropdownIconColor={colors.text}
+                                                                        mode="dialog"
                                                                     >
                                                                         {allMonths.map(m => {
                                                                             const isAvailable = availableMonthsByYear[tempYear]?.has(m);
-                                                                            // Only render items that are available to prevent invalid selection
                                                                             if (!isAvailable) return null;
                                                                             return (
                                                                                 <Picker.Item
                                                                                     key={m}
                                                                                     label={m}
                                                                                     value={m}
-                                                                                    color={colors.text}
+                                                                                    color={Platform.OS === 'android' ? '#000000' : colors.text}
                                                                                 />
                                                                             );
                                                                         })}
                                                                     </Picker>
                                                                     <Picker
                                                                         selectedValue={tempYear}
-                                                                        style={{ flex: 0.8, height: 200 }}
+                                                                        style={{ flex: 0.8, height: Platform.OS === 'ios' ? 200 : 50 }}
                                                                         itemStyle={{ fontSize: 18, color: colors.text }}
                                                                         onValueChange={(itemValue) => setTempYear(itemValue)}
+                                                                        dropdownIconColor={colors.text}
+                                                                        mode="dialog"
                                                                     >
                                                                         {availableYears.map(y => (
-                                                                            <Picker.Item key={y} label={y} value={y} color={colors.text} />
+                                                                            <Picker.Item key={y} label={y} value={y} color={Platform.OS === 'android' ? '#000000' : colors.text} />
                                                                         ))}
                                                                     </Picker>
                                                                 </View>
