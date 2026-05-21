@@ -9,7 +9,7 @@ router.use(verifyToken);
 
 router.get('/', getReports);
 router.get('/generate-now', checkLimit('export_reports'), triggerReport);   // manual trigger for testing
-router.post('/:id/regenerate', checkLimit('export_reports'), regenerateReport);
+router.get('/:id/regenerate', checkLimit('export_reports'), regenerateReport);
 router.get('/:id/share', shareReport);
 router.get('/:id', getReportById);
 

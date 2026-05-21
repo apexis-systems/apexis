@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getOrgUsers, inviteUser, getOnboardingLinks, deleteUser } from '@/services/userService';
+import { getOrgUsers, inviteUser, getOnboardingLinks, deleteUser, getProjectsUsers } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
 import { getApiErrorMessage } from '@/helpers/apiError';
 
@@ -41,7 +41,7 @@ const UserManagement = () => {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const data = await getOrgUsers('management');
+            const data = await getProjectsUsers();
             const sorted = (data || []).sort((a: any, b: any) => {
                 if (a.is_primary && !b.is_primary) return -1;
                 if (!a.is_primary && b.is_primary) return 1;
