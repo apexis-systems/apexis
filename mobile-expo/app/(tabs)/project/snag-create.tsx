@@ -71,16 +71,16 @@ export default function SnagCreateScreen() {
 
 
     //zoom 
-    const zoomShared = useSharedValue(0); // 0–1 for expo-camera
-    const startZoom = useSharedValue(0);
-    const MIN_ZOOM = Platform.OS === 'ios' ? 0.5 : 1.0;
-    const [zoomDisplay, setZoomDisplay] = useState(Platform.OS === 'ios' ? '0.5x' : '1.0x'); // live label
-    const [cameraZoom, setCameraZoom] = useState(0); // Standard React state for camera zoom prop
+    const MIN_ZOOM = 0.5;
+    const MAX_ZOOM_FACTOR = 10;
+    const DEFAULT_ZOOM = (1.0 - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
+
+    const zoomShared = useSharedValue(DEFAULT_ZOOM); // 0–1 for expo-camera
+    const startZoom = useSharedValue(DEFAULT_ZOOM);
+    const [zoomDisplay, setZoomDisplay] = useState('1.0x'); // live label
+    const [cameraZoom, setCameraZoom] = useState(DEFAULT_ZOOM); // Standard React state for camera zoom prop
     const zoomLabelOpacity = useSharedValue(0);
     let zoomHideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // Max real-world zoom multiplier each platform supports
-    const MAX_ZOOM_FACTOR = Platform.OS === 'ios' ? 10 : 10;
 
     // Converts 0-1 internal value → display string like "2.3x"
     const toDisplayZoom = (val: number) => {
@@ -373,7 +373,7 @@ export default function SnagCreateScreen() {
                                 </Animated.View>
                                 {/* Direct Zoom Buttons */}
                                 <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
-                                    {(Platform.OS === 'ios' ? [0.5, 1, 2] : [1, 2, 3]).map(factor => (
+                                    {[0.5, 1, 2].map(factor => (
                                         <TouchableOpacity
                                             key={factor}
                                             onPress={() => handleManualZoom(factor)}
