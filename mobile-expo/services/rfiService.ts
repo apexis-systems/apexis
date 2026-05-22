@@ -30,6 +30,8 @@ export interface RFI {
     photos: string[];
     createdAt: string;
     updatedAt: string;
+    created_at?: string;
+    updated_at?: string;
     assignee?: { id: number; name: string; role: string; profile_pic?: string };
     creator?: { id: number; name: string; role: string; profile_pic?: string };
     photoDownloadUrls?: string[];
@@ -40,6 +42,7 @@ export interface RFI {
     folder_ids?: number[];
     linked_folders?: { id: number; name: string; folder_type: string }[];
     seen_at?: string | null;
+    file_rfi_links?: any[];
 }
 
 export const getFolderRFIs = async (folderId: string | number): Promise<RFI[]> => {

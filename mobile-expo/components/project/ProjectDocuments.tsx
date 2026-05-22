@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
@@ -251,6 +251,22 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [mentionStartIndex, setMentionStartIndex] = useState(-1);
     const [showMentions, setShowMentions] = useState(false);
     const [showComments, setShowComments] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => setKeyboardHeight(e.endCoordinates.height)
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setKeyboardHeight(0)
+        );
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     const fetchFolders = async (isRefetch = false) => {
         if (!project?.id) return;
@@ -542,8 +558,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     };
 
     const handleAddComment = async () => {
-        if (!currentDoc?.id || !commentText.trim()) return;
+        if (!currentDoc?.id || !commentText.trim() || addingComment) return;
         setAddingComment(true);
+        Keyboard.dismiss();
         try {
             await addCommentApi(currentDoc.id, commentText.trim(), replyTo ?? undefined);
             setCommentText('');
@@ -2216,11 +2233,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
                     {/* Comments Overlay Panel */}
                     {showComments && (
-                        <KeyboardAvoidingView
-                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        <View
                             style={{
                                 position: 'absolute',
-                                bottom: 0,
+                                bottom: keyboardHeight,
                                 left: 0,
                                 right: 0,
                                 backgroundColor: 'rgba(15,15,15,0.98)',
@@ -2237,7 +2253,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 elevation: 24
                             }}
                         >
-                            <View style={{ padding: 16 }}>
+                            <ScrollView
+                                keyboardShouldPersistTaps="always"
+                                scrollEnabled={true}
+                                bounces={false}
+                                alwaysBounceVertical={false}
+                                contentContainerStyle={{ padding: 16 }}
+                            >
                                 <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
                                     <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>
                                         💬 {t('projectDocuments.discussion')} ({docComments.length})
@@ -2251,7 +2273,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         style={{ maxHeight: SCREEN_H * 0.35 }}
                                         contentContainerStyle={{ paddingBottom: 10 }}
                                         showsVerticalScrollIndicator={true}
-                                        keyboardShouldPersistTaps="handled"
+                                        keyboardShouldPersistTaps="always"
                                     >
                                         {docComments.length === 0 && (
                                             <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
@@ -2330,8 +2352,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     </TouchableOpacity>
                                 </View>
                                 <View style={{ height: Math.max(insets.bottom, 10) }} />
-                            </View>
-                        </KeyboardAvoidingView>
+                            </ScrollView>
+                        </View>
                     )}
                 </View>
 
