@@ -2,7 +2,7 @@ import {
     View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard
 } from 'react-native';
 import { Image } from 'expo-image';
-import { FlatList } from 'react-native-gesture-handler';
+import { FlatList, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
@@ -94,6 +94,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
 
     // Comment state
+    const commentInputRef = useRef<any>(null);
     const [photoComments, setPhotoComments] = useState<CommentThread[]>([]);
     const [commentText, setCommentText] = useState('');
     const [replyTo, setReplyTo] = useState<number | null>(null);
@@ -623,6 +624,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setCommentText(newText);
         setShowMentions(false);
         setMentionStartIndex(-1);
+
+
+        // Refocus the input to keep the keyboard open and the cursor active
+        setTimeout(() => {
+            commentInputRef.current?.focus();
+        }, 50);
     };
 
     const renderCommentText = (text: string) => {
@@ -666,7 +673,6 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         const photo = sortedPhotos[viewerIndex];
         if (!photo?.id || !commentText.trim() || addingComment) return;
         setAddingComment(true);
-        Keyboard.dismiss();
         try {
             await addCommentApi(photo.id, commentText.trim(), replyTo ?? undefined);
             setCommentText('');
@@ -2227,9 +2233,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             data={sortedPhotos}
                             horizontal
                             pagingEnabled
-                            scrollEnabled={!isViewerZoomed}
+                            scrollEnabled={!isViewerZoomed && keyboardHeight === 0}
                             showsHorizontalScrollIndicator={false}
                             removeClippedSubviews={Platform.OS === 'android'}
+                            keyboardShouldPersistTaps="handled"
                             windowSize={3}
                             initialNumToRender={1}
                             maxToRenderPerBatch={1}
@@ -2251,6 +2258,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 onZoomStateChange={setIsViewerZoomed}
                                                 onTap={() => setShowViewerUI(prev => !prev)}
                                                 onDismiss={closeViewer}
+                                                gesturesEnabled={keyboardHeight === 0}
                                             />
                                         </View>
                                     </View>
@@ -2261,7 +2269,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         {/* Bottom panel: info + comments */}
                         {showViewerUI && (
                             <View
-                                style={{ position: 'absolute', bottom: keyboardHeight, left: 0, right: 0 }}
+                                style={{ position: 'absolute', bottom: Platform.OS === 'ios' ? keyboardHeight : 0, left: 0, right: 0, zIndex: 9999 }}
                             >
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
                                     <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
@@ -2346,39 +2354,49 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             <View style={{ position: 'absolute', bottom: 50, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000 }}>
                                                 <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
                                                     {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
-                                                        <TouchableOpacity
+                                                        <GestureTouchableOpacity
                                                             key={m.id}
                                                             onPress={() => handleSelectMention(m)}
-                                                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
                                                         >
-                                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                            <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                                </View>
+                                                                <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
                                                             </View>
-                                                            <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
-                                                        </TouchableOpacity>
+                                                        </GestureTouchableOpacity>
                                                     ))}
                                                 </ScrollView>
                                             </View>
                                         )}
-                                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
-                                            <TextInput
-                                                value={commentText}
-                                                onChangeText={handleInputChange}
-                                                placeholder={t('projectPhotos.addCommentPlaceholder')}
-                                                placeholderTextColor="#555"
-                                                style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
-                                            />
-                                            <TouchableOpacity
-                                                onPress={handleAddComment}
-                                                disabled={addingComment || !commentText.trim()}
-                                                style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
-                                            >
-                                                {addingComment
-                                                    ? <ActivityIndicator size="small" color="#fff" />
-                                                    : <Feather name="send" size={14} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
-                                                }
-                                            </TouchableOpacity>
-                                        </View>
+                                        <ScrollView
+                                            keyboardShouldPersistTaps="always"
+                                            scrollEnabled={false}
+                                            style={{ width: '100%', flexGrow: 0 }}
+                                        >
+                                            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
+                                                <TextInput
+                                                    ref={commentInputRef}
+                                                    value={commentText}
+                                                    onChangeText={handleInputChange}
+                                                    placeholder={t('projectPhotos.addCommentPlaceholder')}
+                                                    placeholderTextColor="#555"
+                                                    style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
+                                                />
+                                                <GestureTouchableOpacity
+                                                    onPress={handleAddComment}
+                                                    disabled={addingComment || !commentText.trim()}
+
+                                                >
+                                                    <View style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: (!commentText.trim() || addingComment) ? 0.5 : 1 }}>
+                                                        {addingComment
+                                                            ? <ActivityIndicator size="small" color="#fff" />
+                                                            : <Feather name="send" size={14} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
+                                                        }
+                                                    </View>
+                                                </GestureTouchableOpacity>
+                                            </View>
+                                        </ScrollView>
                                     </View>
                                     {/* Safe-area spacer: covers Android nav bar (gesture or 3-button) and iOS home indicator */}
                                     <View style={{ height: Math.max(insets.bottom, 0) }} />

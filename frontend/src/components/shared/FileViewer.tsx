@@ -139,13 +139,21 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!open) return;
+
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      if ((isInput || showLinkModal) && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        return;
+      }
+
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'Escape') onOpenChange(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, goNext, goPrev, onOpenChange]);
+  }, [open, goNext, goPrev, onOpenChange, showLinkModal]);
 
   const zoomRef = useRef(zoom);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
@@ -348,33 +356,33 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
             {/* Top Bar Controls (Floating) */}
             <div className="absolute top-0 left-0 right-0 z-[120] flex items-center justify-between p-4 bg-gradient-to-b from-background/80 via-background/30 to-transparent dark:from-black/60 dark:via-black/20 backdrop-blur-[2px]">
               <div className="flex flex-col pl-2">
-                 <span className="text-[10px] font-black tracking-[0.2em] opacity-70 uppercase">
+                <span className="text-[10px] font-black tracking-[0.2em] opacity-70 uppercase">
                   {currentIndex + 1} / {files.length}
                 </span>
               </div>
 
               <div className="flex items-center gap-1.5 pr-2">
                 {onCreateRfi && (
-                  <Button 
-                    variant="ghost" 
-                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
                     onClick={() => onCreateRfi(currentFile)}
                   >
                     <Plus className="h-3.5 w-3.5" /> {t('rfi_label')}
                   </Button>
                 )}
                 {onCreateSnag && (
-                  <Button 
-                    variant="ghost" 
-                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
                     onClick={() => onCreateSnag(currentFile)}
                   >
                     <Plus className="h-3.5 w-3.5" /> {t('snag')}
                   </Button>
                 )}
-                <Button 
-                  variant="ghost" 
-                  className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
+                <Button
+                  variant="ghost"
+                  className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
                   onClick={() => setShowLinkModal(true)}
                 >
                   <LinkIcon className="h-3.5 w-3.5" /> {t('link')}
@@ -387,7 +395,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                   <>
                     <div className="h-4 w-[1px] bg-border/50 mx-1" />
                     <Button size="icon" variant="ghost" className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => {
-                      setZoom(z => { const nz = Math.max(z - 0.5, 1); if(nz <= 1) setPan({x:0, y:0}); return nz; });
+                      setZoom(z => { const nz = Math.max(z - 0.5, 1); if (nz <= 1) setPan({ x: 0, y: 0 }); return nz; });
                     }} title={t('zoom_out')}>
                       <ZoomOut className="h-4 w-4" />
                     </Button>
