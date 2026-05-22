@@ -49,6 +49,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            only_for_reference: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
             location: {
                 type: DataTypes.STRING,
                 allowNull: true,

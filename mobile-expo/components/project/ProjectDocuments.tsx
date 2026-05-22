@@ -12,7 +12,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, toggleOnlyForReference, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import LinkFileModal from '../shared/LinkFileModal';
@@ -737,6 +737,24 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
                         </View>
                     )}
+                    {doc.only_for_reference && (
+                        <View style={{
+                            position: 'absolute',
+                            top: '15%',
+                            left: '20%',
+                            right: '20%',
+                            backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                            borderRadius: 4,
+                            paddingHorizontal: 4,
+                            paddingVertical: 2,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 20,
+                            transform: [{ rotate: '10deg' }]
+                        }}>
+                            <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>OFR</Text>
+                        </View>
+                    )}
                 </View>
             );
         } else {
@@ -1039,6 +1057,28 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         }
     };
 
+    const handleToggleOnlyForReference = async (file: any) => {
+        try {
+            setProcessing('ofr');
+            await toggleOnlyForReference(file.id, !file.only_for_reference);
+
+            // Local update
+            setDocs((prev) => prev.map((d) => (d.id === file.id ? { ...d, only_for_reference: !file.only_for_reference } : d)));
+
+            // Sync current doc in viewer
+            if (currentDoc?.id === file.id) {
+                setCurrentDoc((prev: any) => ({ ...prev, only_for_reference: !file.only_for_reference }));
+            }
+
+            setActionMenuVisible(false);
+        } catch (e) {
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateOfr') || 'Failed to update Only for Reference status');
+            await fetchFolders(true);
+        } finally {
+            setProcessing(null);
+        }
+    };
+
     const handleToggleFolderVis = async (folder: any) => {
         try {
             setProcessing('visibility');
@@ -1214,6 +1254,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleShare = async (doc: any) => {
         try {
             if (!doc.downloadUrl) return;
+            console.log(doc);
 
             setSharing(true);
 
@@ -1225,7 +1266,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             let urlToDownload = doc.downloadUrl;
             let uri = '';
 
-            if (doc.do_not_follow && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
+            if ((doc.do_not_follow || doc.only_for_reference) && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
                 const data = await downloadFile(doc.id);
                 // Convert arraybuffer to base64 for FileSystem
                 const base64 = btoa(
@@ -1505,7 +1546,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             let urlToDownload = doc.downloadUrl;
             let uri = '';
 
-            if (doc.do_not_follow && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
+            if ((doc.do_not_follow || doc.only_for_reference) && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
                 const data = await downloadFile(doc.id);
                 const base64 = btoa(
                     new Uint8Array(data).reduce(
@@ -2111,8 +2152,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             )
                         )}
 
-                        {/* Do Not Follow Watermark Overlay */}
-                        {currentDoc?.do_not_follow && (
+                        {/* Watermark Overlays */}
+                        {(currentDoc?.do_not_follow || currentDoc?.only_for_reference) && (
                             <View
                                 pointerEvents="none"
                                 style={{
@@ -2120,29 +2161,55 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     justifyContent: 'center',
                                     alignItems: 'center',
                                     zIndex: 100, // Very high zIndex to ensure it's above native components
+                                    gap: 40 // Add spacing if both are present
                                 }}
                             >
-                                <View style={{
-                                    transform: [{ rotate: '-30deg' }],
-                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                    paddingHorizontal: 30,
-                                    paddingVertical: 15,
-                                    borderRadius: 8,
-                                    borderWidth: 3,
-                                    borderColor: 'rgba(239, 68, 68, 0.3)',
-                                    borderStyle: 'dashed'
-                                }}>
-                                    <Text style={{
-                                        color: 'rgba(239, 68, 68, 0.4)',
-                                        fontSize: 48,
-                                        fontWeight: '900',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: 2,
-                                        textAlign: 'center'
+                                {currentDoc?.do_not_follow && (
+                                    <View style={{
+                                        transform: [{ rotate: '-30deg' }],
+                                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                        paddingHorizontal: 30,
+                                        paddingVertical: 15,
+                                        borderRadius: 8,
+                                        borderWidth: 3,
+                                        borderColor: 'rgba(239, 68, 68, 0.3)',
+                                        borderStyle: 'dashed'
                                     }}>
-                                        {t('projectDocuments.doNotFollow')}
-                                    </Text>
-                                </View>
+                                        <Text style={{
+                                            color: 'rgba(239, 68, 68, 0.4)',
+                                            fontSize: 48,
+                                            fontWeight: '900',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 2,
+                                            textAlign: 'center'
+                                        }}>
+                                            {t('projectDocuments.doNotFollow')}
+                                        </Text>
+                                    </View>
+                                )}
+                                {currentDoc?.only_for_reference && (
+                                    <View style={{
+                                        transform: [{ rotate: '-30deg' }],
+                                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                        paddingHorizontal: 30,
+                                        paddingVertical: 15,
+                                        borderRadius: 8,
+                                        borderWidth: 3,
+                                        borderColor: 'rgba(59, 130, 246, 0.3)',
+                                        borderStyle: 'dashed'
+                                    }}>
+                                        <Text style={{
+                                            color: 'rgba(59, 130, 246, 0.4)',
+                                            fontSize: 48,
+                                            fontWeight: '900',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 2,
+                                            textAlign: 'center'
+                                        }}>
+                                            {t('projectDocuments.onlyForReference')}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                         )}
                     </View>
@@ -2630,6 +2697,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onClose={() => setActionMenuVisible(false)}
                 onHideUnhide={() => handleToggleVisibility(activeActionFile)}
                 onDoNotFollow={() => handleToggleDoNotFollow(activeActionFile)}
+                onOnlyForReference={() => handleToggleOnlyForReference(activeActionFile)}
                 onDelete={() => handleDeleteFile(activeActionFile)}
                 onArchive={() => handleArchiveFileAction(activeActionFile)}
                 onUnarchive={() => handleUnarchiveFile(activeActionFile)}
@@ -2638,6 +2706,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={activeActionFile?.do_not_follow === true}
+                onlyForReference={activeActionFile?.only_for_reference === true}
                 canDelete={false} // Disable delete in Docs
                 showArchive={!currentFolder?.name.toLowerCase().includes('archive')}
                 isArchived={folders.find(f => f.id === activeActionFile?.folder_id)?.name.toLowerCase() === 'archive'}
