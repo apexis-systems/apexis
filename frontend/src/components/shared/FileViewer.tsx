@@ -49,13 +49,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
 
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'discussion'|'links'>('discussion');
+  const [activeTab, setActiveTab] = useState<'discussion' | 'links'>('discussion');
 
   const currentFile = files[currentIndex];
-  const isImage = currentFile?.file_type?.toLowerCase().includes('image') || 
-                  ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
-  const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') || 
-                currentFile?.file_name?.toLowerCase().endsWith('.pdf');
+  const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
+    ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
+  const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') ||
+    currentFile?.file_name?.toLowerCase().endsWith('.pdf');
 
   const fetchLinks = useCallback(async () => {
     if (currentFile?.id) {
@@ -139,13 +139,21 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!open) return;
+
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      if ((isInput || showLinkModal) && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        return;
+      }
+
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'Escape') onOpenChange(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, goNext, goPrev, onOpenChange]);
+  }, [open, goNext, goPrev, onOpenChange, showLinkModal]);
 
   const zoomRef = useRef(zoom);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
@@ -158,7 +166,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
       // Check if we are interacting with the viewer or its children
       const isOverViewer = viewerRef.current?.contains(e.target as Node);
       if (!isOverViewer) return;
-      
+
       if (!isImage && !isPdf) return;
 
       // Stop the browser from zooming/scrolling the page
@@ -168,7 +176,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
       const currentZoom = zoomRef.current;
       const newZoom = Math.min(Math.max(currentZoom + delta, 1), 5);
-      
+
       if (newZoom !== currentZoom) {
         setZoom(newZoom);
         if (newZoom <= 1) setPan({ x: 0, y: 0 });
@@ -192,7 +200,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     try {
       let blob;
       // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
-      if (currentFile.do_not_follow && currentFile.file_type === 'application/pdf') {
+      if ((currentFile.do_not_follow || currentFile.only_for_reference) && currentFile.file_type === 'application/pdf') {
         blob = await downloadFile(currentFile.id);
       } else {
         const response = await fetch(currentFile.downloadUrl);
@@ -225,7 +233,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
         "max-w-[100vw] md:max-w-[95vw] w-full h-full md:h-[90vh] p-0 overflow-hidden bg-background text-foreground border-none shadow-2xl transition-all duration-300"
       )}>
         <div className="flex flex-col md:flex-row h-full w-full overflow-hidden">
-          
+
           {/* Column 1: Details Sidebar (Visible on Desktop, Bottom on Mobile) */}
           <div className={cn(
             "w-full md:w-[350px] lg:w-[400px] border-r border-border bg-card/30 backdrop-blur-xl flex flex-col shrink-0 order-2 md:order-1",
@@ -233,7 +241,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           )}>
             {/* Sidebar Header */}
             <div className="p-6 border-b border-border/50 bg-background/50">
-               <span className="text-[10px] font-black tracking-[0.2em] opacity-50 uppercase block mb-1">
+              <span className="text-[10px] font-black tracking-[0.2em] opacity-50 uppercase block mb-1">
                 {t('file_details')}
               </span>
               <h3 className="text-lg font-bold truncate leading-tight">
@@ -276,13 +284,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                 </div>
 
                 <div className="pt-2">
-                  <Button 
-                     className={cn("w-full h-11 text-[11px] font-black rounded-xl bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg shadow-accent/20 transition-all active:scale-95", downloading && "opacity-50 pointer-events-none")} 
-                     onClick={handleDownload}
-                     disabled={downloading}
-                   >
-                     <Download className="h-4 w-4 mr-2" /> {downloading ? t('downloading_label') : t('download_file')}
-                   </Button>
+                  <Button
+                    className={cn("w-full h-11 text-[11px] font-black rounded-xl bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg shadow-accent/20 transition-all active:scale-95", downloading && "opacity-50 pointer-events-none")}
+                    onClick={handleDownload}
+                    disabled={downloading}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> {downloading ? t('downloading_label') : t('download_file')}
+                  </Button>
                 </div>
               </div>
 
@@ -290,14 +298,14 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               <div className="flex-1 flex flex-col min-h-0 border-t border-border/50">
                 <div className="px-6 py-4 flex flex-col h-full overflow-hidden">
                   <div className="flex items-center gap-4 mb-4 shrink-0 border-b border-border/50 pb-2">
-                    <button 
+                    <button
                       onClick={() => setActiveTab('discussion')}
                       className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'discussion' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
                     >
                       {activeTab === 'discussion' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
                       {t('discussion')}
                     </button>
-                    <button 
+                    <button
                       onClick={() => setActiveTab('links')}
                       className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'links' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
                     >
@@ -315,7 +323,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                         ) : (
                           linkedItems.map((item, idx) => (
                             <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
-                              <div 
+                              <div
                                 className="flex-1 min-w-0 pr-2 cursor-pointer hover:opacity-85 transition-opacity"
                                 onClick={() => handleLinkItemClick(item)}
                               >
@@ -344,37 +352,37 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
 
           {/* Column 2: Main Content Area (Image/Viewer) */}
           <div className="flex-1 relative flex flex-col bg-muted/10 dark:bg-black/40 overflow-hidden group order-1 md:order-2">
-            
+
             {/* Top Bar Controls (Floating) */}
             <div className="absolute top-0 left-0 right-0 z-[120] flex items-center justify-between p-4 bg-gradient-to-b from-background/80 via-background/30 to-transparent dark:from-black/60 dark:via-black/20 backdrop-blur-[2px]">
               <div className="flex flex-col pl-2">
-                 <span className="text-[10px] font-black tracking-[0.2em] opacity-70 uppercase">
+                <span className="text-[10px] font-black tracking-[0.2em] opacity-70 uppercase">
                   {currentIndex + 1} / {files.length}
                 </span>
               </div>
-              
+
               <div className="flex items-center gap-1.5 pr-2">
                 {onCreateRfi && (
-                  <Button 
-                    variant="ghost" 
-                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
                     onClick={() => onCreateRfi(currentFile)}
                   >
                     <Plus className="h-3.5 w-3.5" /> {t('rfi_label')}
                   </Button>
                 )}
                 {onCreateSnag && (
-                  <Button 
-                    variant="ghost" 
-                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
                     onClick={() => onCreateSnag(currentFile)}
                   >
                     <Plus className="h-3.5 w-3.5" /> {t('snag')}
                   </Button>
                 )}
-                <Button 
-                  variant="ghost" 
-                  className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
+                <Button
+                  variant="ghost"
+                  className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
                   onClick={() => setShowLinkModal(true)}
                 >
                   <LinkIcon className="h-3.5 w-3.5" /> {t('link')}
@@ -382,12 +390,12 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                 <Button size="icon" variant="ghost" className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title={t('view_original')}>
                   <ExternalLink className="h-4 w-4" />
                 </Button>
-                
+
                 {(isImage || isPdf) && (
                   <>
                     <div className="h-4 w-[1px] bg-border/50 mx-1" />
                     <Button size="icon" variant="ghost" className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => {
-                      setZoom(z => { const nz = Math.max(z - 0.5, 1); if(nz <= 1) setPan({x:0, y:0}); return nz; });
+                      setZoom(z => { const nz = Math.max(z - 0.5, 1); if (nz <= 1) setPan({ x: 0, y: 0 }); return nz; });
                     }} title={t('zoom_out')}>
                       <ZoomOut className="h-4 w-4" />
                     </Button>
@@ -411,16 +419,16 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
             </div>
 
             {/* Actual Viewer Area */}
-            <div 
+            <div
               ref={viewerRef}
               className="flex-1 w-full min-h-0 flex items-center justify-center relative overflow-hidden"
-              onMouseDown={(e) => { 
+              onMouseDown={(e) => {
                 if (zoom > 1) {
-                  setIsDragging(true); 
+                  setIsDragging(true);
                   setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
                 }
               }}
-              onMouseMove={(e) => { 
+              onMouseMove={(e) => {
                 if (isDragging && zoom > 1) {
                   setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
                 }
@@ -447,9 +455,9 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               </button>
 
               {isImage ? (
-                <div 
+                <div
                   className="w-full h-full flex items-center justify-center transition-transform duration-75"
-                  style={{ 
+                  style={{
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
                     cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
                   }}
@@ -461,9 +469,9 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                   />
                 </div>
               ) : isPdf ? (
-                <div 
+                <div
                   className="w-full h-full flex items-center justify-center p-4 md:p-8 transition-transform duration-75"
-                  style={{ 
+                  style={{
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                     cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
                   }}
@@ -487,14 +495,23 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                 </div>
               )}
 
-              {/* Watermark */}
-              {currentFile.do_not_follow && (
-                <div className="absolute inset-0 pointer-events-none z-[100] flex items-center justify-center overflow-hidden">
-                  <div className="transform -rotate-[30deg] border-4 md:border-[10px] border-dashed border-red-500/20 rounded-xl md:rounded-3xl px-8 py-4 md:px-20 md:py-10 bg-red-500/[0.02] select-none">
-                    <h1 className="text-red-500/25 text-4xl md:text-8xl lg:text-9xl font-black uppercase tracking-widest text-center whitespace-nowrap">
-                      {t('do_not_follow_tag')}
-                    </h1>
-                  </div>
+              {/* Watermarks */}
+              {(currentFile.do_not_follow || currentFile.only_for_reference) && (
+                <div className="absolute inset-0 pointer-events-none z-[100] flex flex-col gap-8 md:gap-16 items-center justify-center overflow-hidden">
+                  {currentFile.do_not_follow && (
+                    <div className="transform -rotate-[30deg] border-4 md:border-[10px] border-dashed border-red-500/20 rounded-xl md:rounded-3xl px-8 py-4 md:px-20 md:py-10 bg-red-500/[0.02] select-none">
+                      <h1 className="text-red-500/25 text-2xl md:text-3xl lg:text-5xl font-black uppercase tracking-widest text-center whitespace-nowrap">
+                        {t('do_not_follow_tag')}
+                      </h1>
+                    </div>
+                  )}
+                  {currentFile.only_for_reference && (
+                    <div className="transform -rotate-[30deg] border-4 md:border-[10px] border-dashed border-blue-500/20 rounded-xl md:rounded-3xl px-8 py-4 md:px-20 md:py-10 bg-blue-500/[0.02] select-none mt-4">
+                      <h1 className="text-blue-500/25 text-2xl md:text-3xl lg:text-5xl font-black uppercase tracking-widest text-center whitespace-nowrap">
+                        {t('only_for_reference_tag')}
+                      </h1>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

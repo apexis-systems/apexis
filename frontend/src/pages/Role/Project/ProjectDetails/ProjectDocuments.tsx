@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUsage } from '@/contexts/UsageContext';
 import { createRFI, getRFIAssignees } from '@/services/rfiService';
@@ -17,7 +17,7 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile } from '@/services/fileService';
+import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, toggleOnlyForReference, updateFile, archiveFile } from '@/services/fileService';
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
 import LinkedItemsTab from './LinkedItemsTab';
@@ -316,6 +316,16 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     }
   };
 
+  const toggleDocOnlyForReference = async (doc: any) => {
+    try {
+      await toggleOnlyForReference(doc.id, !doc.only_for_reference);
+      setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, only_for_reference: !doc.only_for_reference } : d));
+      toast.success(t(!doc.only_for_reference ? 'doc_marked_ofr' : 'doc_unmarked_ofr'));
+    } catch (e) {
+      toast.error(t('failed_toggle_ofr'));
+    }
+  };
+
   const toggleFolderVis = async (folder: any, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -423,11 +433,11 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
 
   const handleMoveContents = () => {
     if (!folderToDelete) return;
-    
+
     // Find direct children
     const childFolders = folders.filter(f => String(f.parent_id) === String(folderToDelete.id));
     const childFiles = docs.filter(p => String(p.folder_id) === String(folderToDelete.id));
-    
+
     if (childFolders.length === 0 && childFiles.length === 0) {
       toast.info(t("folder_already_empty"));
       setShowDeleteConflict(false);
@@ -501,6 +511,19 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       }
     } catch (e) {
       toast.error(t("failed_toggle_dnf"));
+    }
+  };
+
+  const handleBulkOnlyForReference = async (value: boolean) => {
+    try {
+      if (selectedFiles.size > 0) {
+        await bulkUpdateFiles({ ids: Array.from(selectedFiles), only_for_reference: value });
+        toast.success(value ? t('doc_marked_ofr') : t('doc_unmarked_ofr'));
+        importFolders();
+        clearSelection();
+      }
+    } catch (e) {
+      toast.error(t("failed_toggle_ofr"));
     }
   };
 
@@ -650,129 +673,129 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       ) : (
         <>
           <div className="grid grid-cols-4 gap-2">
-        {sortedFolders.map((folder) => {
-          const folderDocs = docs.filter((d) => d.folder_id === folder.id);
-          const subFolders = folders.filter((f) => f.parent_id === folder.id);
-          const isSelected = selectedFolders.has(folder.id);
-          const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
-          const isArchiveFolder = folder.name.toLowerCase() === 'archive';
-          return (
-            <button
-              key={folder.id}
-              onClick={() => {
-                if (isSelectionMode) toggleSelection('folder', folder.id);
-                else setSelectedFolder(folder.id);
-              }}
-              className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
-            >
-              {!isSelectionMode && !isArchiveFolder && !isConfirmationFolder && (
-                <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
-                  {(user.role === 'admin' || user.role === 'superadmin') && (
-                    <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
-                      {folder.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
-                    </button>
+            {sortedFolders.map((folder) => {
+              const folderDocs = docs.filter((d) => d.folder_id === folder.id);
+              const subFolders = folders.filter((f) => f.parent_id === folder.id);
+              const isSelected = selectedFolders.has(folder.id);
+              const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
+              const isArchiveFolder = folder.name.toLowerCase() === 'archive';
+              return (
+                <button
+                  key={folder.id}
+                  onClick={() => {
+                    if (isSelectionMode) toggleSelection('folder', folder.id);
+                    else setSelectedFolder(folder.id);
+                  }}
+                  className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
+                >
+                  {!isSelectionMode && !isArchiveFolder && !isConfirmationFolder && (
+                    <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
+                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                        <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                          {folder.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
+                        </button>
+                      )}
+                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                        <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('move_folder_tip')}>
+                          <Move className="h-2.5 w-2.5 text-muted-foreground" />
+                        </button>
+                      )}
+                      {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
+                        <>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }}
+                            className="rounded-full p-1 hover:bg-secondary transition-colors"
+                            title={t('rename_folder_tip')}
+                          >
+                            <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   )}
-                  {(user.role === 'admin' || user.role === 'superadmin') && (
-                    <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('move_folder_tip')}>
-                      <Move className="h-2.5 w-2.5 text-muted-foreground" />
-                    </button>
+
+                  {isSelectionMode && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
+                    </div>
                   )}
-                  {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
-                    <>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }} 
-                        className="rounded-full p-1 hover:bg-secondary transition-colors" 
-                        title={t('rename_folder_tip')}
-                      >
-                        <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
-                      </button>
-                    </>
+                  {isArchiveFolder ? (
+                    <Archive className="h-8 w-8 text-slate-400" />
+                  ) : isConfirmationFolder ? (
+                    <CheckCircle2 className="h-8 w-8 text-orange-400" />
+                  ) : (
+                    <FolderIcon className="h-8 w-8 text-accent" />
                   )}
-                </div>
-              )}
-
-              {isSelectionMode && (
-                <div className="absolute top-2 right-2 z-10">
-                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('folder', folder.id)} />
-                </div>
-              )}
-              {isArchiveFolder ? (
-                <Archive className="h-8 w-8 text-slate-400" />
-              ) : isConfirmationFolder ? (
-                <CheckCircle2 className="h-8 w-8 text-orange-400" />
-              ) : (
-                <FolderIcon className="h-8 w-8 text-accent" />
-              )}
-              <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
-                {isConfirmationFolder ? "Confirmations" : folder.name}
-              </span>
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-[9px] text-muted-foreground mr-1">
-                  {t('files_count_label').replace('{count}', String(folderDocs.length))}{subFolders.length > 0 ? `, ${t(subFolders.length === 1 ? 'folder_count_label' : 'folders_count_label').replace('{count}', String(subFolders.length))}` : ''}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-
-
-      <CreateFolderDialog
-        open={showCreateFolder}
-        onOpenChange={setShowCreateFolder}
-        onCreateFolder={handleCreateFolder}
-        type="documents"
-      />
-
-      <EditFolderDialog
-        open={!!editFolder}
-        onOpenChange={(open) => !open && setEditFolder(null)}
-        onRename={handleRenameFolder}
-        currentName={editFolder?.name || ''}
-      />
-
-
-      <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-2" : "space-y-1.5"}>
-        {sortedDocs.map((doc) => {
-          const isSelected = selectedFiles.has(doc.id);
-
-          if (viewMode === 'grid') {
-            return (
-              <div
-                key={doc.id}
-                className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-colors cursor-pointer group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
-                onClick={() => {
-                  if (isSelectionMode) toggleSelection('file', doc.id);
-                  else setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
-                }}
-              >
-                {isSelectionMode && (
-                  <div className="absolute top-2 right-2">
-                    <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} />
+                  <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
+                    {isConfirmationFolder ? "Confirmations" : folder.name}
+                  </span>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-[9px] text-muted-foreground mr-1">
+                      {t('files_count_label').replace('{count}', String(folderDocs.length))}{subFolders.length > 0 ? `, ${t(subFolders.length === 1 ? 'folder_count_label' : 'folders_count_label').replace('{count}', String(subFolders.length))}` : ''}
+                    </span>
                   </div>
-                )}
-                <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950/30' : 'bg-blue-50 dark:bg-blue-950/30'}`}>
-                  <FileText className={`h-6 w-6 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
-                </div>
-                <span className="text-[10px] font-semibold text-center leading-tight line-clamp-2 px-1 mt-1">
-                  {doc.file_name}
-                </span>
-                <span className="text-[9px] text-muted-foreground mt-0.5">
-                  {formatFileSize(doc.file_size_mb)}
-                </span>
-                
-                {doc.assignee && (
-                  <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%]">
-                    <UserIcon className="h-2 w-2 text-muted-foreground" />
-                    <span className="text-[8px] font-medium truncate text-muted-foreground">{doc.assignee.name}</span>
-                    {doc.seen_at && (
-                      <CheckCheck className="h-2.5 w-2.5 text-orange-500 ml-0.5" />
+                </button>
+              );
+            })}
+          </div>
+
+
+
+          <CreateFolderDialog
+            open={showCreateFolder}
+            onOpenChange={setShowCreateFolder}
+            onCreateFolder={handleCreateFolder}
+            type="documents"
+          />
+
+          <EditFolderDialog
+            open={!!editFolder}
+            onOpenChange={(open) => !open && setEditFolder(null)}
+            onRename={handleRenameFolder}
+            currentName={editFolder?.name || ''}
+          />
+
+
+          <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-2" : "space-y-1.5"}>
+            {sortedDocs.map((doc) => {
+              const isSelected = selectedFiles.has(doc.id);
+
+              if (viewMode === 'grid') {
+                return (
+                  <div
+                    key={doc.id}
+                    className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-colors cursor-pointer group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
+                    onClick={() => {
+                      if (isSelectionMode) toggleSelection('file', doc.id);
+                      else setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
+                    }}
+                  >
+                    {isSelectionMode && (
+                      <div className="absolute top-2 right-2">
+                        <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} />
+                      </div>
                     )}
-                  </div>
-                )}
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950/30' : 'bg-blue-50 dark:bg-blue-950/30'}`}>
+                      <FileText className={`h-6 w-6 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
+                    </div>
+                    <span className="text-[10px] font-semibold text-center leading-tight line-clamp-2 px-1 mt-1">
+                      {doc.file_name}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground mt-0.5">
+                      {formatFileSize(doc.file_size_mb)}
+                    </span>
 
-                 <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
+                    {doc.assignee && (
+                      <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%]">
+                        <UserIcon className="h-2 w-2 text-muted-foreground" />
+                        <span className="text-[8px] font-medium truncate text-muted-foreground">{doc.assignee.name}</span>
+                        {doc.seen_at && (
+                          <CheckCheck className="h-2.5 w-2.5 text-orange-500 ml-0.5" />
+                        )}
+                      </div>
+                    )}
+
+                    <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
                       {!isSelectionMode && (
                         <>
                           <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('share_link_tip')}>
@@ -790,6 +813,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                               </button>
                               <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('toggle_dnf_tip')}>
                                 <ShieldAlert className={`h-2.5 w-2.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocOnlyForReference(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_ofr_tip')}>
+                                <Info className={`h-3.5 w-3.5 ${doc.only_for_reference ? 'text-blue-500' : 'text-muted-foreground'}`} />
                               </button>
                             </>
                           )}
@@ -820,113 +846,121 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           </button>
                         </>
                       )}
-                </div>
-                {doc.do_not_follow && (
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
-                    {t('dnf_tag')}
+                    </div>
+                    {doc.do_not_follow && (
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-20 rotate-[-12deg] border border-white/20 uppercase tracking-tighter">
+                        {t('dnf_tag')}
+                      </div>
+                    )}
+                    {doc.only_for_reference && (
+                      <div className="absolute  left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] font-black px-2 py-0.5 rounded-sm shadow-sm z-1 rotate-[12deg] border border-white/20 uppercase tracking-tighter">
+                        {t('ofr_tag')}
+                      </div>
+                    )}
+
                   </div>
-                )}
+                );
+              }
 
-              </div>
-            );
-          }
-
-          return (
-            <div key={doc.id}>
-              <div
-                className={`flex items-center gap-2 rounded-lg bg-card border p-2 cursor-pointer transition-colors ${isSelected ? 'border-accent bg-accent/5' : 'border-border'}`}
-                onClick={() => {
-                  if (isSelectionMode) toggleSelection('file', doc.id);
-                }}
-              >
-                {isSelectionMode && (
-                  <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} className="mr-1" />
-                )}
-                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950' : 'bg-blue-50 dark:bg-blue-950'}`}>
-                  <FileText className={`h-4 w-4 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
-                </div>
-                <div className="flex-1 min-w-0 flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      if (isSelectionMode) {
-                        e.stopPropagation();
-                        toggleSelection('file', doc.id);
-                      } else {
-                        setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
-                      }
+              return (
+                <div key={doc.id}>
+                  <div
+                    className={`flex items-center gap-2 rounded-lg bg-card border p-2 cursor-pointer transition-colors ${isSelected ? 'border-accent bg-accent/5' : 'border-border'}`}
+                    onClick={() => {
+                      if (isSelectionMode) toggleSelection('file', doc.id);
                     }}
-                    className="min-w-0 text-left hover:underline"
                   >
-                    <p className="text-[10px] font-semibold truncate">{doc.file_name}</p>
-                    <p className="text-[9px] text-muted-foreground">
-                      {formatFileSize(doc.file_size_mb)}
-                    </p>
-                  </button>
-                  {doc.assignee && (
-                    <div className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
-                      <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
-                      <span className="text-[9px] font-medium text-muted-foreground">{doc.assignee.name}</span>
-                      {doc.seen_at && (
-                        <CheckCheck className="h-3 w-3 text-orange-500 ml-0.5" />
-                      )}
+                    {isSelectionMode && (
+                      <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} className="mr-1" />
+                    )}
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950' : 'bg-blue-50 dark:bg-blue-950'}`}>
+                      <FileText className={`h-4 w-4 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
                     </div>
-                  )}
-                  {doc.do_not_follow && (
-                    <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
-                      <ShieldAlert className="h-2.5 w-2.5" /> {t('do_not_follow_tag')}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1">
-                  {!isSelectionMode && (
-                    <>
-                      <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-md p-1 hover:bg-secondary">
-                        <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          if (isSelectionMode) {
+                            e.stopPropagation();
+                            toggleSelection('file', doc.id);
+                          } else {
+                            setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
+                          }
+                        }}
+                        className="min-w-0 text-left hover:underline"
+                      >
+                        <p className="text-[10px] font-semibold truncate">{doc.file_name}</p>
+                        <p className="text-[9px] text-muted-foreground">
+                          {formatFileSize(doc.file_size_mb)}
+                        </p>
                       </button>
-                      {!currentFolder?.name.toLowerCase().includes('archive') && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
-                          className="rounded-md p-1 hover:bg-secondary"
-                          title={t('move_file_tip')}
-                        >
-                          <Move className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
+                      {doc.assignee && (
+                        <div className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
+                          <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
+                          <span className="text-[9px] font-medium text-muted-foreground">{doc.assignee.name}</span>
+                          {doc.seen_at && (
+                            <CheckCheck className="h-3 w-3 text-orange-500 ml-0.5" />
+                          )}
+                        </div>
                       )}
-                      {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
+                      {doc.do_not_follow && (
+                        <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
+                          <ShieldAlert className="h-2.5 w-2.5" /> {t('do_not_follow_tag')}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!isSelectionMode && (
                         <>
-                          <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
-                            {doc.client_visible !== false ? (
-                              <Eye className="h-3.5 w-3.5 text-accent" />
-                            ) : (
-                              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
+                          <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-md p-1 hover:bg-secondary">
+                            <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_dnf_tip')}>
-                            <ShieldAlert className={`h-3.5 w-3.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                          {!currentFolder?.name.toLowerCase().includes('archive') && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
+                              className="rounded-md p-1 hover:bg-secondary"
+                              title={t('move_file_tip')}
+                            >
+                              <Move className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
+                          )}
+                          {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_client_vis_tip')}>
+                                {doc.client_visible !== false ? (
+                                  <Eye className="h-3.5 w-3.5 text-accent" />
+                                ) : (
+                                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                )}
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_dnf_tip')}>
+                                <ShieldAlert className={`h-3.5 w-3.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocOnlyForReference(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_ofr_tip')}>
+                                <Info className={`h-3.5 w-3.5 ${doc.only_for_reference ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                              </button>
+                            </>
+                          )}
+                          {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
+                            <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('rename_file_tip')}>
+                              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
+                          )}
+                          {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && !currentFolder?.name.toLowerCase().includes('archive') && (
+                            <button onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title={t('archive_file_tip')}>
+                              <Archive className="h-3.5 w-3.5 text-amber-600" />
+                            </button>
+                          )}
+                          <button onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="rounded-md p-1 hover:bg-secondary" title="Create RFI">
+                            <Plus className="h-3.5 w-3.5 text-muted-foreground" />
                           </button>
                         </>
                       )}
-                      {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
-                        <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('rename_file_tip')}>
-                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      )}
-                      {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && !currentFolder?.name.toLowerCase().includes('archive') && (
-                        <button onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }} className="rounded-md p-1 hover:bg-amber-500/10" title={t('archive_file_tip')}>
-                          <Archive className="h-3.5 w-3.5 text-amber-600" />
-                        </button>
-                      )}
-                      <button onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="rounded-md p-1 hover:bg-secondary" title="Create RFI">
-                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    </>
-                  )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
 
       <FileViewer
         files={sortedDocs}
@@ -955,14 +989,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         onCreateRfi={handleStartCreateRfi}
       />
 
-      {
-        currentFolders.length === 0 && visibleDocs.length === 0 && (
-          <div className="mt-12 text-center">
-            <FileText className="mx-auto h-8 w-8 text-muted-foreground/30" />
-            <p className="mt-1.5 text-xs text-muted-foreground">{t('no_docs_yet')}</p>
-          </div>
-        )
-      }
+          {
+            currentFolders.length === 0 && visibleDocs.length === 0 && (
+              <div className="mt-12 text-center">
+                <FileText className="mx-auto h-8 w-8 text-muted-foreground/30" />
+                <p className="mt-1.5 text-xs text-muted-foreground">{t('no_docs_yet')}</p>
+              </div>
+            )
+          }
         </>
       )}
 
@@ -1038,6 +1072,22 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       onClick={() => handleBulkDoNotFollow(false)}
                     >
                       <ShieldAlert className="h-3.5 w-3.5 mr-1" /> {t('regular_btn')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-semibold text-blue-500"
+                      onClick={() => handleBulkOnlyForReference(true)}
+                    >
+                      <Info className="h-3.5 w-3.5 mr-1" /> {t('ofr_tag')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-semibold text-muted-foreground"
+                      onClick={() => handleBulkOnlyForReference(false)}
+                    >
+                      <Info className="h-3.5 w-3.5 mr-1" /> {t('regular_btn')}
                     </Button>
                   </div>
                 )}

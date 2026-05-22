@@ -96,7 +96,11 @@ export const toggleDoNotFollow = async (fileId: string | number, do_not_follow: 
     return updateFile(fileId, { do_not_follow });
 };
 
-export const bulkUpdateFiles = async (data: { ids: (string | number)[], folder_id?: string | null, client_visible?: boolean, do_not_follow?: boolean }) => {
+export const toggleOnlyForReference = async (fileId: string | number, only_for_reference: boolean) => {
+    return updateFile(fileId, { only_for_reference });
+};
+
+export const bulkUpdateFiles = async (data: { ids: (string | number)[], folder_id?: string | null, client_visible?: boolean, do_not_follow?: boolean, only_for_reference?: boolean }) => {
     try {
         const response = await PrivateAxios.put('/files/bulk', data);
         return response.data;
@@ -116,7 +120,7 @@ export const bulkDeleteFiles = async (ids: (string | number)[]) => {
     }
 };
 
-export const updateFile = async (fileId: string | number, data: { file_name?: string, folder_id?: string | null, client_visible?: boolean, do_not_follow?: boolean }) => {
+export const updateFile = async (fileId: string | number, data: { file_name?: string, folder_id?: string | null, client_visible?: boolean, do_not_follow?: boolean, only_for_reference?: boolean }) => {
     try {
         const response = await PrivateAxios.put(`/files/${fileId}`, data);
         return response.data;
