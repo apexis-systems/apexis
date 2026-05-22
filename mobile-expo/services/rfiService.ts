@@ -171,3 +171,22 @@ export const sendRFIMessage = async (id: number, formData: FormData): Promise<Co
         throw error;
     }
 };
+
+export const linkRfiFile = async (id: number, fileId: number): Promise<any> => {
+    try {
+        const res = await PrivateAxios.post(`/rfis/${id}/link`, { fileId });
+        return res.data;
+    } catch (error) {
+        console.error("linkRfiFile Error", error);
+        throw error;
+    }
+};
+
+export const deleteRfiLink = async (id: number, fileId: number): Promise<void> => {
+    try {
+        await PrivateAxios.delete(`/rfis/${id}/link/${fileId}`);
+    } catch (error) {
+        console.error("deleteRfiLink Error", error);
+        throw error;
+    }
+};

@@ -41,11 +41,13 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
     }, [folderId]);
 
     const handleRFIClick = (rfiId: number) => {
-        router.push(`?tab=rfi&rfiId=${rfiId}`);
+        const returnContext = folderId ? `&returnTab=documents&returnFolderId=${folderId}` : '';
+        router.push(`?tab=rfi&rfiId=${rfiId}${returnContext}`);
     };
 
     const handleSnagClick = (snagId: number) => {
-        router.push(`?tab=snags&snagId=${snagId}`);
+        const returnContext = folderId ? `&returnTab=documents&returnFolderId=${folderId}` : '';
+        router.push(`?tab=snags&snagId=${snagId}${returnContext}`);
     };
 
     if (loading) {

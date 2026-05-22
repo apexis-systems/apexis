@@ -24,13 +24,33 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Image } from "expo-image";
 import { Text } from "@/components/ui/AppText";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const FilePaperclip = ({ size = 20, color, bgColor = '#ffffff' }: { size?: number; color?: string; bgColor?: string }) => {
+    const fileSize = Math.round(size * 0.85);
+    const clipSize = Math.round(size * 0.65);
+    return (
+        <View style={{ width: size, height: size, position: 'relative', justifyContent: 'center', alignItems: 'center' }}>
+            <Feather name="file-text" size={fileSize} color={color} style={{ position: 'absolute', top: 0, left: 0 }} />
+            <View style={{ 
+                position: 'absolute', 
+                bottom: -2, 
+                right: -2, 
+                backgroundColor: bgColor, 
+                borderRadius: clipSize / 2,
+                padding: 1,
+            }}>
+                <Feather name="paperclip" size={clipSize} color={color} />
+            </View>
+        </View>
+    );
+};
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 // Removed AnimatedCameraView for stability
@@ -51,7 +71,10 @@ import {
     Assignee,
     markSnagSeen,
     getSnagMessages,
-    sendSnagMessage
+    sendSnagMessage,
+    createSnag,
+    linkSnagFile,
+    deleteSnagLink
 } from "@/services/snagService";
 import * as ImagePicker from 'expo-image-picker';
 import FullScreenImageModal from "@/components/shared/FullScreenImageModal";
@@ -60,6 +83,7 @@ import ImageAnnotator from "../common/ImageAnnotator";
 import { KeyboardAvoidingView } from "react-native";
 import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
+import LinkFileModal from '../shared/LinkFileModal';
 
 const isAudio = (url: string) => {
     if (!url) return false;
@@ -69,6 +93,17 @@ const isAudio = (url: string) => {
     } catch {
         return false;
     }
+};
+
+const isImageFile = (fileOrUrl: any): boolean => {
+    if (!fileOrUrl) return false;
+    const type = fileOrUrl.file_type || fileOrUrl.type || '';
+    if (type.toLowerCase().startsWith('image/') || type.toLowerCase().includes('image')) return true;
+    const name = fileOrUrl.file_name || fileOrUrl.name || '';
+    const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+    if (name.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i)) return true;
+    if (downloadUrl.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i)) return true;
+    return false;
 };
 
 interface Props {
@@ -104,6 +139,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
 
     const router = useRouter();
+    const searchParams = useLocalSearchParams();
     const insets = useSafeAreaInsets();
     const projectId = project.id;
 
@@ -120,6 +156,30 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [playingUri, setPlayingUri] = useState<string | null>(null);
 
     const [selectedSnag, setSelectedSnag] = useState<Snag | null>(null);
+
+    const handleCloseDetailModal = () => {
+        setSelectedSnag(null);
+        setIsEditing(false);
+        setEditAudio(null);
+        setRemoveEditAudio(false);
+        setResponseComment("");
+        setResponsePhotos([]);
+        const returnTab = searchParams?.returnTab as string;
+        if (returnTab) {
+            const rParams: any = { tab: returnTab, snagId: '' };
+            if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+            if (searchParams.returnFileId) {
+                rParams.fileId = String(searchParams.returnFileId);
+                // Signal viewer to open on links tab
+                rParams.returnViewerTab = 'links';
+            } else {
+                // Returning to a folder (not a file preview) — clear stale fileId
+                rParams.fileId = '';
+                if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
+            }
+            router.setParams(rParams);
+        }
+    };
     const [isEditing, setIsEditing] = useState(false);
     const [editTitle, setEditTitle] = useState("");
     const [editDesc, setEditDesc] = useState("");
@@ -139,7 +199,93 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [isVoiceRecording, setIsVoiceRecording] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [showFolderPicker, setShowFolderPicker] = useState(false);
+    const [showFilePicker, setShowFilePicker] = useState(false);
     const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
+
+    const handleLinkFile = async (targetFileId: string | number) => {
+        if (!selectedSnag) return;
+        setSubmitting(true);
+        try {
+            await linkSnagFile(selectedSnag.id, Number(targetFileId));
+            const updated = (await getSnags(project.id)).find((s: any) => s.id === selectedSnag.id);
+            if (updated) {
+                setSelectedSnag(updated);
+                setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
+            }
+            setShowFilePicker(false);
+        } catch (error) {
+            Alert.alert('Error', t('link_failed') || 'Failed to link file');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleRemoveFileLink = async (targetFileId: string | number) => {
+        if (!selectedSnag) return;
+        try {
+            await deleteSnagLink(selectedSnag.id, Number(targetFileId));
+            const updated = (await getSnags(project.id)).find((s: any) => s.id === selectedSnag.id);
+            if (updated) {
+                setSelectedSnag(updated);
+                setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
+            }
+        } catch (error) {
+            Alert.alert('Error', t('link_remove_failed') || 'Failed to remove link');
+        }
+    };
+
+    const handleLinkItemClick = async (item: any) => {
+        const itemType = item.type || item.target_type;
+        const itemId = item.target_id || item.id;
+        if (!itemType || !itemId) return;
+
+        let targetFolderId: string | null = item.folder_id ? String(item.folder_id) : null;
+        if (!targetFolderId && item.file_url) {
+            const parts = item.file_url.split('/');
+            const folderIdx = parts.indexOf('folders');
+            if (folderIdx !== -1 && folderIdx + 1 < parts.length) {
+                targetFolderId = parts[folderIdx + 1];
+            }
+        }
+
+        const returnContext = {
+            returnTab: 'snags',
+            returnSnagId: selectedSnag ? String(selectedSnag.id) : ''
+        };
+
+        setShowFilePicker(false);
+        setSelectedSnag(null);
+
+        setTimeout(() => {
+            if (itemType === 'file') {
+                const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+                const isPhoto = item.file_type?.startsWith('image/') ||
+                    fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
+
+                if (isPhoto) {
+                    router.setParams({
+                        tab: 'photos',
+                        folderId: String(targetFolderId || ''),
+                        fileId: String(itemId),
+                        ...returnContext
+                    });
+                } else {
+                    router.setParams({
+                        tab: 'documents',
+                        folderId: String(targetFolderId || ''),
+                        fileId: String(itemId),
+                        ...returnContext
+                    });
+                }
+            } else {
+                if (itemType === 'rfi') {
+                    router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
+                } else if (itemType === 'snag') {
+                    router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
+                }
+            }
+        }, 100);
+    };
 
     const [cameraVisible, setCameraVisible] = useState(false);
     const [cameraMode, setCameraMode] = useState<'edit' | 'response'>('response');
@@ -1045,7 +1191,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 animationType="slide"
                 transparent
                 presentationStyle="overFullScreen"
-                onRequestClose={() => { setSelectedSnag(null); setIsEditing(false); setEditAudio(null); setRemoveEditAudio(false); setResponseComment(""); setResponsePhotos([]); }}
+                onRequestClose={handleCloseDetailModal}
             >
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1055,7 +1201,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                         <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '85%', padding: 16 }}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
                                 <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>{isEditing ? t('projectSnags.editSnag') : t('projectSnags.snagDetails')}</Text>
-                                <TouchableOpacity onPress={() => { setSelectedSnag(null); setIsEditing(false); setEditAudio(null); setRemoveEditAudio(false); setResponseComment(""); setResponsePhotos([]); }}>
+                                <TouchableOpacity onPress={handleCloseDetailModal}>
 
                                     <Feather name="x" size={24} color={colors.text} />
                                 </TouchableOpacity>
@@ -1194,12 +1340,17 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 </View>
                                                     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
                                                         {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id) || String(selectedSnag.assigned_to) === String(user?.id) || String(selectedSnag.assignee?.id) === String(user?.id)) && (
-                                                            <TouchableOpacity onPress={() => {
-                                                                setSelectedFolderIds(selectedSnag.folder_ids || []);
-                                                                setShowFolderPicker(true);
-                                                            }}>
-                                                                <Feather name="link-2" size={18} color={colors.primary} />
-                                                            </TouchableOpacity>
+                                                            <>
+                                                                <TouchableOpacity onPress={() => setShowFilePicker(true)}>
+                                                                    <FilePaperclip size={18} color={colors.primary} bgColor={colors.background} />
+                                                                </TouchableOpacity>
+                                                                <TouchableOpacity onPress={() => {
+                                                                    setSelectedFolderIds(selectedSnag.folder_ids || []);
+                                                                    setShowFolderPicker(true);
+                                                                }}>
+                                                                    <Feather name="link-2" size={18} color={colors.primary} />
+                                                                </TouchableOpacity>
+                                                            </>
                                                         )}
                                                         {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id)) && !selectedSnag.response && !selectedSnag.response_photos && (
                                                             <>
@@ -1222,14 +1373,30 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                             </View>
                                             <Text style={{ fontSize: 13, color: colors.textMuted }}>{selectedSnag.description}</Text>
 
-                                            {(selectedSnag.photoDownloadUrl || selectedSnag.photo_url) && (
-                                                <TouchableOpacity onPress={() => setViewPhoto(selectedSnag.photoDownloadUrl || selectedSnag.photo_url!)}>
-                                                    <Image
-                                                        source={selectedSnag.photoDownloadUrl || selectedSnag.photo_url}
-                                                        style={{ width: '100%', height: 200, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
-                                                    />
-                                                </TouchableOpacity>
-                                            )}
+                                            {(() => {
+                                                const urls: string[] = [];
+                                                if (selectedSnag.photoDownloadUrl || selectedSnag.photo_url) {
+                                                    urls.push(selectedSnag.photoDownloadUrl || selectedSnag.photo_url!);
+                                                }
+
+                                                if (urls.length === 0) return null;
+
+                                                return (
+                                                    <View style={{ gap: 10 }}>
+                                                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted }}>{t('projectSnags.photosLabel') || 'Photos'}</Text>
+                                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                                            {urls.map((url, idx) => (
+                                                                <TouchableOpacity key={idx} onPress={() => setViewPhoto(url)}>
+                                                                    <Image
+                                                                        source={{ uri: url }}
+                                                                        style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+                                                                    />
+                                                                </TouchableOpacity>
+                                                            ))}
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })()}
 
                                             {(selectedSnag.audioDownloadUrl || selectedSnag.audio_url) && (
                                                 <View style={{ padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
@@ -1267,7 +1434,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                                         router.setParams({
                                                                             tab: f.folder_type === 'photo' ? 'photos' : 'documents',
                                                                             folderId: String(f.id),
-                                                                            snagId: undefined
+                                                                            snagId: undefined,
+                                                                            returnTab: 'snags',
+                                                                            returnSnagId: selectedSnag ? String(selectedSnag.id) : undefined
                                                                         });
                                                                     }, 100);
                                                                 }}
@@ -1731,7 +1900,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                 />
                             )}
                             {/* Folder Picker nested for iOS support while inside Detail Modal */}
-                            <MobileFolderPickerDialog
+                                <MobileFolderPickerDialog
                                 visible={showFolderPicker}
                                 onClose={() => setShowFolderPicker(false)}
                                 project={project}
@@ -1745,6 +1914,19 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                     setShowFolderPicker(false);
                                 }}
                             />
+                            
+                            {selectedSnag && showFilePicker && (
+                                <LinkFileModal
+                                    visible={showFilePicker}
+                                    onClose={() => setShowFilePicker(false)}
+                                    projectId={project.id}
+                                    linkedFileIds={selectedSnag.file_snag_links?.map((l: any) => l.file_id) || []}
+                                    onLink={handleLinkFile}
+                                    onRemoveLink={handleRemoveFileLink}
+                                    handleLinkItemClick={handleLinkItemClick}
+                                    onlyPhotos={true}
+                                />
+                            )}
                         </View>
                     </View>
                 </KeyboardAvoidingView>

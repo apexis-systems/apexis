@@ -11,11 +11,13 @@ interface LinkFileModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string | number;
-  currentFileId: string | number;
+  currentFileId?: string | number;
+  linkedFileIds?: (string | number)[];
   onLink: (targetFileId: string | number) => void;
+  onlyPhotos?: boolean;
 }
 
-export default function LinkFileModal({ open, onOpenChange, projectId, currentFileId, onLink }: LinkFileModalProps) {
+export default function LinkFileModal({ open, onOpenChange, projectId, currentFileId, linkedFileIds, onLink, onlyPhotos }: LinkFileModalProps) {
   const { t } = useLanguage();
   const [files, setFiles] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
@@ -33,10 +35,17 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
       setSelectedIds(new Set());
       setSearchQuery('');
       setCurrentParentId(null);
+      if (onlyPhotos) setActiveTab('photo');
+
+      const fetchLinks = async () => {
+        if (linkedFileIds) return { links: linkedFileIds.map(id => ({ file_2: { id } })) };
+        if (currentFileId) return await getLinkedItems(currentFileId);
+        return { links: [] };
+      };
 
       Promise.all([
         getFiles(projectId),
-        currentFileId ? getLinkedItems(currentFileId) : Promise.resolve({ links: [] })
+        fetchLinks()
       ]).then(([fileDataRes, linkDataRes]) => {
         if (fileDataRes.fileData) setFiles(fileDataRes.fileData);
         if (fileDataRes.folderData) setFolders(fileDataRes.folderData);
@@ -47,7 +56,7 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
         setLoading(false);
       });
     }
-  }, [open, projectId, currentFileId]);
+  }, [open, projectId, currentFileId, linkedFileIds, onlyPhotos]);
 
   const handleTabChange = (tab: 'document' | 'photo') => {
     setActiveTab(tab);
@@ -156,7 +165,7 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
         {!searchQuery && (
           <div className="shrink-0 flex flex-col border-b">
             <div className="flex bg-muted/10">
-              {(['document', 'photo'] as const).map(tab => (
+              {(['document', 'photo'] as const).filter(tab => !(onlyPhotos && tab === 'document')).map(tab => (
                 <button
                   key={tab}
                   onClick={() => handleTabChange(tab)}

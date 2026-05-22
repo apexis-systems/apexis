@@ -41,6 +41,7 @@ export interface Snag {
     seen_at?: string | null;
     folder_ids?: number[];
     linked_folders?: { id: number; name: string; folder_type: string }[];
+    file_snag_links?: any[];
 }
 
 export interface Assignee {
@@ -105,4 +106,13 @@ export const sendSnagMessage = async (id: number, form: FormData): Promise<Conve
         headers: { 'Content-Type': 'multipart/form-data' },
     });
     return res.data.message;
+};
+
+export const linkSnagFile = async (id: number, fileId: number): Promise<any> => {
+    const res = await PrivateAxios.post(`/snags/${id}/link`, { fileId });
+    return res.data;
+};
+
+export const deleteSnagLink = async (id: number, fileId: number): Promise<void> => {
+    await PrivateAxios.delete(`/snags/${id}/link/${fileId}`);
 };

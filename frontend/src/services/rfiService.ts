@@ -119,3 +119,12 @@ export const sendRFIMessage = async (id: number, form: FormData): Promise<Conver
     });
     return res.data.message;
 };
+
+export const linkRfiFile = async (id: number, fileId: number): Promise<any> => {
+    const res = await PrivateAxios.post(`/rfis/${id}/link`, { fileId });
+    return res.data;
+};
+
+export const deleteRfiLink = async (id: number, fileId: number): Promise<void> => {
+    await PrivateAxios.delete(`/rfis/${id}/link/${fileId}`);
+};

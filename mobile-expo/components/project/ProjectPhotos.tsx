@@ -6,7 +6,7 @@ import { FlatList } from 'react-native-gesture-handler';
 import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
@@ -42,6 +42,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const searchParams = useLocalSearchParams();
     const [photos, setPhotos] = useState<any[]>([]);
     const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfis'>('files');
     const [activeLinkedSubTab, setActiveLinkedSubTab] = useState<'rfis' | 'snags'>('rfis');
@@ -314,6 +315,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     }, [selectedFolder]);
 
+    // Auto-switch folder tab when returning from an RFI/Snag opened from the folder's linked section
+    useEffect(() => {
+        const folderActiveTab = searchParams?.returnFolderActiveTab as string;
+        if (folderActiveTab && selectedFolder) {
+            setActiveFolderTab('rfis');
+            router.setParams({ returnFolderActiveTab: '' });
+        }
+    }, [searchParams?.returnFolderActiveTab, selectedFolder]);
+
     const fetchLinkedRFIs = async () => {
         if (!selectedFolder) return;
         setLoadingRFIs(true);
@@ -353,7 +363,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const index = sortedInit.findIndex(p => String(p.id) === String(initialFileId));
             if (index !== -1) {
                 openViewer(index);
-                router.setParams({ fileId: '', photoId: '' });
+                // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
+                if (searchParams?.returnViewerTab === 'links') {
+                    setViewerActiveTab('links');
+                }
+                router.setParams({ fileId: '', photoId: '', returnViewerTab: '' });
             }
         }
     }, [initialFileId, photos, selectedFolder, sortBy, user.role, router, viewerOpen]);
@@ -437,6 +451,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!selectedFolder) return;
         const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
+        // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
+        router.setParams({ folderId: '' });
     };
 
     // ── Viewer helpers ────────────────────────────────────────────────────────
@@ -508,53 +524,45 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }
         }
 
+        const returnContext = {
+            returnTab: 'photos',
+            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+            returnFileId: sortedPhotos[viewerIndex]?.id ? String(sortedPhotos[viewerIndex].id) : '',
+            // Tell the viewer to reopen on the links tab when returning
+            returnViewerTab: 'links',
+        };
+
         if (itemType === 'file') {
             const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
             const isPhoto = item.file_type?.startsWith('image/') ||
                 fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
 
             if (isPhoto) {
-                // Try to find the photo in the current folder first
                 const idx = sortedPhotos.findIndex(p => String(p.id) === String(itemId));
-                if (idx !== -1) {
-                    // SAME FOLDER: viewer is already open — just slide to the new photo index
+                if (idx !== -1 && String(targetFolderId || '') === String(selectedFolder || '')) {
                     setViewerIndex(idx);
                 } else {
-                    // DIFFERENT FOLDER: close viewer, switch folder, deep-link to photo
-                    // const targetPhoto = photos.find(p => String(p.id) === String(itemId));
-                    // const resolvedFolderId = targetPhoto?.folder_id != null
-                    //     ? String(targetPhoto.folder_id)
-                    //     : targetFolderId;
-                    // if (resolvedFolderId) {
-                    //     setViewerOpen(false);
-                    //     setSelectedFolder(resolvedFolderId);
-                    //     router.setParams({ photoId: String(itemId), fileId: String(itemId) });
-                    // }
-
-                    setViewerOpen(false);
                     router.setParams({
                         tab: 'photos',
                         folderId: String(targetFolderId || ''),
                         fileId: String(itemId),
+                        ...returnContext
                     });
-                    // No fallback to WebBrowser — relative S3 URLs can't be opened in a browser
                 }
             } else {
-                // It's a document/PDF — navigate to the documents tab and deep-link open it
-                setViewerOpen(false);
                 router.setParams({
                     tab: 'documents',
                     folderId: String(targetFolderId || ''),
                     fileId: String(itemId),
+                    ...returnContext
                 });
             }
         } else {
             // RFI or Snag
-            setViewerOpen(false);
             if (itemType === 'rfi') {
-                router.setParams({ tab: 'rfi', rfiId: String(itemId) });
+                router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
             } else if (itemType === 'snag') {
-                router.setParams({ tab: 'snags', snagId: String(itemId) });
+                router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
             }
         }
     };
@@ -694,6 +702,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setViewerOpen(false);
         setIsViewerZoomed(false);
         setViewerIndex(-1);
+        const returnTab = searchParams?.returnTab as string;
+        if (returnTab) {
+            const rParams: any = { tab: returnTab };
+            if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+            if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+            router.setParams(rParams);
+        }
     };
 
     useFocusEffect(
@@ -1466,7 +1481,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     {linkedRFIs.map((rfi) => (
                                                         <TouchableOpacity
                                                             key={rfi.id}
-                                                            onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                                            onPress={() => {
+                                                const returnContext = {
+                                                    returnTab: 'photos',
+                                                    returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                    returnFolderActiveTab: 'rfis',
+                                                };
+                                                router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
+                                            }}
                                                             style={{
                                                                 backgroundColor: colors.surface,
                                                                 borderRadius: 12,
@@ -1525,7 +1547,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     {linkedSnags.map((snag) => (
                                                         <TouchableOpacity
                                                             key={snag.id}
-                                                            onPress={() => router.setParams({ tab: 'snags', snagId: String(snag.id) })}
+                                                            onPress={() => {
+                                                const returnContext = {
+                                                    returnTab: 'photos',
+                                                    returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                    returnFolderActiveTab: 'rfis',
+                                                };
+                                                router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
+                                            }}
                                                             style={{
                                                                 backgroundColor: colors.surface,
                                                                 borderRadius: 12,

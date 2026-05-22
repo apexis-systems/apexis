@@ -7,7 +7,7 @@ import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
 import * as WebBrowser from 'expo-web-browser';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -51,6 +51,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const { socket } = useSocket();
 
     const router = useRouter();
+    const searchParams = useLocalSearchParams();
     const [docs, setDocs] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
     // Sync selectedFolder whenever the deep-link prop changes.
@@ -364,6 +365,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             }
         }
 
+        const returnContext = {
+            returnTab: 'documents',
+            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+            returnFileId: currentDoc?.id ? String(currentDoc.id) : '',
+            // Tell the viewer to reopen on the links tab when returning
+            returnViewerTab: 'links',
+        };
+
         if (itemType === 'file') {
             const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
             const isPhoto = item.file_type?.startsWith('image/') ||
@@ -371,51 +380,34 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 fileName.endsWith('.gif') || fileName.endsWith('.webp');
 
             if (isPhoto) {
-                // It's an image — navigate to the photos tab and deep-link open it
-                setPdfViewerUrl(null);
-                setCurrentDoc(null);
+                setShowLinkModal(false);
                 router.setParams({
                     tab: 'photos',
                     folderId: String(targetFolderId || ''),
                     fileId: String(itemId),
+                    ...returnContext
                 });
             } else {
-                // It's a document/PDF
                 const targetDoc = docs.find(d => String(d.id) === String(itemId));
-                if (targetDoc) {
-                    if (String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
-                        // SAME FOLDER: open doc directly
-                        openDoc(targetDoc);
-                    } else {
-                        // DIFFERENT FOLDER: close current doc, navigate via router params
-                        setPdfViewerUrl(null);
-                        setCurrentDoc(null);
-                        router.setParams({
-                            tab: 'documents',
-                            folderId: String(targetFolderId || ''),
-                            fileId: String(itemId),
-                        });
-                    }
+                if (targetDoc && String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
+                    setShowLinkModal(false);
+                    openDoc(targetDoc);
                 } else {
-                    // Doc not yet loaded — navigate via router params
-                    setPdfViewerUrl(null);
-                    setCurrentDoc(null);
+                    setShowLinkModal(false);
                     router.setParams({
                         tab: 'documents',
                         folderId: String(targetFolderId || ''),
                         fileId: String(itemId),
+                        ...returnContext
                     });
                 }
             }
         } else {
-            // RFI or Snag
-            setPdfViewerUrl(null);
-            setCurrentDoc(null);
-            setShowComments(false);
+            setShowLinkModal(false);
             if (itemType === 'rfi') {
-                router.setParams({ tab: 'rfi', rfiId: String(itemId) });
+                router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
             } else if (itemType === 'snag') {
-                router.setParams({ tab: 'snags', snagId: String(itemId) });
+                router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
             }
         }
     };
@@ -449,6 +441,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setLinkedSnags([]);
         }
     }, [selectedFolder]);
+
+    // Auto-switch folder tab when returning from an RFI/Snag opened from the folder's linked section
+    useEffect(() => {
+        const folderActiveTab = searchParams?.returnFolderActiveTab as string;
+        if (folderActiveTab && selectedFolder) {
+            setActiveFolderTab('rfis');
+            router.setParams({ returnFolderActiveTab: '' });
+        }
+    }, [searchParams?.returnFolderActiveTab, selectedFolder]);
 
     const fetchLinkedRFIs = async () => {
         if (!selectedFolder) return;
@@ -588,7 +589,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const index = sortedInit.findIndex(d => String(d.id) === String(initialFileId));
             if (index !== -1) {
                 openDoc(sortedInit[index]);
-                router.setParams({ fileId: '', documentId: '' });
+                // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
+                if (searchParams?.returnViewerTab === 'links') {
+                    setViewerActiveTab('links');
+                }
+                router.setParams({ fileId: '', documentId: '', returnViewerTab: '' });
             }
         }
     }, [initialFileId, docs, selectedFolder, sortBy, user.role, router]);
@@ -976,7 +981,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         if (!selectedFolder) return;
         const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
-    }, [selectedFolder, currentFolder]);
+        // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
+        router.setParams({ folderId: '' });
+    }, [selectedFolder, currentFolder, router]);
 
     useFocusEffect(
         useCallback(() => {
@@ -1764,7 +1771,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             {linkedRFIs.map((rfi) => (
                                                 <TouchableOpacity
                                                     key={rfi.id}
-                                                    onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                                    onPress={() => {
+                                        const returnContext = {
+                                            returnTab: 'documents',
+                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                            returnFolderActiveTab: 'rfis',
+                                        };
+                                        router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
+                                    }}
                                                     style={{
                                                         backgroundColor: colors.surface,
                                                         borderRadius: 12,
@@ -1823,7 +1837,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             {linkedSnags.map((snag) => (
                                                 <TouchableOpacity
                                                     key={snag.id}
-                                                    onPress={() => router.setParams({ tab: 'snags', snagId: String(snag.id) })}
+                                                    onPress={() => {
+                                        const returnContext = {
+                                            returnTab: 'documents',
+                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                            returnFolderActiveTab: 'rfis',
+                                        };
+                                        router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
+                                    }}
                                                     style={{
                                                         backgroundColor: colors.surface,
                                                         borderRadius: 12,
@@ -1996,6 +2017,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     setCurrentDoc(null);
                     setShowComments(false);
                     setDocComments([]);
+                    const returnTab = searchParams?.returnTab as string;
+                    if (returnTab) {
+                        const rParams: any = { tab: returnTab };
+                        if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+                        if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                        router.setParams(rParams);
+                    }
                 }}
             >
                 <StatusBar hidden />
@@ -2018,6 +2046,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 setCurrentDoc(null);
                                 setShowComments(false);
                                 setDocComments([]);
+                                const returnTab = searchParams?.returnTab as string;
+                                if (returnTab) {
+                                    const rParams: any = { tab: returnTab };
+                                    if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+                                    if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                                    router.setParams(rParams);
+                                }
                             }}
                             style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
                         >
