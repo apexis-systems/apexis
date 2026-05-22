@@ -639,6 +639,7 @@
             "folderNamePlaceholder": "फ़ोल्डर का नाम",
             "fileNamePlaceholder": "फ़ाइल का नाम",
             "doNotFollow": "अनुसरण न करें",
+            "onlyForReference": "केवल संदर्भ के लिए",
             "create": "बनाएँ",
             "creating": "बना रहे हैं…",
             "update": "अपडेट करें",

@@ -15,7 +15,7 @@ import { PDFDocument } from 'pdf-lib';
 import { getIO } from '../socket.ts';
 import { logActivity } from "../utils/activityUtils.ts";
 import { checkStorageLimit, checkSubscriptionStatus } from "../utils/subscriptionAccess.ts";
-import { addDoNotFollowWatermarkToPDF } from "../utils/pdfWatermark.ts";
+import { addWatermarksToPDF } from "../utils/pdfWatermark.ts";
 
 interface MulterFile {
     buffer: Buffer;
@@ -60,7 +60,7 @@ export const confirmScreenshot = async (req: Request | any, res: Response) => {
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
         const { project_id, skipActivity, location, tags, assigned_to } = req.body;
-        
+
         if (!project_id || project_id === '') {
             return res.status(400).json({ error: "Project ID is required for confirmation screenshots" });
         }
@@ -106,7 +106,7 @@ export const confirmScreenshot = async (req: Request | any, res: Response) => {
                 folder_type: 'photo',
                 created_by: authUser.user_id
             });
-            
+
             await logActivity({
                 projectId: project_id,
                 userId: authUser.user_id,
@@ -724,8 +724,11 @@ export const downloadFile = async (req: Request, res: Response) => {
         let fileBuffer = Buffer.concat(chunks);
 
         // Apply watermark if needed
-        if (file.do_not_follow && file.file_type === 'application/pdf') {
-            fileBuffer = await addDoNotFollowWatermarkToPDF(fileBuffer) as any;
+        if ((file.do_not_follow || file.only_for_reference) && file.file_type === 'application/pdf') {
+            fileBuffer = await addWatermarksToPDF(fileBuffer, {
+                doNotFollow: file.do_not_follow,
+                onlyForReference: file.only_for_reference
+            }) as any;
         }
 
         res.setHeader("Content-Type", file.file_type || "application/octet-stream");
@@ -743,7 +746,7 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { ids, folder_id, client_visible, do_not_follow } = req.body;
+        const { ids, folder_id, client_visible, do_not_follow, only_for_reference } = req.body;
 
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ error: "No file IDs provided" });
@@ -757,7 +760,7 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
         }
 
         // Visibility action permissions: Admins only
-        if (client_visible !== undefined || do_not_follow !== undefined) {
+        if (client_visible !== undefined || do_not_follow !== undefined || only_for_reference !== undefined) {
             if (authUser.role !== "admin" && authUser.role !== "superadmin") {
                 return res.status(403).json({ error: "Forbidden: Only Admins can toggle file visibility or 'Do Not Follow'" });
             }
@@ -767,6 +770,7 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
         if (folder_id !== undefined) updateData.folder_id = (folder_id === '' || folder_id === 'root') ? null : folder_id;
         if (client_visible !== undefined) updateData.client_visible = client_visible;
         if (do_not_follow !== undefined) updateData.do_not_follow = do_not_follow;
+        if (only_for_reference !== undefined) updateData.only_for_reference = only_for_reference;
 
         await files.update(updateData, {
             where: { id: ids }
@@ -799,7 +803,7 @@ export const updateFile = async (req: Request, res: Response) => {
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
         const { fileId } = req.params;
-        const { file_name, folder_id, client_visible, do_not_follow } = req.body;
+        const { file_name, folder_id, client_visible, do_not_follow, only_for_reference } = req.body;
 
         const file = await files.findByPk(fileId);
         if (!file) {
@@ -819,6 +823,7 @@ export const updateFile = async (req: Request, res: Response) => {
         if (folder_id !== undefined) updateData.folder_id = (folder_id === '' || folder_id === 'root') ? null : folder_id;
         if (client_visible !== undefined) updateData.client_visible = client_visible;
         if (do_not_follow !== undefined) updateData.do_not_follow = do_not_follow;
+        if (only_for_reference !== undefined) updateData.only_for_reference = only_for_reference;
 
         await file.update(updateData);
 
@@ -916,7 +921,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         const shouldSkip = req.body.skipActivity === 'true' || req.body.skipActivity === true;
 
         const createdFiles = [];
-        
+
         // We only merge if mode is 'single' AND there's more than 1 file.
         // If there's only 1 file, we ALWAYS "just save" it to preserve integrity.
         const shouldMerge = !isSeparate && scanFiles.length > 1;
@@ -928,11 +933,11 @@ export const uploadScans = async (req: Request | any, res: Response) => {
             for (let i = 0; i < scanFiles.length; i++) {
                 const file = scanFiles[i];
                 console.log(`[DEBUG] Processing file ${i}: name=${file.originalname}, mimetype=${file.mimetype}`);
-                
+
                 let uploadBuffer: Buffer = file.buffer;
                 const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
                 const isImage = file.mimetype.startsWith('image/');
-                
+
                 const originalName = file.originalname;
                 let finalFileName = originalName;
                 let finalMimeType = file.mimetype;
