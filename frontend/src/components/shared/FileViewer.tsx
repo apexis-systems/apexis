@@ -346,65 +346,65 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           <div className="flex-1 relative flex flex-col bg-muted/10 dark:bg-black/40 overflow-hidden group order-1 md:order-2">
 
             {/* Top Bar Controls (Floating) */}
-            <div className="absolute top-0 left-0 right-0 z-[120] flex items-center justify-between p-4 bg-gradient-to-b from-background/90 via-background/40 to-transparent backdrop-blur-[2px]">
+            <div className="absolute top-0 left-0 right-0 z-[120] flex items-center justify-between p-4 bg-gradient-to-b from-background/80 via-background/30 to-transparent dark:from-black/60 dark:via-black/20 backdrop-blur-[2px]">
               <div className="flex flex-col pl-2">
-                <span className="text-[10px] font-black tracking-[0.2em] opacity-60 uppercase">
+                 <span className="text-[10px] font-black tracking-[0.2em] opacity-70 uppercase">
                   {currentIndex + 1} / {files.length}
                 </span>
               </div>
 
               <div className="flex items-center gap-1.5 pr-2">
                 {onCreateRfi && (
-                  <Button
-                    variant="ghost"
-                    className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md"
+                  <Button 
+                    variant="ghost" 
+                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
                     onClick={() => onCreateRfi(currentFile)}
                   >
                     <Plus className="h-3.5 w-3.5" /> {t('rfi_label')}
                   </Button>
                 )}
                 {onCreateSnag && (
-                  <Button
-                    variant="ghost"
-                    className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md"
+                  <Button 
+                    variant="ghost" 
+                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
                     onClick={() => onCreateSnag(currentFile)}
                   >
                     <Plus className="h-3.5 w-3.5" /> {t('snag')}
                   </Button>
                 )}
-                <Button
-                  variant="ghost"
-                  className="hover:bg-accent/10 h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase text-accent-foreground border border-border/50 bg-background/50 shadow-md"
+                <Button 
+                  variant="ghost" 
+                  className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" 
                   onClick={() => setShowLinkModal(true)}
                 >
                   <LinkIcon className="h-3.5 w-3.5" /> {t('link')}
                 </Button>
-                <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title={t('view_original')}>
+                <Button size="icon" variant="ghost" className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => window.open(currentFile.downloadUrl, '_blank')} title={t('view_original')}>
                   <ExternalLink className="h-4 w-4" />
                 </Button>
 
                 {(isImage || isPdf) && (
                   <>
                     <div className="h-4 w-[1px] bg-border/50 mx-1" />
-                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => {
-                      setZoom(z => { const nz = Math.max(z - 0.5, 1); if (nz <= 1) setPan({ x: 0, y: 0 }); return nz; });
+                    <Button size="icon" variant="ghost" className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => {
+                      setZoom(z => { const nz = Math.max(z - 0.5, 1); if(nz <= 1) setPan({x:0, y:0}); return nz; });
                     }} title={t('zoom_out')}>
                       <ZoomOut className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setZoom(z => Math.min(z + 0.5, 5))} title={t('zoom_in')}>
+                    <Button size="icon" variant="ghost" className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => setZoom(z => Math.min(z + 0.5, 5))} title={t('zoom_in')}>
                       <ZoomIn className="h-4 w-4" />
                     </Button>
                     {isImage && (
-                      <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setRotation(r => (r + 90) % 360)} title={t('rotate')}>
+                      <Button size="icon" variant="ghost" className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => setRotation(r => (r + 90) % 360)} title={t('rotate')}>
                         <RotateCw className="h-4 w-4" />
                       </Button>
                     )}
-                    <Button size="icon" variant="ghost" className="hover:bg-accent/10 h-9 w-9 backdrop-blur-md rounded-full" onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? t('exit_fullscreen') : t('fullscreen')}>
+                    <Button size="icon" variant="ghost" className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? t('exit_fullscreen') : t('fullscreen')}>
                       {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                     </Button>
                   </>
                 )}
-                <Button size="icon" variant="ghost" className="hover:bg-accent/20 h-10 w-10 ml-2 backdrop-blur-md rounded-full border border-border/50 bg-background/50 shadow-xl" onClick={() => onOpenChange(false)}>
+                <Button size="icon" variant="ghost" className="h-10 w-10 ml-2 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-xl dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80" onClick={() => onOpenChange(false)}>
                   <X className="h-5 w-5" />
                 </Button>
               </div>
