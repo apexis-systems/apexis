@@ -19,7 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSocket } from '@/contexts/SocketContext';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as WebBrowser from 'expo-web-browser';
@@ -34,7 +34,7 @@ import { Accelerometer } from 'expo-sensors';
 import { Project, User } from '@/types';
 import {
   getRFIs, createRFI, updateRFIStatus, RFI, ConversationMessage, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI,
-  getRFIById, markRFISeen, getRFIMessages, sendRFIMessage
+  getRFIById, markRFISeen, getRFIMessages, sendRFIMessage, linkRfiFile, deleteRfiLink
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -48,6 +48,26 @@ if (!isExpoGo) {
   }
 }
 
+const FilePaperclip = ({ size = 20, color, bgColor = '#ffffff' }: { size?: number; color?: string; bgColor?: string }) => {
+  const fileSize = Math.round(size * 0.85);
+  const clipSize = Math.round(size * 0.65);
+  return (
+    <View style={{ width: size, height: size, position: 'relative', justifyContent: 'center', alignItems: 'center' }}>
+      <Feather name="file-text" size={fileSize} color={color} style={{ position: 'absolute', top: 0, left: 0 }} />
+      <View style={{ 
+        position: 'absolute', 
+        bottom: -2, 
+        right: -2, 
+        backgroundColor: bgColor, 
+        borderRadius: clipSize / 2,
+        padding: 1,
+      }}>
+        <Feather name="paperclip" size={clipSize} color={color} />
+      </View>
+    </View>
+  );
+};
+
 // Removed AnimatedCameraView for stability
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { Assignee } from '@/services/snagService';
@@ -56,6 +76,7 @@ import { parseApiError } from '@/helpers/apiError';
 import MobileFolderPickerDialog from './MobileFolderPickerDialog';
 import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
+import LinkFileModal from '../shared/LinkFileModal';
 
 const isAudio = (url: string) => {
   if (!url) return false;
@@ -208,21 +229,6 @@ const getLinkedDocuments = (rfi: any, docMetadata?: Record<string, { size?: stri
   const list: { name: string; url: string; size?: string; type?: string }[] = [];
   if (!rfi) return list;
 
-  if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
-    rfi.file_rfi_links.forEach((link: any) => {
-      const f = link.file || link.files;
-      if (f && f.downloadUrl) {
-        if (!isImageFile(f, docMetadata) && !isAudioFile(f, docMetadata)) {
-          list.push({
-            name: f.file_name || 'Document',
-            url: f.downloadUrl,
-            size: f.file_size_mb ? `${f.file_size_mb} MB` : undefined,
-            type: f.file_type || 'Unknown'
-          });
-        }
-      }
-    });
-  }
   return list;
 };
 
@@ -237,6 +243,7 @@ const getLinkedImages = (rfi: any, docMetadata?: Record<string, { size?: string;
       }
     });
   }
+
   return list;
 };
 
@@ -251,6 +258,7 @@ const getLinkedAudios = (rfi: any, docMetadata?: Record<string, { size?: string;
       }
     });
   }
+
   return list;
 };
 
@@ -286,6 +294,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const config = statusConfig(t);
 
   const router = useRouter();
+  const searchParams = useLocalSearchParams();
 
   const insets = useSafeAreaInsets();
   const MAX_RFI_IMAGES = 4;
@@ -295,6 +304,27 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [playingUri, setPlayingUri] = useState<string | null>(null);
   const [creatorFilter, setCreatorFilter] = useState<string>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+
+  const handleCloseDetailModal = () => {
+    setDetailModalVisible(false);
+    setResponseBody('');
+    setResponseImages([]);
+    const returnTab = searchParams?.returnTab as string;
+    if (returnTab) {
+      const rParams: any = { tab: returnTab, rfiId: '' };
+      if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+      if (searchParams.returnFileId) {
+        rParams.fileId = String(searchParams.returnFileId);
+        // Signal viewer to open on links tab
+        rParams.returnViewerTab = 'links';
+      } else {
+        // Returning to a folder (not a file preview) — clear stale fileId
+        rParams.fileId = '';
+        if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
+      }
+      router.setParams(rParams);
+    }
+  };
 
   // Modals
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -320,7 +350,91 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [messageAttachment, setMessageAttachment] = useState<string | null>(null);
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
-  const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
+  const [showFilePicker, setShowFilePicker] = useState(false);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
+  const [activeTab, setActiveTab] = useState<'photos' | 'documents'>('photos');
+
+  const handleLinkFile = async (targetFileId: string | number) => {
+    if (!selectedRFI) return;
+    setSubmitting(true);
+    try {
+      await linkRfiFile(selectedRFI.id, Number(targetFileId));
+      const updated = await getRFIById(selectedRFI.id);
+      setSelectedRFI(updated);
+      setRfis(prev => prev.map(r => r.id === updated.id ? updated : r));
+      setShowFilePicker(false);
+    } catch (error) {
+      Alert.alert('Error', t('link_failed') || 'Failed to link file');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRemoveFileLink = async (targetFileId: string | number) => {
+    if (!selectedRFI) return;
+    try {
+      await deleteRfiLink(selectedRFI.id, Number(targetFileId));
+      const updated = await getRFIById(selectedRFI.id);
+      setSelectedRFI(updated);
+      setRfis(prev => prev.map(r => r.id === updated.id ? updated : r));
+    } catch (error) {
+      Alert.alert('Error', t('link_remove_failed') || 'Failed to remove link');
+    }
+  };
+
+  const handleLinkItemClick = async (item: any) => {
+      const itemType = item.type || item.target_type;
+      const itemId = item.target_id || item.id;
+      if (!itemType || !itemId) return;
+
+      let targetFolderId: string | null = item.folder_id ? String(item.folder_id) : null;
+      if (!targetFolderId && item.file_url) {
+          const parts = item.file_url.split('/');
+          const folderIdx = parts.indexOf('folders');
+          if (folderIdx !== -1 && folderIdx + 1 < parts.length) {
+              targetFolderId = parts[folderIdx + 1];
+          }
+      }
+
+      const returnContext = {
+          returnTab: 'rfi',
+          returnRfiId: selectedRFI ? String(selectedRFI.id) : ''
+      };
+
+      setDetailModalVisible(false);
+      setShowFilePicker(false);
+      setSelectedRFI(null);
+
+      setTimeout(() => {
+          if (itemType === 'file') {
+              const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+              const isPhoto = item.file_type?.startsWith('image/') ||
+                  fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
+
+              if (isPhoto) {
+                  router.setParams({
+                      tab: 'photos',
+                      folderId: String(targetFolderId || ''),
+                      fileId: String(itemId),
+                      ...returnContext
+                  });
+              } else {
+                  router.setParams({
+                      tab: 'documents',
+                      folderId: String(targetFolderId || ''),
+                      fileId: String(itemId),
+                      ...returnContext
+                  });
+              }
+          } else {
+              if (itemType === 'rfi') {
+                  router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
+              } else if (itemType === 'snag') {
+                  router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
+              }
+          }
+      }, 100);
+  };
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
   const [pdfViewerName, setPdfViewerName] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -1330,7 +1444,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         visible={detailModalVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => { setDetailModalVisible(false); setResponseBody(''); setResponseImages([]); }}
+        onRequestClose={handleCloseDetailModal}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1351,12 +1465,17 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
                   {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id) || String(selectedRFI.assigned_to) === String(user.id) || String(selectedRFI.assignee?.id) === String(user.id)) && (
-                    <TouchableOpacity onPress={() => {
-                      setSelectedFolderIds(selectedRFI.folder_ids || []);
-                      setShowFolderPicker(true);
-                    }}>
-                      <Feather name="link-2" size={20} color={colors.primary} />
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity onPress={() => setShowFilePicker(true)}>
+                        <FilePaperclip size={20} color={colors.primary} bgColor={colors.background} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => {
+                        setSelectedFolderIds(selectedRFI.folder_ids || []);
+                        setShowFolderPicker(true);
+                      }}>
+                        <Feather name="link-2" size={20} color={colors.primary} />
+                      </TouchableOpacity>
+                    </>
                   )}
                   {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id)) && !selectedRFI.response && !selectedRFI?.response_photos && (
                     <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -1379,7 +1498,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </TouchableOpacity>
                     </View>
                   )}
-                  <TouchableOpacity onPress={() => { setDetailModalVisible(false); }}>
+                  <TouchableOpacity onPress={handleCloseDetailModal}>
                     <Feather name="x" size={24} color={colors.text} />
                   </TouchableOpacity>
                 </View>
@@ -1557,7 +1676,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                   router.setParams({
                                     tab: f.folder_type === 'photo' ? 'photos' : 'documents',
                                     folderId: String(f.id),
-                                    rfiId: undefined // Explicitly clear any RFI trigger
+                                    rfiId: undefined,
+                                    returnTab: 'rfi',
+                                    returnRfiId: selectedRFI ? String(selectedRFI.id) : undefined
                                   });
                                 }, 100);
                               }}
@@ -2533,13 +2654,25 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           selectedFolderIds={selectedFolderIds}
           submitting={submitting}
           onConfirm={async (ids) => {
-            setSelectedFolderIds(ids);
+            setSelectedFolderIds(ids.map(Number));
             if (selectedRFI && detailModalVisible && !createModalVisible) {
               await handleUpdateLinks(ids);
             }
             setShowFolderPicker(false);
           }}
         />
+
+        {selectedRFI && showFilePicker && (
+            <LinkFileModal
+                visible={showFilePicker}
+                onClose={() => setShowFilePicker(false)}
+                projectId={project.id}
+                linkedFileIds={selectedRFI.file_rfi_links?.map((l: any) => l.file_id) || []}
+                onLink={handleLinkFile}
+                onRemoveLink={handleRemoveFileLink}
+                handleLinkItemClick={handleLinkItemClick}
+            />
+        )}
 
       </Modal>
 

@@ -8,7 +8,7 @@ import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
 import * as WebBrowser from 'expo-web-browser';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -52,6 +52,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const { socket } = useSocket();
 
     const router = useRouter();
+    const searchParams = useLocalSearchParams();
     const [docs, setDocs] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
     // Sync selectedFolder whenever the deep-link prop changes.
@@ -366,6 +367,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             }
         }
 
+        const returnContext = {
+            returnTab: 'documents',
+            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+            returnFileId: currentDoc?.id ? String(currentDoc.id) : '',
+            // Tell the viewer to reopen on the links tab when returning
+            returnViewerTab: 'links',
+        };
+
         if (itemType === 'file') {
             const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
             const isPhoto = item.file_type?.startsWith('image/') ||
@@ -373,51 +382,34 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 fileName.endsWith('.gif') || fileName.endsWith('.webp');
 
             if (isPhoto) {
-                // It's an image — navigate to the photos tab and deep-link open it
-                setPdfViewerUrl(null);
-                setCurrentDoc(null);
+                setShowLinkModal(false);
                 router.setParams({
                     tab: 'photos',
                     folderId: String(targetFolderId || ''),
                     fileId: String(itemId),
+                    ...returnContext
                 });
             } else {
-                // It's a document/PDF
                 const targetDoc = docs.find(d => String(d.id) === String(itemId));
-                if (targetDoc) {
-                    if (String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
-                        // SAME FOLDER: open doc directly
-                        openDoc(targetDoc);
-                    } else {
-                        // DIFFERENT FOLDER: close current doc, navigate via router params
-                        setPdfViewerUrl(null);
-                        setCurrentDoc(null);
-                        router.setParams({
-                            tab: 'documents',
-                            folderId: String(targetFolderId || ''),
-                            fileId: String(itemId),
-                        });
-                    }
+                if (targetDoc && String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
+                    setShowLinkModal(false);
+                    openDoc(targetDoc);
                 } else {
-                    // Doc not yet loaded — navigate via router params
-                    setPdfViewerUrl(null);
-                    setCurrentDoc(null);
+                    setShowLinkModal(false);
                     router.setParams({
                         tab: 'documents',
                         folderId: String(targetFolderId || ''),
                         fileId: String(itemId),
+                        ...returnContext
                     });
                 }
             }
         } else {
-            // RFI or Snag
-            setPdfViewerUrl(null);
-            setCurrentDoc(null);
-            setShowComments(false);
+            setShowLinkModal(false);
             if (itemType === 'rfi') {
-                router.setParams({ tab: 'rfi', rfiId: String(itemId) });
+                router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
             } else if (itemType === 'snag') {
-                router.setParams({ tab: 'snags', snagId: String(itemId) });
+                router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
             }
         }
     };
@@ -451,6 +443,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setLinkedSnags([]);
         }
     }, [selectedFolder]);
+
+    // Auto-switch folder tab when returning from an RFI/Snag opened from the folder's linked section
+    useEffect(() => {
+        const folderActiveTab = searchParams?.returnFolderActiveTab as string;
+        if (folderActiveTab && selectedFolder) {
+            setActiveFolderTab('rfis');
+            router.setParams({ returnFolderActiveTab: '' });
+        }
+    }, [searchParams?.returnFolderActiveTab, selectedFolder]);
 
     const fetchLinkedRFIs = async () => {
         if (!selectedFolder) return;
@@ -594,7 +595,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const index = sortedInit.findIndex(d => String(d.id) === String(initialFileId));
             if (index !== -1) {
                 openDoc(sortedInit[index]);
-                router.setParams({ fileId: '', documentId: '' });
+                // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
+                if (searchParams?.returnViewerTab === 'links') {
+                    setViewerActiveTab('links');
+                }
+                router.setParams({ fileId: '', documentId: '', returnViewerTab: '' });
             }
         }
     }, [initialFileId, docs, selectedFolder, sortBy, user.role, router]);
@@ -1000,7 +1005,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         if (!selectedFolder) return;
         const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
-    }, [selectedFolder, currentFolder]);
+        // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
+        router.setParams({ folderId: '' });
+    }, [selectedFolder, currentFolder, router]);
 
     useFocusEffect(
         useCallback(() => {
@@ -1811,7 +1818,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             {linkedRFIs.map((rfi) => (
                                                 <TouchableOpacity
                                                     key={rfi.id}
-                                                    onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                                    onPress={() => {
+                                        const returnContext = {
+                                            returnTab: 'documents',
+                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                            returnFolderActiveTab: 'rfis',
+                                        };
+                                        router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
+                                    }}
                                                     style={{
                                                         backgroundColor: colors.surface,
                                                         borderRadius: 12,
@@ -1870,7 +1884,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             {linkedSnags.map((snag) => (
                                                 <TouchableOpacity
                                                     key={snag.id}
-                                                    onPress={() => router.setParams({ tab: 'snags', snagId: String(snag.id) })}
+                                                    onPress={() => {
+                                        const returnContext = {
+                                            returnTab: 'documents',
+                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                            returnFolderActiveTab: 'rfis',
+                                        };
+                                        router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
+                                    }}
                                                     style={{
                                                         backgroundColor: colors.surface,
                                                         borderRadius: 12,
@@ -2043,64 +2064,91 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     setCurrentDoc(null);
                     setShowComments(false);
                     setDocComments([]);
+                    const returnTab = searchParams?.returnTab as string;
+                    if (returnTab) {
+                        const rParams: any = { tab: returnTab };
+                        if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+                        if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                        if (searchParams.returnFileId) {
+                            rParams.fileId = String(searchParams.returnFileId);
+                            rParams.returnViewerTab = 'links';
+                        } else {
+                            rParams.fileId = '';
+                            if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
+                        }
+                        router.setParams(rParams);
+                    }
                 }}
             >
                 <StatusBar hidden />
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                    <View style={{ flex: 1, backgroundColor: '#111' }}>
-                        {/* Header */}
-                        <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            paddingHorizontal: 16,
-                            paddingTop: Platform.OS === 'android' ? 40 : 52,
-                            paddingBottom: 12,
-                            backgroundColor: '#1a1a1a',
-                            borderBottomWidth: 1,
-                            borderBottomColor: 'rgba(255,255,255,0.08)',
-                        }}>
+                <View style={{ flex: 1, backgroundColor: '#111' }}>
+                    {/* Header */}
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 16,
+                        paddingTop: Platform.OS === 'android' ? 40 : 52,
+                        paddingBottom: 12,
+                        backgroundColor: '#1a1a1a',
+                        borderBottomWidth: 1,
+                        borderBottomColor: 'rgba(255,255,255,0.08)',
+                    }}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setPdfViewerUrl(null);
+                                setCurrentDoc(null);
+                                setShowComments(false);
+                                setDocComments([]);
+                                const returnTab = searchParams?.returnTab as string;
+                                if (returnTab) {
+                                    const rParams: any = { tab: returnTab };
+                                    if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+                                    if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                                    if (searchParams.returnFileId) {
+                                        rParams.fileId = String(searchParams.returnFileId);
+                                        rParams.returnViewerTab = 'links';
+                                    } else {
+                                        rParams.fileId = '';
+                                        if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
+                                    }
+                                    router.setParams(rParams);
+                                }
+                            }}
+                            style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
+                        >
+                            <Feather name="x" size={20} color="#fff" />
+                        </TouchableOpacity>
+                        <Text numberOfLines={1} style={{ flex: 1, color: '#fff', fontSize: 13, fontWeight: '600', marginHorizontal: 12 }}>
+                            {pdfViewerName}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                                <Feather name="link" size={18} color="#fff" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setShowComments(!showComments)}
+                                style={{ padding: 8, borderRadius: 20, backgroundColor: showComments ? colors.primary : 'rgba(255,255,255,0.1)' }}
+                            >
+                                <View style={{ position: 'relative' }}>
+                                    <Feather name="message-square" size={18} color="#fff" />
+                                    {docComments.length > 0 && (
+                                        <View style={{ position: 'absolute', top: -4, right: -6, backgroundColor: '#ef4444', borderRadius: 8, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
+                                            <Text style={{ color: '#fff', fontSize: 7, fontWeight: '900' }}>{docComments.length}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => {
-                                    setPdfViewerUrl(null);
-                                    setCurrentDoc(null);
-                                    setShowComments(false);
-                                    setDocComments([]);
+                                    if (currentDoc) handleShareDoc(currentDoc);
                                 }}
                                 style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
                             >
-                                <Feather name="x" size={20} color="#fff" />
+                                <Feather name="share-2" size={18} color="#fff" />
                             </TouchableOpacity>
-                            <Text numberOfLines={1} style={{ flex: 1, color: '#fff', fontSize: 13, fontWeight: '600', marginHorizontal: 12 }}>
-                                {pdfViewerName}
-                            </Text>
-                            <View style={{ flexDirection: 'row', gap: 4 }}>
-                                <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                                    <Feather name="link" size={18} color="#fff" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setShowComments(!showComments)}
-                                    style={{ padding: 8, borderRadius: 20, backgroundColor: showComments ? colors.primary : 'rgba(255,255,255,0.1)' }}
-                                >
-                                    <View style={{ position: 'relative' }}>
-                                        <Feather name="message-square" size={18} color="#fff" />
-                                        {docComments.length > 0 && (
-                                            <View style={{ position: 'absolute', top: -4, right: -6, backgroundColor: '#ef4444', borderRadius: 8, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
-                                                <Text style={{ color: '#fff', fontSize: 7, fontWeight: '900' }}>{docComments.length}</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        if (currentDoc) handleShareDoc(currentDoc);
-                                    }}
-                                    style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
-                                >
-                                    <Feather name="share-2" size={18} color="#fff" />
-                                </TouchableOpacity>
-                            </View>
                         </View>
+                    </View>
 
                         {/* Metadata Strip */}
                         {(currentDoc?.location || currentDoc?.tags) && (
@@ -2380,7 +2428,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 </ScrollView>
                             </View>
                         )}
-                    </View>
+
 
                     {/* Sharing Overlay (Inside the PDF Viewer) */}
                     {sharing && (
@@ -2409,7 +2457,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             handleLinkItemClick={handleLinkItemClick}
                         />
                     )}
-                </GestureHandlerRootView>
+                </View>
             </Modal>
 
             {/* Sharing Overlay (For cases where viewer isn't open) */}

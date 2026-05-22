@@ -1044,7 +1044,23 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             files={sortedPhotos}
             initialIndex={viewerState.index}
             open={viewerState.open}
-            onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
+            onOpenChange={(open) => {
+                if (!open) {
+                    setViewerState(prev => ({ ...prev, open: false }));
+                    const returnTab = searchParams?.get('returnTab');
+                    if (returnTab) {
+                        const returnRfiId = searchParams?.get('returnRfiId');
+                        const returnSnagId = searchParams?.get('returnSnagId');
+                        const params = new URLSearchParams();
+                        params.set('tab', returnTab);
+                        if (returnRfiId) params.set('rfiId', returnRfiId);
+                        if (returnSnagId) params.set('snagId', returnSnagId);
+                        router.push(`?${params.toString()}`);
+                    }
+                } else {
+                    setViewerState(prev => ({ ...prev, open: true }));
+                }
+            }}
             user={user}
             onUpdate={(updatedFile) => setPhotos(prev => prev.map(p => p.id === updatedFile.id ? updatedFile : p))}
             targetType="photo"

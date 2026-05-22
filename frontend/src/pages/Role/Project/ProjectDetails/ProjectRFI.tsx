@@ -9,7 +9,7 @@ import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2, Pencil,
-    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck, FileText, Eye
+    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck, FileText, Eye, Paperclip
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,8 @@ import {
     getRFIMessages,
     sendRFIMessage,
     RFIAssignee,
+    linkRfiFile,
+    deleteRfiLink
 } from '@/services/rfiService';
 import { Assignee } from '@/services/snagService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
@@ -35,6 +37,16 @@ import FolderPickerDialog from './FolderPickerDialog';
 import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
 import FileViewer from '@/components/shared/FileViewer';
+import LinkFileModal from '@/components/shared/LinkFileModal';
+
+const FilePaperclip = ({ className }: { className?: string }) => {
+    return (
+        <div className={cn("relative flex items-center justify-center shrink-0", className)}>
+            <FileText className="h-[90%] w-[90%] -translate-x-[5%] -translate-y-[5%]" />
+            <Paperclip className="absolute -bottom-[3px] -right-[3px] h-[65%] w-[65%] bg-background text-foreground rounded-full p-[0.5px]" />
+        </div>
+    );
+};
 
 const isAudio = (url: string) => {
     if (!url) return false;
@@ -194,52 +206,36 @@ const isAudioFile = (
 const getLinkedDocuments = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
     const list: { id?: string | number; name: string; url: string; size?: string; type?: string; file_size_mb?: number }[] = [];
     if (!rfi) return list;
-
-    if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
-        rfi.file_rfi_links.forEach((link: any) => {
-            const f = link.file || link.files;
-            if (f && f.downloadUrl) {
-                if (!isImageFile(f, docMetadata) && !isAudioFile(f, docMetadata)) {
-                    list.push({
-                        id: f.id,
-                        name: f.file_name || 'Document',
-                        url: f.downloadUrl,
-                        size: f.file_size_mb ? `${f.file_size_mb} MB` : undefined,
-                        file_size_mb: f.file_size_mb,
-                        type: f.file_type || 'Unknown'
-                    });
-                }
-            }
-        });
-    }
     return list;
 };
 
 const getLinkedImages = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
-    const list: string[] = [];
+    const list: { id?: number; url: string }[] = [];
     if (!rfi) return list;
 
     if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
         rfi.photoDownloadUrls.forEach((url: string) => {
-            if (isImageFile(url, docMetadata) && !list.includes(url)) {
-                list.push(url);
+            if (isImageFile(url, docMetadata) && !list.find(i => i.url === url)) {
+                list.push({ url });
             }
         });
     }
+
     return list;
 };
 
 const getLinkedAudios = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
-    const list: string[] = [];
+    const list: { id?: number; url: string }[] = [];
     if (!rfi) return list;
 
     if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
         rfi.photoDownloadUrls.forEach((url: string) => {
-            if (isAudioFile(url, docMetadata) && !list.includes(url)) {
-                list.push(url);
+            if (isAudioFile(url, docMetadata) && !list.find(a => a.url === url)) {
+                list.push({ url });
             }
         });
     }
+
     return list;
 };
 
@@ -307,6 +303,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
     const [showFolderPicker, setShowFolderPicker] = useState(false);
+    const [showFilePicker, setShowFilePicker] = useState(false);
     const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -314,6 +311,16 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [viewerFiles, setViewerFiles] = useState<any[]>([]);
+
+    const handleCloseDetailDialog = () => {
+        setSelectedRFI(null);
+        const returnTab = searchParams?.get('returnTab');
+        if (returnTab) {
+            const returnFolderId = searchParams?.get('returnFolderId');
+            const returnContext = returnFolderId ? `&folderId=${returnFolderId}` : '';
+            router.push(`?tab=${returnTab}${returnContext}`);
+        }
+    };
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -601,6 +608,36 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             toast.error(t('failed_update_links'));
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleLinkFile = async (targetFileId: string | number) => {
+        if (!selectedRFI) return;
+        setSubmitting(true);
+        try {
+            await linkRfiFile(selectedRFI.id, Number(targetFileId));
+            const updated = await getRFIById(selectedRFI.id);
+            setSelectedRFI(updated);
+            setRfis(prev => prev.map(r => r.id === updated.id ? updated : r));
+            toast.success(t('link_success') || 'File linked successfully');
+            setShowFilePicker(false);
+        } catch (error) {
+            toast.error(t('link_failed') || 'Failed to link file');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleRemoveFileLink = async (targetFileId: string | number) => {
+        if (!selectedRFI) return;
+        try {
+            await deleteRfiLink(selectedRFI.id, Number(targetFileId));
+            const updated = await getRFIById(selectedRFI.id);
+            setSelectedRFI(updated);
+            setRfis(prev => prev.map(r => r.id === updated.id ? updated : r));
+            toast.success(t('link_removed') || 'Link removed successfully');
+        } catch (error) {
+            toast.error(t('link_remove_failed') || 'Failed to remove link');
         }
     };
 
@@ -994,7 +1031,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             </Dialog>
 
             {/* Detail Dialog */}
-            <Dialog open={!!selectedRFI} onOpenChange={(open) => !open && setSelectedRFI(null)}>
+            <Dialog open={!!selectedRFI} onOpenChange={(open) => !open && handleCloseDetailDialog()}>
                 <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto no-scrollbar">
                     {selectedRFI && (
                         <>
@@ -1008,18 +1045,29 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id) || String(selectedRFI.assigned_to) === String(user?.id) || String(selectedRFI.assignee?.id) === String(user?.id)) && (
-                                            <Button 
-                                                variant="outline" 
-                                                size="sm" 
-                                                className="h-7 text-[10px]"
-                                                onClick={() => {
-                                                    setSelectedFolderIds(selectedRFI.linked_folders?.map(f => f.id) || []);
-                                                    setShowFolderPicker(true);
-                                                }}
-                                            >
-                                                <Folder className="h-3 w-3 mr-1.5" />
-                                                {t('link_btn')}
-                                            </Button>
+                                            <>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px]"
+                                                    onClick={() => setShowFilePicker(true)}
+                                                >
+                                                    <FilePaperclip className="h-3.5 w-3.5 mr-1.5" />
+                                                    {t('link_files') || 'Link Files'}
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px]"
+                                                    onClick={() => {
+                                                        setSelectedFolderIds(selectedRFI.linked_folders?.map(f => f.id) || []);
+                                                        setShowFolderPicker(true);
+                                                    }}
+                                                >
+                                                    <Folder className="h-3 w-3 mr-1.5" />
+                                                    {t('link_btn')}
+                                                </Button>
+                                            </>
                                         )}
                                         {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && (
                                             <>
@@ -1057,7 +1105,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         if (confirm(t('confirm_delete_rfi'))) {
                                                             deleteRFI(selectedRFI.id).then(() => {
                                                                 setRfis(prev => prev.filter(r => r.id !== selectedRFI.id));
-                                                                setSelectedRFI(null);
+                                                                handleCloseDetailDialog();
                                                                 toast.success(t('rfi_deleted_msg'));
                                                             }).catch(() => toast.error(t('failed_delete_rfi')));
                                                         }
@@ -1133,14 +1181,20 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                 <div className="space-y-2">
                                                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('attachments') || 'Attachments'}</p>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {images.map((url, idx) => (
+                                                        {images.map((img, idx) => (
                                                             <div 
                                                                 key={idx}
-                                                                onClick={() => setViewPhoto(url)}
+                                                                onClick={() => {
+                                                                    if (img.id) {
+                                                                        router.push(`?tab=photos&photoId=${img.id}&returnTab=rfi&returnRfiId=${selectedRFI.id}`);
+                                                                    } else {
+                                                                        setViewPhoto(img.url);
+                                                                    }
+                                                                }}
                                                                 className="relative w-24 h-24 rounded-xl overflow-hidden border border-border bg-card shadow-sm hover:border-accent/30 transition-all cursor-pointer group"
                                                             >
                                                                 <img 
-                                                                    src={url} 
+                                                                    src={img.url} 
                                                                     alt={`Attachment ${idx + 1}`} 
                                                                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
                                                                 />
@@ -1156,7 +1210,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                 <div className="space-y-2">
                                                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('voiceAttachment') || 'Voice Attachment'}</p>
                                                     <div className="grid grid-cols-1 gap-2">
-                                                        {audios.map((url, idx) => (
+                                                        {audios.map((aud, idx) => (
                                                             <div 
                                                                 key={idx}
                                                                 className="p-3 rounded-xl border border-border bg-card shadow-sm"
@@ -1165,7 +1219,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />
                                                                     <span className="text-[9px] font-extrabold text-muted-foreground tracking-wider uppercase">{t('voiceAttachment') || 'Voice Attachment'}</span>
                                                                 </div>
-                                                                <VoiceNotePlayer url={url} isMe={false} />
+                                                                <VoiceNotePlayer url={aud.url} isMe={false} />
                                                             </div>
                                                         ))}
                                                     </div>
@@ -1189,19 +1243,23 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                      <div 
                                                          key={idx} 
                                                          onClick={() => {
-                                                             const filesForViewer = docs.map((d, index) => ({
-                                                                 id: d.id || `rfi-doc-${selectedRFI.id}-${index}`,
-                                                                 file_name: d.name,
-                                                                 file_type: d.type || getMimeTypeFromUrl(d.url) || 'application/octet-stream',
-                                                                 downloadUrl: d.url,
-                                                                 file_size_mb: d.file_size_mb,
-                                                                 creator: { name: selectedRFI.creator?.name },
-                                                                 createdAt: selectedRFI.createdAt || selectedRFI.created_at,
-                                                                 project_id: selectedRFI.project_id,
-                                                             }));
-                                                             setViewerFiles(filesForViewer);
-                                                             setViewerIndex(idx);
-                                                             setViewerOpen(true);
+                                                             if (doc.id) {
+                                                                 router.push(`?tab=documents&documentId=${doc.id}&returnTab=rfi&returnRfiId=${selectedRFI.id}`);
+                                                             } else {
+                                                                 const filesForViewer = docs.map((d, index) => ({
+                                                                     id: d.id || `rfi-doc-${selectedRFI.id}-${index}`,
+                                                                     file_name: d.name,
+                                                                     file_type: d.type || getMimeTypeFromUrl(d.url) || 'application/octet-stream',
+                                                                     downloadUrl: d.url,
+                                                                     file_size_mb: d.file_size_mb,
+                                                                     creator: { name: selectedRFI.creator?.name },
+                                                                     createdAt: selectedRFI.createdAt || selectedRFI.created_at,
+                                                                     project_id: selectedRFI.project_id,
+                                                                 }));
+                                                                 setViewerFiles(filesForViewer);
+                                                                 setViewerIndex(idx);
+                                                                 setViewerOpen(true);
+                                                             }
                                                          }}
                                                          className="flex items-center justify-between p-3 rounded-xl border border-border bg-card shadow-sm hover:border-accent/30 transition-all cursor-pointer"
                                                      >
@@ -1491,6 +1549,16 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 }
             }}
         />
+
+        {selectedRFI && showFilePicker && (
+            <LinkFileModal
+                open={showFilePicker}
+                onOpenChange={setShowFilePicker}
+                projectId={String(project.id)}
+                linkedFileIds={selectedRFI.file_rfi_links?.map((l: any) => l.file_id) || []}
+                onLink={handleLinkFile}
+            />
+        )}
     </div>
     );
 }

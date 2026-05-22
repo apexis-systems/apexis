@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { verifyToken } from '../middleware/verifyToken.ts';
 import { checkLimit } from '../middleware/checkLimit.ts';
-import { getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees, updateSnag, markSnagSeen, getFolderSnags } from '../controllers/snagController.ts';
+import { getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees, updateSnag, markSnagSeen, getFolderSnags, linkSnagFile, deleteSnagLink } from '../controllers/snagController.ts';
 import { createConversationMessage, getConversationMessages } from '../controllers/conversationMessageController.ts';
 
 const router = Router();
@@ -23,5 +23,7 @@ router.patch('/:id/status', upload.array('photos', 2), updateSnagStatus);
 router.patch('/:id/seen', markSnagSeen);
 router.patch('/:id', upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), updateSnag);
 router.delete('/:id', deleteSnag);
+router.post('/:id/link', linkSnagFile);
+router.delete('/:id/link/:fileId', deleteSnagLink);
 
 export default router;
