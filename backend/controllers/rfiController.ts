@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { S3Client, PutObjectCommand, GetObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { rfis, users, activities, projects, project_members, folders, sequelize, file_rfi_links } from '../models/index.ts';
+import { rfis, users, activities, projects, project_members, folders, sequelize, file_rfi_links, files } from '../models/index.ts';
 import { sendNotification } from '../utils/notificationUtils.ts';
 import { logActivity } from "../utils/activityUtils.ts";
 import { addWatermark } from '../utils/watermark.ts';
@@ -70,6 +70,29 @@ const withPresignedUrls = async (rfi: any) => {
         json.linked_folders = [];
     }
 
+    if (json.file_rfi_links && Array.isArray(json.file_rfi_links)) {
+        try {
+            await Promise.all(
+                json.file_rfi_links.map(async (link: any) => {
+                    const fileObj = link.file || link.files;
+                    if (fileObj && fileObj.file_url) {
+                        try {
+                            const rawKey = fileObj.file_url;
+                            const key = rawKey.startsWith('/') ? rawKey.substring(1) : rawKey;
+                            const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+                            fileObj.downloadUrl = await getSignedUrl(s3Client, cmd, { expiresIn: 3600 });
+                        } catch (err) {
+                            console.error("Presign file url error:", err);
+                            fileObj.downloadUrl = null;
+                        }
+                    }
+                })
+            );
+        } catch (err) {
+            console.error("Error processing file_rfi_links presigning:", err);
+        }
+    }
+
     return json;
 };
 
@@ -92,6 +115,10 @@ export const getRFIs = async (req: Request, res: Response) => {
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
                 { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },
+                {
+                    model: file_rfi_links,
+                    include: [{ model: files }]
+                }
             ],
             order: [['createdAt', 'DESC']],
         });
@@ -277,6 +304,10 @@ export const createRFI = async (req: Request | any, res: Response) => {
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name', 'role', 'profile_pic'] },
                 { model: users, as: 'creator', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                {
+                    model: file_rfi_links,
+                    include: [{ model: files }]
+                }
             ],
         });
 
@@ -329,10 +360,23 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
             });
         }
 
-        res.json({ rfi });
+        const full = await rfis.findByPk(id, {
+            include: [
+                { model: users, as: 'assignee', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                { model: users, as: 'creator', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                {
+                    model: file_rfi_links,
+                    include: [{ model: files }]
+                }
+            ],
+        });
+
+        const rfiWithUrls = await withPresignedUrls(full!);
+
+        res.json({ rfi: rfiWithUrls });
 
         try {
-            getIO().to(`project-${(rfi as any).project_id}`).emit('rfi-updated', { rfi });
+            getIO().to(`project-${(rfi as any).project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
         } catch (e) {
             console.error('Socket emit error (updateRFIStatus):', e);
         }
@@ -385,6 +429,10 @@ export const getRFIById = async (req: Request, res: Response) => {
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name', 'role', 'profile_pic'] },
                 { model: users, as: 'creator', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                {
+                    model: file_rfi_links,
+                    include: [{ model: files }]
+                }
             ],
         });
 
@@ -599,7 +647,18 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
             });
         }
 
-        const rfiWithUrls = await withPresignedUrls(rfi);
+        const full = await rfis.findByPk(id, {
+            include: [
+                { model: users, as: 'assignee', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                { model: users, as: 'creator', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                {
+                    model: file_rfi_links,
+                    include: [{ model: files }]
+                }
+            ],
+        });
+
+        const rfiWithUrls = await withPresignedUrls(full!);
 
         try {
             getIO().to(`project-${(rfi as any).project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
@@ -672,13 +731,19 @@ export const updateRFI = async (req: Request | any, res: Response) => {
         const rfi = await rfis.findByPk(id);
         if (!rfi) return res.status(404).json({ error: 'RFI not found' });
 
-        // Only creator can edit
-        if (Number(rfi.created_by) !== Number(authUser.user_id)) {
-            return res.status(403).json({ error: 'Only the creator can edit this RFI' });
+        const isCreator = Number(rfi.created_by) === Number(authUser.user_id);
+        const isAssignee = Number(rfi.assigned_to) === Number(authUser.user_id);
+
+        if (!isCreator && !isAssignee) {
+            return res.status(403).json({ error: 'Only the creator or assignee can edit this RFI' });
         }
 
-        // Cannot edit core fields if there is a response, but folder linking is always allowed
         const isCoreUpdate = title || (description !== undefined) || assigned_to || expiry_date || (req.files && req.files.length > 0) || removedPhotos;
+
+        // If they are only the assignee (not creator), they can only update folder links
+        if (isAssignee && !isCreator && isCoreUpdate) {
+            return res.status(403).json({ error: 'Assignee can only update folder links' });
+        }
         const hasResponse = rfi.response || (rfi.response_photos && rfi.response_photos.length > 0);
         if (hasResponse && isCoreUpdate) {
             return res.status(400).json({ error: 'Cannot edit RFI details because a response has already been generated. However, folder links can still be updated.' });
@@ -764,6 +829,10 @@ export const updateRFI = async (req: Request | any, res: Response) => {
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name', 'role', 'profile_pic'] },
                 { model: users, as: 'creator', attributes: ['id', 'name', 'role', 'profile_pic'] },
+                {
+                    model: file_rfi_links,
+                    include: [{ model: files }]
+                }
             ],
         });
 
@@ -797,6 +866,10 @@ export const getFolderRFIs = async (req: Request, res: Response) => {
             include: [
                 { model: users, as: 'assignee', attributes: ['id', 'name', 'role'] },
                 { model: users, as: 'creator', attributes: ['id', 'name', 'role'] },
+                {
+                    model: file_rfi_links,
+                    include: [{ model: files }]
+                }
             ],
             order: [['createdAt', 'DESC']],
         });

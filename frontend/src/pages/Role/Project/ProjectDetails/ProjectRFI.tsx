@@ -9,7 +9,7 @@ import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2, Pencil,
-    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck
+    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck, FileText, Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,7 @@ import ImageAnnotator from '@/components/common/ImageAnnotator';
 import FolderPickerDialog from './FolderPickerDialog';
 import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
+import FileViewer from '@/components/shared/FileViewer';
 
 const isAudio = (url: string) => {
     if (!url) return false;
@@ -45,7 +46,202 @@ const isAudio = (url: string) => {
     }
 };
 
-const isAudioFile = (file: File) => file.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(file.name);
+const isImage = (url: string) => {
+    if (!url) return false;
+    try {
+        const urlWithoutQuery = url.split('?')[0];
+        return !!urlWithoutQuery.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i);
+    } catch {
+        return false;
+    }
+};
+
+const getFileNameFromUrl = (url: string) => {
+    if (!url) return 'Document';
+    try {
+        const withoutQuery = url.split('?')[0];
+        const parts = withoutQuery.split('/');
+        return parts[parts.length - 1] || 'Document';
+    } catch {
+        return 'Document';
+    }
+};
+
+const getMimeTypeFromUrl = (url: string) => {
+    if (!url) return 'application/octet-stream';
+    const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
+    switch (ext) {
+        case 'pdf': return 'application/pdf';
+        case 'doc': return 'application/msword';
+        case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        case 'xls': return 'application/vnd.ms-excel';
+        case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        case 'ppt': return 'application/vnd.ms-powerpoint';
+        case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        case 'txt': return 'text/plain';
+        case 'csv': return 'text/csv';
+        case 'png': return 'image/png';
+        case 'jpg':
+        case 'jpeg': return 'image/jpeg';
+        default: return 'application/octet-stream';
+    }
+};
+
+const fetchDocumentMetadata = async (url: string) => {
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Range': 'bytes=0-0'
+            }
+        });
+        
+        const contentType = response.headers.get('content-type');
+        const contentRange = response.headers.get('content-range');
+        const contentLength = response.headers.get('content-length');
+        
+        let sizeBytes = 0;
+        if (contentRange) {
+            const parts = contentRange.split('/');
+            if (parts.length > 1) {
+                sizeBytes = parseInt(parts[1], 10);
+            }
+        } else if (contentLength) {
+            sizeBytes = parseInt(contentLength, 10);
+        }
+        
+        let sizeStr = '';
+        if (sizeBytes > 0) {
+            const sizeMB = sizeBytes / (1024 * 1024);
+            sizeStr = sizeMB < 0.1 ? `${(sizeBytes / 1024).toFixed(1)} KB` : `${sizeMB.toFixed(1)} MB`;
+        }
+        
+        return {
+            type: contentType || getMimeTypeFromUrl(url),
+            size: sizeStr || undefined
+        };
+    } catch (error) {
+        console.error('Error fetching document metadata:', error);
+        return {
+            type: getMimeTypeFromUrl(url),
+            size: undefined
+        };
+    }
+};
+
+const isImageFile = (
+    fileOrUrl: any,
+    docMetadata?: Record<string, { size?: string; type?: string }>
+): boolean => {
+    if (!fileOrUrl) return false;
+    
+    if (typeof File !== 'undefined' && fileOrUrl instanceof File) {
+        return fileOrUrl.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i.test(fileOrUrl.name);
+    }
+    
+    if (typeof fileOrUrl === 'string') {
+        if (isImage(fileOrUrl)) return true;
+        const meta = docMetadata?.[fileOrUrl];
+        if (meta?.type?.toLowerCase().startsWith('image/')) return true;
+        return false;
+    }
+    
+    const name = fileOrUrl.file_name || fileOrUrl.name || '';
+    const type = fileOrUrl.file_type || fileOrUrl.type || '';
+    const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+    
+    if (type.toLowerCase().startsWith('image/') || type.toLowerCase().includes('image')) return true;
+    if (isImage(name) || isImage(downloadUrl)) return true;
+    
+    if (downloadUrl) {
+        const meta = docMetadata?.[downloadUrl];
+        if (meta?.type?.toLowerCase().startsWith('image/')) return true;
+    }
+    return false;
+};
+
+const isAudioFile = (
+    fileOrUrl: any,
+    docMetadata?: Record<string, { size?: string; type?: string }>
+): boolean => {
+    if (!fileOrUrl) return false;
+    
+    if (typeof File !== 'undefined' && fileOrUrl instanceof File) {
+        return fileOrUrl.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(fileOrUrl.name);
+    }
+    
+    if (typeof fileOrUrl === 'string') {
+        if (isAudio(fileOrUrl)) return true;
+        const meta = docMetadata?.[fileOrUrl];
+        if (meta?.type?.toLowerCase().startsWith('audio/')) return true;
+        return false;
+    }
+    
+    const name = fileOrUrl.file_name || fileOrUrl.name || '';
+    const type = fileOrUrl.file_type || fileOrUrl.type || '';
+    const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+    
+    if (type.toLowerCase().startsWith('audio/') || type.toLowerCase().includes('audio')) return true;
+    if (isAudio(name) || isAudio(downloadUrl)) return true;
+    
+    if (downloadUrl) {
+        const meta = docMetadata?.[downloadUrl];
+        if (meta?.type?.toLowerCase().startsWith('audio/')) return true;
+    }
+    return false;
+};
+
+const getLinkedDocuments = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+    const list: { id?: string | number; name: string; url: string; size?: string; type?: string; file_size_mb?: number }[] = [];
+    if (!rfi) return list;
+
+    if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
+        rfi.file_rfi_links.forEach((link: any) => {
+            const f = link.file || link.files;
+            if (f && f.downloadUrl) {
+                if (!isImageFile(f, docMetadata) && !isAudioFile(f, docMetadata)) {
+                    list.push({
+                        id: f.id,
+                        name: f.file_name || 'Document',
+                        url: f.downloadUrl,
+                        size: f.file_size_mb ? `${f.file_size_mb} MB` : undefined,
+                        file_size_mb: f.file_size_mb,
+                        type: f.file_type || 'Unknown'
+                    });
+                }
+            }
+        });
+    }
+    return list;
+};
+
+const getLinkedImages = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+    const list: string[] = [];
+    if (!rfi) return list;
+
+    if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
+        rfi.photoDownloadUrls.forEach((url: string) => {
+            if (isImageFile(url, docMetadata) && !list.includes(url)) {
+                list.push(url);
+            }
+        });
+    }
+    return list;
+};
+
+const getLinkedAudios = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+    const list: string[] = [];
+    if (!rfi) return list;
+
+    if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
+        rfi.photoDownloadUrls.forEach((url: string) => {
+            if (isAudioFile(url, docMetadata) && !list.includes(url)) {
+                list.push(url);
+            }
+        });
+    }
+    return list;
+};
 
 const mergeUniqueMessages = (messages: ConversationMessage[]) => {
   const seen = new Set<string>();
@@ -113,6 +309,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [showFolderPicker, setShowFolderPicker] = useState(false);
     const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
     const chatContainerRef = useRef<HTMLDivElement>(null);
+
+    const [docMetadata, setDocMetadata] = useState<Record<string, { size?: string; type?: string }>>({});
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [viewerIndex, setViewerIndex] = useState(0);
+    const [viewerFiles, setViewerFiles] = useState<any[]>([]);
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -288,6 +489,34 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             }
         }
     }, [initialRfiId, rfis]);
+
+    useEffect(() => {
+        if (!selectedRFI) return;
+        
+        const docs = getLinkedDocuments(selectedRFI, docMetadata);
+        const urlsToFetch = docs
+            .filter(doc => !doc.size) // only those without metadata/size
+            .map(doc => doc.url);
+            
+        if (urlsToFetch.length === 0) return;
+        
+        const fetchAll = async () => {
+            const updates: Record<string, { size?: string; type?: string }> = {};
+            await Promise.all(
+                urlsToFetch.map(async (url) => {
+                    const meta = await fetchDocumentMetadata(url);
+                    if (meta) {
+                        updates[url] = meta;
+                    }
+                })
+            );
+            if (Object.keys(updates).length > 0) {
+                setDocMetadata(prev => ({ ...prev, ...updates }));
+            }
+        };
+        
+        fetchAll();
+    }, [selectedRFI?.id]);
 
     const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -778,7 +1007,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         <span className="text-[10px] text-muted-foreground">{t('rfi_id_label').replace('{id}', String(selectedRFI.id))}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && (
+                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id) || String(selectedRFI.assigned_to) === String(user?.id) || String(selectedRFI.assignee?.id) === String(user?.id)) && (
                                             <Button 
                                                 variant="outline" 
                                                 size="sm" 
@@ -804,9 +1033,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         setNewAssignee(String(selectedRFI.assigned_to));
                                                         setNewExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date).toISOString().slice(0, 16) : '');
                                                         const allAttachments = selectedRFI.photoDownloadUrls || [];
-                                                        const imageAttachments = allAttachments.filter(url => !isAudio(url));
-                                                        const audioAttachment = allAttachments.find(isAudio) || null;
-                                                        const audioKeyIndex = allAttachments.findIndex(isAudio);
+                                                        const imageAttachments = allAttachments.filter(url => isImageFile(url, docMetadata));
+                                                        const audioAttachment = allAttachments.find(url => isAudioFile(url, docMetadata)) || null;
+                                                        const audioKeyIndex = allAttachments.findIndex(url => isAudioFile(url, docMetadata));
                                                         setPhotoPreviews(imageAttachments);
                                                         setNewPhotos([]);
                                                         setNewAudio(null);
@@ -893,31 +1122,134 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 )}
 
-                                {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
-                                    <div>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">{t('attachments_label')}</p>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            {selectedRFI.photoDownloadUrls.map((url, idx) => (
-                                                isAudio(url) ? (
-                                                    <div key={idx} className="col-span-3 rounded-xl border border-border bg-card p-4 shadow-sm">
-                                                        <div className="flex items-center gap-2 mb-3">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                                                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{t('voice_attachment_label')}</span>
-                                                        </div>
-                                                        <VoiceNotePlayer url={url} isMe={false} />
+                                {/* Attachments Section */}
+                                {(() => {
+                                    const images = getLinkedImages(selectedRFI, docMetadata);
+                                    const audios = getLinkedAudios(selectedRFI, docMetadata);
+                                    if (images.length === 0 && audios.length === 0) return null;
+                                    return (
+                                        <div className="space-y-4 pt-2">
+                                            {images.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('attachments') || 'Attachments'}</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {images.map((url, idx) => (
+                                                            <div 
+                                                                key={idx}
+                                                                onClick={() => setViewPhoto(url)}
+                                                                className="relative w-24 h-24 rounded-xl overflow-hidden border border-border bg-card shadow-sm hover:border-accent/30 transition-all cursor-pointer group"
+                                                            >
+                                                                <img 
+                                                                    src={url} 
+                                                                    alt={`Attachment ${idx + 1}`} 
+                                                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <ZoomIn className="h-5 w-5 text-white" />
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ) : (
-                                                    <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group cursor-pointer">
-                                                        <img src={url} alt="Attachment" className="w-full h-full object-cover" />
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <ZoomIn className="h-5 w-5 text-white" />
-                                                        </div>
+                                                </div>
+                                            )}
+                                            {audios.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('voiceAttachment') || 'Voice Attachment'}</p>
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {audios.map((url, idx) => (
+                                                            <div 
+                                                                key={idx}
+                                                                className="p-3 rounded-xl border border-border bg-card shadow-sm"
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />
+                                                                    <span className="text-[9px] font-extrabold text-muted-foreground tracking-wider uppercase">{t('voiceAttachment') || 'Voice Attachment'}</span>
+                                                                </div>
+                                                                <VoiceNotePlayer url={url} isMe={false} />
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                )
-                                            ))}
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
+
+                            
+
+                                {/* Linked Documents Section */}
+                                 {(() => {
+                                     const docs = getLinkedDocuments(selectedRFI, docMetadata);
+                                     if (docs.length === 0) return null;
+                                     return (
+                                         <div className="space-y-2">
+                                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('documents')}</p>
+                                             <div className="grid grid-cols-1 gap-2">
+                                                 {docs.map((doc, idx) => (
+                                                     <div 
+                                                         key={idx} 
+                                                         onClick={() => {
+                                                             const filesForViewer = docs.map((d, index) => ({
+                                                                 id: d.id || `rfi-doc-${selectedRFI.id}-${index}`,
+                                                                 file_name: d.name,
+                                                                 file_type: d.type || getMimeTypeFromUrl(d.url) || 'application/octet-stream',
+                                                                 downloadUrl: d.url,
+                                                                 file_size_mb: d.file_size_mb,
+                                                                 creator: { name: selectedRFI.creator?.name },
+                                                                 createdAt: selectedRFI.createdAt || selectedRFI.created_at,
+                                                                 project_id: selectedRFI.project_id,
+                                                             }));
+                                                             setViewerFiles(filesForViewer);
+                                                             setViewerIndex(idx);
+                                                             setViewerOpen(true);
+                                                         }}
+                                                         className="flex items-center justify-between p-3 rounded-xl border border-border bg-card shadow-sm hover:border-accent/30 transition-all cursor-pointer"
+                                                     >
+                                                         <div className="flex items-center gap-3 overflow-hidden">
+                                                             <div className="p-2 rounded-lg bg-accent/10 text-accent">
+                                                                 <FileText className="h-5 w-5" />
+                                                             </div>
+                                                             <div className="overflow-hidden">
+                                                                 <p className="text-xs font-semibold truncate max-w-[250px]" title={doc.name}>
+                                                                     {doc.name}
+                                                                 </p>
+                                                                 {(doc.type || doc.size) && (
+                                                                     <p className="text-[10px] text-muted-foreground">
+                                                                         {[doc.type, doc.size].filter(Boolean).join(' • ')}
+                                                                     </p>
+                                                                 )}
+                                                             </div>
+                                                         </div>
+                                                         {doc.url && (
+                                                             <button 
+                                                                 onClick={(e) => {
+                                                                     e.stopPropagation();
+                                                                     const filesForViewer = docs.map((d, index) => ({
+                                                                         id: d.id || `rfi-doc-${selectedRFI.id}-${index}`,
+                                                                         file_name: d.name,
+                                                                         file_type: d.type || getMimeTypeFromUrl(d.url) || 'application/octet-stream',
+                                                                         downloadUrl: d.url,
+                                                                         file_size_mb: d.file_size_mb,
+                                                                         creator: { name: selectedRFI.creator?.name },
+                                                                         createdAt: selectedRFI.createdAt || selectedRFI.created_at,
+                                                                         project_id: selectedRFI.project_id,
+                                                                     }));
+                                                                     setViewerFiles(filesForViewer);
+                                                                     setViewerIndex(idx);
+                                                                     setViewerOpen(true);
+                                                                 }}
+                                                                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-[10px] font-semibold hover:bg-secondary/80 transition-colors"
+                                                             >
+                                                                 <Eye className="h-3.5 w-3.5" />
+                                                                 {t('view_btn') || 'View'}
+                                                             </button>
+                                                         )}
+                                                     </div>
+                                                 ))}
+                                             </div>
+                                         </div>
+                                     );
+                                 })()}
 
                                 <div className="space-y-3 pt-4 border-t border-border">
                                     <style>{`

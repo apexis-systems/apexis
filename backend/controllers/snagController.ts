@@ -636,20 +636,23 @@ export const updateSnag = async (req: Request | any, res: Response) => {
     const snag = await snags.findByPk(id);
     if (!snag) return res.status(404).json({ error: "Snag not found" });
 
-    // Only creator or admin can edit
-    if (
-      authUser.role !== "admin" &&
-      authUser.role !== "superadmin" &&
-      Number(snag.created_by) !== Number(authUser.user_id)
-    ) {
+    const isCreatorOrAdmin = authUser.role === "admin" || authUser.role === "superadmin" || Number(snag.created_by) === Number(authUser.user_id);
+    const isAssignee = Number(snag.assigned_to) === Number(authUser.user_id);
+
+    if (!isCreatorOrAdmin && !isAssignee) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const hasResponse = snag.response || (snag.response_photos && snag.response_photos.length > 0);
     const hasPhoto = req.files && req.files.photo && req.files.photo.length > 0;
     const hasAudio = req.files && req.files.audio && req.files.audio.length > 0;
     const isCoreUpdate = title || (description !== undefined) || assigned_to || hasPhoto || hasAudio || remove_audio;
 
+    // If they are only the assignee (not creator/admin), they can only update folder links
+    if (isAssignee && !isCreatorOrAdmin && isCoreUpdate) {
+      return res.status(403).json({ error: "Forbidden: Assignee can only update folder links" });
+    }
+
+    const hasResponse = snag.response || (snag.response_photos && snag.response_photos.length > 0);
     if (hasResponse && isCoreUpdate) {
       return res.status(400).json({ error: "Cannot edit snag details because a response has already been generated. However, folder links can still be updated." });
     }

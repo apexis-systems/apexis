@@ -1192,15 +1192,16 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 <View style={{ backgroundColor: STATUS_CONFIG[selectedSnag.status].bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
                                                     <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>{STATUS_CONFIG[selectedSnag.status].label}</Text>
                                                 </View>
-                                                {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id)) && (
                                                     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                                                        <TouchableOpacity onPress={() => {
-                                                            setSelectedFolderIds(selectedSnag.folder_ids || []);
-                                                            setShowFolderPicker(true);
-                                                        }}>
-                                                            <Feather name="link-2" size={18} color={colors.primary} />
-                                                        </TouchableOpacity>
-                                                        {!selectedSnag.response && !selectedSnag.response_photos && (
+                                                        {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id) || String(selectedSnag.assigned_to) === String(user?.id) || String(selectedSnag.assignee?.id) === String(user?.id)) && (
+                                                            <TouchableOpacity onPress={() => {
+                                                                setSelectedFolderIds(selectedSnag.folder_ids || []);
+                                                                setShowFolderPicker(true);
+                                                            }}>
+                                                                <Feather name="link-2" size={18} color={colors.primary} />
+                                                            </TouchableOpacity>
+                                                        )}
+                                                        {(user?.role === 'admin' || String(selectedSnag.creator?.id || selectedSnag.created_by) === String(user?.id)) && !selectedSnag.response && !selectedSnag.response_photos && (
                                                             <>
                                                                 <TouchableOpacity onPress={() => startEditing(selectedSnag)}>
                                                                     <Feather name="edit" size={18} color={colors.primary} />
@@ -1211,7 +1212,6 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                             </>
                                                         )}
                                                     </View>
-                                                )}
                                             </View>
 
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

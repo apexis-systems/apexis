@@ -702,8 +702,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <div className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", STATUS_CONFIG[selectedSnag.status].bg, STATUS_CONFIG[selectedSnag.status].text)}>
                     {t(STATUS_CONFIG[selectedSnag.status].key)}
                   </div>
-                  {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && (
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id) || String(selectedSnag.assigned_to) === String(user?.id) || String(selectedSnag.assignee?.id) === String(user?.id)) && (
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -716,42 +716,42 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                         <Folder className="h-3 w-3 mr-1.5" />
                         {t('link_btn')}
                       </Button>
-                      {!selectedSnag.response && (
-                        <>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-7 text-[10px]"
-                            onClick={() => {
-                              setNewTitle(selectedSnag.title);
-                              setNewDescription(selectedSnag.description || '');
-                              setNewAssignee(String(selectedSnag.assigned_to));
-                              setNewPhoto(null);
-                              setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
-                              setNewAudio(null);
-                              setAudioPreview(null);
-                              setRemoveExistingAudio(false);
-                              setIsEditing(true);
-                            }}
-                          >
-                            {t('edit_btn')}
-                          </Button>
+                    )}
+                    {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && !selectedSnag.response && (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-7 text-[10px]"
+                          onClick={() => {
+                            setNewTitle(selectedSnag.title);
+                            setNewDescription(selectedSnag.description || '');
+                            setNewAssignee(String(selectedSnag.assigned_to));
+                            setNewPhoto(null);
+                            setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
+                            setNewAudio(null);
+                            setAudioPreview(null);
+                            setRemoveExistingAudio(false);
+                            setIsEditing(true);
+                          }}
+                        >
+                          {t('edit_btn')}
+                        </Button>
 
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            className="h-7 text-[10px]"
-                            onClick={() => {
-                              handleDelete(selectedSnag);
-                              setSelectedSnag(null);
-                            }}
-                          >
-                            {t('delete_btn')}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          className="h-7 text-[10px]"
+                          onClick={() => {
+                            handleDelete(selectedSnag);
+                            setSelectedSnag(null);
+                          }}
+                        >
+                          {t('delete_btn')}
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <DialogTitle className="text-lg">{selectedSnag.title}</DialogTitle>
               </DialogHeader>
