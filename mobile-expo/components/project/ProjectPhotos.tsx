@@ -1,5 +1,5 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard
 } from 'react-native';
 import { Image } from 'expo-image';
 import { FlatList } from 'react-native-gesture-handler';
@@ -104,6 +104,22 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [mentionQuery, setMentionQuery] = useState('');
     const [mentionStartIndex, setMentionStartIndex] = useState(-1);
     const [showMentions, setShowMentions] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => setKeyboardHeight(e.endCoordinates.height)
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setKeyboardHeight(0)
+        );
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     // Action Menu state
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
@@ -648,8 +664,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const handleAddComment = async () => {
         const photo = sortedPhotos[viewerIndex];
-        if (!photo?.id || !commentText.trim()) return;
+        if (!photo?.id || !commentText.trim() || addingComment) return;
         setAddingComment(true);
+        Keyboard.dismiss();
         try {
             await addCommentApi(photo.id, commentText.trim(), replyTo ?? undefined);
             setCommentText('');
@@ -2243,10 +2260,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                         {/* Bottom panel: info + comments */}
                         {showViewerUI && (
-                            <KeyboardAvoidingView
-                                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-                                style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
-                                keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
+                            <View
+                                style={{ position: 'absolute', bottom: keyboardHeight, left: 0, right: 0 }}
                             >
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
                                     <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
@@ -2290,7 +2305,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         {commentLoading ? (
                                             <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
                                         ) : (
-                                            <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
+                                            <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
                                                 {photoComments.length === 0 && (
                                                     <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>{t('projectPhotos.noComments')}</Text>
                                                 )}
@@ -2368,7 +2383,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     {/* Safe-area spacer: covers Android nav bar (gesture or 3-button) and iOS home indicator */}
                                     <View style={{ height: Math.max(insets.bottom, 0) }} />
                                 </View>
-                            </KeyboardAvoidingView>
+                            </View>
                         )}
                     </View>
                 </GestureHandlerRootView>

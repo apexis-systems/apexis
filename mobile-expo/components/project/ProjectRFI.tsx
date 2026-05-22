@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
   Modal, ScrollView, TextInput, Alert, StyleSheet, Platform, RefreshControl, Dimensions,
-  KeyboardAvoidingView
+  KeyboardAvoidingView, Share, StatusBar
 } from 'react-native';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
@@ -22,6 +22,11 @@ import { useSocket } from '@/contexts/SocketContext';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as WebBrowser from 'expo-web-browser';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { WebView } from 'react-native-webview';
 
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -33,7 +38,15 @@ import {
 } from '@/services/rfiService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-// Removed AnimatedCameraView for stability
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+let Pdf: any = null;
+if (!isExpoGo) {
+  try {
+    Pdf = require('react-native-pdf').default;
+  } catch (e) {
+    // Fallback handled in UI
+  }
+}
 
 // Removed AnimatedCameraView for stability
 import ImageAnnotator from '@/components/common/ImageAnnotator';
@@ -53,6 +66,194 @@ const isAudio = (url: string) => {
     return false;
   }
 };
+
+const isImage = (url: string) => {
+  if (!url) return false;
+  try {
+    const urlWithoutQuery = url.split('?')[0];
+    return !!urlWithoutQuery.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i);
+  } catch {
+    return false;
+  }
+};
+
+const getFileNameFromUrl = (url: string) => {
+  if (!url) return 'Document';
+  try {
+    const withoutQuery = url.split('?')[0];
+    const parts = withoutQuery.split('/');
+    return parts[parts.length - 1] || 'Document';
+  } catch {
+    return 'Document';
+  }
+};
+
+const getMimeTypeFromUrl = (url: string) => {
+  if (!url) return 'application/octet-stream';
+  const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'pdf': return 'application/pdf';
+    case 'doc': return 'application/msword';
+    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'xls': return 'application/vnd.ms-excel';
+    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'ppt': return 'application/vnd.ms-powerpoint';
+    case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    case 'txt': return 'text/plain';
+    case 'csv': return 'text/csv';
+    case 'png': return 'image/png';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    default: return 'application/octet-stream';
+  }
+};
+
+const fetchDocumentMetadata = async (url: string) => {
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Range': 'bytes=0-0'
+      }
+    });
+    
+    const contentType = response.headers.get('content-type');
+    const contentRange = response.headers.get('content-range');
+    const contentLength = response.headers.get('content-length');
+    
+    let sizeBytes = 0;
+    if (contentRange) {
+      const parts = contentRange.split('/');
+      if (parts.length > 1) {
+        sizeBytes = parseInt(parts[1], 10);
+      }
+    } else if (contentLength) {
+      sizeBytes = parseInt(contentLength, 10);
+    }
+    
+    let sizeStr = '';
+    if (sizeBytes > 0) {
+      const sizeMB = sizeBytes / (1024 * 1024);
+      sizeStr = sizeMB < 0.1 ? `${(sizeBytes / 1024).toFixed(1)} KB` : `${sizeMB.toFixed(1)} MB`;
+    }
+    
+    return {
+      type: contentType || getMimeTypeFromUrl(url),
+      size: sizeStr || undefined
+    };
+  } catch (error) {
+    console.error('Error fetching document metadata:', error);
+    return {
+      type: getMimeTypeFromUrl(url),
+      size: undefined
+    };
+  }
+};
+
+const isImageFile = (
+  fileOrUrl: any,
+  docMetadata?: Record<string, { size?: string; type?: string }>
+): boolean => {
+  if (!fileOrUrl) return false;
+  
+  if (typeof fileOrUrl === 'string') {
+    if (isImage(fileOrUrl)) return true;
+    const meta = docMetadata?.[fileOrUrl];
+    if (meta?.type?.toLowerCase().startsWith('image/')) return true;
+    return false;
+  }
+  
+  const name = fileOrUrl.file_name || fileOrUrl.name || '';
+  const type = fileOrUrl.file_type || fileOrUrl.type || '';
+  const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+  
+  if (type.toLowerCase().startsWith('image/') || type.toLowerCase().includes('image')) return true;
+  if (isImage(name) || isImage(downloadUrl)) return true;
+  
+  if (downloadUrl) {
+    const meta = docMetadata?.[downloadUrl];
+    if (meta?.type?.toLowerCase().startsWith('image/')) return true;
+  }
+  return false;
+};
+
+const isAudioFile = (
+  fileOrUrl: any,
+  docMetadata?: Record<string, { size?: string; type?: string }>
+): boolean => {
+  if (!fileOrUrl) return false;
+  
+  if (typeof fileOrUrl === 'string') {
+    if (isAudio(fileOrUrl)) return true;
+    const meta = docMetadata?.[fileOrUrl];
+    if (meta?.type?.toLowerCase().startsWith('audio/')) return true;
+    return false;
+  }
+  
+  const name = fileOrUrl.file_name || fileOrUrl.name || '';
+  const type = fileOrUrl.file_type || fileOrUrl.type || '';
+  const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+  
+  if (type.toLowerCase().startsWith('audio/') || type.toLowerCase().includes('audio')) return true;
+  if (isAudio(name) || isAudio(downloadUrl)) return true;
+  
+  if (downloadUrl) {
+    const meta = docMetadata?.[downloadUrl];
+    if (meta?.type?.toLowerCase().startsWith('audio/')) return true;
+  }
+  return false;
+};
+
+const getLinkedDocuments = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+  const list: { name: string; url: string; size?: string; type?: string }[] = [];
+  if (!rfi) return list;
+
+  if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
+    rfi.file_rfi_links.forEach((link: any) => {
+      const f = link.file || link.files;
+      if (f && f.downloadUrl) {
+        if (!isImageFile(f, docMetadata) && !isAudioFile(f, docMetadata)) {
+          list.push({
+            name: f.file_name || 'Document',
+            url: f.downloadUrl,
+            size: f.file_size_mb ? `${f.file_size_mb} MB` : undefined,
+            type: f.file_type || 'Unknown'
+          });
+        }
+      }
+    });
+  }
+  return list;
+};
+
+const getLinkedImages = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+  const list: string[] = [];
+  if (!rfi) return list;
+
+  if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
+    rfi.photoDownloadUrls.forEach((url: string) => {
+      if (isImageFile(url, docMetadata) && !list.includes(url)) {
+        list.push(url);
+      }
+    });
+  }
+  return list;
+};
+
+const getLinkedAudios = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+  const list: string[] = [];
+  if (!rfi) return list;
+
+  if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
+    rfi.photoDownloadUrls.forEach((url: string) => {
+      if (isAudioFile(url, docMetadata) && !list.includes(url)) {
+        list.push(url);
+      }
+    });
+  }
+  return list;
+};
+
 interface Props {
   project: Project;
   user: User;
@@ -120,6 +321,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
+  const [pdfViewerName, setPdfViewerName] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [currentDoc, setCurrentDoc] = useState<any | null>(null);
+  const [docMetadata, setDocMetadata] = useState<Record<string, { size?: string; type?: string }>>({});
 
   // Physical Orientation Tracking
   const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
@@ -318,6 +524,34 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       setRemovedResponsePhotos([]);
       setResponseImages([]);
     }
+  }, [selectedRFI?.id]);
+
+  useEffect(() => {
+    if (!selectedRFI) return;
+    
+    const docs = getLinkedDocuments(selectedRFI, docMetadata);
+    const urlsToFetch = docs
+      .filter(doc => !doc.size) // only those without metadata/size
+      .map(doc => doc.url);
+      
+    if (urlsToFetch.length === 0) return;
+    
+    const fetchAll = async () => {
+      const updates: Record<string, { size?: string; type?: string }> = {};
+      await Promise.all(
+        urlsToFetch.map(async (url) => {
+          const meta = await fetchDocumentMetadata(url);
+          if (meta) {
+            updates[url] = meta;
+          }
+        })
+      );
+      if (Object.keys(updates).length > 0) {
+        setDocMetadata(prev => ({ ...prev, ...updates }));
+      }
+    };
+    
+    fetchAll();
   }, [selectedRFI?.id]);
 
   useEffect(() => {
@@ -552,6 +786,53 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       Alert.alert(t('projectRfi.error'), t('projectRfi.failedToPickImage'));
     }
 
+  };
+
+  const openDoc = async (doc: any) => {
+    if (!doc.url) return;
+
+    const isPdf = doc.type?.includes('pdf') || doc.name?.toLowerCase().endsWith('.pdf');
+
+    if (isPdf) {
+      try {
+        setPdfLoading(true);
+        setPdfViewerName(doc.name || 'Document');
+        setCurrentDoc(doc);
+
+        const ext = doc.name?.split('.').pop() || 'pdf';
+        const sanitizedName = (doc.name || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const urlHash = doc.url.split('?')[0].split('/').pop() || 'temp';
+        const cleanName = `${urlHash}_${sanitizedName}${sanitizedName.includes('.') ? '' : '.' + ext}`;
+        const localUri = `${FileSystem.cacheDirectory}${cleanName}`;
+
+        const fileInfo = await FileSystem.getInfoAsync(localUri);
+        let uriToOpen = localUri;
+
+        if (!fileInfo.exists) {
+          const downloadResult = await FileSystem.downloadAsync(doc.url, localUri);
+          uriToOpen = downloadResult.uri;
+        }
+
+        if (Platform.OS === 'ios') {
+          setPdfViewerUrl(uriToOpen);
+        } else {
+          if (!isExpoGo) {
+            setPdfViewerUrl(uriToOpen);
+          } else {
+            const viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.url)}`;
+            setPdfViewerUrl(viewerUrl);
+          }
+        }
+      } catch (error) {
+        console.error("[PDF] Optimization failed:", error);
+        setPdfLoading(false);
+        await WebBrowser.openBrowserAsync(doc.url);
+      } finally {
+        setPdfLoading(false);
+      }
+    } else {
+      WebBrowser.openBrowserAsync(doc.url);
+    }
   };
 
   const capturePhoto = async () => {
@@ -1069,7 +1350,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                  {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id)) && (
+                  {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id) || String(selectedRFI.assigned_to) === String(user.id) || String(selectedRFI.assignee?.id) === String(user.id)) && (
                     <TouchableOpacity onPress={() => {
                       setSelectedFolderIds(selectedRFI.folder_ids || []);
                       setShowFolderPicker(true);
@@ -1085,8 +1366,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         setAssignedToId(selectedRFI.assigned_to);
                         setExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date) : null);
                         setSelectedFolderIds(selectedRFI.folder_ids || []);
-                        setSelectedImages((selectedRFI.photoDownloadUrls || []).filter(url => !isAudio(url)));
-                        setSelectedAudio((selectedRFI.photoDownloadUrls || []).find(isAudio) || null);
+                        setSelectedImages(getLinkedImages(selectedRFI, docMetadata));
+                        setSelectedAudio(getLinkedAudios(selectedRFI, docMetadata)[0] || null);
                         setRemovedPhotos([]);
                         setIsEditing(true);
                         setCreateModalVisible(true);
@@ -1147,27 +1428,29 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </View>
 
 
-                    {(selectedRFI?.photoDownloadUrls?.length || 0) > 0 && (
+                    {(getLinkedImages(selectedRFI, docMetadata).length > 0 || getLinkedAudios(selectedRFI, docMetadata).length > 0) && (
                       <View style={{ marginBottom: 20 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>{t('projectRfi.attachments')}</Text>
-
-                        {(selectedRFI.photoDownloadUrls || []).filter(url => !isAudio(url)).length > 0 && (
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                            {(selectedRFI.photoDownloadUrls || []).filter(url => !isAudio(url)).map((url, idx) => (
-                              <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
-                                <Image
-                                  source={url}
-                                  style={{ width: 120, height: 120, borderRadius: 12 }}
-                                  contentFit="cover"
-                                  transition={200}
-                                />
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
+                        {getLinkedImages(selectedRFI, docMetadata).length > 0 && (
+                          <View style={{ marginBottom: 12 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>{t('projectRfi.attachments')}</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                              {getLinkedImages(selectedRFI, docMetadata).map((url, idx) => (
+                                <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
+                                  <Image
+                                    source={url}
+                                    style={{ width: 120, height: 120, borderRadius: 12 }}
+                                    contentFit="cover"
+                                    transition={200}
+                                  />
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          </View>
                         )}
-                        {(selectedRFI.photoDownloadUrls || []).filter(isAudio).length > 0 && (
+                        {getLinkedAudios(selectedRFI, docMetadata).length > 0 && (
                           <View style={{ marginTop: 12, gap: 10 }}>
-                            {(selectedRFI.photoDownloadUrls || []).filter(isAudio).map((url, idx) => (
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>{t('projectRfi.voiceAttachment') || 'Voice Attachment'}</Text>
+                            {getLinkedAudios(selectedRFI, docMetadata).map((url, idx) => (
                               <View
                                 key={idx}
                                 style={{
@@ -1195,6 +1478,53 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         )}
                       </View>
                     )}
+
+                    {/* Linked Documents Block */}
+                    {(() => {
+                      const docs = getLinkedDocuments(selectedRFI, docMetadata);
+                      if (docs.length === 0) return null;
+                      return (
+                        <View style={{ marginBottom: 20 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 }}>
+                            {t('projectRfi.documents') || 'Documents'}
+                          </Text>
+                          <View style={{ gap: 8 }}>
+                            {docs.map((doc, idx) => (
+                              <TouchableOpacity
+                                key={idx}
+                                onPress={() => {
+                                  if (doc.url) {
+                                    openDoc(doc);
+                                  }
+                                }}
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  padding: 12,
+                                  borderWidth: 1,
+                                  borderColor: colors.border,
+                                  borderRadius: 16,
+                                  backgroundColor: colors.surface,
+                                }}
+                              >
+                                <Ionicons name="document-text-outline" size={24} color={colors.primary} style={{ marginRight: 12 }} />
+                                <View style={{ flex: 1 }}>
+                                  <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>
+                                    {doc.name}
+                                  </Text>
+                                  {doc.size || doc.type ? (
+                                    <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>
+                                      {[doc.type, doc.size].filter(Boolean).join(' • ')}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                                <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      );
+                    })()}
 
                     {selectedRFI.expiry_date && (
                       <View style={{ marginBottom: 20, padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: selectedRFI.status === 'overdue' ? '#ef4444' : colors.primary }}>
@@ -2211,6 +2541,128 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           }}
         />
 
+      </Modal>
+
+      {/* ── PDF Viewer Modal ── */}
+      <Modal
+        visible={!!pdfViewerUrl}
+        transparent={false}
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => {
+          setPdfViewerUrl(null);
+          setCurrentDoc(null);
+        }}
+      >
+        <StatusBar hidden />
+        <View style={{ flex: 1, backgroundColor: '#111' }}>
+          {/* Header */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            paddingTop: Platform.OS === 'android' ? 40 : 52,
+            paddingBottom: 12,
+            backgroundColor: '#1a1a1a',
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(255,255,255,0.08)',
+          }}>
+            <TouchableOpacity
+              onPress={() => {
+                setPdfViewerUrl(null);
+                setCurrentDoc(null);
+              }}
+              style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
+            >
+              <Feather name="x" size={20} color="#fff" />
+            </TouchableOpacity>
+            <Text numberOfLines={1} style={{ flex: 1, color: '#fff', fontSize: 13, fontWeight: '600', marginHorizontal: 12 }}>
+              {pdfViewerName}
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (currentDoc) {
+                  const handleShare = async () => {
+                    try {
+                      const ext = currentDoc.name?.split('.').pop() || 'pdf';
+                      const sanitizedName = (currentDoc.name || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
+                      const urlHash = currentDoc.url.split('?')[0].split('/').pop() || 'temp';
+                      const cleanName = `${urlHash}_${sanitizedName}${sanitizedName.includes('.') ? '' : '.' + ext}`;
+                      const localUri = `${FileSystem.cacheDirectory}${cleanName}`;
+                      
+                      const fileInfo = await FileSystem.getInfoAsync(localUri);
+                      if (fileInfo.exists) {
+                        if (await Sharing.isAvailableAsync()) {
+                          await Sharing.shareAsync(localUri, { mimeType: currentDoc.type || 'application/pdf', dialogTitle: currentDoc.name });
+                        } else {
+                          Alert.alert(t('projectDocuments.sharingNotAvailable') || 'Sharing not available');
+                        }
+                      } else {
+                        await Share.share({ message: currentDoc.url, title: currentDoc.name });
+                      }
+                    } catch (error) {
+                      console.error("Sharing failed:", error);
+                    }
+                  };
+                  handleShare();
+                }
+              }}
+              style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
+            >
+              <Feather name="share-2" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flex: 1, position: 'relative' }}>
+            {/* WebView PDF Rendering Layer */}
+            {pdfViewerUrl && (
+              (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
+                <WebView
+                  key={pdfViewerUrl}
+                  source={{ uri: pdfViewerUrl }}
+                  style={{ flex: 1, backgroundColor: '#111' }}
+                  startInLoadingState
+                  scalesPageToFit
+                  allowsInlineMediaPlayback
+                  javaScriptEnabled
+                  domStorageEnabled
+                  originWhitelist={['*']}
+                  onLoadStart={() => setPdfLoading(true)}
+                  onLoadEnd={() => setPdfLoading(false)}
+                  renderLoading={() => (
+                    <View style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                      justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
+                    }}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
+                        {t('projectDocuments.optimizingView') || 'Optimizing view...'}
+                      </Text>
+                    </View>
+                  )}
+                />
+              ) : (
+                Pdf ? (
+                  <Pdf
+                    source={{ uri: pdfViewerUrl, cache: true }}
+                    style={{ flex: 1, backgroundColor: '#111' }}
+                    trustAllCerts={false}
+                    onLoadComplete={() => setPdfLoading(false)}
+                    onError={(error: any) => {
+                      console.error("PDF Load Error:", error);
+                      setPdfLoading(false);
+                    }}
+                  />
+                ) : (
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ color: '#fff' }}>{t('projectDocuments.viewerNotAvailable') || 'Viewer not available'}</Text>
+                  </View>
+                )
+              )
+            )}
+          </View>
+        </View>
       </Modal>
 
       <Modal
