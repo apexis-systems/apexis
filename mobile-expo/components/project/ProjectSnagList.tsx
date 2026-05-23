@@ -565,10 +565,22 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                 setResponsePhotos([]);
                 setSelectedSnag(match);
                 if (searchParams?.viewerTab === 'links') {
-                    setShowFilePicker(true);
+                    if (Platform.OS === 'android') {
+                        setTimeout(() => {
+                            setShowFilePicker(true);
+                        }, 500);
+                    } else {
+                        setShowFilePicker(true);
+                    }
                 }
                 // Clear the param from router to prevent re-opening on focus
-                router.setParams({ snagId: '', viewerTab: '' });
+                if (Platform.OS === 'android') {
+                    setTimeout(() => {
+                        router.setParams({ snagId: '', viewerTab: '' });
+                    }, 500);
+                } else {
+                    router.setParams({ snagId: '', viewerTab: '' });
+                }
             }
         }
     }, [initialSnagId, snags, router, searchParams]);
@@ -1456,9 +1468,10 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                                             folderId: String(f.id),
                                                                             snagId: undefined,
                                                                             returnTab: 'snags',
-                                                                            returnSnagId: selectedSnag ? String(selectedSnag.id) : undefined
+                                                                            returnSnagId: selectedSnag ? String(selectedSnag.id) : undefined,
+                                                                            returnViewerTab: 'links',
                                                                         });
-                                                                    }, 100);
+                                                                    }, Platform.OS === 'android' ? 450 : 100);
                                                                 }}
                                                                 style={{
                                                                     flexDirection: 'row',

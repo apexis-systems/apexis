@@ -645,9 +645,21 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
                 if (searchParams?.viewerTab === 'links') {
                     setViewerActiveTab('links');
-                    setShowLinkModal(true);
+                    if (Platform.OS === 'android') {
+                        setTimeout(() => {
+                            setShowLinkModal(true);
+                        }, 500);
+                    } else {
+                        setShowLinkModal(true);
+                    }
                 }
-                router.setParams({ fileId: '', documentId: '', viewerTab: '' });
+                if (Platform.OS === 'android') {
+                    setTimeout(() => {
+                        router.setParams({ fileId: '', documentId: '', viewerTab: '' });
+                    }, 500);
+                } else {
+                    router.setParams({ fileId: '', documentId: '', viewerTab: '' });
+                }
             }
         }
     }, [initialFileId, docs, selectedFolder, initialFolderId, sortBy, user.role, router]);
@@ -1054,7 +1066,35 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
         // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
+        const returnTab = searchParams?.returnTab as string;
+        if (returnTab) {
+            const rParams: any = { tab: returnTab };
+            if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+            if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+            if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+            if (searchParams.returnFileId) rParams.fileId = String(searchParams.returnFileId);
+
+            // Clear the return params by passing empty strings to router.setParams
+            rParams.returnTab = '';
+            rParams.returnRfiId = '';
+            rParams.returnSnagId = '';
+            rParams.returnFolderId = '';
+            rParams.returnFileId = '';
+            rParams.returnViewerTab = '';
+
+            if (Platform.OS === 'ios') {
+                setTimeout(() => {
+                    router.setParams(rParams);
+                }, 450);
+            } else {
+                router.setParams(rParams);
+            }
+        }
+
+        // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
         router.setParams({ folderId: '' });
+
+
     }, [selectedFolder, currentFolder, router]);
 
     useFocusEffect(
