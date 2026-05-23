@@ -378,9 +378,21 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
                 if (searchParams?.viewerTab === 'links') {
                     setViewerActiveTab('links');
-                    setShowLinkModal(true);
+                    if (Platform.OS === 'android') {
+                        setTimeout(() => {
+                            setShowLinkModal(true);
+                        }, 500);
+                    } else {
+                        setShowLinkModal(true);
+                    }
                 }
-                router.setParams({ fileId: '', photoId: '', viewerTab: '' });
+                if (Platform.OS === 'android') {
+                    setTimeout(() => {
+                        router.setParams({ fileId: '', photoId: '', viewerTab: '' });
+                    }, 500);
+                } else {
+                    router.setParams({ fileId: '', photoId: '', viewerTab: '' });
+                }
             }
         }
     }, [initialFileId, photos, selectedFolder, initialFolderId, sortBy, user.role, router, viewerOpen]);
@@ -490,6 +502,31 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
         // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
+        const returnTab = searchParams?.returnTab as string;
+        if (returnTab) {
+            const rParams: any = { tab: returnTab };
+            if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+            if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+            if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+            if (searchParams.returnFileId) rParams.fileId = String(searchParams.returnFileId);
+
+            // Clear the return params by passing empty strings to router.setParams
+            rParams.returnTab = '';
+            rParams.returnRfiId = '';
+            rParams.returnSnagId = '';
+            rParams.returnFolderId = '';
+            rParams.returnFileId = '';
+            rParams.returnViewerTab = '';
+
+            if (Platform.OS === 'ios') {
+                setTimeout(() => {
+                    router.setParams(rParams);
+                }, 450);
+            } else {
+                router.setParams(rParams);
+            }
+        }
+
         router.setParams({ folderId: '' });
     };
 
@@ -2554,14 +2591,16 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         )}
                     </View>
                 </GestureHandlerRootView>
-                <LinkFileModal
-                    visible={showLinkModal}
-                    onClose={() => setShowLinkModal(false)}
-                    onLink={handleLinkFile}
-                    projectId={project?.id}
-                    currentFileId={sortedPhotos[viewerIndex]?.id}
-                    handleLinkItemClick={handleLinkItemClick}
-                />
+                {showLinkModal && sortedPhotos[viewerIndex]?.id && (
+                    <LinkFileModal
+                        visible={showLinkModal}
+                        onClose={() => setShowLinkModal(false)}
+                        onLink={handleLinkFile}
+                        projectId={project?.id}
+                        currentFileId={sortedPhotos[viewerIndex]?.id}
+                        handleLinkItemClick={handleLinkItemClick}
+                    />
+                )}
             </Modal>
 
             {/* Rename Folder Modal */}

@@ -598,9 +598,21 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         setSelectedRFI(target);
         setDetailModalVisible(true);
         if (searchParams?.viewerTab === 'links') {
-          setShowFilePicker(true);
+          if (Platform.OS === 'android') {
+            setTimeout(() => {
+              setShowFilePicker(true);
+            }, 500);
+          } else {
+            setShowFilePicker(true);
+          }
         }
-        router.setParams({ rfiId: undefined, viewerTab: undefined });
+        if (Platform.OS === 'android') {
+          setTimeout(() => {
+            router.setParams({ rfiId: undefined, viewerTab: undefined });
+          }, 500);
+        } else {
+          router.setParams({ rfiId: undefined, viewerTab: undefined });
+        }
       };
 
       // If already in list, open it
@@ -1698,9 +1710,10 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                     folderId: String(f.id),
                                     rfiId: undefined,
                                     returnTab: 'rfi',
-                                    returnRfiId: selectedRFI ? String(selectedRFI.id) : undefined
+                                    returnRfiId: selectedRFI ? String(selectedRFI.id) : undefined,
+                                    
                                   });
-                                }, 100);
+                                }, Platform.OS === 'android' ? 450 : 100);
                               }}
                               style={{
                                 flexDirection: 'row',
