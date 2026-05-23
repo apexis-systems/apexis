@@ -26,6 +26,7 @@ const CommentThread = ({ targetId, targetType, projectId }: CommentThreadProps) 
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentions, setShowMentions] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(-1);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -72,6 +73,7 @@ const CommentThread = ({ targetId, targetType, projectId }: CommentThreadProps) 
         setMentionQuery(query);
         setShowMentions(true);
         setMentionIndex(lastAt);
+        setSelectedMentionIndex(0);
         return;
       }
     }
@@ -83,6 +85,34 @@ const CommentThread = ({ targetId, targetType, projectId }: CommentThreadProps) 
     setNewText(`${before}@[${m.id}:${m.name}] `);
     setShowMentions(false);
   };
+
+  const filteredMembers = members.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase()));
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showMentions && filteredMembers.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => (prev + 1) % filteredMembers.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => (prev - 1 + filteredMembers.length) % filteredMembers.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        selectMention(filteredMembers[selectedMentionIndex]);
+      } else if (e.key === 'Escape') {
+        setShowMentions(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (showMentions) {
+      const el = document.getElementById(`mention-item-${selectedMentionIndex}`);
+      if (el) {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [selectedMentionIndex, showMentions]);
 
   const renderText = (text: string) => {
     const mentionRegex = /(@\[(\d+):([^\]]+)\])/g;
@@ -170,22 +200,25 @@ const CommentThread = ({ targetId, targetType, projectId }: CommentThreadProps) 
               <Input
                 value={newText}
                 onChange={e => handleTextChange(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Add a comment... (@ to tag)"
                 className="h-8 text-xs"
                 maxLength={500}
                 disabled={sending}
               />
-              {showMentions && members.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).length > 0 && (
+              {showMentions && filteredMembers.length > 0 && (
                 <div className="absolute bottom-full left-0 w-[280px] bg-popover text-popover-foreground border border-border rounded-md shadow-md mb-1 z-50 max-h-48 overflow-y-auto py-1 animate-in fade-in slide-in-from-bottom-1 duration-150">
                   <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Mentions
                   </div>
-                  {members.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map(m => (
+                  {filteredMembers.map((m, idx) => (
                     <button
+                      id={`mention-item-${idx}`}
                       type="button"
                       key={m.id}
                       onClick={() => selectMention(m)}
-                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/10 transition-colors flex items-center gap-2.5"
+                      onMouseDown={(e) => e.preventDefault()}
+                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2.5 ${idx === selectedMentionIndex ? 'bg-accent/20' : 'hover:bg-accent/10'}`}
                     >
                       <div className="h-5 w-5 rounded-full bg-accent/20 flex items-center justify-center text-[9px] font-bold text-accent shrink-0">
                         {m.name.charAt(0).toUpperCase()}

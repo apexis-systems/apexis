@@ -1,12 +1,12 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard
 } from 'react-native';
 import { Image } from 'expo-image';
-import { FlatList } from 'react-native-gesture-handler';
+import { FlatList, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
@@ -42,6 +42,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const searchParams = useLocalSearchParams();
     const [photos, setPhotos] = useState<any[]>([]);
     const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfis'>('files');
     const [activeLinkedSubTab, setActiveLinkedSubTab] = useState<'rfis' | 'snags'>('rfis');
@@ -84,16 +85,23 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
+    const viewerOpenRef = useRef(viewerOpen);
+    useEffect(() => {
+        viewerOpenRef.current = viewerOpen;
+    }, [viewerOpen]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [isViewerZoomed, setIsViewerZoomed] = useState(false);
     const [showViewerUI, setShowViewerUI] = useState(true);
     const [downloading, setDownloading] = useState(false);
+    const [sharing, setSharing] = useState(false);
     const flatListRef = useRef<FlatList>(null);
+    const isUserScrollingRef = useRef(false);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
 
     // Comment state
+    const commentInputRef = useRef<any>(null);
     const [photoComments, setPhotoComments] = useState<CommentThread[]>([]);
     const [commentText, setCommentText] = useState('');
     const [replyTo, setReplyTo] = useState<number | null>(null);
@@ -104,6 +112,22 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [mentionQuery, setMentionQuery] = useState('');
     const [mentionStartIndex, setMentionStartIndex] = useState(-1);
     const [showMentions, setShowMentions] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => setKeyboardHeight(e.endCoordinates.height)
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setKeyboardHeight(0)
+        );
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     // Action Menu state
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
@@ -240,9 +264,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const loadFiles = async (isRefetch = false) => {
         if (!project?.id) return;
+        if (viewerOpenRef.current) return;
         if (!isRefetch && folders.length === 0 && photos.length === 0) setLoading(true);
         try {
             const data = await getProjectFiles(project.id, 'photo', searchQuery);
+            if (viewerOpenRef.current) return;
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) {
                 setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
@@ -298,6 +324,17 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     }, [selectedFolder]);
 
+    // Auto-switch folder tab when returning from an RFI/Snag opened from the folder's linked section
+    useEffect(() => {
+        const folderActiveTab = searchParams?.folderActiveTab as string;
+        if (folderActiveTab && selectedFolder) {
+            setActiveFolderTab('rfis');
+            setTimeout(() => {
+                router.setParams({ folderActiveTab: '' });
+            }, 100);
+        }
+    }, [searchParams?.folderActiveTab, selectedFolder]);
+
     const fetchLinkedRFIs = async () => {
         if (!selectedFolder) return;
         setLoadingRFIs(true);
@@ -320,11 +357,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     };
 
+
+
     useEffect(() => {
         // Only auto-open viewer when it is NOT already open — prevents "1/0" black screen
         // caused by this effect firing mid-session and switching selectedFolder unexpectedly
         if (!viewerOpen && initialFileId && photos.length > 0) {
-            const currentFolderPhotosForInit = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
+            const folderToUse = initialFolderId || selectedFolder;
+            const currentFolderPhotosForInit = photos.filter((p) => String(p.folder_id ?? 'null') === String(folderToUse ?? 'null'));
             const visiblePhotosInit = user.role === 'client' ? currentFolderPhotosForInit.filter((p) => p.client_visible !== false) : currentFolderPhotosForInit;
             const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
                 if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
@@ -337,10 +377,27 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const index = sortedInit.findIndex(p => String(p.id) === String(initialFileId));
             if (index !== -1) {
                 openViewer(index);
-                router.setParams({ fileId: '', photoId: '' });
+                // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
+                if (searchParams?.viewerTab === 'links') {
+                    setViewerActiveTab('links');
+                    if (Platform.OS === 'android') {
+                        setTimeout(() => {
+                            setShowLinkModal(true);
+                        }, 500);
+                    } else {
+                        setShowLinkModal(true);
+                    }
+                }
+                if (Platform.OS === 'android') {
+                    setTimeout(() => {
+                        router.setParams({ fileId: '', photoId: '', viewerTab: '' });
+                    }, 500);
+                } else {
+                    router.setParams({ fileId: '', photoId: '', viewerTab: '' });
+                }
             }
         }
-    }, [initialFileId, photos, selectedFolder, sortBy, user.role, router, viewerOpen]);
+    }, [initialFileId, photos, selectedFolder, initialFolderId, sortBy, user.role, router, viewerOpen]);
 
 
     const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
@@ -349,7 +406,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         ? currentFolderPhotos.filter((p) => p.client_visible !== false)
         : currentFolderPhotos, [currentFolderPhotos, user.role]);
 
-    const sortItems = (items: any[], type: 'folder' | 'file') => {
+    const sortItems = useCallback((items: any[], type: 'folder' | 'file') => {
         return [...items].sort((a: any, b: any) => {
             if (sortBy === 'name') {
                 const nameA = type === 'folder' ? a.name : a.file_name;
@@ -368,10 +425,35 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }
             return 0;
         });
-    };
+    }, [sortBy]);
 
-    const sortedFolders = sortItems(currentFolders, 'folder');
-    const sortedPhotos = sortItems(visiblePhotos, 'file');
+    const sortedFolders = useMemo(() => sortItems(currentFolders, 'folder'), [currentFolders, sortItems]);
+    const sortedPhotos = useMemo(() => sortItems(visiblePhotos, 'file'), [visiblePhotos, sortItems]);
+
+    const sortedPhotosRef = useRef(sortedPhotos);
+    useEffect(() => {
+        sortedPhotosRef.current = sortedPhotos;
+    }, [sortedPhotos]);
+
+    const activePhotoIdRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        const photosList = sortedPhotosRef.current;
+        if (viewerOpen && viewerIndex >= 0 && photosList[viewerIndex]) {
+            activePhotoIdRef.current = photosList[viewerIndex].id;
+        } else if (!viewerOpen) {
+            activePhotoIdRef.current = null;
+        }
+    }, [viewerIndex, viewerOpen]);
+
+    useEffect(() => {
+        if (viewerOpen && activePhotoIdRef.current !== null) {
+            const newIndex = sortedPhotos.findIndex(p => p.id === activePhotoIdRef.current);
+            if (newIndex !== -1 && newIndex !== viewerIndex) {
+                setViewerIndex(newIndex);
+            }
+        }
+    }, [sortedPhotos, viewerOpen]);
 
     const groups = useMemo(() => {
         if (sortBy === 'newest' || sortBy === 'oldest') {
@@ -421,6 +503,33 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!selectedFolder) return;
         const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
+        // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
+        const returnTab = searchParams?.returnTab as string;
+        if (returnTab) {
+            const rParams: any = { tab: returnTab };
+            if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+            if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+            if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+            if (searchParams.returnFileId) rParams.fileId = String(searchParams.returnFileId);
+
+            // Clear the return params by passing empty strings to router.setParams
+            rParams.returnTab = '';
+            rParams.returnRfiId = '';
+            rParams.returnSnagId = '';
+            rParams.returnFolderId = '';
+            rParams.returnFileId = '';
+            rParams.returnViewerTab = '';
+
+            if (Platform.OS === 'ios') {
+                setTimeout(() => {
+                    router.setParams(rParams);
+                }, 450);
+            } else {
+                router.setParams(rParams);
+            }
+        }
+
+        router.setParams({ folderId: '' });
     };
 
     // ── Viewer helpers ────────────────────────────────────────────────────────
@@ -436,7 +545,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }, 50);
             return () => clearTimeout(t);
         }
-    }, [viewerOpen, sortedPhotos, viewerIndex]);
+    }, [viewerOpen, viewerIndex]);
 
     const fetchLinkedItems = useCallback(async () => {
         if (viewerOpen && sortedPhotos[viewerIndex]?.id) {
@@ -492,54 +601,91 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }
         }
 
-        if (itemType === 'file') {
-            const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
-            const isPhoto = item.file_type?.startsWith('image/') ||
-                fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
+        const returnContext = {
+            returnTab: 'photos',
+            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+            returnFileId: sortedPhotos[viewerIndex]?.id ? String(sortedPhotos[viewerIndex].id) : '',
+            // Tell the viewer to reopen on the links tab when returning
+            returnViewerTab: 'links',
+        };
 
-            if (isPhoto) {
-                // Try to find the photo in the current folder first
-                const idx = sortedPhotos.findIndex(p => String(p.id) === String(itemId));
-                if (idx !== -1) {
-                    // SAME FOLDER: viewer is already open — just slide to the new photo index
-                    setViewerIndex(idx);
+        const executeClick = () => {
+            if (itemType === 'file') {
+                const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+                const isPhoto = item.file_type?.startsWith('image/') ||
+                    fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
+
+                if (isPhoto) {
+                    const idx = sortedPhotos.findIndex(p => String(p.id) === String(itemId));
+                    if (idx !== -1 && String(targetFolderId || '') === String(selectedFolder || '')) {
+                        setViewerIndex(idx);
+                    } else {
+                        setViewerOpen(false);
+                        setViewerIndex(-1);
+                        setIsViewerZoomed(false);
+                        if (Platform.OS === 'ios') {
+                            setTimeout(() => {
+                                router.setParams({
+                                    tab: 'photos',
+                                    folderId: String(targetFolderId || ''),
+                                    fileId: String(itemId),
+                                    ...returnContext
+                                });
+                            }, 450);
+                        } else {
+                            router.setParams({
+                                tab: 'photos',
+                                folderId: String(targetFolderId || ''),
+                                fileId: String(itemId),
+                                ...returnContext
+                            });
+                        }
+                    }
                 } else {
-                    // DIFFERENT FOLDER: close viewer, switch folder, deep-link to photo
-                    // const targetPhoto = photos.find(p => String(p.id) === String(itemId));
-                    // const resolvedFolderId = targetPhoto?.folder_id != null
-                    //     ? String(targetPhoto.folder_id)
-                    //     : targetFolderId;
-                    // if (resolvedFolderId) {
-                    //     setViewerOpen(false);
-                    //     setSelectedFolder(resolvedFolderId);
-                    //     router.setParams({ photoId: String(itemId), fileId: String(itemId) });
-                    // }
-
                     setViewerOpen(false);
-                    router.setParams({
-                        tab: 'photos',
-                        folderId: String(targetFolderId || ''),
-                        fileId: String(itemId),
-                    });
-                    // No fallback to WebBrowser — relative S3 URLs can't be opened in a browser
+                    setViewerIndex(-1);
+                    setIsViewerZoomed(false);
+                    if (Platform.OS === 'ios') {
+                        setTimeout(() => {
+                            router.setParams({
+                                tab: 'documents',
+                                folderId: String(targetFolderId || ''),
+                                fileId: String(itemId),
+                                ...returnContext
+                            });
+                        }, 450);
+                    } else {
+                        router.setParams({
+                            tab: 'documents',
+                            folderId: String(targetFolderId || ''),
+                            fileId: String(itemId),
+                            ...returnContext
+                        });
+                    }
                 }
             } else {
-                // It's a document/PDF — navigate to the documents tab and deep-link open it
                 setViewerOpen(false);
-                router.setParams({
-                    tab: 'documents',
-                    folderId: String(targetFolderId || ''),
-                    fileId: String(itemId),
-                });
+                setViewerIndex(-1);
+                setIsViewerZoomed(false);
+                const triggerNav = () => {
+                    if (itemType === 'rfi') {
+                        router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
+                    } else if (itemType === 'snag') {
+                        router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
+                    }
+                };
+                if (Platform.OS === 'ios') {
+                    setTimeout(triggerNav, 450);
+                } else {
+                    triggerNav();
+                }
             }
+        };
+
+        if (Platform.OS === 'ios') {
+            setTimeout(executeClick, 450);
         } else {
-            // RFI or Snag
-            setViewerOpen(false);
-            if (itemType === 'rfi') {
-                router.setParams({ tab: 'rfi', rfiId: String(itemId) });
-            } else if (itemType === 'snag') {
-                router.setParams({ tab: 'snags', snagId: String(itemId) });
-            }
+            executeClick();
         }
     };
 
@@ -607,6 +753,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setCommentText(newText);
         setShowMentions(false);
         setMentionStartIndex(-1);
+
+
+        // Refocus the input to keep the keyboard open and the cursor active
+        setTimeout(() => {
+            commentInputRef.current?.focus();
+        }, 50);
     };
 
     const renderCommentText = (text: string) => {
@@ -648,7 +800,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const handleAddComment = async () => {
         const photo = sortedPhotos[viewerIndex];
-        if (!photo?.id || !commentText.trim()) return;
+        if (!photo?.id || !commentText.trim() || addingComment) return;
         setAddingComment(true);
         try {
             await addCommentApi(photo.id, commentText.trim(), replyTo ?? undefined);
@@ -677,6 +829,31 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setViewerOpen(false);
         setIsViewerZoomed(false);
         setViewerIndex(-1);
+        const returnTab = searchParams?.returnTab as string;
+        if (returnTab) {
+            const rParams: any = { tab: returnTab };
+            if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+            if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+            if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+            if (searchParams.returnFileId) rParams.fileId = String(searchParams.returnFileId);
+            if (searchParams.returnViewerTab) rParams.viewerTab = String(searchParams.returnViewerTab);
+
+            // Clear the return params by passing empty strings to router.setParams
+            rParams.returnTab = '';
+            rParams.returnRfiId = '';
+            rParams.returnSnagId = '';
+            rParams.returnFolderId = '';
+            rParams.returnFileId = '';
+            rParams.returnViewerTab = '';
+
+            if (Platform.OS === 'ios') {
+                setTimeout(() => {
+                    router.setParams(rParams);
+                }, 450);
+            } else {
+                router.setParams(rParams);
+            }
+        }
     };
 
     useFocusEffect(
@@ -737,14 +914,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!photo?.downloadUrl) return;
         setDownloading(true);
         try {
-            const { status } = await MediaLibrary.requestPermissionsAsync();
+            const { status } = await MediaLibrary.requestPermissionsAsync(true);
             if (status !== 'granted') {
                 Alert.alert(t('projectPhotos.galleryAccess'), t('projectPhotos.galleryAccessMessage'));
                 return;
             }
             const ext = photo.file_name?.split('.').pop() || 'jpg';
             const localUri = (FileSystem as any).cacheDirectory + `apexis_${Date.now()}.${ext}`;
-            const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
+            const { uri } = await (FileSystem as any).downloadAsync(photo.downloadUrl, localUri);
             await MediaLibrary.saveToLibraryAsync(uri);
             Alert.alert(t('projectPhotos.saved'), t('projectPhotos.photoSavedMessage'));
         } catch (err) {
@@ -754,6 +931,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             setDownloading(false);
         }
     };
+
 
     const confirmDeletePhoto = (photo: any) => {
         if (!photo?.id) return;
@@ -1201,11 +1379,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!photoToShare) return;
 
         try {
-            setDownloading(true);
+            setSharing(true);
             const ext = photoToShare.file_name?.split('.').pop() || 'jpg';
             const localUri = `${(FileSystem as any).cacheDirectory}${photoToShare.file_name || `photo_${Date.now()}.${ext}`}`;
 
-            const { uri } = await FileSystem.downloadAsync(photoToShare.downloadUrl, localUri);
+            const { uri } = await (FileSystem as any).downloadAsync(photoToShare.downloadUrl, localUri);
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
@@ -1221,7 +1399,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         } catch (e) {
             Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToSharePhoto'));
         } finally {
-            setDownloading(false);
+            setSharing(false);
         }
     };
 
@@ -1449,7 +1627,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     {linkedRFIs.map((rfi) => (
                                                         <TouchableOpacity
                                                             key={rfi.id}
-                                                            onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                                            onPress={() => {
+                                                                const returnContext = {
+                                                                    returnTab: 'photos',
+                                                                    returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                                    returnFolderActiveTab: 'rfis',
+                                                                };
+                                                                router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
+                                                            }}
                                                             style={{
                                                                 backgroundColor: colors.surface,
                                                                 borderRadius: 12,
@@ -1508,7 +1693,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                     {linkedSnags.map((snag) => (
                                                         <TouchableOpacity
                                                             key={snag.id}
-                                                            onPress={() => router.setParams({ tab: 'snags', snagId: String(snag.id) })}
+                                                            onPress={() => {
+                                                                const returnContext = {
+                                                                    returnTab: 'photos',
+                                                                    returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                                    returnFolderActiveTab: 'rfis',
+                                                                };
+                                                                router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
+                                                            }}
                                                             style={{
                                                                 backgroundColor: colors.surface,
                                                                 borderRadius: 12,
@@ -2174,10 +2366,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8 }}>
                                         <Feather name="link" size={20} color="#fff" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
-                                        <Feather name="share-2" size={20} color="#fff" />
+                                    <TouchableOpacity onPress={() => handleSharePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }} disabled={sharing || downloading}>
+                                        {sharing
+                                            ? <ActivityIndicator size="small" color="#fff" />
+                                            : <Feather name="share-2" size={20} color="#fff" />
+                                        }
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
+                                    <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading || sharing}>
                                         {downloading
                                             ? <ActivityIndicator size="small" color={colors.primary} />
                                             : <Feather name="download" size={20} color={colors.primary} />
@@ -2210,17 +2405,34 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             data={sortedPhotos}
                             horizontal
                             pagingEnabled
-                            scrollEnabled={!isViewerZoomed}
+                            scrollEnabled={!isViewerZoomed && keyboardHeight === 0}
                             showsHorizontalScrollIndicator={false}
                             removeClippedSubviews={Platform.OS === 'android'}
+                            keyboardShouldPersistTaps="handled"
                             windowSize={3}
                             initialNumToRender={1}
                             maxToRenderPerBatch={1}
                             keyExtractor={(item) => item.id.toString()}
                             getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
+                            onScrollBeginDrag={() => {
+                                isUserScrollingRef.current = true;
+                            }}
                             onMomentumScrollEnd={(e) => {
-                                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-                                if (idx !== viewerIndex) setViewerIndex(idx);
+                                if (isUserScrollingRef.current) {
+                                    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                                    if (idx !== viewerIndex) setViewerIndex(idx);
+                                    isUserScrollingRef.current = false;
+                                }
+                            }}
+                            onScrollEndDrag={(e) => {
+                                const velocity = e.nativeEvent.velocity;
+                                if (!velocity || (Math.abs(velocity.x) < 0.1 && Math.abs(velocity.y) < 0.1)) {
+                                    if (isUserScrollingRef.current) {
+                                        const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                                        if (idx !== viewerIndex) setViewerIndex(idx);
+                                        isUserScrollingRef.current = false;
+                                    }
+                                }
                             }}
                             renderItem={({ item }) => {
                                 const viewerHeight = SCREEN_H - insets.top - insets.bottom;
@@ -2234,6 +2446,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 onZoomStateChange={setIsViewerZoomed}
                                                 onTap={() => setShowViewerUI(prev => !prev)}
                                                 onDismiss={closeViewer}
+                                                gesturesEnabled={keyboardHeight === 0}
                                             />
                                         </View>
                                     </View>
@@ -2243,10 +2456,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                         {/* Bottom panel: info + comments */}
                         {showViewerUI && (
-                            <KeyboardAvoidingView
-                                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-                                style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
-                                keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
+                            <View
+                                style={{ position: 'absolute', bottom: Platform.OS === 'ios' ? keyboardHeight : 0, left: 0, right: 0, zIndex: 9999 }}
                             >
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
                                     <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
@@ -2290,7 +2501,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         {commentLoading ? (
                                             <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 8 }} />
                                         ) : (
-                                            <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
+                                            <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
                                                 {photoComments.length === 0 && (
                                                     <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>{t('projectPhotos.noComments')}</Text>
                                                 )}
@@ -2331,55 +2542,67 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                             <View style={{ position: 'absolute', bottom: 50, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000 }}>
                                                 <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
                                                     {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
-                                                        <TouchableOpacity
+                                                        <GestureTouchableOpacity
                                                             key={m.id}
                                                             onPress={() => handleSelectMention(m)}
-                                                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
                                                         >
-                                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                            <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                                </View>
+                                                                <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
                                                             </View>
-                                                            <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
-                                                        </TouchableOpacity>
+                                                        </GestureTouchableOpacity>
                                                     ))}
                                                 </ScrollView>
                                             </View>
                                         )}
-                                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
-                                            <TextInput
-                                                value={commentText}
-                                                onChangeText={handleInputChange}
-                                                placeholder={t('projectPhotos.addCommentPlaceholder')}
-                                                placeholderTextColor="#555"
-                                                style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
-                                            />
-                                            <TouchableOpacity
-                                                onPress={handleAddComment}
-                                                disabled={addingComment || !commentText.trim()}
-                                                style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
-                                            >
-                                                {addingComment
-                                                    ? <ActivityIndicator size="small" color="#fff" />
-                                                    : <Feather name="send" size={14} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
-                                                }
-                                            </TouchableOpacity>
-                                        </View>
+                                        <ScrollView
+                                            keyboardShouldPersistTaps="always"
+                                            scrollEnabled={false}
+                                            style={{ width: '100%', flexGrow: 0 }}
+                                        >
+                                            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingBottom: 8, marginTop: 6 }}>
+                                                <TextInput
+                                                    ref={commentInputRef}
+                                                    value={commentText}
+                                                    onChangeText={handleInputChange}
+                                                    placeholder={t('projectPhotos.addCommentPlaceholder')}
+                                                    placeholderTextColor="#555"
+                                                    style={{ flex: 1, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, color: '#fff', fontSize: 12 }}
+                                                />
+                                                <GestureTouchableOpacity
+                                                    onPress={handleAddComment}
+                                                    disabled={addingComment || !commentText.trim()}
+
+                                                >
+                                                    <View style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: (!commentText.trim() || addingComment) ? 0.5 : 1 }}>
+                                                        {addingComment
+                                                            ? <ActivityIndicator size="small" color="#fff" />
+                                                            : <Feather name="send" size={14} color="#fff" style={{ transform: [{ translateY: 1 }, { translateX: -1 }] }} />
+                                                        }
+                                                    </View>
+                                                </GestureTouchableOpacity>
+                                            </View>
+                                        </ScrollView>
                                     </View>
                                     {/* Safe-area spacer: covers Android nav bar (gesture or 3-button) and iOS home indicator */}
                                     <View style={{ height: Math.max(insets.bottom, 0) }} />
                                 </View>
-                            </KeyboardAvoidingView>
+                            </View>
                         )}
                     </View>
                 </GestureHandlerRootView>
-                <LinkFileModal
-                    visible={showLinkModal}
-                    onClose={() => setShowLinkModal(false)}
-                    onLink={handleLinkFile}
-                    projectId={project?.id}
-                    currentFileId={sortedPhotos[viewerIndex]?.id}
-                    handleLinkItemClick={handleLinkItemClick}
-                />
+                {showLinkModal && sortedPhotos[viewerIndex]?.id && (
+                    <LinkFileModal
+                        visible={showLinkModal}
+                        onClose={() => setShowLinkModal(false)}
+                        onLink={handleLinkFile}
+                        projectId={project?.id}
+                        currentFileId={sortedPhotos[viewerIndex]?.id}
+                        handleLinkItemClick={handleLinkItemClick}
+                    />
+                )}
             </Modal>
 
             {/* Rename Folder Modal */}

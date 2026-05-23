@@ -14,9 +14,10 @@ interface Props {
     onZoomStateChange?: (isZoomed: boolean) => void;
     onTap?: () => void;
     onDismiss?: () => void;
+    gesturesEnabled?: boolean;
 }
 
-export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H, onZoomStateChange, onTap, onDismiss }: Props) {
+export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H, onZoomStateChange, onTap, onDismiss, gesturesEnabled = true }: Props) {
     const scale = useSharedValue(1);
     const savedScale = useSharedValue(1);
     const translateX = useSharedValue(0);
@@ -150,52 +151,60 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
 
     const all = Gesture.Simultaneous(taps, gestures);
 
+    const animatedViewContent = (
+        <Animated.View
+            renderToHardwareTextureAndroid={true}
+            style={[{ width, height, justifyContent: 'center', alignItems: 'center' }, animatedStyle]}
+            collapsable={false}
+        >
+            <Image
+                source={uri}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="contain"
+                priority="high"
+                cachePolicy="memory-disk"
+                onLoadStart={() => {
+                    setLoading(true);
+                }}
+                onLoad={() => {
+                    // Small delay to allow the device to finish decoding/rendering 
+                    // before hiding the loader, preventing the "black screen" gap.
+                    setTimeout(() => {
+                        setLoading(false);
+                        setHasError(false);
+                    }, 150);
+                }}
+                onError={() => {
+                    setLoading(false);
+                    setHasError(true);
+                }}
+                transition={200}
+            />
+
+            {loading && (
+                <View style={{ position: 'absolute', zIndex: 10, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator color="#fff" size="large" />
+                </View>
+            )}
+
+            {hasError && !loading && (
+                <View style={{ position: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
+                    <Feather name="image" size={48} color="rgba(255,255,255,0.3)" />
+                    <View style={{ marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
+                        <ActivityIndicator size="small" color="#fff" />
+                    </View>
+                </View>
+            )}
+        </Animated.View>
+    );
+
+    if (!gesturesEnabled) {
+        return animatedViewContent;
+    }
+
     return (
         <GestureDetector gesture={all}>
-            <Animated.View
-                renderToHardwareTextureAndroid={true}
-                style={[{ width, height, justifyContent: 'center', alignItems: 'center' }, animatedStyle]}
-                collapsable={false}
-            >
-                <Image
-                    source={uri}
-                    style={{ width: '100%', height: '100%' }}
-                    contentFit="contain"
-                    priority="high"
-                    cachePolicy="memory-disk"
-                    onLoadStart={() => {
-                        setLoading(true);
-                    }}
-                    onLoad={() => {
-                        // Small delay to allow the device to finish decoding/rendering 
-                        // before hiding the loader, preventing the "black screen" gap.
-                        setTimeout(() => {
-                            setLoading(false);
-                            setHasError(false);
-                        }, 150);
-                    }}
-                    onError={() => {
-                        setLoading(false);
-                        setHasError(true);
-                    }}
-                    transition={200}
-                />
-
-                {loading && (
-                    <View style={{ position: 'absolute', zIndex: 10, justifyContent: 'center', alignItems: 'center' }}>
-                        <ActivityIndicator color="#fff" size="large" />
-                    </View>
-                )}
-
-                {hasError && !loading && (
-                    <View style={{ position: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
-                        <Feather name="image" size={48} color="rgba(255,255,255,0.3)" />
-                        <View style={{ marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
-                            <ActivityIndicator size="small" color="#fff" />
-                        </View>
-                    </View>
-                )}
-            </Animated.View>
+            {animatedViewContent}
         </GestureDetector>
     );
 }

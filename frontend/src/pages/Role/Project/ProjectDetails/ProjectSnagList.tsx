@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck, CheckCircle2, Link2, Folder, Pencil } from 'lucide-react';
+import { X, Minus, Check, Plus, MessageSquare, ImagePlus, ZoomIn, Trash2, Loader2, CheckCheck, CheckCircle2, Link2, Folder, Pencil, FileText, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,10 +20,21 @@ import { getApiErrorMessage } from '@/helpers/apiError';
 import {
   Snag, SnagStatus, Assignee, ConversationMessage,
   getSnags, createSnag, updateSnagStatus, deleteSnag, getAssignees,
-  updateSnag, markSnagSeen, getSnagMessages, sendSnagMessage
+  updateSnag, markSnagSeen, getSnagMessages, sendSnagMessage,
+  linkSnagFile, deleteSnagLink
 } from '@/services/snagService';
 import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
+import LinkFileModal from '@/components/shared/LinkFileModal';
+
+const FilePaperclip = ({ className }: { className?: string }) => {
+  return (
+    <div className={cn("relative flex items-center justify-center shrink-0", className)}>
+      <FileText className="h-[90%] w-[90%] -translate-x-[5%] -translate-y-[5%]" />
+      <Paperclip className="absolute -bottom-[3px] -right-[3px] h-[65%] w-[65%] bg-background text-foreground rounded-full p-[0.5px]" />
+    </div>
+  );
+};
 
 const isAudio = (url: string) => {
     if (!url) return false;
@@ -36,6 +47,17 @@ const isAudio = (url: string) => {
 };
 
 const isAudioFile = (file: File) => file.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(file.name);
+
+const isImageFile = (fileOrUrl: any): boolean => {
+    if (!fileOrUrl) return false;
+    const type = fileOrUrl.file_type || fileOrUrl.type || '';
+    if (type.toLowerCase().startsWith('image/') || type.toLowerCase().includes('image')) return true;
+    const name = fileOrUrl.file_name || fileOrUrl.name || '';
+    const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+    if (name.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i)) return true;
+    if (downloadUrl.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i)) return true;
+    return false;
+};
 
 const mergeUniqueMessages = (messages: ConversationMessage[]) => {
   const seen = new Set<string>();
@@ -92,7 +114,43 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [selectedSnag, setSelectedSnag] = useState<Snag | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
-  const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
+  const [showFilePicker, setShowFilePicker] = useState(false);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
+
+  const handleLinkFile = async (targetFileId: string | number) => {
+      if (!selectedSnag) return;
+      setSubmitting(true);
+      try {
+          await linkSnagFile(selectedSnag.id, Number(targetFileId));
+          const updated = (await getSnags(project.id)).find(s => s.id === selectedSnag.id);
+          if (updated) {
+              setSelectedSnag(updated);
+              setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
+          }
+          toast.success(t('link_success') || 'File linked successfully');
+          setShowFilePicker(false);
+      } catch (error) {
+          toast.error(t('link_failed') || 'Failed to link file');
+      } finally {
+          setSubmitting(false);
+      }
+  };
+
+  const handleRemoveFileLink = async (targetFileId: string | number) => {
+      if (!selectedSnag) return;
+      try {
+          await deleteSnagLink(selectedSnag.id, Number(targetFileId));
+          const updated = (await getSnags(project.id)).find(s => s.id === selectedSnag.id);
+          if (updated) {
+              setSelectedSnag(updated);
+              setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
+          }
+          toast.success(t('link_removed') || 'Link removed successfully');
+      } catch (error) {
+          toast.error(t('link_remove_failed') || 'Failed to remove link');
+      }
+  };
+  
   const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -102,6 +160,24 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleCloseDetailDialog = () => {
+    setSelectedSnag(null);
+    const returnTab = searchParams?.get('returnTab');
+    if (returnTab) {
+        const returnFolderId = searchParams?.get('returnFolderId');
+        const returnFileId = searchParams?.get('returnFileId');
+        const params = new URLSearchParams();
+        params.set('tab', returnTab);
+        if (returnFolderId) params.set('folder', returnFolderId);
+        if (returnFileId) {
+            params.set('fileId', returnFileId);
+            params.set('viewerTab', 'links');
+        }
+        const url = window.location.pathname + '?' + params.toString();
+        router.push(url);
+    }
+  };
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -399,11 +475,50 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     try {
       await deleteSnag(snag.id);
       setSnags(prev => prev.filter(s => s.id !== snag.id));
-      toast.success(t('snag_deleted_msg'));
-    } catch { toast.error(t('failed_delete_snag')); }
+      toast.success(t('snag_status_updated'));
+    } catch (err) {
+      toast.error(t('failed_update_status'));
+    }
   };
 
-  const filteredSnags = snags.filter(s => {
+  const handleLinkItemClick = (item: any) => {
+    const currentUrlParams = new URLSearchParams(window.location.search);
+    const currentTab = currentUrlParams.get('tab') || 'snags';
+    
+    if (item.type === 'file') {
+        const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
+        const extraParams = new URLSearchParams();
+        extraParams.set('tab', targetTab);
+        if (item.folder_id) extraParams.set('folder', String(item.folder_id));
+        extraParams.set('fileId', String(item.file_id || item.id));
+        extraParams.set('viewerTab', 'links');
+        if (selectedSnag?.id) {
+            extraParams.set('returnTab', currentTab);
+            extraParams.set('returnSnagId', String(selectedSnag.id));
+        }
+        router.push(`?${extraParams.toString()}`);
+    } else {
+        if (item.url) {
+            try {
+                const hasPath = item.url.includes('?');
+                const [urlPath, queryStr] = hasPath ? item.url.split('?') : [item.url, ''];
+                const targetParams = new URLSearchParams(queryStr);
+                
+                targetParams.set('returnTab', currentTab);
+                if (selectedSnag?.id) targetParams.set('returnSnagId', String(selectedSnag.id));
+                
+                const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `?${targetParams.toString()}`;
+                router.push(newUrl);
+            } catch {
+                router.push(item.url);
+            }
+        }
+    }
+  };
+
+  
+
+    const filteredSnags = snags.filter(s => {
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
     const matchesCreator = creatorFilter === 'all' || String(s.created_by) === creatorFilter;
     const matchesAssignee = assigneeFilter === 'all' || String(s.assigned_to) === assigneeFilter;
@@ -693,7 +808,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       </Dialog>
 
       {/* Snag Detail Dialog */}
-      <Dialog open={!!selectedSnag} onOpenChange={(open) => !open && setSelectedSnag(null)}>
+      <Dialog open={!!selectedSnag} onOpenChange={(open) => !open && handleCloseDetailDialog()}>
         <DialogContent className="max-w-md overflow-y-auto max-h-[90vh] no-scrollbar">
           {selectedSnag && (
             <>
@@ -702,66 +817,102 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <div className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", STATUS_CONFIG[selectedSnag.status].bg, STATUS_CONFIG[selectedSnag.status].text)}>
                     {t(STATUS_CONFIG[selectedSnag.status].key)}
                   </div>
-                  {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && (
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-7 text-[10px]"
-                        onClick={() => {
-                          setSelectedFolderIds(selectedSnag.folder_ids || []);
-                          setShowFolderPicker(true);
-                        }}
-                      >
-                        <Folder className="h-3 w-3 mr-1.5" />
-                        {t('link_btn')}
-                      </Button>
-                      {!selectedSnag.response && (
-                        <>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-7 text-[10px]"
-                            onClick={() => {
-                              setNewTitle(selectedSnag.title);
-                              setNewDescription(selectedSnag.description || '');
-                              setNewAssignee(String(selectedSnag.assigned_to));
-                              setNewPhoto(null);
-                              setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
-                              setNewAudio(null);
-                              setAudioPreview(null);
-                              setRemoveExistingAudio(false);
-                              setIsEditing(true);
-                            }}
-                          >
-                            {t('edit_btn')}
-                          </Button>
+                  <div className="flex items-center gap-2">
+                    {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id) || String(selectedSnag.assigned_to) === String(user?.id) || String(selectedSnag.assignee?.id) === String(user?.id)) && (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-7 text-[10px]"
+                          onClick={() => setShowFilePicker(true)}
+                        >
+                          <FilePaperclip className="h-3.5 w-3.5 mr-1.5" />
+                          {t('link_files') || 'Link Files'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-7 text-[10px]"
+                          onClick={() => {
+                            setSelectedFolderIds(selectedSnag.folder_ids || []);
+                            setShowFolderPicker(true);
+                          }}
+                        >
+                          <Folder className="h-3 w-3 mr-1.5" />
+                          {t('link_btn')}
+                        </Button>
+                      </>
+                    )}
+                    {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && !selectedSnag.response && (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-7 text-[10px]"
+                          onClick={() => {
+                            setNewTitle(selectedSnag.title);
+                            setNewDescription(selectedSnag.description || '');
+                            setNewAssignee(String(selectedSnag.assigned_to));
+                            setNewPhoto(null);
+                            setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
+                            setNewAudio(null);
+                            setAudioPreview(null);
+                            setRemoveExistingAudio(false);
+                            setIsEditing(true);
+                          }}
+                        >
+                          {t('edit_btn')}
+                        </Button>
 
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            className="h-7 text-[10px]"
-                            onClick={() => {
-                              handleDelete(selectedSnag);
-                              setSelectedSnag(null);
-                            }}
-                          >
-                            {t('delete_btn')}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          className="h-7 text-[10px]"
+                          onClick={() => {
+                            handleDelete(selectedSnag);
+                            handleCloseDetailDialog();
+                          }}
+                        >
+                          {t('delete_btn')}
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <DialogTitle className="text-lg">{selectedSnag.title}</DialogTitle>
               </DialogHeader>
 
               <div className="space-y-4 py-2">
-                {selectedSnag.photoDownloadUrl && (
-                  <div className="aspect-video rounded-lg overflow-hidden border border-border cursor-pointer" onClick={() => setViewPhoto(selectedSnag.photoDownloadUrl || null)}>
-                    <img src={selectedSnag.photoDownloadUrl} alt="Snag" className="w-full h-full object-cover" />
-                  </div>
-                )}
+                {(() => {
+                  const images: { id?: string | number; url: string }[] = [];
+                  if (selectedSnag.photoDownloadUrl) images.push({ url: selectedSnag.photoDownloadUrl });
+                  if (images.length === 0) return null;
+
+                  return (
+                    <div className="grid grid-cols-2 gap-2">
+                      {images.map((img, idx) => (
+                        <div 
+                          key={idx} 
+                          className="aspect-video rounded-lg overflow-hidden border border-border cursor-pointer relative group" 
+                          onClick={() => {
+                            if (img.id) {
+                              router.push(`?tab=photos&photoId=${img.id}&returnTab=snags&returnSnagId=${selectedSnag.id}`);
+                            } else {
+                              setViewPhoto(img.url);
+                            }
+                          }}
+                        >
+                          <img src={img.url} alt={`Snag ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ZoomIn className="h-6 w-6 text-white" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+
 
                 {(selectedSnag.audioDownloadUrl || selectedSnag.audio_url) && (
                   <div className="rounded-lg border border-border bg-card p-3">
@@ -796,10 +947,13 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                         <button 
                           key={f.id} 
                           onClick={() => {
+                            const snagId = selectedSnag.id;
                             setSelectedSnag(null);
-                            const params = new URLSearchParams(window.location.search);
+                            const params = new URLSearchParams();
                             params.set('tab', f.folder_type === 'photo' ? 'photos' : 'documents');
                             params.set('folder', String(f.id));
+                            params.set('returnTab', 'snags');
+                            params.set('returnSnagId', String(snagId));
                             router.push(`?${params.toString()}`);
                           }}
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
@@ -1040,6 +1194,19 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
               }
           }}
       />
+
+      {selectedSnag && showFilePicker && (
+          <LinkFileModal
+              open={showFilePicker}
+              onOpenChange={setShowFilePicker}
+              projectId={project.id}
+              linkedFileIds={selectedSnag.file_snag_links?.map((l: any) => l.file_id) || []}
+              onLink={handleLinkFile}
+              onRemoveLink={handleRemoveFileLink}
+              handleLinkItemClick={handleLinkItemClick}
+              onlyPhotos={true}
+          />
+      )}
     </div>
   );
 };

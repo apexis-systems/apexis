@@ -9,7 +9,7 @@ import { useUsage } from '@/contexts/UsageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     X, Plus, MessageSquare, ImagePlus, ZoomIn, Loader2, Pencil,
-    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck
+    AlertCircle, CheckCircle, AlertTriangle, Clock, User, Camera, Folder, CheckCheck, FileText, Eye, Paperclip
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,12 +28,25 @@ import {
     getRFIMessages,
     sendRFIMessage,
     RFIAssignee,
+    linkRfiFile,
+    deleteRfiLink
 } from '@/services/rfiService';
 import { Assignee } from '@/services/snagService';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import FolderPickerDialog from './FolderPickerDialog';
 import VoiceNoteRecorder from '@/components/common/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/common/VoiceNotePlayer';
+import FileViewer from '@/components/shared/FileViewer';
+import LinkFileModal from '@/components/shared/LinkFileModal';
+
+const FilePaperclip = ({ className }: { className?: string }) => {
+    return (
+        <div className={cn("relative flex items-center justify-center shrink-0", className)}>
+            <FileText className="h-[90%] w-[90%] -translate-x-[5%] -translate-y-[5%]" />
+            <Paperclip className="absolute -bottom-[3px] -right-[3px] h-[65%] w-[65%] bg-background text-foreground rounded-full p-[0.5px]" />
+        </div>
+    );
+};
 
 const isAudio = (url: string) => {
     if (!url) return false;
@@ -45,7 +58,220 @@ const isAudio = (url: string) => {
     }
 };
 
-const isAudioFile = (file: File) => file.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(file.name);
+const isImage = (url: string) => {
+    if (!url) return false;
+    try {
+        const urlWithoutQuery = url.split('?')[0];
+        return !!urlWithoutQuery.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i);
+    } catch {
+        return false;
+    }
+};
+
+const getFileNameFromUrl = (url: string) => {
+    if (!url) return 'Document';
+    try {
+        const withoutQuery = url.split('?')[0];
+        const parts = withoutQuery.split('/');
+        return parts[parts.length - 1] || 'Document';
+    } catch {
+        return 'Document';
+    }
+};
+
+const getMimeTypeFromUrl = (url: string) => {
+    if (!url) return 'application/octet-stream';
+    const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
+    switch (ext) {
+        case 'pdf': return 'application/pdf';
+        case 'doc': return 'application/msword';
+        case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        case 'xls': return 'application/vnd.ms-excel';
+        case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        case 'ppt': return 'application/vnd.ms-powerpoint';
+        case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        case 'txt': return 'text/plain';
+        case 'csv': return 'text/csv';
+        case 'png': return 'image/png';
+        case 'jpg':
+        case 'jpeg': return 'image/jpeg';
+        default: return 'application/octet-stream';
+    }
+};
+
+const fetchDocumentMetadata = async (url: string) => {
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Range': 'bytes=0-0'
+            }
+        });
+        
+        const contentType = response.headers.get('content-type');
+        const contentRange = response.headers.get('content-range');
+        const contentLength = response.headers.get('content-length');
+        
+        let sizeBytes = 0;
+        if (contentRange) {
+            const parts = contentRange.split('/');
+            if (parts.length > 1) {
+                sizeBytes = parseInt(parts[1], 10);
+            }
+        } else if (contentLength) {
+            sizeBytes = parseInt(contentLength, 10);
+        }
+        
+        let sizeStr = '';
+        if (sizeBytes > 0) {
+            const sizeMB = sizeBytes / (1024 * 1024);
+            sizeStr = sizeMB < 0.1 ? `${(sizeBytes / 1024).toFixed(1)} KB` : `${sizeMB.toFixed(1)} MB`;
+        }
+        
+        return {
+            type: contentType || getMimeTypeFromUrl(url),
+            size: sizeStr || undefined
+        };
+    } catch (error) {
+        console.error('Error fetching document metadata:', error);
+        return {
+            type: getMimeTypeFromUrl(url),
+            size: undefined
+        };
+    }
+};
+
+const isImageFile = (
+    fileOrUrl: any,
+    docMetadata?: Record<string, { size?: string; type?: string }>
+): boolean => {
+    if (!fileOrUrl) return false;
+    
+    if (typeof File !== 'undefined' && fileOrUrl instanceof File) {
+        return fileOrUrl.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i.test(fileOrUrl.name);
+    }
+    
+    if (typeof fileOrUrl === 'string') {
+        if (isImage(fileOrUrl)) return true;
+        const meta = docMetadata?.[fileOrUrl];
+        if (meta?.type?.toLowerCase().startsWith('image/')) return true;
+        return false;
+    }
+    
+    const name = fileOrUrl.file_name || fileOrUrl.name || '';
+    const type = fileOrUrl.file_type || fileOrUrl.type || '';
+    const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+    
+    if (type.toLowerCase().startsWith('image/') || type.toLowerCase().includes('image')) return true;
+    if (isImage(name) || isImage(downloadUrl)) return true;
+    
+    if (downloadUrl) {
+        const meta = docMetadata?.[downloadUrl];
+        if (meta?.type?.toLowerCase().startsWith('image/')) return true;
+    }
+    return false;
+};
+
+const isAudioFile = (
+    fileOrUrl: any,
+    docMetadata?: Record<string, { size?: string; type?: string }>
+): boolean => {
+    if (!fileOrUrl) return false;
+    
+    if (typeof File !== 'undefined' && fileOrUrl instanceof File) {
+        return fileOrUrl.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(fileOrUrl.name);
+    }
+    
+    if (typeof fileOrUrl === 'string') {
+        if (isAudio(fileOrUrl)) return true;
+        const meta = docMetadata?.[fileOrUrl];
+        if (meta?.type?.toLowerCase().startsWith('audio/')) return true;
+        return false;
+    }
+    
+    const name = fileOrUrl.file_name || fileOrUrl.name || '';
+    const type = fileOrUrl.file_type || fileOrUrl.type || '';
+    const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+    
+    if (type.toLowerCase().startsWith('audio/') || type.toLowerCase().includes('audio')) return true;
+    if (isAudio(name) || isAudio(downloadUrl)) return true;
+    
+    if (downloadUrl) {
+        const meta = docMetadata?.[downloadUrl];
+        if (meta?.type?.toLowerCase().startsWith('audio/')) return true;
+    }
+    return false;
+};
+
+const getLinkedDocuments = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+    const list: { id?: string | number; name: string; url: string; size?: string; type?: string; file_size_mb?: number; folder_id?: string | number; file_type?: string }[] = [];
+    if (!rfi) return list;
+
+    if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
+        rfi.file_rfi_links.forEach((link: any) => {
+            const file = link.file || link;
+            const url = file.downloadUrl || file.url || '';
+            if (!url) return;
+            if (!isImageFile(file, docMetadata) && !isAudioFile(file, docMetadata)) {
+                const meta = docMetadata?.[url];
+                list.push({
+                    id: file.id || link.file_id,
+                    name: file.file_name || file.name || url.split('/').pop() || 'File',
+                    url,
+                    type: meta?.type || file.file_type || '',
+                    size: meta?.size || (file.file_size_mb ? `${file.file_size_mb.toFixed(1)} MB` : undefined),
+                    file_size_mb: file.file_size_mb,
+                    folder_id: file.folder_id,
+                    file_type: file.file_type,
+                });
+            }
+        });
+    }
+
+    return list;
+};
+
+const getLinkedImages = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+    const list: { id?: number | string; url: string; folder_id?: string | number; file_type?: string }[] = [];
+    if (!rfi) return list;
+
+    if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
+        rfi.photoDownloadUrls.forEach((url: string) => {
+            if (isImageFile(url, docMetadata) && !list.find(i => i.url === url)) {
+                list.push({ url });
+            }
+        });
+    }
+
+    // Also include image files from file_rfi_links
+    if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
+        rfi.file_rfi_links.forEach((link: any) => {
+            const file = link.file || link;
+            const url = file.downloadUrl || file.url || '';
+            if (!url) return;
+            if (isImageFile(file, docMetadata) && !list.find(i => i.url === url)) {
+                list.push({ id: file.id || link.file_id, url, folder_id: file.folder_id, file_type: file.file_type });
+            }
+        });
+    }
+
+    return list;
+};
+
+const getLinkedAudios = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
+    const list: { id?: number; url: string }[] = [];
+    if (!rfi) return list;
+
+    if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
+        rfi.photoDownloadUrls.forEach((url: string) => {
+            if (isAudioFile(url, docMetadata) && !list.find(a => a.url === url)) {
+                list.push({ url });
+            }
+        });
+    }
+
+    return list;
+};
 
 const mergeUniqueMessages = (messages: ConversationMessage[]) => {
   const seen = new Set<string>();
@@ -111,8 +337,33 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
     const [showFolderPicker, setShowFolderPicker] = useState(false);
+    const [showFilePicker, setShowFilePicker] = useState(false);
     const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
     const chatContainerRef = useRef<HTMLDivElement>(null);
+
+    const [docMetadata, setDocMetadata] = useState<Record<string, { size?: string; type?: string }>>({});
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [viewerIndex, setViewerIndex] = useState(0);
+    const [viewerFiles, setViewerFiles] = useState<any[]>([]);
+
+    const handleCloseDetailDialog = () => {
+        setSelectedRFI(null);
+        const returnTab = searchParams?.get('returnTab');
+        if (returnTab) {
+            const returnFolderId = searchParams?.get('returnFolderId');
+            const returnFileId = searchParams?.get('returnFileId');
+            const params = new URLSearchParams();
+            params.set('tab', returnTab);
+            if (returnFolderId) params.set('folder', returnFolderId);
+            if (returnFileId) {
+                params.set('fileId', returnFileId);
+                params.set('viewerTab', 'links');
+            }
+            // Clear return params from URL
+            const url = window.location.pathname + '?' + params.toString();
+            router.push(url);
+        }
+    };
 
     const dataUrlToBlob = (dataUrl: string) => {
         const arr = dataUrl.split(',');
@@ -289,6 +540,34 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         }
     }, [initialRfiId, rfis]);
 
+    useEffect(() => {
+        if (!selectedRFI) return;
+        
+        const docs = getLinkedDocuments(selectedRFI, docMetadata);
+        const urlsToFetch = docs
+            .filter(doc => !doc.size) // only those without metadata/size
+            .map(doc => doc.url);
+            
+        if (urlsToFetch.length === 0) return;
+        
+        const fetchAll = async () => {
+            const updates: Record<string, { size?: string; type?: string }> = {};
+            await Promise.all(
+                urlsToFetch.map(async (url) => {
+                    const meta = await fetchDocumentMetadata(url);
+                    if (meta) {
+                        updates[url] = meta;
+                    }
+                })
+            );
+            if (Object.keys(updates).length > 0) {
+                setDocMetadata(prev => ({ ...prev, ...updates }));
+            }
+        };
+        
+        fetchAll();
+    }, [selectedRFI?.id]);
+
     const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         const validFiles = files.filter(f => f.type.startsWith('image/'));
@@ -372,6 +651,36 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             toast.error(t('failed_update_links'));
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleLinkFile = async (targetFileId: string | number) => {
+        if (!selectedRFI) return;
+        setSubmitting(true);
+        try {
+            await linkRfiFile(selectedRFI.id, Number(targetFileId));
+            const updated = await getRFIById(selectedRFI.id);
+            setSelectedRFI(updated);
+            setRfis(prev => prev.map(r => r.id === updated.id ? updated : r));
+            toast.success(t('link_success') || 'File linked successfully');
+            setShowFilePicker(false);
+        } catch (error) {
+            toast.error(t('link_failed') || 'Failed to link file');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleRemoveFileLink = async (targetFileId: string | number) => {
+        if (!selectedRFI) return;
+        try {
+            await deleteRfiLink(selectedRFI.id, Number(targetFileId));
+            const updated = await getRFIById(selectedRFI.id);
+            setSelectedRFI(updated);
+            setRfis(prev => prev.map(r => r.id === updated.id ? updated : r));
+            toast.success(t('link_removed') || 'Link removed successfully');
+        } catch (error) {
+            toast.error(t('link_remove_failed') || 'Failed to remove link');
         }
     };
 
@@ -482,11 +791,48 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             // Update the selected RFI view if it's the one being modified
             if (selectedRFI?.id === id) {
                 setSelectedRFI({ ...selectedRFI, status });
-            }
-        } catch {
+            }            toast.success(t('status_updated_msg'));
+        } catch (err) {
             toast.error(t('failed_update_status'));
         }
     };
+
+    const handleLinkItemClick = (item: any) => {
+        const currentUrlParams = new URLSearchParams(window.location.search);
+        const currentTab = currentUrlParams.get('tab') || 'rfi';
+        
+        if (item.type === 'file') {
+            const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
+            const extraParams = new URLSearchParams();
+            extraParams.set('tab', targetTab);
+            if (item.folder_id) extraParams.set('folder', String(item.folder_id));
+            extraParams.set('fileId', String(item.file_id || item.id));
+            extraParams.set('viewerTab', 'links');
+            if (selectedRFI?.id) {
+                extraParams.set('returnTab', currentTab);
+                extraParams.set('returnRfiId', String(selectedRFI.id));
+            }
+            router.push(`?${extraParams.toString()}`);
+        } else {
+            if (item.url) {
+                try {
+                    const hasPath = item.url.includes('?');
+                    const [urlPath, queryStr] = hasPath ? item.url.split('?') : [item.url, ''];
+                    const targetParams = new URLSearchParams(queryStr);
+                    
+                    targetParams.set('returnTab', currentTab);
+                    if (selectedRFI?.id) targetParams.set('returnRfiId', String(selectedRFI.id));
+                    
+                    const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `?${targetParams.toString()}`;
+                    router.push(newUrl);
+                } catch {
+                    router.push(item.url);
+                }
+            }
+        }
+    };
+
+    const hasExistingResponseAudio = !!selectedRFI?.response_photos?.some(p => p.match(/\.(m4a|webm|mp3|wav|aac|ogg)(\?.*)?$/i));
 
     const filteredRfis = rfis.filter(r => {
         const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
@@ -765,7 +1111,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             </Dialog>
 
             {/* Detail Dialog */}
-            <Dialog open={!!selectedRFI} onOpenChange={(open) => !open && setSelectedRFI(null)}>
+            <Dialog open={!!selectedRFI} onOpenChange={(open) => !open && handleCloseDetailDialog()}>
                 <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto no-scrollbar">
                     {selectedRFI && (
                         <>
@@ -778,19 +1124,30 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         <span className="text-[10px] text-muted-foreground">{t('rfi_id_label').replace('{id}', String(selectedRFI.id))}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && (
-                                            <Button 
-                                                variant="outline" 
-                                                size="sm" 
-                                                className="h-7 text-[10px]"
-                                                onClick={() => {
-                                                    setSelectedFolderIds(selectedRFI.linked_folders?.map(f => f.id) || []);
-                                                    setShowFolderPicker(true);
-                                                }}
-                                            >
-                                                <Folder className="h-3 w-3 mr-1.5" />
-                                                {t('link_btn')}
-                                            </Button>
+                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id) || String(selectedRFI.assigned_to) === String(user?.id) || String(selectedRFI.assignee?.id) === String(user?.id)) && (
+                                            <>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px]"
+                                                    onClick={() => setShowFilePicker(true)}
+                                                >
+                                                    <FilePaperclip className="h-3.5 w-3.5 mr-1.5" />
+                                                    {t('link_files') || 'Link Files'}
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px]"
+                                                    onClick={() => {
+                                                        setSelectedFolderIds(selectedRFI.linked_folders?.map(f => f.id) || []);
+                                                        setShowFolderPicker(true);
+                                                    }}
+                                                >
+                                                    <Folder className="h-3 w-3 mr-1.5" />
+                                                    {t('link_btn')}
+                                                </Button>
+                                            </>
                                         )}
                                         {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && (
                                             <>
@@ -804,9 +1161,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         setNewAssignee(String(selectedRFI.assigned_to));
                                                         setNewExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date).toISOString().slice(0, 16) : '');
                                                         const allAttachments = selectedRFI.photoDownloadUrls || [];
-                                                        const imageAttachments = allAttachments.filter(url => !isAudio(url));
-                                                        const audioAttachment = allAttachments.find(isAudio) || null;
-                                                        const audioKeyIndex = allAttachments.findIndex(isAudio);
+                                                        const imageAttachments = allAttachments.filter(url => isImageFile(url, docMetadata));
+                                                        const audioAttachment = allAttachments.find(url => isAudioFile(url, docMetadata)) || null;
+                                                        const audioKeyIndex = allAttachments.findIndex(url => isAudioFile(url, docMetadata));
                                                         setPhotoPreviews(imageAttachments);
                                                         setNewPhotos([]);
                                                         setNewAudio(null);
@@ -828,7 +1185,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         if (confirm(t('confirm_delete_rfi'))) {
                                                             deleteRFI(selectedRFI.id).then(() => {
                                                                 setRfis(prev => prev.filter(r => r.id !== selectedRFI.id));
-                                                                setSelectedRFI(null);
+                                                                handleCloseDetailDialog();
                                                                 toast.success(t('rfi_deleted_msg'));
                                                             }).catch(() => toast.error(t('failed_delete_rfi')));
                                                         }
@@ -877,10 +1234,13 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                 <button 
                                                     key={f.id} 
                                                     onClick={() => {
+                                                        const rfiId = selectedRFI.id;
                                                         setSelectedRFI(null);
-                                                        const params = new URLSearchParams(window.location.search);
+                                                        const params = new URLSearchParams();
                                                         params.set('tab', f.folder_type === 'photo' ? 'photos' : 'documents');
                                                         params.set('folder', String(f.id));
+                                                        params.set('returnTab', 'rfi');
+                                                        params.set('returnRfiId', String(rfiId));
                                                         router.push(`?${params.toString()}`);
                                                     }}
                                                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
@@ -893,31 +1253,72 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 )}
 
-                                {selectedRFI.photoDownloadUrls && selectedRFI.photoDownloadUrls.length > 0 && (
-                                    <div>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">{t('attachments_label')}</p>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            {selectedRFI.photoDownloadUrls.map((url, idx) => (
-                                                isAudio(url) ? (
-                                                    <div key={idx} className="col-span-3 rounded-xl border border-border bg-card p-4 shadow-sm">
-                                                        <div className="flex items-center gap-2 mb-3">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                                                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{t('voice_attachment_label')}</span>
-                                                        </div>
-                                                        <VoiceNotePlayer url={url} isMe={false} />
+                                {/* Attachments Section */}
+                                {(() => {
+                                    const images = getLinkedImages(selectedRFI, docMetadata);
+                                    const audios = getLinkedAudios(selectedRFI, docMetadata);
+                                    if (images.length === 0 && audios.length === 0) return null;
+                                    return (
+                                        <div className="space-y-4 pt-2">
+                                            {images.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('attachments') || 'Attachments'}</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {images.map((img, idx) => (
+                                                            <div 
+                                                                key={idx}
+                                                                onClick={() => {
+                                                                    if (img.id) {
+                                                                        // Navigate to photos tab, open that file, with return context to come back here
+                                                                        const params = new URLSearchParams();
+                                                                        params.set('tab', 'photos');
+                                                                        if (img.folder_id) params.set('folder', String(img.folder_id));
+                                                                        params.set('fileId', String(img.id));
+                                                                        params.set('returnTab', 'rfi');
+                                                                        params.set('returnRfiId', String(selectedRFI.id));
+                                                                        setSelectedRFI(null);
+                                                                        router.push(`?${params.toString()}`);
+                                                                    } else {
+                                                                        setViewPhoto(img.url);
+                                                                    }
+                                                                }}
+                                                                className="relative w-24 h-24 rounded-xl overflow-hidden border border-border bg-card shadow-sm hover:border-accent/30 transition-all cursor-pointer group"
+                                                            >
+                                                                <img 
+                                                                    src={img.url} 
+                                                                    alt={`Attachment ${idx + 1}`} 
+                                                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <ZoomIn className="h-5 w-5 text-white" />
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ) : (
-                                                    <div key={idx} onClick={() => setViewPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent/50 transition-all group cursor-pointer">
-                                                        <img src={url} alt="Attachment" className="w-full h-full object-cover" />
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <ZoomIn className="h-5 w-5 text-white" />
-                                                        </div>
+                                                </div>
+                                            )}
+                                            {audios.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('voiceAttachment') || 'Voice Attachment'}</p>
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {audios.map((aud, idx) => (
+                                                            <div 
+                                                                key={idx}
+                                                                className="p-3 rounded-xl border border-border bg-card shadow-sm"
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />
+                                                                    <span className="text-[9px] font-extrabold text-muted-foreground tracking-wider uppercase">{t('voiceAttachment') || 'Voice Attachment'}</span>
+                                                                </div>
+                                                                <VoiceNotePlayer url={aud.url} isMe={false} />
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                )
-                                            ))}
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                                 <div className="space-y-3 pt-4 border-t border-border">
                                     <style>{`
@@ -1159,6 +1560,18 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 }
             }}
         />
+
+        {selectedRFI && showFilePicker && (
+            <LinkFileModal
+                open={showFilePicker}
+                onOpenChange={setShowFilePicker}
+                projectId={String(project.id)}
+                linkedFileIds={selectedRFI.file_rfi_links?.map((l: any) => l.file_id) || []}
+                onLink={handleLinkFile}
+                onRemoveLink={handleRemoveFileLink}
+                handleLinkItemClick={handleLinkItemClick}
+            />
+        )}
     </div>
     );
 }

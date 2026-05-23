@@ -23,12 +23,15 @@ interface LinkFileModalProps {
     visible: boolean;
     onClose: () => void;
     onLink: (fileId: number) => Promise<void>;
+    onRemoveLink?: (fileId: number | string) => Promise<void>;
     projectId: string | number;
     currentFileId?: number;
-    handleLinkItemClick: (item: any) => void;
+    linkedFileIds?: number[];
+    onlyPhotos?: boolean;
+    handleLinkItemClick?: (item: any) => void;
 }
 
-export default function LinkFileModal({ visible, onClose, onLink, projectId, currentFileId, handleLinkItemClick }: LinkFileModalProps) {
+export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, projectId, currentFileId, linkedFileIds, onlyPhotos, handleLinkItemClick }: LinkFileModalProps) {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const { t } = useTranslation();
@@ -50,13 +53,21 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
         if (visible && projectId) {
             loadFiles();
             setSelectedIds(new Set());
+            if (onlyPhotos) setActiveTab('photo');
         } else {
             setSearchQuery('');
             setCurrentParentId(null);
             setLinkedItems([]);
             setSelectedIds(new Set());
         }
-    }, [visible, projectId]);
+    }, [visible, projectId, onlyPhotos]);
+
+    useEffect(() => {
+        if (visible && !currentFileId && linkedFileIds && files.length > 0) {
+            const linked = files.filter((f: any) => linkedFileIds.includes(Number(f.id)));
+            setLinkedItems(linked.map((f: any) => ({ ...f, type: 'file' })));
+        }
+    }, [linkedFileIds, files, visible]);
 
     const loadFiles = async () => {
         setLoading(true);
@@ -64,9 +75,15 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
             const data = await getProjectFiles(projectId);
             if (data.fileData) setFiles(data.fileData);
             if (data.folderData) setFolders(data.folderData);
+            
             if (currentFileId) {
                 const linkData = await getLinkedItems(currentFileId);
                 setLinkedItems(linkData.links || []);
+            } else if (linkedFileIds) {
+                // If we're linking to RFI/Snag, linked items just represent the IDs to show as "already linked" checkboxes
+                // but we might not have full item data. For now, we just map IDs to minimal file objects.
+                const linked = data.fileData?.filter((f: any) => linkedFileIds.includes(Number(f.id))) || [];
+                setLinkedItems(linked.map((f: any) => ({ ...f, type: 'file' })));
             }
         } catch (error) {
             console.error('Error loading files:', error);
@@ -104,14 +121,17 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
     };
 
     const handleRemoveLink = async (item: any) => {
-        if (!currentFileId) return;
         const targetType = item.type || item.target_type;
         const targetId = item.id || item.target_id;
         setUnlinkingId(targetId);
         try {
-            await deleteLink(currentFileId, targetType, targetId);
-            const linkData = await getLinkedItems(currentFileId);
-            setLinkedItems(linkData.links || []);
+            if (onRemoveLink) {
+                await onRemoveLink(targetId);
+            } else if (currentFileId) {
+                await deleteLink(currentFileId, targetType, targetId);
+                const linkData = await getLinkedItems(currentFileId);
+                setLinkedItems(linkData.links || []);
+            }
         } catch (error) {
             console.error('Failed to remove link:', error);
         } finally {
@@ -285,7 +305,7 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
                 return (
                     <View key={key} style={{ width: '47%' }}>
                         <TouchableOpacity
-                            onPress={() => handleLinkItemClick(item)}
+                            onPress={() => handleLinkItemClick?.(item)}
                             activeOpacity={0.8}
                             style={{ backgroundColor: bg, borderWidth: 1, borderColor: accent + '44', borderRadius: 10, padding: 10, minHeight: 78, justifyContent: 'space-between' }}
                         >
@@ -396,7 +416,7 @@ export default function LinkFileModal({ visible, onClose, onLink, projectId, cur
                             </View>
 
                             {/* Document / Photo sub-tabs */}
-                            {!searchQuery && (
+                            {!searchQuery && !onlyPhotos && (
                                 <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface }}>
                                     {(['document', 'photo'] as const).map(tab => (
                                         <TouchableOpacity key={tab} onPress={() => handleTabChange(tab)}

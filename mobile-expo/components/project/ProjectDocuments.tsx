@@ -2,17 +2,18 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView } from 'react-native';
+import { FlatList, TouchableOpacity as GestureTouchableOpacity, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
 import * as WebBrowser from 'expo-web-browser';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, toggleOnlyForReference, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import LinkFileModal from '../shared/LinkFileModal';
@@ -51,6 +52,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const { socket } = useSocket();
 
     const router = useRouter();
+    const searchParams = useLocalSearchParams();
     const [docs, setDocs] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
     // Sync selectedFolder whenever the deep-link prop changes.
@@ -241,6 +243,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const insets = useSafeAreaInsets();
 
     // Comment state
+    const commentInputRef = useRef<any>(null);
     const [docComments, setDocComments] = useState<CommentThread[]>([]);
     const [commentText, setCommentText] = useState('');
     const [replyTo, setReplyTo] = useState<number | null>(null);
@@ -251,6 +254,22 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [mentionStartIndex, setMentionStartIndex] = useState(-1);
     const [showMentions, setShowMentions] = useState(false);
     const [showComments, setShowComments] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => setKeyboardHeight(e.endCoordinates.height)
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setKeyboardHeight(0)
+        );
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     const fetchFolders = async (isRefetch = false) => {
         if (!project?.id) return;
@@ -333,6 +352,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     };
 
     const handleLinkItemClick = async (item: any) => {
+        setShowLinkModal(false);
 
         const itemType = item.type || item.target_type;
         const itemId = item.target_id || item.id;
@@ -348,59 +368,95 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             }
         }
 
-        if (itemType === 'file') {
-            const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
-            const isPhoto = item.file_type?.startsWith('image/') ||
-                fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') ||
-                fileName.endsWith('.gif') || fileName.endsWith('.webp');
+        const returnContext = {
+            returnTab: 'documents',
+            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+            returnFileId: currentDoc?.id ? String(currentDoc.id) : '',
+            // Tell the viewer to reopen on the links tab when returning
+            returnViewerTab: 'links',
+        };
 
-            if (isPhoto) {
-                // It's an image — navigate to the photos tab and deep-link open it
-                setPdfViewerUrl(null);
-                setCurrentDoc(null);
-                router.setParams({
-                    tab: 'photos',
-                    folderId: String(targetFolderId || ''),
-                    fileId: String(itemId),
-                });
-            } else {
-                // It's a document/PDF
-                const targetDoc = docs.find(d => String(d.id) === String(itemId));
-                if (targetDoc) {
-                    if (String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
-                        // SAME FOLDER: open doc directly
-                        openDoc(targetDoc);
+        const executeClick = () => {
+            if (itemType === 'file') {
+                const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+                const isPhoto = item.file_type?.startsWith('image/') ||
+                    fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') ||
+                    fileName.endsWith('.gif') || fileName.endsWith('.webp');
+
+                if (isPhoto) {
+                    setPdfViewerUrl(null);
+                    setCurrentDoc(null);
+                    setShowComments(false);
+                    setDocComments([]);
+                    if (Platform.OS === 'ios') {
+                        setTimeout(() => {
+                            router.setParams({
+                                tab: 'photos',
+                                folderId: String(targetFolderId || ''),
+                                fileId: String(itemId),
+                                ...returnContext
+                            });
+                        }, 450);
                     } else {
-                        // DIFFERENT FOLDER: close current doc, navigate via router params
-                        setPdfViewerUrl(null);
-                        setCurrentDoc(null);
                         router.setParams({
-                            tab: 'documents',
+                            tab: 'photos',
                             folderId: String(targetFolderId || ''),
                             fileId: String(itemId),
+                            ...returnContext
                         });
                     }
                 } else {
-                    // Doc not yet loaded — navigate via router params
-                    setPdfViewerUrl(null);
-                    setCurrentDoc(null);
-                    router.setParams({
-                        tab: 'documents',
-                        folderId: String(targetFolderId || ''),
-                        fileId: String(itemId),
-                    });
+                    const targetDoc = docs.find(d => String(d.id) === String(itemId));
+                    if (targetDoc && String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
+                        openDoc(targetDoc);
+                    } else {
+                        setPdfViewerUrl(null);
+                        setCurrentDoc(null);
+                        setShowComments(false);
+                        setDocComments([]);
+                        if (Platform.OS === 'ios') {
+                            setTimeout(() => {
+                                router.setParams({
+                                    tab: 'documents',
+                                    folderId: String(targetFolderId || ''),
+                                    fileId: String(itemId),
+                                    ...returnContext
+                                });
+                            }, 450);
+                        } else {
+                            router.setParams({
+                                tab: 'documents',
+                                folderId: String(targetFolderId || ''),
+                                fileId: String(itemId),
+                                ...returnContext
+                            });
+                        }
+                    }
+                }
+            } else {
+                setPdfViewerUrl(null);
+                setCurrentDoc(null);
+                setShowComments(false);
+                setDocComments([]);
+                const triggerNav = () => {
+                    if (itemType === 'rfi') {
+                        router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
+                    } else if (itemType === 'snag') {
+                        router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
+                    }
+                };
+                if (Platform.OS === 'ios') {
+                    setTimeout(triggerNav, 450);
+                } else {
+                    triggerNav();
                 }
             }
+        };
+
+        if (Platform.OS === 'ios') {
+            setTimeout(executeClick, 450);
         } else {
-            // RFI or Snag
-            setPdfViewerUrl(null);
-            setCurrentDoc(null);
-            setShowComments(false);
-            if (itemType === 'rfi') {
-                router.setParams({ tab: 'rfi', rfiId: String(itemId) });
-            } else if (itemType === 'snag') {
-                router.setParams({ tab: 'snags', snagId: String(itemId) });
-            }
+            executeClick();
         }
     };
 
@@ -433,6 +489,17 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setLinkedSnags([]);
         }
     }, [selectedFolder]);
+
+    // Auto-switch folder tab when returning from an RFI/Snag opened from the folder's linked section
+    useEffect(() => {
+        const folderActiveTab = searchParams?.folderActiveTab as string;
+        if (folderActiveTab && selectedFolder) {
+            setActiveFolderTab('rfis');
+            setTimeout(() => {
+                router.setParams({ folderActiveTab: '' });
+            }, 100);
+        }
+    }, [searchParams?.folderActiveTab, selectedFolder]);
 
     const fetchLinkedRFIs = async () => {
         if (!selectedFolder) return;
@@ -513,6 +580,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         setCommentText(newText);
         setShowMentions(false);
         setMentionStartIndex(-1);
+
+        // Refocus the input to keep the keyboard open and the cursor active
+        setTimeout(() => {
+            commentInputRef.current?.focus();
+        }, 50);
     };
 
     const renderCommentText = (text: string) => {
@@ -542,7 +614,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     };
 
     const handleAddComment = async () => {
-        if (!currentDoc?.id || !commentText.trim()) return;
+        if (!currentDoc?.id || !commentText.trim() || addingComment) return;
         setAddingComment(true);
         try {
             await addCommentApi(currentDoc.id, commentText.trim(), replyTo ?? undefined);
@@ -558,7 +630,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     useEffect(() => {
         if (initialFileId && docs.length > 0) {
-            const currentFolderDocsForInit = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
+            const folderToUse = initialFolderId || selectedFolder;
+            const currentFolderDocsForInit = docs.filter((d) => String(d.folder_id ?? 'null') === String(folderToUse ?? 'null'));
             const visibleDocsInit = user.role === 'client' ? currentFolderDocsForInit.filter((d) => d.client_visible !== false) : currentFolderDocsForInit;
             const sortedInit = [...visibleDocsInit].sort((a: any, b: any) => {
                 if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
@@ -571,10 +644,27 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const index = sortedInit.findIndex(d => String(d.id) === String(initialFileId));
             if (index !== -1) {
                 openDoc(sortedInit[index]);
-                router.setParams({ fileId: '', documentId: '' });
+                // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
+                if (searchParams?.viewerTab === 'links') {
+                    setViewerActiveTab('links');
+                    if (Platform.OS === 'android') {
+                        setTimeout(() => {
+                            setShowLinkModal(true);
+                        }, 500);
+                    } else {
+                        setShowLinkModal(true);
+                    }
+                }
+                if (Platform.OS === 'android') {
+                    setTimeout(() => {
+                        router.setParams({ fileId: '', documentId: '', viewerTab: '' });
+                    }, 500);
+                } else {
+                    router.setParams({ fileId: '', documentId: '', viewerTab: '' });
+                }
             }
         }
-    }, [initialFileId, docs, selectedFolder, sortBy, user.role, router]);
+    }, [initialFileId, docs, selectedFolder, initialFolderId, sortBy, user.role, router]);
 
 
     const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
@@ -735,6 +825,24 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             transform: [{ rotate: '-10deg' }]
                         }}>
                             <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>DNF</Text>
+                        </View>
+                    )}
+                    {doc.only_for_reference && (
+                        <View style={{
+                            position: 'absolute',
+                            top: '15%',
+                            left: '20%',
+                            right: '20%',
+                            backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                            borderRadius: 4,
+                            paddingHorizontal: 4,
+                            paddingVertical: 2,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 20,
+                            transform: [{ rotate: '10deg' }]
+                        }}>
+                            <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff' }}>OFR</Text>
                         </View>
                     )}
                 </View>
@@ -959,7 +1067,37 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         if (!selectedFolder) return;
         const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
         setSelectedFolder(parentId);
-    }, [selectedFolder, currentFolder]);
+        // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
+        const returnTab = searchParams?.returnTab as string;
+        if (returnTab) {
+            const rParams: any = { tab: returnTab };
+            if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+            if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+            if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+            if (searchParams.returnFileId) rParams.fileId = String(searchParams.returnFileId);
+
+            // Clear the return params by passing empty strings to router.setParams
+            rParams.returnTab = '';
+            rParams.returnRfiId = '';
+            rParams.returnSnagId = '';
+            rParams.returnFolderId = '';
+            rParams.returnFileId = '';
+            rParams.returnViewerTab = '';
+
+            if (Platform.OS === 'ios') {
+                setTimeout(() => {
+                    router.setParams(rParams);
+                }, 450);
+            } else {
+                router.setParams(rParams);
+            }
+        }
+
+        // Clear the deep-link folderId param so the useEffect sync doesn't override this navigation
+        router.setParams({ folderId: '' });
+
+
+    }, [selectedFolder, currentFolder, router]);
 
     useFocusEffect(
         useCallback(() => {
@@ -1033,6 +1171,28 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setActionMenuVisible(false);
         } catch (e) {
             Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateDnf'));
+            await fetchFolders(true);
+        } finally {
+            setProcessing(null);
+        }
+    };
+
+    const handleToggleOnlyForReference = async (file: any) => {
+        try {
+            setProcessing('ofr');
+            await toggleOnlyForReference(file.id, !file.only_for_reference);
+
+            // Local update
+            setDocs((prev) => prev.map((d) => (d.id === file.id ? { ...d, only_for_reference: !file.only_for_reference } : d)));
+
+            // Sync current doc in viewer
+            if (currentDoc?.id === file.id) {
+                setCurrentDoc((prev: any) => ({ ...prev, only_for_reference: !file.only_for_reference }));
+            }
+
+            setActionMenuVisible(false);
+        } catch (e) {
+            Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateOfr') || 'Failed to update Only for Reference status');
             await fetchFolders(true);
         } finally {
             setProcessing(null);
@@ -1214,6 +1374,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleShare = async (doc: any) => {
         try {
             if (!doc.downloadUrl) return;
+            console.log(doc);
 
             setSharing(true);
 
@@ -1225,7 +1386,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             let urlToDownload = doc.downloadUrl;
             let uri = '';
 
-            if (doc.do_not_follow && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
+            if ((doc.do_not_follow || doc.only_for_reference) && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
                 const data = await downloadFile(doc.id);
                 // Convert arraybuffer to base64 for FileSystem
                 const base64 = btoa(
@@ -1505,7 +1666,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             let urlToDownload = doc.downloadUrl;
             let uri = '';
 
-            if (doc.do_not_follow && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
+            if ((doc.do_not_follow || doc.only_for_reference) && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
                 const data = await downloadFile(doc.id);
                 const base64 = btoa(
                     new Uint8Array(data).reduce(
@@ -1747,7 +1908,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             {linkedRFIs.map((rfi) => (
                                                 <TouchableOpacity
                                                     key={rfi.id}
-                                                    onPress={() => router.setParams({ tab: 'rfi', rfiId: String(rfi.id) })}
+                                                    onPress={() => {
+                                                        const returnContext = {
+                                                            returnTab: 'documents',
+                                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                            returnFolderActiveTab: 'rfis',
+                                                        };
+                                                        router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
+                                                    }}
                                                     style={{
                                                         backgroundColor: colors.surface,
                                                         borderRadius: 12,
@@ -1806,7 +1974,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                             {linkedSnags.map((snag) => (
                                                 <TouchableOpacity
                                                     key={snag.id}
-                                                    onPress={() => router.setParams({ tab: 'snags', snagId: String(snag.id) })}
+                                                    onPress={() => {
+                                                        const returnContext = {
+                                                            returnTab: 'documents',
+                                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                            returnFolderActiveTab: 'rfis',
+                                                        };
+                                                        router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
+                                                    }}
                                                     style={{
                                                         backgroundColor: colors.surface,
                                                         borderRadius: 12,
@@ -1979,6 +2154,36 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     setCurrentDoc(null);
                     setShowComments(false);
                     setDocComments([]);
+                    const returnTab = searchParams?.returnTab as string;
+                    if (returnTab) {
+                        const rParams: any = { tab: returnTab };
+                        if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+                        if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                        if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+                        if (searchParams.returnFileId) {
+                            rParams.fileId = String(searchParams.returnFileId);
+                            rParams.viewerTab = 'links';
+                        } else {
+                            rParams.fileId = '';
+                            if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
+                        }
+                        // Clear the return params from the query state
+                        rParams.returnTab = '';
+                        rParams.returnRfiId = '';
+                        rParams.returnSnagId = '';
+                        rParams.returnFolderId = '';
+                        rParams.returnFileId = '';
+                        rParams.returnFolderActiveTab = '';
+
+
+                        if (Platform.OS === 'ios') {
+                            setTimeout(() => {
+                                router.setParams(rParams);
+                            }, 450);
+                        } else {
+                            router.setParams(rParams);
+                        }
+                    }
                 }}
             >
                 <StatusBar hidden />
@@ -2001,6 +2206,38 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 setCurrentDoc(null);
                                 setShowComments(false);
                                 setDocComments([]);
+                                const returnTab = searchParams?.returnTab as string;
+                                if (returnTab) {
+                                    const rParams: any = { tab: returnTab };
+                                    if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+                                    if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                                    if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+                                    if (searchParams.returnViewerTab) {
+                                        rParams.viewerTab = 'links';
+                                    }
+                                    if (searchParams.returnFileId) {
+                                        rParams.fileId = String(searchParams.returnFileId);
+
+                                    } else {
+                                        rParams.fileId = '';
+                                        if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
+                                    }
+
+                                    // Clear the return params from the query state
+                                    rParams.returnTab = '';
+                                    rParams.returnRfiId = '';
+                                    rParams.returnSnagId = '';
+                                    rParams.returnFolderId = '';
+                                    rParams.returnFileId = '';
+                                    rParams.returnFolderActiveTab = '';
+                                    if (Platform.OS === 'ios') {
+                                        setTimeout(() => {
+                                            router.setParams(rParams);
+                                        }, 450);
+                                    } else {
+                                        router.setParams(rParams);
+                                    }
+                                }
                             }}
                             style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
                         >
@@ -2063,7 +2300,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         </View>
                     )}
 
-                    <View style={{ flex: 1, position: 'relative' }}>
+                    <View pointerEvents={keyboardHeight > 0 ? 'none' : 'auto'} style={{ flex: 1, position: 'relative' }}>
                         {/* WebView PDF Rendering Layer */}
                         {pdfViewerUrl && (
                             (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
@@ -2111,8 +2348,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             )
                         )}
 
-                        {/* Do Not Follow Watermark Overlay */}
-                        {currentDoc?.do_not_follow && (
+                        {/* Watermark Overlays */}
+                        {(currentDoc?.do_not_follow || currentDoc?.only_for_reference) && (
                             <View
                                 pointerEvents="none"
                                 style={{
@@ -2120,40 +2357,65 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     justifyContent: 'center',
                                     alignItems: 'center',
                                     zIndex: 100, // Very high zIndex to ensure it's above native components
+                                    gap: 40 // Add spacing if both are present
                                 }}
                             >
-                                <View style={{
-                                    transform: [{ rotate: '-30deg' }],
-                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                    paddingHorizontal: 30,
-                                    paddingVertical: 15,
-                                    borderRadius: 8,
-                                    borderWidth: 3,
-                                    borderColor: 'rgba(239, 68, 68, 0.3)',
-                                    borderStyle: 'dashed'
-                                }}>
-                                    <Text style={{
-                                        color: 'rgba(239, 68, 68, 0.4)',
-                                        fontSize: 48,
-                                        fontWeight: '900',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: 2,
-                                        textAlign: 'center'
+                                {currentDoc?.do_not_follow && (
+                                    <View style={{
+                                        transform: [{ rotate: '-30deg' }],
+                                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                        paddingHorizontal: 30,
+                                        paddingVertical: 15,
+                                        borderRadius: 8,
+                                        borderWidth: 3,
+                                        borderColor: 'rgba(239, 68, 68, 0.3)',
+                                        borderStyle: 'dashed'
                                     }}>
-                                        {t('projectDocuments.doNotFollow')}
-                                    </Text>
-                                </View>
+                                        <Text style={{
+                                            color: 'rgba(239, 68, 68, 0.4)',
+                                            fontSize: 48,
+                                            fontWeight: '900',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 2,
+                                            textAlign: 'center'
+                                        }}>
+                                            {t('projectDocuments.doNotFollow')}
+                                        </Text>
+                                    </View>
+                                )}
+                                {currentDoc?.only_for_reference && (
+                                    <View style={{
+                                        transform: [{ rotate: '-30deg' }],
+                                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                        paddingHorizontal: 30,
+                                        paddingVertical: 15,
+                                        borderRadius: 8,
+                                        borderWidth: 3,
+                                        borderColor: 'rgba(59, 130, 246, 0.3)',
+                                        borderStyle: 'dashed'
+                                    }}>
+                                        <Text style={{
+                                            color: 'rgba(59, 130, 246, 0.4)',
+                                            fontSize: 48,
+                                            fontWeight: '900',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 2,
+                                            textAlign: 'center'
+                                        }}>
+                                            {t('projectDocuments.onlyForReference')}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                         )}
                     </View>
 
                     {/* Comments Overlay Panel */}
                     {showComments && (
-                        <KeyboardAvoidingView
-                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        <View
                             style={{
                                 position: 'absolute',
-                                bottom: 0,
+                                bottom: Platform.OS === 'ios' ? keyboardHeight : 0,
                                 left: 0,
                                 right: 0,
                                 backgroundColor: 'rgba(15,15,15,0.98)',
@@ -2170,7 +2432,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 elevation: 24
                             }}
                         >
-                            <View style={{ padding: 16 }}>
+                            <ScrollView
+                                keyboardShouldPersistTaps="always"
+                                scrollEnabled={true}
+                                bounces={false}
+                                alwaysBounceVertical={false}
+                                contentContainerStyle={{ padding: 16 }}
+                            >
                                 <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
                                     <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>
                                         💬 {t('projectDocuments.discussion')} ({docComments.length})
@@ -2184,7 +2452,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         style={{ maxHeight: SCREEN_H * 0.35 }}
                                         contentContainerStyle={{ paddingBottom: 10 }}
                                         showsVerticalScrollIndicator={true}
-                                        keyboardShouldPersistTaps="handled"
+                                        keyboardShouldPersistTaps="always"
                                     >
                                         {docComments.length === 0 && (
                                             <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
@@ -2228,73 +2496,92 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     <View style={{ position: 'absolute', bottom: 65, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 }}>
                                         <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
                                             {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
-                                                <TouchableOpacity
+                                                <GestureTouchableOpacity
                                                     key={m.id}
                                                     onPress={() => handleSelectMention(m)}
-                                                    style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}
                                                 >
-                                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                    <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                        </View>
+                                                        <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
                                                     </View>
-                                                    <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
-                                                </TouchableOpacity>
+                                                </GestureTouchableOpacity>
                                             ))}
                                         </ScrollView>
                                     </View>
                                 )}
 
-                                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
-                                    <TextInput
-                                        value={commentText}
-                                        onChangeText={handleInputChange}
-                                        placeholder={t('projectDocuments.addCommentPlaceholder')}
-                                        placeholderTextColor="#666"
-                                        style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
-                                    />
-                                    <TouchableOpacity
-                                        onPress={handleAddComment}
-                                        disabled={addingComment || !commentText.trim()}
-                                        style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: (!commentText.trim() || addingComment) ? 0.5 : 1 }}
-                                    >
-                                        {addingComment
-                                            ? <ActivityIndicator size="small" color="#fff" />
-                                            : <Feather name="send" size={16} color="#fff" />
-                                        }
-                                    </TouchableOpacity>
-                                </View>
+                                <ScrollView
+                                    keyboardShouldPersistTaps="always"
+                                    scrollEnabled={false}
+                                    style={{ width: '100%', flexGrow: 0 }}
+                                >
+
+                                    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
+                                        <TextInput
+                                            ref={commentInputRef}
+                                            value={commentText}
+                                            onChangeText={handleInputChange}
+                                            placeholder={t('projectDocuments.addCommentPlaceholder')}
+                                            placeholderTextColor="#666"
+                                            style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
+                                        />
+                                        <GestureTouchableOpacity
+                                            onPress={handleAddComment}
+                                            disabled={addingComment || !commentText.trim()}
+                                        >
+                                            <View style={{
+                                                width: 40,
+                                                height: 40,
+                                                borderRadius: 20,
+                                                backgroundColor: colors.primary,
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                opacity: (!commentText.trim() || addingComment) ? 0.5 : 1
+                                            }}>
+                                                {addingComment
+                                                    ? <ActivityIndicator size="small" color="#fff" />
+                                                    : <Feather name="send" size={16} color="#fff" />
+                                                }
+                                            </View>
+                                        </GestureTouchableOpacity>
+                                    </View>
+                                </ScrollView>
                                 <View style={{ height: Math.max(insets.bottom, 10) }} />
+                            </ScrollView>
+                        </View>
+                    )}
+
+
+                    {/* Sharing Overlay (Inside the PDF Viewer) */}
+                    {sharing && (
+                        <View style={{
+                            ...StyleSheet.absoluteFillObject,
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            zIndex: 9999
+                        }}>
+                            <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
+                                <ActivityIndicator size="large" color={colors.primary} />
+                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.preparing')}</Text>
+                                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
                             </View>
-                        </KeyboardAvoidingView>
+                        </View>
+                    )}
+
+                    {showLinkModal && currentDoc?.id && (
+                        <LinkFileModal
+                            visible={showLinkModal}
+                            onClose={() => setShowLinkModal(false)}
+                            onLink={handleLinkFile}
+                            projectId={project.id}
+                            currentFileId={currentDoc.id}
+                            handleLinkItemClick={handleLinkItemClick}
+                        />
                     )}
                 </View>
-
-                {/* Sharing Overlay (Inside the PDF Viewer) */}
-                {sharing && (
-                    <View style={{
-                        ...StyleSheet.absoluteFillObject,
-                        backgroundColor: 'rgba(0,0,0,0.6)',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        zIndex: 9999
-                    }}>
-                        <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
-                            <ActivityIndicator size="large" color={colors.primary} />
-                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.preparing')}</Text>
-                            <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
-                        </View>
-                    </View>
-                )}
-
-                {showLinkModal && currentDoc?.id && (
-                    <LinkFileModal
-                        visible={showLinkModal}
-                        onClose={() => setShowLinkModal(false)}
-                        onLink={handleLinkFile}
-                        projectId={project.id}
-                        currentFileId={currentDoc.id}
-                        handleLinkItemClick={handleLinkItemClick}
-                    />
-                )}
             </Modal>
 
             {/* Sharing Overlay (For cases where viewer isn't open) */}
@@ -2630,6 +2917,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onClose={() => setActionMenuVisible(false)}
                 onHideUnhide={() => handleToggleVisibility(activeActionFile)}
                 onDoNotFollow={() => handleToggleDoNotFollow(activeActionFile)}
+                onOnlyForReference={() => handleToggleOnlyForReference(activeActionFile)}
                 onDelete={() => handleDeleteFile(activeActionFile)}
                 onArchive={() => handleArchiveFileAction(activeActionFile)}
                 onUnarchive={() => handleUnarchiveFile(activeActionFile)}
@@ -2638,6 +2926,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={activeActionFile?.do_not_follow === true}
+                onlyForReference={activeActionFile?.only_for_reference === true}
                 canDelete={false} // Disable delete in Docs
                 showArchive={!currentFolder?.name.toLowerCase().includes('archive')}
                 isArchived={folders.find(f => f.id === activeActionFile?.folder_id)?.name.toLowerCase() === 'archive'}

@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apexis.ios",
-      "buildNumber": "46",
+      "buildNumber": "47",
       "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:web.apexis.in"
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "com.apexis.app",
-      "versionCode": 46,
+      "versionCode": 47,
       "intentFilters": [
         {
           "action": "VIEW",

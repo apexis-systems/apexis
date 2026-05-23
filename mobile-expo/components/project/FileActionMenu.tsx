@@ -12,6 +12,7 @@ interface FileActionMenuProps {
     onClose: () => void;
     onHideUnhide: () => void;
     onDoNotFollow: () => void;
+    onOnlyForReference?: () => void;
     onDelete: () => void;
     onShare?: () => void;
     onRename?: () => void;
@@ -21,6 +22,7 @@ interface FileActionMenuProps {
     onCreateSnag?: () => void;
     clientVisible: boolean;
     doNotFollow: boolean;
+    onlyForReference?: boolean;
     canDelete: boolean;
     canRename: boolean;
     showArchive?: boolean;
@@ -38,6 +40,7 @@ export default function FileActionMenu({
     onClose,
     onHideUnhide,
     onDoNotFollow,
+    onOnlyForReference,
     onDelete,
     onShare,
     onRename,
@@ -47,6 +50,7 @@ export default function FileActionMenu({
     onCreateSnag,
     clientVisible,
     doNotFollow,
+    onlyForReference,
     canDelete,
     canRename,
     showArchive = false,
@@ -165,6 +169,29 @@ export default function FileActionMenu({
                                         </Text>
                                     </TouchableOpacity>
                                 )}
+
+                                {(!isArchived && showDoNotFollow && onOnlyForReference && (isAdmin || !isContributor || isUploader)) && (
+                                    <TouchableOpacity 
+                                        style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                        onPress={() => { !isProcessing && onOnlyForReference(); }}
+                                        disabled={isProcessing}
+                                    >
+                                        {processingAction === 'ofr' ? (
+                                            <ActivityIndicator size="small" color={colors.primary} />
+                                        ) : (
+                                            <Feather 
+                                                name="info" 
+                                                size={18} 
+                                                color={onlyForReference ? colors.primary : colors.textMuted} 
+                                            />
+                                        )}
+                                        <Text style={[styles.optionText, { color: colors.text }]}>
+                                            {onlyForReference ? t('fileActionMenu.unmarkOfr') : t('fileActionMenu.markOfr')}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                 
 
                                 {showArchive && !isArchived && onArchive && (
                                     <TouchableOpacity 

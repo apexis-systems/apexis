@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { verifyToken } from '../middleware/verifyToken.ts';
 import { checkLimit } from '../middleware/checkLimit.ts';
-import { getRFIs, createRFI, updateRFIStatus, getRFIById, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI, getFolderRFIs, markRFISeen } from '../controllers/rfiController.ts';
+import { getRFIs, createRFI, updateRFIStatus, getRFIById, getRFIAssignees, updateRFIResponse, deleteRFI, updateRFI, getFolderRFIs, markRFISeen, linkRfiFile, deleteRfiLink } from '../controllers/rfiController.ts';
 import { createConversationMessage, getConversationMessages } from '../controllers/conversationMessageController.ts';
 
 const router = Router();
@@ -25,5 +25,7 @@ router.patch('/:id/response', upload.array('photos', 2), updateRFIResponse);
 router.patch('/:id/seen', markRFISeen);
 router.patch('/:id', upload.array('photos', 5), updateRFI);
 router.delete('/:id', deleteRFI);
+router.post('/:id/link', linkRfiFile);
+router.delete('/:id/link/:fileId', deleteRfiLink);
 
 export default router;

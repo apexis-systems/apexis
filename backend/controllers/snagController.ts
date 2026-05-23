@@ -15,7 +15,8 @@ import {
   projects,
   folders,
   sequelize,
-  file_snag_links
+  file_snag_links,
+  files
 } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { logActivity } from "../utils/activityUtils.ts";
@@ -86,6 +87,29 @@ const withPresignedUrl = async (snag: any) => {
     json.linked_folders = [];
   }
 
+  if (json.file_snag_links && Array.isArray(json.file_snag_links)) {
+    try {
+      await Promise.all(
+        json.file_snag_links.map(async (link: any) => {
+          const fileObj = link.file || link.files;
+          if (fileObj && fileObj.file_url) {
+            try {
+              const rawKey = fileObj.file_url;
+              const key = rawKey.startsWith('/') ? rawKey.substring(1) : rawKey;
+              const cmd = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: key });
+              fileObj.downloadUrl = await getSignedUrl(s3Client, cmd, { expiresIn: 3600 });
+            } catch (err) {
+              console.error("Presign file url error:", err);
+              fileObj.downloadUrl = null;
+            }
+          }
+        })
+      );
+    } catch (err) {
+      console.error("Error processing file_snag_links presigning:", err);
+    }
+  }
+
   return json;
 };
 
@@ -106,6 +130,10 @@ export const getSnags = async (req: Request, res: Response) => {
       include: [
         { model: users, as: "assignee", attributes: ["id", "name", "email"] },
         { model: users, as: "creator", attributes: ["id", "name"] },
+        {
+          model: file_snag_links,
+          include: [{ model: files }]
+        }
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -636,20 +664,23 @@ export const updateSnag = async (req: Request | any, res: Response) => {
     const snag = await snags.findByPk(id);
     if (!snag) return res.status(404).json({ error: "Snag not found" });
 
-    // Only creator or admin can edit
-    if (
-      authUser.role !== "admin" &&
-      authUser.role !== "superadmin" &&
-      Number(snag.created_by) !== Number(authUser.user_id)
-    ) {
+    const isCreatorOrAdmin = authUser.role === "admin" || authUser.role === "superadmin" || Number(snag.created_by) === Number(authUser.user_id);
+    const isAssignee = Number(snag.assigned_to) === Number(authUser.user_id);
+
+    if (!isCreatorOrAdmin && !isAssignee) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const hasResponse = snag.response || (snag.response_photos && snag.response_photos.length > 0);
     const hasPhoto = req.files && req.files.photo && req.files.photo.length > 0;
     const hasAudio = req.files && req.files.audio && req.files.audio.length > 0;
     const isCoreUpdate = title || (description !== undefined) || assigned_to || hasPhoto || hasAudio || remove_audio;
 
+    // If they are only the assignee (not creator/admin), they can only update folder links
+    if (isAssignee && !isCreatorOrAdmin && isCoreUpdate) {
+      return res.status(403).json({ error: "Forbidden: Assignee can only update folder links" });
+    }
+
+    const hasResponse = snag.response || (snag.response_photos && snag.response_photos.length > 0);
     if (hasResponse && isCoreUpdate) {
       return res.status(400).json({ error: "Cannot edit snag details because a response has already been generated. However, folder links can still be updated." });
     }
@@ -778,6 +809,10 @@ export const getFolderSnags = async (req: Request, res: Response) => {
       include: [
         { model: users, as: "assignee", attributes: ["id", "name", "email"] },
         { model: users, as: "creator", attributes: ["id", "name"] },
+        {
+          model: file_snag_links,
+          include: [{ model: files }]
+        }
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -791,5 +826,62 @@ export const getFolderSnags = async (req: Request, res: Response) => {
     console.error("getFolderSnags error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
+};
+
+// POST /snags/:id/link
+export const linkSnagFile = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { fileId } = req.body;
+
+    try {
+        if (!fileId) {
+            return res.status(400).json({ error: "fileId is required" });
+        }
+
+        const snagRecord = await snags.findByPk(id);
+        const fileRecord = await files.findByPk(fileId);
+
+        if (!snagRecord || !fileRecord) {
+            return res.status(404).json({ error: "Snag or File not found" });
+        }
+
+        const existing = await file_snag_links.findOne({
+            where: { snag_id: id, file_id: fileId }
+        });
+
+        if (existing) {
+            return res.status(200).json({ message: "File is already linked to this Snag", link: existing });
+        }
+
+        const link = await file_snag_links.create({
+            snag_id: id,
+            file_id: fileId
+        });
+
+        res.status(201).json({ message: "File linked to Snag successfully", link });
+    } catch (error) {
+        console.error("linkSnagFile error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// DELETE /snags/:id/link/:fileId
+export const deleteSnagLink = async (req: Request, res: Response) => {
+    const { id, fileId } = req.params;
+
+    try {
+        const deleted = await file_snag_links.destroy({
+            where: { snag_id: id, file_id: fileId }
+        });
+
+        if (!deleted) {
+            return res.status(404).json({ error: "Link not found" });
+        }
+
+        res.status(200).json({ message: "Link removed successfully" });
+    } catch (error) {
+        console.error("deleteSnagLink error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
 };
 

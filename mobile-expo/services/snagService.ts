@@ -41,6 +41,7 @@ export interface Snag {
     seen_at?: string | null;
     folder_ids?: number[];
     linked_folders?: any[];
+    file_snag_links?: any[];
 }
 
 export interface Assignee {
@@ -153,6 +154,25 @@ export const sendSnagMessage = async (id: number, formData: FormData): Promise<C
         return res.data.message;
     } catch (error) {
         console.error("sendSnagMessage Error", error);
+        throw error;
+    }
+};
+
+export const linkSnagFile = async (id: number, fileId: number): Promise<any> => {
+    try {
+        const res = await PrivateAxios.post(`/snags/${id}/link`, { fileId });
+        return res.data;
+    } catch (error) {
+        console.error("linkSnagFile Error", error);
+        throw error;
+    }
+};
+
+export const deleteSnagLink = async (id: number, fileId: number): Promise<void> => {
+    try {
+        await PrivateAxios.delete(`/snags/${id}/link/${fileId}`);
+    } catch (error) {
+        console.error("deleteSnagLink Error", error);
         throw error;
     }
 };
