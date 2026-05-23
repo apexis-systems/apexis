@@ -37,26 +37,26 @@ const FilePaperclip = ({ className }: { className?: string }) => {
 };
 
 const isAudio = (url: string) => {
-    if (!url) return false;
-    try {
-        const urlWithoutQuery = url.split('?')[0];
-        return !!urlWithoutQuery.match(/\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i);
-    } catch {
-        return false;
-    }
+  if (!url) return false;
+  try {
+    const urlWithoutQuery = url.split('?')[0];
+    return !!urlWithoutQuery.match(/\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i);
+  } catch {
+    return false;
+  }
 };
 
 const isAudioFile = (file: File) => file.type.startsWith('audio/') || /\.(m4a|mp4|wav|mp3|webm|aac|3gp|caf)$/i.test(file.name);
 
 const isImageFile = (fileOrUrl: any): boolean => {
-    if (!fileOrUrl) return false;
-    const type = fileOrUrl.file_type || fileOrUrl.type || '';
-    if (type.toLowerCase().startsWith('image/') || type.toLowerCase().includes('image')) return true;
-    const name = fileOrUrl.file_name || fileOrUrl.name || '';
-    const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
-    if (name.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i)) return true;
-    if (downloadUrl.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i)) return true;
-    return false;
+  if (!fileOrUrl) return false;
+  const type = fileOrUrl.file_type || fileOrUrl.type || '';
+  if (type.toLowerCase().startsWith('image/') || type.toLowerCase().includes('image')) return true;
+  const name = fileOrUrl.file_name || fileOrUrl.name || '';
+  const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
+  if (name.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i)) return true;
+  if (downloadUrl.match(/\.(png|jpg|jpeg|gif|webp|bmp|heic|heif)$/i)) return true;
+  return false;
 };
 
 const mergeUniqueMessages = (messages: ConversationMessage[]) => {
@@ -110,7 +110,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [removeExistingAudio, setRemoveExistingAudio] = useState(false);
   const [viewPhoto, setViewPhoto] = useState<string | null>(null);
-  
+
   const [selectedSnag, setSelectedSnag] = useState<Snag | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
@@ -118,46 +118,46 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [selectedFolderIds, setSelectedFolderIds] = useState<(string | number)[]>([]);
 
   const handleLinkFile = async (targetFileId: string | number) => {
-      if (!selectedSnag) return;
-      setSubmitting(true);
-      try {
-          await linkSnagFile(selectedSnag.id, Number(targetFileId));
-          const updated = (await getSnags(project.id)).find(s => s.id === selectedSnag.id);
-          if (updated) {
-              setSelectedSnag(updated);
-              setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
-          }
-          toast.success(t('link_success') || 'File linked successfully');
-          setShowFilePicker(false);
-      } catch (error) {
-          toast.error(t('link_failed') || 'Failed to link file');
-      } finally {
-          setSubmitting(false);
+    if (!selectedSnag) return;
+    setSubmitting(true);
+    try {
+      await linkSnagFile(selectedSnag.id, Number(targetFileId));
+      const updated = (await getSnags(project.id)).find(s => s.id === selectedSnag.id);
+      if (updated) {
+        setSelectedSnag(updated);
+        setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
       }
+      toast.success(t('link_success') || 'File linked successfully');
+      setShowFilePicker(false);
+    } catch (error) {
+      toast.error(t('link_failed') || 'Failed to link file');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleRemoveFileLink = async (targetFileId: string | number) => {
-      if (!selectedSnag) return;
-      try {
-          await deleteSnagLink(selectedSnag.id, Number(targetFileId));
-          const updated = (await getSnags(project.id)).find(s => s.id === selectedSnag.id);
-          if (updated) {
-              setSelectedSnag(updated);
-              setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
-          }
-          toast.success(t('link_removed') || 'Link removed successfully');
-      } catch (error) {
-          toast.error(t('link_remove_failed') || 'Failed to remove link');
+    if (!selectedSnag) return;
+    try {
+      await deleteSnagLink(selectedSnag.id, Number(targetFileId));
+      const updated = (await getSnags(project.id)).find(s => s.id === selectedSnag.id);
+      if (updated) {
+        setSelectedSnag(updated);
+        setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
       }
+      toast.success(t('link_removed') || 'Link removed successfully');
+    } catch (error) {
+      toast.error(t('link_remove_failed') || 'Failed to remove link');
+    }
   };
-  
+
   const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [messageFile, setMessageFile] = useState<File | null>(null);
   const [messagePreview, setMessagePreview] = useState<string | null>(null);
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -165,17 +165,21 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     setSelectedSnag(null);
     const returnTab = searchParams?.get('returnTab');
     if (returnTab) {
-        const returnFolderId = searchParams?.get('returnFolderId');
-        const returnFileId = searchParams?.get('returnFileId');
-        const params = new URLSearchParams();
-        params.set('tab', returnTab);
-        if (returnFolderId) params.set('folder', returnFolderId);
-        if (returnFileId) {
-            params.set('fileId', returnFileId);
-            params.set('viewerTab', 'links');
-        }
-        const url = window.location.pathname + '?' + params.toString();
-        router.push(url);
+      const returnFolderId = searchParams?.get('returnFolderId');
+      const returnFileId = searchParams?.get('returnFileId');
+      const returnViewerTab = searchParams?.get('returnViewerTab');
+      const params = new URLSearchParams();
+      params.set('tab', returnTab);
+      if (returnFolderId) params.set('folder', returnFolderId);
+      if (returnFileId) {
+        params.set('fileId', returnFileId);
+        params.set('viewerTab', 'links');
+      }
+      if (returnViewerTab) {
+        params.set('viewerSubTab', returnViewerTab);
+      }
+      const url = window.location.pathname + '?' + params.toString();
+      router.push(url);
     }
   };
 
@@ -324,7 +328,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       const updated = await updateSnagStatus(snag.id, form);
       setSnags(prev => prev.map(s => s.id === snag.id ? updated : s));
       setSelectedSnag(updated);
-      
+
       toast.success(t('status_updated_to_msg').replace('{label}', t(STATUS_CONFIG[next].key)));
     } catch (error) {
       toast.error(t('failed_update_status'));
@@ -423,7 +427,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const handleUpdateSnag = async () => {
     if (!selectedSnag) return;
     if (!newTitle.trim()) { toast.error(t('title_required_msg')); return; }
-    
+
     setSubmitting(true);
     try {
       const form = new FormData();
@@ -484,41 +488,49 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const handleLinkItemClick = (item: any) => {
     const currentUrlParams = new URLSearchParams(window.location.search);
     const currentTab = currentUrlParams.get('tab') || 'snags';
-    
+
     if (item.type === 'file') {
-        const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
-        const extraParams = new URLSearchParams();
-        extraParams.set('tab', targetTab);
-        if (item.folder_id) extraParams.set('folder', String(item.folder_id));
-        extraParams.set('fileId', String(item.file_id || item.id));
-        extraParams.set('viewerTab', 'links');
-        if (selectedSnag?.id) {
-            extraParams.set('returnTab', currentTab);
-            extraParams.set('returnSnagId', String(selectedSnag.id));
+      const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
+      const extraParams = new URLSearchParams();
+      extraParams.set('tab', targetTab);
+      let folderId = item.folder_id;
+      if (!folderId) {
+        const urlToParse = item.url || item.file_url;
+        if (urlToParse) {
+          const match = urlToParse.match(/folders\/([^/]+)/);
+          if (match) folderId = match[1];
         }
-        router.push(`?${extraParams.toString()}`);
+      }
+      if (folderId) extraParams.set('folder', String(folderId));
+      extraParams.set('fileId', String(item.file_id || item.id));
+      extraParams.set('viewerTab', 'links');
+      if (selectedSnag?.id) {
+        extraParams.set('returnTab', currentTab);
+        extraParams.set('returnSnagId', String(selectedSnag.id));
+      }
+      router.push(window.location.pathname + `?${extraParams.toString()}`);
     } else {
-        if (item.url) {
-            try {
-                const hasPath = item.url.includes('?');
-                const [urlPath, queryStr] = hasPath ? item.url.split('?') : [item.url, ''];
-                const targetParams = new URLSearchParams(queryStr);
-                
-                targetParams.set('returnTab', currentTab);
-                if (selectedSnag?.id) targetParams.set('returnSnagId', String(selectedSnag.id));
-                
-                const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `?${targetParams.toString()}`;
-                router.push(newUrl);
-            } catch {
-                router.push(item.url);
-            }
+      if (item.url) {
+        try {
+          const hasPath = item.url.includes('?');
+          const [urlPath, queryStr] = hasPath ? item.url.split('?') : [item.url, ''];
+          const targetParams = new URLSearchParams(queryStr);
+
+          targetParams.set('returnTab', currentTab);
+          if (selectedSnag?.id) targetParams.set('returnSnagId', String(selectedSnag.id));
+
+          const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `${window.location.pathname}?${targetParams.toString()}`;
+          router.push(newUrl);
+        } catch {
+          router.push(item.url);
         }
+      }
     }
   };
 
-  
 
-    const filteredSnags = snags.filter(s => {
+
+  const filteredSnags = snags.filter(s => {
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
     const matchesCreator = creatorFilter === 'all' || String(s.created_by) === creatorFilter;
     const matchesAssignee = assigneeFilter === 'all' || String(s.assigned_to) === assigneeFilter;
@@ -589,9 +601,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
             <div className="flex items-end pb-0.5">
               {(statusFilter !== 'all' || creatorFilter !== 'all' || assigneeFilter !== 'all') && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className="text-[10px] h-8 text-muted-foreground hover:text-foreground"
                   onClick={() => { setStatusFilter('all'); setCreatorFilter('all'); setAssigneeFilter('all'); }}
                 >
@@ -610,8 +622,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           const photoUrl = snag.photoDownloadUrl || snag.photo_url;
           const isTarget = initialSnagId && String(snag.id) === String(initialSnagId);
           return (
-            <div 
-              key={snag.id} 
+            <div
+              key={snag.id}
               onClick={() => setSelectedSnag(snag)}
               className={cn(
                 "flex items-start gap-3 rounded-lg border p-3 transition-all cursor-pointer hover:border-accent/50",
@@ -820,18 +832,18 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   <div className="flex items-center gap-2">
                     {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id) || String(selectedSnag.assigned_to) === String(user?.id) || String(selectedSnag.assignee?.id) === String(user?.id)) && (
                       <>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-7 text-[10px]"
                           onClick={() => setShowFilePicker(true)}
                         >
                           <FilePaperclip className="h-3.5 w-3.5 mr-1.5" />
                           {t('link_files') || 'Link Files'}
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-7 text-[10px]"
                           onClick={() => {
                             setSelectedFolderIds(selectedSnag.folder_ids || []);
@@ -845,9 +857,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     )}
                     {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && !selectedSnag.response && (
                       <>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-7 text-[10px]"
                           onClick={() => {
                             setNewTitle(selectedSnag.title);
@@ -864,9 +876,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                           {t('edit_btn')}
                         </Button>
 
-                        <Button 
-                          variant="destructive" 
-                          size="sm" 
+                        <Button
+                          variant="destructive"
+                          size="sm"
                           className="h-7 text-[10px]"
                           onClick={() => {
                             handleDelete(selectedSnag);
@@ -891,12 +903,12 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   return (
                     <div className="grid grid-cols-2 gap-2">
                       {images.map((img, idx) => (
-                        <div 
-                          key={idx} 
-                          className="aspect-video rounded-lg overflow-hidden border border-border cursor-pointer relative group" 
+                        <div
+                          key={idx}
+                          className="aspect-video rounded-lg overflow-hidden border border-border cursor-pointer relative group"
                           onClick={() => {
                             if (img.id) {
-                              router.push(`?tab=photos&photoId=${img.id}&returnTab=snags&returnSnagId=${selectedSnag.id}`);
+                              router.push(window.location.pathname + `?tab=photos&photoId=${img.id}&returnTab=snags&returnSnagId=${selectedSnag.id}`);
                             } else {
                               setViewPhoto(img.url);
                             }
@@ -944,8 +956,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('linked_folders_title')}</p>
                     <div className="flex flex-wrap gap-2">
                       {selectedSnag.linked_folders.map((f: { id: number; name: string; folder_type: string }) => (
-                        <button 
-                          key={f.id} 
+                        <button
+                          key={f.id}
                           onClick={() => {
                             const snagId = selectedSnag.id;
                             setSelectedSnag(null);
@@ -954,7 +966,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                             params.set('folder', String(f.id));
                             params.set('returnTab', 'snags');
                             params.set('returnSnagId', String(snagId));
-                            router.push(`?${params.toString()}`);
+                            router.push(window.location.pathname + `?${params.toString()}`);
                           }}
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
                         >
@@ -973,9 +985,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     }
                   `}</style>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('response_title')}</p>
-                  <div 
-                    ref={chatContainerRef} 
-                    className="space-y-3 max-h-[320px] overflow-y-auto pr-1 no-scrollbar" 
+                  <div
+                    ref={chatContainerRef}
+                    className="space-y-3 max-h-[320px] overflow-y-auto pr-1 no-scrollbar"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                   >
                     {loadingMessages ? (
@@ -1106,9 +1118,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                             ) : null}
                           </div>
                         )}
-                        <Textarea 
-                          placeholder={t('add_comment_placeholder')} 
-                          className="min-h-[96px] resize-none text-sm border-0 bg-transparent shadow-none focus-visible:ring-0 p-0" 
+                        <Textarea
+                          placeholder={t('add_comment_placeholder')}
+                          className="min-h-[96px] resize-none text-sm border-0 bg-transparent shadow-none focus-visible:ring-0 p-0"
                           value={messageText}
                           onChange={e => setMessageText(e.target.value)}
                         />
@@ -1122,7 +1134,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                             )}
                             {!messageFile && (
                               <div className="flex-1 min-w-0">
-                                <VoiceNoteRecorder 
+                                <VoiceNoteRecorder
                                   onRecordingStateChange={setIsVoiceRecording}
                                   onSend={(file) => {
                                     setMessageFile(file);
@@ -1133,8 +1145,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                             )}
                           </div>
                           {!isVoiceRecording && (
-                            <Button 
-                              className="min-w-[140px] h-11 rounded-xl bg-accent hover:bg-accent/90" 
+                            <Button
+                              className="min-w-[140px] h-11 rounded-xl bg-accent hover:bg-accent/90"
                               onClick={handleSendMessage}
                               disabled={submitting || (!messageText.trim() && !messageFile)}
                             >
@@ -1153,9 +1165,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('update_status_respond_title')}</p>
                     <div className="flex gap-2">
                       {STATUS_CYCLE.map(s => (
-                        <Button 
-                          key={s} 
-                          size="sm" 
+                        <Button
+                          key={s}
+                          size="sm"
                           variant={selectedSnag.status === s ? 'default' : 'outline'}
                           className={cn("flex-1 text-[10px] h-8", selectedSnag.status === s && STATUS_CONFIG[s].bg && STATUS_CONFIG[s].text)}
                           onClick={() => cycleStatus(selectedSnag, s)}
@@ -1179,33 +1191,33 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
         </DialogContent>
       </Dialog>
 
-      <FolderPickerDialog 
-          open={showFolderPicker}
-          onOpenChange={setShowFolderPicker}
-          project={project}
-          selectedFolderIds={selectedFolderIds}
-          submitting={submitting}
-          onSelect={async (ids) => {
-              setSelectedFolderIds(ids.map(Number));
-              if (selectedSnag && !isEditing) {
-                  await handleUpdateLinks(ids);
-              } else {
-                  setShowFolderPicker(false);
-              }
-          }}
+      <FolderPickerDialog
+        open={showFolderPicker}
+        onOpenChange={setShowFolderPicker}
+        project={project}
+        selectedFolderIds={selectedFolderIds}
+        submitting={submitting}
+        onSelect={async (ids) => {
+          setSelectedFolderIds(ids.map(Number));
+          if (selectedSnag && !isEditing) {
+            await handleUpdateLinks(ids);
+          } else {
+            setShowFolderPicker(false);
+          }
+        }}
       />
 
       {selectedSnag && showFilePicker && (
-          <LinkFileModal
-              open={showFilePicker}
-              onOpenChange={setShowFilePicker}
-              projectId={project.id}
-              linkedFileIds={selectedSnag.file_snag_links?.map((l: any) => l.file_id) || []}
-              onLink={handleLinkFile}
-              onRemoveLink={handleRemoveFileLink}
-              handleLinkItemClick={handleLinkItemClick}
-              onlyPhotos={true}
-          />
+        <LinkFileModal
+          open={showFilePicker}
+          onOpenChange={setShowFilePicker}
+          projectId={project.id}
+          linkedFileIds={selectedSnag.file_snag_links?.map((l: any) => l.file_id) || []}
+          onLink={handleLinkFile}
+          onRemoveLink={handleRemoveFileLink}
+          handleLinkItemClick={handleLinkItemClick}
+          onlyPhotos={true}
+        />
       )}
     </div>
   );
