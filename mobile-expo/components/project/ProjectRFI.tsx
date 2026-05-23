@@ -54,11 +54,11 @@ const FilePaperclip = ({ size = 20, color, bgColor = '#ffffff' }: { size?: numbe
   return (
     <View style={{ width: size, height: size, position: 'relative', justifyContent: 'center', alignItems: 'center' }}>
       <Feather name="file-text" size={fileSize} color={color} style={{ position: 'absolute', top: 0, left: 0 }} />
-      <View style={{ 
-        position: 'absolute', 
-        bottom: -2, 
-        right: -2, 
-        backgroundColor: bgColor, 
+      <View style={{
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        backgroundColor: bgColor,
         borderRadius: clipSize / 2,
         padding: 1,
       }}>
@@ -137,11 +137,11 @@ const fetchDocumentMetadata = async (url: string) => {
         'Range': 'bytes=0-0'
       }
     });
-    
+
     const contentType = response.headers.get('content-type');
     const contentRange = response.headers.get('content-range');
     const contentLength = response.headers.get('content-length');
-    
+
     let sizeBytes = 0;
     if (contentRange) {
       const parts = contentRange.split('/');
@@ -151,13 +151,13 @@ const fetchDocumentMetadata = async (url: string) => {
     } else if (contentLength) {
       sizeBytes = parseInt(contentLength, 10);
     }
-    
+
     let sizeStr = '';
     if (sizeBytes > 0) {
       const sizeMB = sizeBytes / (1024 * 1024);
       sizeStr = sizeMB < 0.1 ? `${(sizeBytes / 1024).toFixed(1)} KB` : `${sizeMB.toFixed(1)} MB`;
     }
-    
+
     return {
       type: contentType || getMimeTypeFromUrl(url),
       size: sizeStr || undefined
@@ -176,21 +176,21 @@ const isImageFile = (
   docMetadata?: Record<string, { size?: string; type?: string }>
 ): boolean => {
   if (!fileOrUrl) return false;
-  
+
   if (typeof fileOrUrl === 'string') {
     if (isImage(fileOrUrl)) return true;
     const meta = docMetadata?.[fileOrUrl];
     if (meta?.type?.toLowerCase().startsWith('image/')) return true;
     return false;
   }
-  
+
   const name = fileOrUrl.file_name || fileOrUrl.name || '';
   const type = fileOrUrl.file_type || fileOrUrl.type || '';
   const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
-  
+
   if (type.toLowerCase().startsWith('image/') || type.toLowerCase().includes('image')) return true;
   if (isImage(name) || isImage(downloadUrl)) return true;
-  
+
   if (downloadUrl) {
     const meta = docMetadata?.[downloadUrl];
     if (meta?.type?.toLowerCase().startsWith('image/')) return true;
@@ -203,21 +203,21 @@ const isAudioFile = (
   docMetadata?: Record<string, { size?: string; type?: string }>
 ): boolean => {
   if (!fileOrUrl) return false;
-  
+
   if (typeof fileOrUrl === 'string') {
     if (isAudio(fileOrUrl)) return true;
     const meta = docMetadata?.[fileOrUrl];
     if (meta?.type?.toLowerCase().startsWith('audio/')) return true;
     return false;
   }
-  
+
   const name = fileOrUrl.file_name || fileOrUrl.name || '';
   const type = fileOrUrl.file_type || fileOrUrl.type || '';
   const downloadUrl = fileOrUrl.downloadUrl || fileOrUrl.url || '';
-  
+
   if (type.toLowerCase().startsWith('audio/') || type.toLowerCase().includes('audio')) return true;
   if (isAudio(name) || isAudio(downloadUrl)) return true;
-  
+
   if (downloadUrl) {
     const meta = docMetadata?.[downloadUrl];
     if (meta?.type?.toLowerCase().startsWith('audio/')) return true;
@@ -316,13 +316,29 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (searchParams.returnFileId) {
         rParams.fileId = String(searchParams.returnFileId);
         // Signal viewer to open on links tab
-        rParams.returnViewerTab = 'links';
+        rParams.viewerTab = 'links';
       } else {
         // Returning to a folder (not a file preview) — clear stale fileId
         rParams.fileId = '';
         if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
       }
-      router.setParams(rParams);
+
+      // Clear the return params from the query state
+      rParams.returnTab = '';
+      rParams.returnRfiId = '';
+      rParams.returnSnagId = '';
+      rParams.returnFolderId = '';
+      rParams.returnFileId = '';
+      rParams.returnFolderActiveTab = '';
+
+      console.log("rParams", rParams)
+      if (Platform.OS === 'ios') {
+        setTimeout(() => {
+          router.setParams(rParams);
+        }, 450);
+      } else {
+        router.setParams(rParams);
+      }
     }
   };
 
@@ -383,57 +399,58 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   };
 
   const handleLinkItemClick = async (item: any) => {
-      const itemType = item.type || item.target_type;
-      const itemId = item.target_id || item.id;
-      if (!itemType || !itemId) return;
+    const itemType = item.type || item.target_type;
+    const itemId = item.target_id || item.id;
+    if (!itemType || !itemId) return;
 
-      let targetFolderId: string | null = item.folder_id ? String(item.folder_id) : null;
-      if (!targetFolderId && item.file_url) {
-          const parts = item.file_url.split('/');
-          const folderIdx = parts.indexOf('folders');
-          if (folderIdx !== -1 && folderIdx + 1 < parts.length) {
-              targetFolderId = parts[folderIdx + 1];
-          }
+    let targetFolderId: string | null = item.folder_id ? String(item.folder_id) : null;
+    if (!targetFolderId && item.file_url) {
+      const parts = item.file_url.split('/');
+      const folderIdx = parts.indexOf('folders');
+      if (folderIdx !== -1 && folderIdx + 1 < parts.length) {
+        targetFolderId = parts[folderIdx + 1];
       }
+    }
 
-      const returnContext = {
-          returnTab: 'rfi',
-          returnRfiId: selectedRFI ? String(selectedRFI.id) : ''
-      };
+    const returnContext = {
+      returnTab: 'rfi',
+      returnRfiId: selectedRFI ? String(selectedRFI.id) : '',
+      returnViewerTab: 'links',
+    };
 
-      setDetailModalVisible(false);
-      setShowFilePicker(false);
-      setSelectedRFI(null);
+    setDetailModalVisible(false);
+    setShowFilePicker(false);
+    setSelectedRFI(null);
 
-      setTimeout(() => {
-          if (itemType === 'file') {
-              const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
-              const isPhoto = item.file_type?.startsWith('image/') ||
-                  fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
+    setTimeout(() => {
+      if (itemType === 'file') {
+        const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+        const isPhoto = item.file_type?.startsWith('image/') ||
+          fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
 
-              if (isPhoto) {
-                  router.setParams({
-                      tab: 'photos',
-                      folderId: String(targetFolderId || ''),
-                      fileId: String(itemId),
-                      ...returnContext
-                  });
-              } else {
-                  router.setParams({
-                      tab: 'documents',
-                      folderId: String(targetFolderId || ''),
-                      fileId: String(itemId),
-                      ...returnContext
-                  });
-              }
-          } else {
-              if (itemType === 'rfi') {
-                  router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
-              } else if (itemType === 'snag') {
-                  router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
-              }
-          }
-      }, 100);
+        if (isPhoto) {
+          router.setParams({
+            tab: 'photos',
+            folderId: String(targetFolderId || ''),
+            fileId: String(itemId),
+            ...returnContext
+          });
+        } else {
+          router.setParams({
+            tab: 'documents',
+            folderId: String(targetFolderId || ''),
+            fileId: String(itemId),
+            ...returnContext
+          });
+        }
+      } else {
+        if (itemType === 'rfi') {
+          router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
+        } else if (itemType === 'snag') {
+          router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
+        }
+      }
+    }, Platform.OS === 'ios' ? 450 : 100);
   };
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
   const [pdfViewerName, setPdfViewerName] = useState('');
@@ -536,9 +553,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const handleManualZoom = (factor: number) => {
     const z = (factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
     const clamped = Math.max(0, Math.min(1, z));
-    
+
     // Sync everything immediately
-    zoomShared.value = clamped; 
+    zoomShared.value = clamped;
     showZoomLabel(clamped);
   };
 
@@ -580,7 +597,10 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         setResponseImages([]);
         setSelectedRFI(target);
         setDetailModalVisible(true);
-        router.setParams({ rfiId: undefined });
+        if (searchParams?.viewerTab === 'links') {
+          setShowFilePicker(true);
+        }
+        router.setParams({ rfiId: undefined, viewerTab: undefined });
       };
 
       // If already in list, open it
@@ -591,11 +611,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         // Fetch it specifically for faster redirection
         getRFIById(Number(initialRfiId)).then(openRFI).catch(err => {
           console.error("Failed to fetch initial RFI", err);
-          router.setParams({ rfiId: undefined });
+          router.setParams({ rfiId: undefined, viewerTab: undefined });
         });
       }
     }
-  }, [initialRfiId, rfis, router]);
+  }, [initialRfiId, rfis, router, searchParams]);
 
   useEffect(() => {
     if (!cameraVisible) {
@@ -642,14 +662,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
   useEffect(() => {
     if (!selectedRFI) return;
-    
+
     const docs = getLinkedDocuments(selectedRFI, docMetadata);
     const urlsToFetch = docs
       .filter(doc => !doc.size) // only those without metadata/size
       .map(doc => doc.url);
-      
+
     if (urlsToFetch.length === 0) return;
-    
+
     const fetchAll = async () => {
       const updates: Record<string, { size?: string; type?: string }> = {};
       await Promise.all(
@@ -664,7 +684,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         setDocMetadata(prev => ({ ...prev, ...updates }));
       }
     };
-    
+
     fetchAll();
   }, [selectedRFI?.id]);
 
@@ -2493,7 +2513,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                           <GestureDetector gesture={pinchGesture}>
                             <View collapsable={false} style={StyleSheet.absoluteFill}>
                               <CameraView
-                                
+
                                 ref={cameraRef}
                                 style={StyleSheet.absoluteFill}
                                 facing="back"
@@ -2663,15 +2683,15 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
         />
 
         {selectedRFI && showFilePicker && (
-            <LinkFileModal
-                visible={showFilePicker}
-                onClose={() => setShowFilePicker(false)}
-                projectId={project.id}
-                linkedFileIds={selectedRFI.file_rfi_links?.map((l: any) => l.file_id) || []}
-                onLink={handleLinkFile}
-                onRemoveLink={handleRemoveFileLink}
-                handleLinkItemClick={handleLinkItemClick}
-            />
+          <LinkFileModal
+            visible={showFilePicker}
+            onClose={() => setShowFilePicker(false)}
+            projectId={project.id}
+            linkedFileIds={selectedRFI.file_rfi_links?.map((l: any) => l.file_id) || []}
+            onLink={handleLinkFile}
+            onRemoveLink={handleRemoveFileLink}
+            handleLinkItemClick={handleLinkItemClick}
+          />
         )}
 
       </Modal>
@@ -2723,7 +2743,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       const urlHash = currentDoc.url.split('?')[0].split('/').pop() || 'temp';
                       const cleanName = `${urlHash}_${sanitizedName}${sanitizedName.includes('.') ? '' : '.' + ext}`;
                       const localUri = `${FileSystem.cacheDirectory}${cleanName}`;
-                      
+
                       const fileInfo = await FileSystem.getInfoAsync(localUri);
                       if (fileInfo.exists) {
                         if (await Sharing.isAvailableAsync()) {
@@ -3216,11 +3236,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                               </Animated.View>
                               {/* Direct Zoom Buttons */}
                               <View style={{ position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 16, zIndex: 40 }}>
-                                  {[0.5, 1, 2].map(factor => (
-                                    <TouchableOpacity key={factor} onPress={() => handleManualZoom(factor)} style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
-                                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
-                                    </TouchableOpacity>
-                                  ))}
+                                {[0.5, 1, 2].map(factor => (
+                                  <TouchableOpacity key={factor} onPress={() => handleManualZoom(factor)} style={{ backgroundColor: 'rgba(0,0,0,0.55)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
+                                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{factor}x</Text>
+                                  </TouchableOpacity>
+                                ))}
                               </View>
                             </View>
 
