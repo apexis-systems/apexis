@@ -89,6 +89,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [isViewerZoomed, setIsViewerZoomed] = useState(false);
     const [showViewerUI, setShowViewerUI] = useState(true);
     const [downloading, setDownloading] = useState(false);
+    const [sharing, setSharing] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
@@ -1240,11 +1241,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!photoToShare) return;
 
         try {
-            setDownloading(true);
+            setSharing(true);
             const ext = photoToShare.file_name?.split('.').pop() || 'jpg';
             const localUri = `${(FileSystem as any).cacheDirectory}${photoToShare.file_name || `photo_${Date.now()}.${ext}`}`;
 
-            const { uri } = await FileSystem.downloadAsync(photoToShare.downloadUrl, localUri);
+            const { uri } = await (FileSystem as any).downloadAsync(photoToShare.downloadUrl, localUri);
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
@@ -1260,7 +1261,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         } catch (e) {
             Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToSharePhoto'));
         } finally {
-            setDownloading(false);
+            setSharing(false);
         }
     };
 
@@ -2227,10 +2228,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8 }}>
                                         <Feather name="link" size={20} color="#fff" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => handleSharePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }}>
-                                        <Feather name="share-2" size={20} color="#fff" />
+                                    <TouchableOpacity onPress={() => handleSharePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }} disabled={sharing || downloading}>
+                                        {sharing
+                                            ? <ActivityIndicator size="small" color="#fff" />
+                                            : <Feather name="share-2" size={20} color="#fff" />
+                                        }
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
+                                    <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading || sharing}>
                                         {downloading
                                             ? <ActivityIndicator size="small" color={colors.primary} />
                                             : <Feather name="download" size={20} color={colors.primary} />
