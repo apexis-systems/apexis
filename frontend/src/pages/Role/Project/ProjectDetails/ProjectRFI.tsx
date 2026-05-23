@@ -352,12 +352,17 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         if (returnTab) {
             const returnFolderId = searchParams?.get('returnFolderId');
             const returnFileId = searchParams?.get('returnFileId');
+            const returnViewerTab = searchParams?.get('returnViewerTab');
             const params = new URLSearchParams();
             params.set('tab', returnTab);
             if (returnFolderId) params.set('folder', returnFolderId);
             if (returnFileId) {
                 params.set('fileId', returnFileId);
                 params.set('viewerTab', 'links');
+
+            }
+            if (returnViewerTab) {
+                params.set('viewerSubTab', returnViewerTab);
             }
             // Clear return params from URL
             const url = window.location.pathname + '?' + params.toString();
@@ -805,14 +810,22 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
             const extraParams = new URLSearchParams();
             extraParams.set('tab', targetTab);
-            if (item.folder_id) extraParams.set('folder', String(item.folder_id));
+            let folderId = item.folder_id;
+            if (!folderId) {
+                const urlToParse = item.url || item.file_url;
+                if (urlToParse) {
+                    const match = urlToParse.match(/folders\/([^/]+)/);
+                    if (match) folderId = match[1];
+                }
+            }
+            if (folderId) extraParams.set('folder', String(folderId));
             extraParams.set('fileId', String(item.file_id || item.id));
             extraParams.set('viewerTab', 'links');
             if (selectedRFI?.id) {
                 extraParams.set('returnTab', currentTab);
                 extraParams.set('returnRfiId', String(selectedRFI.id));
             }
-            router.push(`?${extraParams.toString()}`);
+            router.push(window.location.pathname + `?${extraParams.toString()}`);
         } else {
             if (item.url) {
                 try {
@@ -823,7 +836,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                     targetParams.set('returnTab', currentTab);
                     if (selectedRFI?.id) targetParams.set('returnRfiId', String(selectedRFI.id));
                     
-                    const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `?${targetParams.toString()}`;
+                    const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `${window.location.pathname}?${targetParams.toString()}`;
                     router.push(newUrl);
                 } catch {
                     router.push(item.url);
@@ -1241,7 +1254,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         params.set('folder', String(f.id));
                                                         params.set('returnTab', 'rfi');
                                                         params.set('returnRfiId', String(rfiId));
-                                                        router.push(`?${params.toString()}`);
+                                                        router.push(window.location.pathname + `?${params.toString()}`);
                                                     }}
                                                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
                                                 >
@@ -1277,7 +1290,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                                         params.set('returnTab', 'rfi');
                                                                         params.set('returnRfiId', String(selectedRFI.id));
                                                                         setSelectedRFI(null);
-                                                                        router.push(`?${params.toString()}`);
+                                                                        router.push(window.location.pathname + `?${params.toString()}`);
                                                                     } else {
                                                                         setViewPhoto(img.url);
                                                                     }

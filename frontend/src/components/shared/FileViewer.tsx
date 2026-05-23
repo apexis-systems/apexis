@@ -98,9 +98,9 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     const currentUrlParams = new URLSearchParams(window.location.search);
     const currentTab = currentUrlParams.get('tab') || 'documents';
     const currentFolderId = currentUrlParams.get('folder');
-
+    console.log('item', item);
     if (item.type === 'file') {
-      const idx = files.findIndex(f => f.id === item.id);
+      const idx = files.findIndex(f => String(f.id) === String(item.id));
       if (idx !== -1) {
         setCurrentIndex(idx);
       } else {
@@ -108,7 +108,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
         const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
         const extraParams = new URLSearchParams();
         extraParams.set('tab', targetTab);
-        if (item.folder_id) extraParams.set('folder', String(item.folder_id));
+        let folderId = item.folder_id;
+        if (!folderId) {
+          const urlToParse = item.url || item.file_url;
+          if (urlToParse) {
+            const match = urlToParse.match(/folders\/([^/]+)/);
+            if (match) folderId = match[1];
+          }
+        }
+        if (folderId) extraParams.set('folder', String(folderId));
         extraParams.set('fileId', String(item.file_id || item.id));
         extraParams.set('viewerTab', 'links');
         if (currentFile?.id) {
@@ -116,7 +124,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           if (currentFolderId) extraParams.set('returnFolderId', currentFolderId);
           extraParams.set('returnFileId', String(currentFile.id));
         }
-        router.push(`?${extraParams.toString()}`);
+        router.push(window.location.pathname + `?${extraParams.toString()}`);
       }
     } else {
       // Navigate to RFI or Snag with return context so closing it brings back here
@@ -134,7 +142,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           if (currentFolderId) targetParams.set('returnFolderId', currentFolderId);
           
           // Determine if this is an absolute URL or just query params
-          const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `?${targetParams.toString()}`;
+          const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `${window.location.pathname}?${targetParams.toString()}`;
           router.push(newUrl);
         } catch {
           router.push(item.url);
@@ -146,8 +154,11 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   useEffect(() => {
     if (open) {
       setCurrentIndex(initialIndex);
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
     }
-  }, [open, initialIndex]);
+  }, [open, initialIndex, initialTab]);
 
   // Mark as seen if assigned to current user
   useEffect(() => {

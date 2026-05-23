@@ -8,11 +8,12 @@ import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface LinkedItemsTabProps {
+    tab?: string;
     folderId?: string | number | null;
     projectId?: string | number | null;
 }
 
-const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabProps) => {
+const LinkedItemsTab = ({ tab = '', folderId = null, projectId = null }: LinkedItemsTabProps) => {
     const { t } = useLanguage();
     const [rfis, setRfis] = useState<RFI[]>([]);
     const [snags, setSnags] = useState<Snag[]>([]);
@@ -27,27 +28,27 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                 getFolderRFIs(folderId).catch(err => { console.error(err); return []; }),
                 getFolderSnags(folderId).catch(err => { console.error(err); return []; })
             ])
-            .then(([rfiData, snagData]) => {
-                setRfis(rfiData);
-                setSnags(snagData);
-                if (rfiData.length === 0 && snagData.length > 0) {
-                    setActiveSubTab('snags');
-                } else {
-                    setActiveSubTab('rfis');
-                }
-            })
-            .finally(() => setLoading(false));
+                .then(([rfiData, snagData]) => {
+                    setRfis(rfiData);
+                    setSnags(snagData);
+                    if (rfiData.length === 0 && snagData.length > 0) {
+                        setActiveSubTab('snags');
+                    } else {
+                        setActiveSubTab('rfis');
+                    }
+                })
+                .finally(() => setLoading(false));
         }
     }, [folderId]);
 
     const handleRFIClick = (rfiId: number) => {
-        const returnContext = folderId ? `&returnTab=documents&returnFolderId=${folderId}` : '';
-        router.push(`?tab=rfi&rfiId=${rfiId}${returnContext}`);
+        const returnContext = folderId ? `&returnTab=${tab}&returnFolderId=${folderId}&returnViewerTab=rfi` : '';
+        router.push(window.location.pathname + `?tab=rfi&rfiId=${rfiId}${returnContext}`);
     };
 
     const handleSnagClick = (snagId: number) => {
-        const returnContext = folderId ? `&returnTab=documents&returnFolderId=${folderId}` : '';
-        router.push(`?tab=snags&snagId=${snagId}${returnContext}`);
+        const returnContext = folderId ? `&returnTab=${tab}&returnFolderId=${folderId}&returnViewerTab=rfi` : '';
+        router.push(window.location.pathname + `?tab=snags&snagId=${snagId}${returnContext}`);
     };
 
     if (loading) {
@@ -81,21 +82,19 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
             <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border/40 max-w-[240px] mx-auto">
                 <button
                     onClick={() => setActiveSubTab('rfis')}
-                    className={`flex-1 py-1 text-[10px] font-bold rounded-md transition-all ${
-                        activeSubTab === 'rfis'
+                    className={`flex-1 py-1 text-[10px] font-bold rounded-md transition-all ${activeSubTab === 'rfis'
                             ? 'bg-background text-primary shadow-sm border border-border/40'
                             : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                        }`}
                 >
                     RFIs ({rfis.length})
                 </button>
                 <button
                     onClick={() => setActiveSubTab('snags')}
-                    className={`flex-1 py-1 text-[10px] font-bold rounded-md transition-all ${
-                        activeSubTab === 'snags'
+                    className={`flex-1 py-1 text-[10px] font-bold rounded-md transition-all ${activeSubTab === 'snags'
                             ? 'bg-background text-primary shadow-sm border border-border/40'
                             : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                        }`}
                 >
                     Snags ({snags.length})
                 </button>
@@ -106,7 +105,7 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                 rfis.length > 0 ? (
                     <div className="space-y-2">
                         {rfis.map((rfi) => (
-                            <div 
+                            <div
                                 key={rfi.id}
                                 onClick={() => handleRFIClick(rfi.id)}
                                 className="group flex items-center justify-between p-3 rounded-xl border border-border bg-card hover:border-accent hover:shadow-sm transition-all cursor-pointer"
@@ -129,10 +128,9 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                                                 {rfi.creator?.name}
                                             </div>
                                             <div className={
-                                                `px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold uppercase tracking-tighter ${
-                                                    rfi.status === 'open' ? 'bg-amber-100 text-amber-700' : 
-                                                    rfi.status === 'closed' ? 'bg-emerald-100 text-emerald-700' : 
-                                                    'bg-red-100 text-red-700'
+                                                `px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold uppercase tracking-tighter ${rfi.status === 'open' ? 'bg-amber-100 text-amber-700' :
+                                                    rfi.status === 'closed' ? 'bg-emerald-100 text-emerald-700' :
+                                                        'bg-red-100 text-red-700'
                                                 }`
                                             }>
                                                 {rfi.status}
@@ -157,7 +155,7 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                 snags.length > 0 ? (
                     <div className="space-y-2">
                         {snags.map((snag) => (
-                            <div 
+                            <div
                                 key={snag.id}
                                 onClick={() => handleSnagClick(snag.id)}
                                 className="group flex items-center justify-between p-3 rounded-xl border border-border bg-card hover:border-accent hover:shadow-sm transition-all cursor-pointer"
@@ -180,15 +178,14 @@ const LinkedItemsTab = ({ folderId = null, projectId = null }: LinkedItemsTabPro
                                                 {snag.creator?.name || '—'}
                                             </div>
                                             <div className={
-                                                `px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold uppercase tracking-tighter ${
-                                                    snag.status === 'amber' ? 'bg-amber-100 text-amber-700' : 
-                                                    snag.status === 'green' ? 'bg-emerald-100 text-emerald-700' : 
-                                                    'bg-red-100 text-red-700'
+                                                `px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold uppercase tracking-tighter ${snag.status === 'amber' ? 'bg-amber-100 text-amber-700' :
+                                                    snag.status === 'green' ? 'bg-emerald-100 text-emerald-700' :
+                                                        'bg-red-100 text-red-700'
                                                 }`
                                             }>
                                                 {snag.status === 'amber' ? t('waiting_clearance') || 'Amber' :
-                                                 snag.status === 'green' ? t('completed_status') || 'Green' :
-                                                 t('no_action_required') || 'Red'}
+                                                    snag.status === 'green' ? t('completed_status') || 'Green' :
+                                                        t('no_action_required') || 'Red'}
                                             </div>
                                         </div>
                                     </div>
