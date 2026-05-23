@@ -775,14 +775,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         if (!photo?.downloadUrl) return;
         setDownloading(true);
         try {
-            const { status } = await MediaLibrary.requestPermissionsAsync();
+            const { status } = await MediaLibrary.requestPermissionsAsync(true);
             if (status !== 'granted') {
                 Alert.alert(t('projectPhotos.galleryAccess'), t('projectPhotos.galleryAccessMessage'));
                 return;
             }
             const ext = photo.file_name?.split('.').pop() || 'jpg';
             const localUri = (FileSystem as any).cacheDirectory + `apexis_${Date.now()}.${ext}`;
-            const { uri } = await FileSystem.downloadAsync(photo.downloadUrl, localUri);
+            const { uri } = await (FileSystem as any).downloadAsync(photo.downloadUrl, localUri);
             await MediaLibrary.saveToLibraryAsync(uri);
             Alert.alert(t('projectPhotos.saved'), t('projectPhotos.photoSavedMessage'));
         } catch (err) {
@@ -792,6 +792,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             setDownloading(false);
         }
     };
+
 
     const confirmDeletePhoto = (photo: any) => {
         if (!photo?.id) return;
@@ -2226,7 +2227,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8 }}>
                                         <Feather name="link" size={20} color="#fff" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={handleSharePhoto} style={{ padding: 8 }}>
+                                    <TouchableOpacity onPress={() => handleSharePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }}>
                                         <Feather name="share-2" size={20} color="#fff" />
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading}>
