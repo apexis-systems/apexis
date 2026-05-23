@@ -283,6 +283,25 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                   )}
                 </div>
 
+                {(currentFile?.tags) && (
+                  <div className="flex flex-col -mt-2 gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">tags</span>
+
+                    {currentFile?.tags && (
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <div className="w-[22px] h-[22px] rounded-full bg-white/10 flex items-center justify-center">
+                          <TagIcon className="h-3 w-3 text-white" />
+                        </div>
+                        {currentFile.tags.split(',').map((tag: string, tidx: number) => (
+                          <div key={tidx} className="bg-white/15 px-2.5 h-[22px] rounded-lg border border-white/10 flex items-center justify-center">
+                            <span className="text-white text-[10px] font-semibold leading-none">{tag.trim()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="pt-2">
                   <Button
                     className={cn("w-full h-11 text-[11px] font-black rounded-xl bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg shadow-accent/20 transition-all active:scale-95", downloading && "opacity-50 pointer-events-none")}

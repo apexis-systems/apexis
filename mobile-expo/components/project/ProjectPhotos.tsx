@@ -85,11 +85,16 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
+    const viewerOpenRef = useRef(viewerOpen);
+    useEffect(() => {
+        viewerOpenRef.current = viewerOpen;
+    }, [viewerOpen]);
     const [viewerIndex, setViewerIndex] = useState(0);
     const [isViewerZoomed, setIsViewerZoomed] = useState(false);
     const [showViewerUI, setShowViewerUI] = useState(true);
     const [downloading, setDownloading] = useState(false);
     const flatListRef = useRef<FlatList>(null);
+    const isUserScrollingRef = useRef(false);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
@@ -258,9 +263,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const loadFiles = async (isRefetch = false) => {
         if (!project?.id) return;
+        if (viewerOpenRef.current) return;
         if (!isRefetch && folders.length === 0 && photos.length === 0) setLoading(true);
         try {
             const data = await getProjectFiles(project.id, 'photo', searchQuery);
+            if (viewerOpenRef.current) return;
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) {
                 setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
@@ -347,11 +354,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     };
 
+
+
     useEffect(() => {
         // Only auto-open viewer when it is NOT already open — prevents "1/0" black screen
         // caused by this effect firing mid-session and switching selectedFolder unexpectedly
         if (!viewerOpen && initialFileId && photos.length > 0) {
-            const currentFolderPhotosForInit = photos.filter((p) => String(p.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
+            const folderToUse = initialFolderId || selectedFolder;
+            const currentFolderPhotosForInit = photos.filter((p) => String(p.folder_id ?? 'null') === String(folderToUse ?? 'null'));
             const visiblePhotosInit = user.role === 'client' ? currentFolderPhotosForInit.filter((p) => p.client_visible !== false) : currentFolderPhotosForInit;
             const sortedInit = [...visiblePhotosInit].sort((a: any, b: any) => {
                 if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
@@ -365,13 +375,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             if (index !== -1) {
                 openViewer(index);
                 // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
-                if (searchParams?.returnViewerTab === 'links') {
+                if (searchParams?.viewerTab === 'links') {
                     setViewerActiveTab('links');
+                    setShowLinkModal(true);
                 }
-                router.setParams({ fileId: '', photoId: '', returnViewerTab: '' });
+                router.setParams({ fileId: '', photoId: '', viewerTab: '' });
             }
         }
-    }, [initialFileId, photos, selectedFolder, sortBy, user.role, router, viewerOpen]);
+    }, [initialFileId, photos, selectedFolder, initialFolderId, sortBy, user.role, router, viewerOpen]);
 
 
     const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
@@ -380,7 +391,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         ? currentFolderPhotos.filter((p) => p.client_visible !== false)
         : currentFolderPhotos, [currentFolderPhotos, user.role]);
 
-    const sortItems = (items: any[], type: 'folder' | 'file') => {
+    const sortItems = useCallback((items: any[], type: 'folder' | 'file') => {
         return [...items].sort((a: any, b: any) => {
             if (sortBy === 'name') {
                 const nameA = type === 'folder' ? a.name : a.file_name;
@@ -399,10 +410,35 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }
             return 0;
         });
-    };
+    }, [sortBy]);
 
-    const sortedFolders = sortItems(currentFolders, 'folder');
-    const sortedPhotos = sortItems(visiblePhotos, 'file');
+    const sortedFolders = useMemo(() => sortItems(currentFolders, 'folder'), [currentFolders, sortItems]);
+    const sortedPhotos = useMemo(() => sortItems(visiblePhotos, 'file'), [visiblePhotos, sortItems]);
+
+    const sortedPhotosRef = useRef(sortedPhotos);
+    useEffect(() => {
+        sortedPhotosRef.current = sortedPhotos;
+    }, [sortedPhotos]);
+
+    const activePhotoIdRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        const photosList = sortedPhotosRef.current;
+        if (viewerOpen && viewerIndex >= 0 && photosList[viewerIndex]) {
+            activePhotoIdRef.current = photosList[viewerIndex].id;
+        } else if (!viewerOpen) {
+            activePhotoIdRef.current = null;
+        }
+    }, [viewerIndex, viewerOpen]);
+
+    useEffect(() => {
+        if (viewerOpen && activePhotoIdRef.current !== null) {
+            const newIndex = sortedPhotos.findIndex(p => p.id === activePhotoIdRef.current);
+            if (newIndex !== -1 && newIndex !== viewerIndex) {
+                setViewerIndex(newIndex);
+            }
+        }
+    }, [sortedPhotos, viewerOpen]);
 
     const groups = useMemo(() => {
         if (sortBy === 'newest' || sortBy === 'oldest') {
@@ -469,7 +505,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }, 50);
             return () => clearTimeout(t);
         }
-    }, [viewerOpen, sortedPhotos, viewerIndex]);
+    }, [viewerOpen, viewerIndex]);
 
     const fetchLinkedItems = useCallback(async () => {
         if (viewerOpen && sortedPhotos[viewerIndex]?.id) {
@@ -533,38 +569,83 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             returnViewerTab: 'links',
         };
 
-        if (itemType === 'file') {
-            const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
-            const isPhoto = item.file_type?.startsWith('image/') ||
-                fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
+        const executeClick = () => {
+            if (itemType === 'file') {
+                const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+                const isPhoto = item.file_type?.startsWith('image/') ||
+                    fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
 
-            if (isPhoto) {
-                const idx = sortedPhotos.findIndex(p => String(p.id) === String(itemId));
-                if (idx !== -1 && String(targetFolderId || '') === String(selectedFolder || '')) {
-                    setViewerIndex(idx);
+                if (isPhoto) {
+                    const idx = sortedPhotos.findIndex(p => String(p.id) === String(itemId));
+                    if (idx !== -1 && String(targetFolderId || '') === String(selectedFolder || '')) {
+                        setViewerIndex(idx);
+                    } else {
+                        setViewerOpen(false);
+                        setViewerIndex(-1);
+                        setIsViewerZoomed(false);
+                        if (Platform.OS === 'ios') {
+                            setTimeout(() => {
+                                router.setParams({
+                                    tab: 'photos',
+                                    folderId: String(targetFolderId || ''),
+                                    fileId: String(itemId),
+                                    ...returnContext
+                                });
+                            }, 450);
+                        } else {
+                            router.setParams({
+                                tab: 'photos',
+                                folderId: String(targetFolderId || ''),
+                                fileId: String(itemId),
+                                ...returnContext
+                            });
+                        }
+                    }
                 } else {
-                    router.setParams({
-                        tab: 'photos',
-                        folderId: String(targetFolderId || ''),
-                        fileId: String(itemId),
-                        ...returnContext
-                    });
+                    setViewerOpen(false);
+                    setViewerIndex(-1);
+                    setIsViewerZoomed(false);
+                    if (Platform.OS === 'ios') {
+                        setTimeout(() => {
+                            router.setParams({
+                                tab: 'documents',
+                                folderId: String(targetFolderId || ''),
+                                fileId: String(itemId),
+                                ...returnContext
+                            });
+                        }, 450);
+                    } else {
+                        router.setParams({
+                            tab: 'documents',
+                            folderId: String(targetFolderId || ''),
+                            fileId: String(itemId),
+                            ...returnContext
+                        });
+                    }
                 }
             } else {
-                router.setParams({
-                    tab: 'documents',
-                    folderId: String(targetFolderId || ''),
-                    fileId: String(itemId),
-                    ...returnContext
-                });
+                setViewerOpen(false);
+                setViewerIndex(-1);
+                setIsViewerZoomed(false);
+                const triggerNav = () => {
+                    if (itemType === 'rfi') {
+                        router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
+                    } else if (itemType === 'snag') {
+                        router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
+                    }
+                };
+                if (Platform.OS === 'ios') {
+                    setTimeout(triggerNav, 450);
+                } else {
+                    triggerNav();
+                }
             }
+        };
+
+        if (Platform.OS === 'ios') {
+            setTimeout(executeClick, 450);
         } else {
-            // RFI or Snag
-            if (itemType === 'rfi') {
-                router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
-            } else if (itemType === 'snag') {
-                router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
-            }
+            executeClick();
         }
     };
 
@@ -713,7 +794,25 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const rParams: any = { tab: returnTab };
             if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
             if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
-            router.setParams(rParams);
+            if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+            if (searchParams.returnFileId) rParams.fileId = String(searchParams.returnFileId);
+            if (searchParams.returnViewerTab) rParams.viewerTab = String(searchParams.returnViewerTab);
+
+            // Clear the return params by passing empty strings to router.setParams
+            rParams.returnTab = '';
+            rParams.returnRfiId = '';
+            rParams.returnSnagId = '';
+            rParams.returnFolderId = '';
+            rParams.returnFileId = '';
+            rParams.returnViewerTab = '';
+
+            if (Platform.OS === 'ios') {
+                setTimeout(() => {
+                    router.setParams(rParams);
+                }, 450);
+            } else {
+                router.setParams(rParams);
+            }
         }
     };
 
@@ -1488,13 +1587,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <TouchableOpacity
                                                             key={rfi.id}
                                                             onPress={() => {
-                                                const returnContext = {
-                                                    returnTab: 'photos',
-                                                    returnFolderId: selectedFolder ? String(selectedFolder) : '',
-                                                    returnFolderActiveTab: 'rfis',
-                                                };
-                                                router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
-                                            }}
+                                                                const returnContext = {
+                                                                    returnTab: 'photos',
+                                                                    returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                                    returnFolderActiveTab: 'rfis',
+                                                                };
+                                                                router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
+                                                            }}
                                                             style={{
                                                                 backgroundColor: colors.surface,
                                                                 borderRadius: 12,
@@ -1554,13 +1653,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <TouchableOpacity
                                                             key={snag.id}
                                                             onPress={() => {
-                                                const returnContext = {
-                                                    returnTab: 'photos',
-                                                    returnFolderId: selectedFolder ? String(selectedFolder) : '',
-                                                    returnFolderActiveTab: 'rfis',
-                                                };
-                                                router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
-                                            }}
+                                                                const returnContext = {
+                                                                    returnTab: 'photos',
+                                                                    returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                                    returnFolderActiveTab: 'rfis',
+                                                                };
+                                                                router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
+                                                            }}
                                                             style={{
                                                                 backgroundColor: colors.surface,
                                                                 borderRadius: 12,
@@ -2271,9 +2370,25 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             maxToRenderPerBatch={1}
                             keyExtractor={(item) => item.id.toString()}
                             getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
+                            onScrollBeginDrag={() => {
+                                isUserScrollingRef.current = true;
+                            }}
                             onMomentumScrollEnd={(e) => {
-                                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-                                if (idx !== viewerIndex) setViewerIndex(idx);
+                                if (isUserScrollingRef.current) {
+                                    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                                    if (idx !== viewerIndex) setViewerIndex(idx);
+                                    isUserScrollingRef.current = false;
+                                }
+                            }}
+                            onScrollEndDrag={(e) => {
+                                const velocity = e.nativeEvent.velocity;
+                                if (!velocity || (Math.abs(velocity.x) < 0.1 && Math.abs(velocity.y) < 0.1)) {
+                                    if (isUserScrollingRef.current) {
+                                        const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                                        if (idx !== viewerIndex) setViewerIndex(idx);
+                                        isUserScrollingRef.current = false;
+                                    }
+                                }
                             }}
                             renderItem={({ item }) => {
                                 const viewerHeight = SCREEN_H - insets.top - insets.bottom;

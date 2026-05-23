@@ -352,6 +352,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     };
 
     const handleLinkItemClick = async (item: any) => {
+        setShowLinkModal(false);
 
         const itemType = item.type || item.target_type;
         const itemId = item.target_id || item.id;
@@ -375,42 +376,87 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             returnViewerTab: 'links',
         };
 
-        if (itemType === 'file') {
-            const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
-            const isPhoto = item.file_type?.startsWith('image/') ||
-                fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') ||
-                fileName.endsWith('.gif') || fileName.endsWith('.webp');
+        const executeClick = () => {
+            if (itemType === 'file') {
+                const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
+                const isPhoto = item.file_type?.startsWith('image/') ||
+                    fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') ||
+                    fileName.endsWith('.gif') || fileName.endsWith('.webp');
 
-            if (isPhoto) {
-                setShowLinkModal(false);
-                router.setParams({
-                    tab: 'photos',
-                    folderId: String(targetFolderId || ''),
-                    fileId: String(itemId),
-                    ...returnContext
-                });
-            } else {
-                const targetDoc = docs.find(d => String(d.id) === String(itemId));
-                if (targetDoc && String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
-                    setShowLinkModal(false);
-                    openDoc(targetDoc);
+                if (isPhoto) {
+                    setPdfViewerUrl(null);
+                    setCurrentDoc(null);
+                    setShowComments(false);
+                    setDocComments([]);
+                    if (Platform.OS === 'ios') {
+                        setTimeout(() => {
+                            router.setParams({
+                                tab: 'photos',
+                                folderId: String(targetFolderId || ''),
+                                fileId: String(itemId),
+                                ...returnContext
+                            });
+                        }, 450);
+                    } else {
+                        router.setParams({
+                            tab: 'photos',
+                            folderId: String(targetFolderId || ''),
+                            fileId: String(itemId),
+                            ...returnContext
+                        });
+                    }
                 } else {
-                    setShowLinkModal(false);
-                    router.setParams({
-                        tab: 'documents',
-                        folderId: String(targetFolderId || ''),
-                        fileId: String(itemId),
-                        ...returnContext
-                    });
+                    const targetDoc = docs.find(d => String(d.id) === String(itemId));
+                    if (targetDoc && String(targetDoc.folder_id ?? 'null') === String(selectedFolder ?? 'null')) {
+                        openDoc(targetDoc);
+                    } else {
+                        setPdfViewerUrl(null);
+                        setCurrentDoc(null);
+                        setShowComments(false);
+                        setDocComments([]);
+                        if (Platform.OS === 'ios') {
+                            setTimeout(() => {
+                                router.setParams({
+                                    tab: 'documents',
+                                    folderId: String(targetFolderId || ''),
+                                    fileId: String(itemId),
+                                    ...returnContext
+                                });
+                            }, 450);
+                        } else {
+                            router.setParams({
+                                tab: 'documents',
+                                folderId: String(targetFolderId || ''),
+                                fileId: String(itemId),
+                                ...returnContext
+                            });
+                        }
+                    }
+                }
+            } else {
+                setPdfViewerUrl(null);
+                setCurrentDoc(null);
+                setShowComments(false);
+                setDocComments([]);
+                const triggerNav = () => {
+                    if (itemType === 'rfi') {
+                        router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
+                    } else if (itemType === 'snag') {
+                        router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
+                    }
+                };
+                if (Platform.OS === 'ios') {
+                    setTimeout(triggerNav, 450);
+                } else {
+                    triggerNav();
                 }
             }
+        };
+
+        if (Platform.OS === 'ios') {
+            setTimeout(executeClick, 450);
         } else {
-            setShowLinkModal(false);
-            if (itemType === 'rfi') {
-                router.setParams({ tab: 'rfi', rfiId: String(itemId), ...returnContext });
-            } else if (itemType === 'snag') {
-                router.setParams({ tab: 'snags', snagId: String(itemId), ...returnContext });
-            }
+            executeClick();
         }
     };
 
@@ -582,7 +628,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     useEffect(() => {
         if (initialFileId && docs.length > 0) {
-            const currentFolderDocsForInit = docs.filter((d) => String(d.folder_id ?? 'null') === String(selectedFolder ?? 'null'));
+            const folderToUse = initialFolderId || selectedFolder;
+            const currentFolderDocsForInit = docs.filter((d) => String(d.folder_id ?? 'null') === String(folderToUse ?? 'null'));
             const visibleDocsInit = user.role === 'client' ? currentFolderDocsForInit.filter((d) => d.client_visible !== false) : currentFolderDocsForInit;
             const sortedInit = [...visibleDocsInit].sort((a: any, b: any) => {
                 if (sortBy === 'name') return (a.file_name || '').localeCompare(b.file_name || '');
@@ -596,13 +643,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             if (index !== -1) {
                 openDoc(sortedInit[index]);
                 // If returning from an RFI/Snag that was opened from the links tab, reopen on links tab
-                if (searchParams?.returnViewerTab === 'links') {
+                if (searchParams?.viewerTab === 'links') {
                     setViewerActiveTab('links');
+                    setShowLinkModal(true);
                 }
-                router.setParams({ fileId: '', documentId: '', returnViewerTab: '' });
+                router.setParams({ fileId: '', documentId: '', viewerTab: '' });
             }
         }
-    }, [initialFileId, docs, selectedFolder, sortBy, user.role, router]);
+    }, [initialFileId, docs, selectedFolder, initialFolderId, sortBy, user.role, router]);
 
 
     const currentFolders = useMemo(() => folders.filter((f) => String(f.parent_id ?? 'null') === String(selectedFolder ?? 'null')), [folders, selectedFolder]);
@@ -1819,13 +1867,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 <TouchableOpacity
                                                     key={rfi.id}
                                                     onPress={() => {
-                                        const returnContext = {
-                                            returnTab: 'documents',
-                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
-                                            returnFolderActiveTab: 'rfis',
-                                        };
-                                        router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
-                                    }}
+                                                        const returnContext = {
+                                                            returnTab: 'documents',
+                                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                            returnFolderActiveTab: 'rfis',
+                                                        };
+                                                        router.setParams({ tab: 'rfi', rfiId: String(rfi.id), fileId: '', ...returnContext });
+                                                    }}
                                                     style={{
                                                         backgroundColor: colors.surface,
                                                         borderRadius: 12,
@@ -1885,13 +1933,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 <TouchableOpacity
                                                     key={snag.id}
                                                     onPress={() => {
-                                        const returnContext = {
-                                            returnTab: 'documents',
-                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
-                                            returnFolderActiveTab: 'rfis',
-                                        };
-                                        router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
-                                    }}
+                                                        const returnContext = {
+                                                            returnTab: 'documents',
+                                                            returnFolderId: selectedFolder ? String(selectedFolder) : '',
+                                                            returnFolderActiveTab: 'rfis',
+                                                        };
+                                                        router.setParams({ tab: 'snags', snagId: String(snag.id), fileId: '', ...returnContext });
+                                                    }}
                                                     style={{
                                                         backgroundColor: colors.surface,
                                                         borderRadius: 12,
@@ -2069,14 +2117,30 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         const rParams: any = { tab: returnTab };
                         if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
                         if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                        if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
                         if (searchParams.returnFileId) {
                             rParams.fileId = String(searchParams.returnFileId);
-                            rParams.returnViewerTab = 'links';
+                            rParams.viewerTab = 'links';
                         } else {
                             rParams.fileId = '';
                             if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
                         }
-                        router.setParams(rParams);
+                        // Clear the return params from the query state
+                        rParams.returnTab = '';
+                        rParams.returnRfiId = '';
+                        rParams.returnSnagId = '';
+                        rParams.returnFolderId = '';
+                        rParams.returnFileId = '';
+                        rParams.returnFolderActiveTab = '';
+
+
+                        if (Platform.OS === 'ios') {
+                            setTimeout(() => {
+                                router.setParams(rParams);
+                            }, 450);
+                        } else {
+                            router.setParams(rParams);
+                        }
                     }
                 }}
             >
@@ -2105,14 +2169,32 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     const rParams: any = { tab: returnTab };
                                     if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
                                     if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                                    if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+                                    if (searchParams.returnViewerTab) {
+                                        rParams.viewerTab = 'links';
+                                    }
                                     if (searchParams.returnFileId) {
                                         rParams.fileId = String(searchParams.returnFileId);
-                                        rParams.returnViewerTab = 'links';
+
                                     } else {
                                         rParams.fileId = '';
                                         if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
                                     }
-                                    router.setParams(rParams);
+
+                                    // Clear the return params from the query state
+                                    rParams.returnTab = '';
+                                    rParams.returnRfiId = '';
+                                    rParams.returnSnagId = '';
+                                    rParams.returnFolderId = '';
+                                    rParams.returnFileId = '';
+                                    rParams.returnFolderActiveTab = '';
+                                    if (Platform.OS === 'ios') {
+                                        setTimeout(() => {
+                                            router.setParams(rParams);
+                                        }, 450);
+                                    } else {
+                                        router.setParams(rParams);
+                                    }
                                 }
                             }}
                             style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
@@ -2150,284 +2232,284 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         </View>
                     </View>
 
-                        {/* Metadata Strip */}
-                        {(currentDoc?.location || currentDoc?.tags) && (
-                            <View style={{ backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                                    {currentDoc?.location && (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Feather name="map-pin" size={12} color="#f97316" />
-                                            <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{currentDoc?.location}</Text>
-                                        </View>
-                                    )}
-                                    {currentDoc?.tags && (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Feather name="tag" size={12} color="#aaa" />
-                                            <View style={{ flexDirection: 'row', gap: 4 }}>
-                                                {currentDoc?.tags?.split(',').map((tag: string, tidx: number) => (
-                                                    <View key={tidx} style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                                        <Text style={{ color: '#fff', fontSize: 9 }}>{tag.trim()}</Text>
-                                                    </View>
-                                                ))}
-                                            </View>
-                                        </View>
-                                    )}
-                                </View>
-                            </View>
-                        )}
-
-                        <View pointerEvents={keyboardHeight > 0 ? 'none' : 'auto'} style={{ flex: 1, position: 'relative' }}>
-                            {/* WebView PDF Rendering Layer */}
-                            {pdfViewerUrl && (
-                                (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
-                                    <WebView
-                                        key={pdfViewerUrl}
-                                        source={{ uri: pdfViewerUrl }}
-                                        style={{ flex: 1, backgroundColor: '#111' }}
-                                        startInLoadingState
-                                        scalesPageToFit
-                                        allowsInlineMediaPlayback
-                                        javaScriptEnabled
-                                        domStorageEnabled
-                                        originWhitelist={['*']}
-                                        onLoadStart={() => setPdfLoading(true)}
-                                        onLoadEnd={() => setPdfLoading(false)}
-                                        renderLoading={() => (
-                                            <View style={{
-                                                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                                                justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
-                                            }}>
-                                                <ActivityIndicator size="large" color={colors.primary} />
-                                                <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
-                                                    {t('projectDocuments.optimizingView')}
-                                                </Text>
-                                            </View>
-                                        )}
-                                    />
-                                ) : (
-                                    Pdf ? (
-                                        <Pdf
-                                            source={{ uri: pdfViewerUrl, cache: true }}
-                                            style={{ flex: 1, backgroundColor: '#111' }}
-                                            trustAllCerts={false}
-                                            onLoadComplete={() => setPdfLoading(false)}
-                                            onError={(error: any) => {
-                                                console.error("PDF Load Error:", error);
-                                                setPdfLoading(false);
-                                            }}
-                                        />
-                                    ) : (
-                                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                            <Text style={{ color: '#fff' }}>{t('projectDocuments.viewerNotAvailable')}</Text>
-                                        </View>
-                                    )
-                                )
-                            )}
-
-                            {/* Watermark Overlays */}
-                            {(currentDoc?.do_not_follow || currentDoc?.only_for_reference) && (
-                                <View
-                                    pointerEvents="none"
-                                    style={{
-                                        ...StyleSheet.absoluteFillObject,
-                                        justifyContent: 'center',
-                                        alignItems: 'center',
-                                        zIndex: 100, // Very high zIndex to ensure it's above native components
-                                        gap: 40 // Add spacing if both are present
-                                    }}
-                                >
-                                    {currentDoc?.do_not_follow && (
-                                        <View style={{
-                                            transform: [{ rotate: '-30deg' }],
-                                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                            paddingHorizontal: 30,
-                                            paddingVertical: 15,
-                                            borderRadius: 8,
-                                            borderWidth: 3,
-                                            borderColor: 'rgba(239, 68, 68, 0.3)',
-                                            borderStyle: 'dashed'
-                                        }}>
-                                            <Text style={{
-                                                color: 'rgba(239, 68, 68, 0.4)',
-                                                fontSize: 48,
-                                                fontWeight: '900',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: 2,
-                                                textAlign: 'center'
-                                            }}>
-                                                {t('projectDocuments.doNotFollow')}
-                                            </Text>
-                                        </View>
-                                    )}
-                                    {currentDoc?.only_for_reference && (
-                                        <View style={{
-                                            transform: [{ rotate: '-30deg' }],
-                                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                            paddingHorizontal: 30,
-                                            paddingVertical: 15,
-                                            borderRadius: 8,
-                                            borderWidth: 3,
-                                            borderColor: 'rgba(59, 130, 246, 0.3)',
-                                            borderStyle: 'dashed'
-                                        }}>
-                                            <Text style={{
-                                                color: 'rgba(59, 130, 246, 0.4)',
-                                                fontSize: 48,
-                                                fontWeight: '900',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: 2,
-                                                textAlign: 'center'
-                                            }}>
-                                                {t('projectDocuments.onlyForReference')}
-                                            </Text>
-                                        </View>
-                                    )}
-                                </View>
-                            )}
-                        </View>
-
-                        {/* Comments Overlay Panel */}
-                        {showComments && (
-                            <View
-                                style={{
-                                    position: 'absolute',
-                                    bottom: Platform.OS === 'ios' ? keyboardHeight : 0,
-                                    left: 0,
-                                    right: 0,
-                                    backgroundColor: 'rgba(15,15,15,0.98)',
-                                    borderTopLeftRadius: 25,
-                                    borderTopRightRadius: 25,
-                                    borderTopWidth: 1,
-                                    borderTopColor: 'rgba(255,255,255,0.15)',
-                                    overflow: 'hidden',
-                                    zIndex: 2000,
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 0, height: -10 },
-                                    shadowOpacity: 0.5,
-                                    shadowRadius: 15,
-                                    elevation: 24
-                                }}
-                            >
-                                <ScrollView
-                                    keyboardShouldPersistTaps="always"
-                                    scrollEnabled={true}
-                                    bounces={false}
-                                    alwaysBounceVertical={false}
-                                    contentContainerStyle={{ padding: 16 }}
-                                >
-                                    <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
-                                        <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>
-                                            💬 {t('projectDocuments.discussion')} ({docComments.length})
-                                        </Text>
+                    {/* Metadata Strip */}
+                    {(currentDoc?.location || currentDoc?.tags) && (
+                        <View style={{ backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                                {currentDoc?.location && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Feather name="map-pin" size={12} color="#f97316" />
+                                        <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{currentDoc?.location}</Text>
                                     </View>
-
-                                    {commentLoading ? (
-                                        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
-                                    ) : (
-                                        <ScrollView
-                                            style={{ maxHeight: SCREEN_H * 0.35 }}
-                                            contentContainerStyle={{ paddingBottom: 10 }}
-                                            showsVerticalScrollIndicator={true}
-                                            keyboardShouldPersistTaps="always"
-                                        >
-                                            {docComments.length === 0 && (
-                                                <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
-                                            )}
-                                            {docComments.map((c: any) => (
-                                                <View key={c.id} style={{ marginBottom: 12 }}>
-                                                    <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
-                                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                            <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || t('projectDocuments.user')}</Text>
-                                                            <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                                <Text style={{ color: '#888', fontSize: 10 }}>↩ {t('projectDocuments.reply')}</Text>
-                                                            </TouchableOpacity>
-                                                        </View>
-                                                        <Text style={{ color: '#eee', fontSize: 12, lineHeight: 18 }}>
-                                                            {renderCommentText(c.text)}
-                                                        </Text>
-                                                    </View>
-                                                    {c.replies?.map((r: any) => (
-                                                        <View key={r.id} style={{ marginLeft: 16, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderLeftWidth: 2, borderLeftColor: colors.primary }}>
-                                                            <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700', marginBottom: 2 }}>{r.user?.name || t('projectDocuments.user')}</Text>
-                                                            <Text style={{ color: '#ccc', fontSize: 11, lineHeight: 16 }}>
-                                                                {renderCommentText(r.text)}
-                                                            </Text>
-                                                        </View>
-                                                    ))}
+                                )}
+                                {currentDoc?.tags && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Feather name="tag" size={12} color="#aaa" />
+                                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                                            {currentDoc?.tags?.split(',').map((tag: string, tidx: number) => (
+                                                <View key={tidx} style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                                    <Text style={{ color: '#fff', fontSize: 9 }}>{tag.trim()}</Text>
                                                 </View>
                                             ))}
-                                        </ScrollView>
-                                    )}
+                                        </View>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                    )}
 
-                                    {replyTo && (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
-                                            <Text style={{ color: colors.primary, fontSize: 10 }}>{t('projectDocuments.replyingTo')}</Text>
-                                            <TouchableOpacity onPress={() => setReplyTo(null)}>
-                                                <Feather name="x-circle" size={12} color="#888" />
-                                            </TouchableOpacity>
+                    <View pointerEvents={keyboardHeight > 0 ? 'none' : 'auto'} style={{ flex: 1, position: 'relative' }}>
+                        {/* WebView PDF Rendering Layer */}
+                        {pdfViewerUrl && (
+                            (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
+                                <WebView
+                                    key={pdfViewerUrl}
+                                    source={{ uri: pdfViewerUrl }}
+                                    style={{ flex: 1, backgroundColor: '#111' }}
+                                    startInLoadingState
+                                    scalesPageToFit
+                                    allowsInlineMediaPlayback
+                                    javaScriptEnabled
+                                    domStorageEnabled
+                                    originWhitelist={['*']}
+                                    onLoadStart={() => setPdfLoading(true)}
+                                    onLoadEnd={() => setPdfLoading(false)}
+                                    renderLoading={() => (
+                                        <View style={{
+                                            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                            justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
+                                        }}>
+                                            <ActivityIndicator size="large" color={colors.primary} />
+                                            <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
+                                                {t('projectDocuments.optimizingView')}
+                                            </Text>
                                         </View>
                                     )}
+                                />
+                            ) : (
+                                Pdf ? (
+                                    <Pdf
+                                        source={{ uri: pdfViewerUrl, cache: true }}
+                                        style={{ flex: 1, backgroundColor: '#111' }}
+                                        trustAllCerts={false}
+                                        onLoadComplete={() => setPdfLoading(false)}
+                                        onError={(error: any) => {
+                                            console.error("PDF Load Error:", error);
+                                            setPdfLoading(false);
+                                        }}
+                                    />
+                                ) : (
+                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                        <Text style={{ color: '#fff' }}>{t('projectDocuments.viewerNotAvailable')}</Text>
+                                    </View>
+                                )
+                            )
+                        )}
 
-                                    {showMentions && (
-                                        <View style={{ position: 'absolute', bottom: 65, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 }}>
-                                            <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
-                                                {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
-                                                    <GestureTouchableOpacity
-                                                        key={m.id}
-                                                        onPress={() => handleSelectMention(m)}
-                                                    >
-                                                        <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
-                                                            </View>
-                                                            <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
-                                                        </View>
-                                                    </GestureTouchableOpacity>
-                                                ))}
-                                            </ScrollView>
-                                        </View>
-                                    )}
-
-                                    <ScrollView
-                                        keyboardShouldPersistTaps="always"
-                                        scrollEnabled={false}
-                                        style={{ width: '100%', flexGrow: 0 }}
-                                    >
-
-                                        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
-                                            <TextInput
-                                                ref={commentInputRef}
-                                                value={commentText}
-                                                onChangeText={handleInputChange}
-                                                placeholder={t('projectDocuments.addCommentPlaceholder')}
-                                                placeholderTextColor="#666"
-                                                style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
-                                            />
-                                            <GestureTouchableOpacity
-                                                onPress={handleAddComment}
-                                                disabled={addingComment || !commentText.trim()}
-                                            >
-                                                <View style={{
-                                                    width: 40,
-                                                    height: 40,
-                                                    borderRadius: 20,
-                                                    backgroundColor: colors.primary,
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    opacity: (!commentText.trim() || addingComment) ? 0.5 : 1
-                                                }}>
-                                                    {addingComment
-                                                        ? <ActivityIndicator size="small" color="#fff" />
-                                                        : <Feather name="send" size={16} color="#fff" />
-                                                    }
-                                                </View>
-                                            </GestureTouchableOpacity>
-                                        </View>
-                                    </ScrollView>
-                                    <View style={{ height: Math.max(insets.bottom, 10) }} />
-                                </ScrollView>
+                        {/* Watermark Overlays */}
+                        {(currentDoc?.do_not_follow || currentDoc?.only_for_reference) && (
+                            <View
+                                pointerEvents="none"
+                                style={{
+                                    ...StyleSheet.absoluteFillObject,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    zIndex: 100, // Very high zIndex to ensure it's above native components
+                                    gap: 40 // Add spacing if both are present
+                                }}
+                            >
+                                {currentDoc?.do_not_follow && (
+                                    <View style={{
+                                        transform: [{ rotate: '-30deg' }],
+                                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                        paddingHorizontal: 30,
+                                        paddingVertical: 15,
+                                        borderRadius: 8,
+                                        borderWidth: 3,
+                                        borderColor: 'rgba(239, 68, 68, 0.3)',
+                                        borderStyle: 'dashed'
+                                    }}>
+                                        <Text style={{
+                                            color: 'rgba(239, 68, 68, 0.4)',
+                                            fontSize: 48,
+                                            fontWeight: '900',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 2,
+                                            textAlign: 'center'
+                                        }}>
+                                            {t('projectDocuments.doNotFollow')}
+                                        </Text>
+                                    </View>
+                                )}
+                                {currentDoc?.only_for_reference && (
+                                    <View style={{
+                                        transform: [{ rotate: '-30deg' }],
+                                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                        paddingHorizontal: 30,
+                                        paddingVertical: 15,
+                                        borderRadius: 8,
+                                        borderWidth: 3,
+                                        borderColor: 'rgba(59, 130, 246, 0.3)',
+                                        borderStyle: 'dashed'
+                                    }}>
+                                        <Text style={{
+                                            color: 'rgba(59, 130, 246, 0.4)',
+                                            fontSize: 48,
+                                            fontWeight: '900',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 2,
+                                            textAlign: 'center'
+                                        }}>
+                                            {t('projectDocuments.onlyForReference')}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                         )}
+                    </View>
+
+                    {/* Comments Overlay Panel */}
+                    {showComments && (
+                        <View
+                            style={{
+                                position: 'absolute',
+                                bottom: Platform.OS === 'ios' ? keyboardHeight : 0,
+                                left: 0,
+                                right: 0,
+                                backgroundColor: 'rgba(15,15,15,0.98)',
+                                borderTopLeftRadius: 25,
+                                borderTopRightRadius: 25,
+                                borderTopWidth: 1,
+                                borderTopColor: 'rgba(255,255,255,0.15)',
+                                overflow: 'hidden',
+                                zIndex: 2000,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: -10 },
+                                shadowOpacity: 0.5,
+                                shadowRadius: 15,
+                                elevation: 24
+                            }}
+                        >
+                            <ScrollView
+                                keyboardShouldPersistTaps="always"
+                                scrollEnabled={true}
+                                bounces={false}
+                                alwaysBounceVertical={false}
+                                contentContainerStyle={{ padding: 16 }}
+                            >
+                                <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
+                                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>
+                                        💬 {t('projectDocuments.discussion')} ({docComments.length})
+                                    </Text>
+                                </View>
+
+                                {commentLoading ? (
+                                    <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
+                                ) : (
+                                    <ScrollView
+                                        style={{ maxHeight: SCREEN_H * 0.35 }}
+                                        contentContainerStyle={{ paddingBottom: 10 }}
+                                        showsVerticalScrollIndicator={true}
+                                        keyboardShouldPersistTaps="always"
+                                    >
+                                        {docComments.length === 0 && (
+                                            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
+                                        )}
+                                        {docComments.map((c: any) => (
+                                            <View key={c.id} style={{ marginBottom: 12 }}>
+                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || t('projectDocuments.user')}</Text>
+                                                        <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                                                            <Text style={{ color: '#888', fontSize: 10 }}>↩ {t('projectDocuments.reply')}</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                    <Text style={{ color: '#eee', fontSize: 12, lineHeight: 18 }}>
+                                                        {renderCommentText(c.text)}
+                                                    </Text>
+                                                </View>
+                                                {c.replies?.map((r: any) => (
+                                                    <View key={r.id} style={{ marginLeft: 16, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderLeftWidth: 2, borderLeftColor: colors.primary }}>
+                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700', marginBottom: 2 }}>{r.user?.name || t('projectDocuments.user')}</Text>
+                                                        <Text style={{ color: '#ccc', fontSize: 11, lineHeight: 16 }}>
+                                                            {renderCommentText(r.text)}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        ))}
+                                    </ScrollView>
+                                )}
+
+                                {replyTo && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
+                                        <Text style={{ color: colors.primary, fontSize: 10 }}>{t('projectDocuments.replyingTo')}</Text>
+                                        <TouchableOpacity onPress={() => setReplyTo(null)}>
+                                            <Feather name="x-circle" size={12} color="#888" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+
+                                {showMentions && (
+                                    <View style={{ position: 'absolute', bottom: 65, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 }}>
+                                        <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
+                                            {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
+                                                <GestureTouchableOpacity
+                                                    key={m.id}
+                                                    onPress={() => handleSelectMention(m)}
+                                                >
+                                                    <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                        </View>
+                                                        <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
+                                                    </View>
+                                                </GestureTouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                )}
+
+                                <ScrollView
+                                    keyboardShouldPersistTaps="always"
+                                    scrollEnabled={false}
+                                    style={{ width: '100%', flexGrow: 0 }}
+                                >
+
+                                    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
+                                        <TextInput
+                                            ref={commentInputRef}
+                                            value={commentText}
+                                            onChangeText={handleInputChange}
+                                            placeholder={t('projectDocuments.addCommentPlaceholder')}
+                                            placeholderTextColor="#666"
+                                            style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
+                                        />
+                                        <GestureTouchableOpacity
+                                            onPress={handleAddComment}
+                                            disabled={addingComment || !commentText.trim()}
+                                        >
+                                            <View style={{
+                                                width: 40,
+                                                height: 40,
+                                                borderRadius: 20,
+                                                backgroundColor: colors.primary,
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                opacity: (!commentText.trim() || addingComment) ? 0.5 : 1
+                                            }}>
+                                                {addingComment
+                                                    ? <ActivityIndicator size="small" color="#fff" />
+                                                    : <Feather name="send" size={16} color="#fff" />
+                                                }
+                                            </View>
+                                        </GestureTouchableOpacity>
+                                    </View>
+                                </ScrollView>
+                                <View style={{ height: Math.max(insets.bottom, 10) }} />
+                            </ScrollView>
+                        </View>
+                    )}
 
 
                     {/* Sharing Overlay (Inside the PDF Viewer) */}
