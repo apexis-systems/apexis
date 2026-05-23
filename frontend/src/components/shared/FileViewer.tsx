@@ -25,9 +25,10 @@ interface FileViewerProps {
   projectId?: string | number;
   onCreateSnag?: (photo: any) => void;
   onCreateRfi?: (photo: any) => void;
+  initialTab?: 'discussion' | 'links';
 }
 
-const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi }: FileViewerProps) => {
+const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi, initialTab }: FileViewerProps) => {
   const router = useRouter();
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -49,7 +50,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
 
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'discussion' | 'links'>('discussion');
+  const [activeTab, setActiveTab] = useState<'discussion' | 'links'>(initialTab || 'discussion');
 
   const currentFile = files[currentIndex];
   const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
@@ -94,19 +95,50 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   };
 
   const handleLinkItemClick = (item: any) => {
+    const currentUrlParams = new URLSearchParams(window.location.search);
+    const currentTab = currentUrlParams.get('tab') || 'documents';
+    const currentFolderId = currentUrlParams.get('folder');
+
     if (item.type === 'file') {
       const idx = files.findIndex(f => f.id === item.id);
       if (idx !== -1) {
         setCurrentIndex(idx);
       } else {
-        if (item.url) {
-          window.open(item.url, '_blank');
+        onOpenChange(false);
+        const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
+        const extraParams = new URLSearchParams();
+        extraParams.set('tab', targetTab);
+        if (item.folder_id) extraParams.set('folder', String(item.folder_id));
+        extraParams.set('fileId', String(item.file_id || item.id));
+        extraParams.set('viewerTab', 'links');
+        if (currentFile?.id) {
+          extraParams.set('returnTab', currentTab);
+          if (currentFolderId) extraParams.set('returnFolderId', currentFolderId);
+          extraParams.set('returnFileId', String(currentFile.id));
         }
+        router.push(`?${extraParams.toString()}`);
       }
     } else {
+      // Navigate to RFI or Snag with return context so closing it brings back here
       onOpenChange(false);
       if (item.url) {
-        router.push(item.url);
+        try {
+          // Parse the target URL to extract path and params
+          const hasPath = item.url.includes('?');
+          const [urlPath, queryStr] = hasPath ? item.url.split('?') : [item.url, ''];
+          const targetParams = new URLSearchParams(queryStr);
+          
+          // Add return context
+          targetParams.set('returnTab', currentTab);
+          if (currentFile?.id) targetParams.set('returnFileId', String(currentFile.id));
+          if (currentFolderId) targetParams.set('returnFolderId', currentFolderId);
+          
+          // Determine if this is an absolute URL or just query params
+          const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `?${targetParams.toString()}`;
+          router.push(newUrl);
+        } catch {
+          router.push(item.url);
+        }
       }
     }
   };

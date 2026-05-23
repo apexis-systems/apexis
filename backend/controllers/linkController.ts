@@ -88,6 +88,7 @@ export const getLinkedItems = async (req: Request, res: Response) => {
                 type: 'file',
                 title: f.file_name,
                 file_type: f.file_type,
+                folder_id: f.folder_id,
                 url: f.file_url,
                 file_url: f.file_url
             })),

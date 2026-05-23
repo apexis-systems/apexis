@@ -52,6 +52,9 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [shareItem, setShareItem] = useState<any | null>(null);
   const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
   const [initialFileId, setInitialFileId] = useState<string | null>(searchParams?.get('fileId') || searchParams?.get('photoId') || null);
+  const [initialViewerTab, setInitialViewerTab] = useState<'discussion' | 'links' | undefined>(
+    (searchParams?.get('viewerTab') as 'discussion' | 'links') || undefined
+  );
 
   // Selection state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -233,6 +236,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           const url = new URL(window.location.href);
           url.searchParams.delete('fileId');
           url.searchParams.delete('photoId');
+          url.searchParams.delete('viewerTab');
           window.history.replaceState(null, '', url.toString());
         }
       }
@@ -1047,6 +1051,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             onOpenChange={(open) => {
                 if (!open) {
                     setViewerState(prev => ({ ...prev, open: false }));
+                    setInitialViewerTab(undefined);
                     const returnTab = searchParams?.get('returnTab');
                     if (returnTab) {
                         const returnRfiId = searchParams?.get('returnRfiId');
@@ -1066,6 +1071,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             targetType="photo"
             projectId={project.id}
             onCreateSnag={handleStartCreateSnag}
+            initialTab={initialViewerTab}
             onCreateRfi={handleStartCreateRfi}
           />
 
