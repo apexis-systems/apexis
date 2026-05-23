@@ -1,11 +1,14 @@
-import React from 'react';
-import { View, Modal, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Modal, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
+import { Share as RNShare } from 'react-native';
 
 import ZoomableImage from './ZoomableImage';
-
 
 interface Props {
     visible: boolean;
@@ -14,14 +17,75 @@ interface Props {
     onEdit?: (uri: string) => void;
 }
 
-const { width, height } = Dimensions.get('window');
-
 export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: Props) {
     const insets = useSafeAreaInsets();
-
-    
+    const [sharing, setSharing] = useState(false);
+    const [downloading, setDownloading] = useState(false);
 
     if (!uri) return null;
+
+    const topOffset = Math.max(insets.top, 20);
+
+    const getFileName = (url: string) => {
+        try {
+            const withoutQuery = url.split('?')[0];
+            const parts = withoutQuery.split('/');
+            return parts[parts.length - 1] || `photo_${Date.now()}.jpg`;
+        } catch {
+            return `photo_${Date.now()}.jpg`;
+        }
+    };
+
+    const getLocalUri = async (url: string): Promise<string> => {
+        if (url.startsWith('file://') || url.startsWith('/')) return url;
+        const fileName = getFileName(url);
+        const localUri = `${(FileSystem as any).cacheDirectory}fsm_${Date.now()}_${fileName}`;
+        const { uri: downloaded } = await (FileSystem as any).downloadAsync(url, localUri);
+        return downloaded;
+    };
+
+    const handleDownload = async () => {
+        if (downloading || sharing) return;
+        setDownloading(true);
+        try {
+            // writeOnly: true avoids requesting the READ_MEDIA_AUDIO permission on Android
+            const { status } = await MediaLibrary.requestPermissionsAsync(true);
+            if (status !== 'granted') {
+                Alert.alert('Permission required', 'Please allow access to your photo library to save images.');
+                return;
+            }
+            const localUri = await getLocalUri(uri);
+            await MediaLibrary.saveToLibraryAsync(localUri);
+            Alert.alert('Saved', 'Photo saved to your gallery.');
+        } catch (err) {
+            console.error('Download error:', err);
+            Alert.alert('Error', 'Failed to save photo.');
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    const handleShare = async () => {
+        if (sharing || downloading) return;
+        setSharing(true);
+        try {
+            const localUri = await getLocalUri(uri);
+            const isAvailable = await Sharing.isAvailableAsync();
+            if (isAvailable) {
+                await Sharing.shareAsync(localUri, {
+                    mimeType: 'image/jpeg',
+                    dialogTitle: getFileName(uri),
+                });
+            } else {
+                await RNShare.share({ url: uri, title: getFileName(uri) });
+            }
+        } catch (err) {
+            console.error('Share error:', err);
+            Alert.alert('Error', 'Failed to share photo.');
+        } finally {
+            setSharing(false);
+        }
+    };
 
     return (
         <Modal
@@ -36,22 +100,41 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
                 <View style={styles.container}>
                     <ZoomableImage uri={uri} onDismiss={onClose} />
 
+                    {/* Close button — top left */}
                     <TouchableOpacity
                         onPress={onClose}
-                        style={[styles.closeButton, { top: Math.max(insets.top, 20) }]}
+                        style={[styles.closeBtn, { top: topOffset }]}
+                        accessibilityLabel="Close"
                     >
-                        <Feather name="x" size={28} color="#fff" />
+                        <Feather name="x" size={24} color="#fff" />
                     </TouchableOpacity>
 
-                    {/* Edit button (optional) */}
-                    {/* {onEdit && (
+                    {/* Download + Share — top right */}
+                    <View style={[styles.topRight, { top: topOffset }]}>
                         <TouchableOpacity
-                            onPress={() => onEdit(uri!)}
-                            style={[styles.editButton, { top: Math.max(insets.top, 20), right: 80 }]}
+                            onPress={handleDownload}
+                            disabled={downloading || sharing}
+                            style={styles.iconBtn}
+                            accessibilityLabel="Save to gallery"
                         >
-                            <Feather name="edit-2" size={20} color="#fff" />
+                            {downloading
+                                ? <ActivityIndicator size="small" color="#fff" />
+                                : <Feather name="download" size={22} color="#fff" />
+                            }
                         </TouchableOpacity>
-                    )} */}
+
+                        <TouchableOpacity
+                            onPress={handleShare}
+                            disabled={sharing || downloading}
+                            style={styles.iconBtn}
+                            accessibilityLabel="Share photo"
+                        >
+                            {sharing
+                                ? <ActivityIndicator size="small" color="#fff" />
+                                : <Feather name="share-2" size={22} color="#fff" />
+                            }
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </GestureHandlerRootView>
         </Modal>
@@ -65,30 +148,31 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    image: {
-        width: width,
-        height: height,
+    // ← position:absolute is here so top/left actually work
+    closeBtn: {
+        position: 'absolute',
+        left: 16,
+        zIndex: 100,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    closeButton: {
+    topRight: {
         position: 'absolute',
-        right: 20,
+        right: 16,
+        flexDirection: 'row',
+        gap: 8,
         zIndex: 100,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    iconBtn: {
+        backgroundColor: 'rgba(0,0,0,0.55)',
         width: 44,
         height: 44,
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-    }
- ,
-    editButton: {
-        position: 'absolute',
-        zIndex: 100,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-    }
+    },
 });
