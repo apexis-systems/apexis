@@ -320,7 +320,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       } else {
         // Returning to a folder (not a file preview) — clear stale fileId
         rParams.fileId = '';
-        if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
+        if (searchParams.returnFolderActiveTab) rParams.folderActiveTab = String(searchParams.returnFolderActiveTab);
       }
 
       // Clear the return params from the query state

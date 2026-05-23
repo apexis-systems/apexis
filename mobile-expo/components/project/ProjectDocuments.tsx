@@ -492,12 +492,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     // Auto-switch folder tab when returning from an RFI/Snag opened from the folder's linked section
     useEffect(() => {
-        const folderActiveTab = searchParams?.returnFolderActiveTab as string;
+        const folderActiveTab = searchParams?.folderActiveTab as string;
         if (folderActiveTab && selectedFolder) {
             setActiveFolderTab('rfis');
-            router.setParams({ returnFolderActiveTab: '' });
+            setTimeout(() => {
+                router.setParams({ folderActiveTab: '' });
+            }, 100);
         }
-    }, [searchParams?.returnFolderActiveTab, selectedFolder]);
+    }, [searchParams?.folderActiveTab, selectedFolder]);
 
     const fetchLinkedRFIs = async () => {
         if (!selectedFolder) return;
