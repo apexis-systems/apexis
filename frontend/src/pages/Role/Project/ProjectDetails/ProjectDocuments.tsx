@@ -202,6 +202,23 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     if (folderId !== selectedFolder) {
       setRawSelectedFolder(folderId);
     }
+    const fileId = searchParams?.get('fileId') || searchParams?.get('documentId') || null;
+    if (fileId) {
+      setInitialFileId(fileId);
+    }
+    const viewerTab = searchParams?.get('viewerTab') as 'discussion' | 'links' | undefined;
+    if (viewerTab) {
+      setInitialViewerTab(viewerTab);
+    }
+    const viewerSubtab = searchParams?.get('viewerSubTab');
+    if (viewerSubtab === 'rfi') {
+      setActiveFolderTab('rfi');
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('viewerSubTab');
+        window.history.replaceState(null, '', url.toString());
+      }
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -673,7 +690,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       )}
 
       {activeFolderTab === 'rfi' && selectedFolder && (linkedRFICount > 0 || linkedSnagCount > 0) ? (
-        <LinkedItemsTab folderId={selectedFolder} projectId={project.id} />
+        <LinkedItemsTab tab='documents' folderId={selectedFolder} projectId={project.id} />
       ) : (
         <>
           <div className="grid grid-cols-4 gap-2">
@@ -966,34 +983,38 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             })}
           </div>
 
-      <FileViewer
-        files={sortedDocs}
-        initialIndex={viewerState.index}
-        open={viewerState.open}
-        onOpenChange={(open) => {
-          if (!open) {
-            setViewerState(prev => ({ ...prev, open: false }));
-            setInitialViewerTab(undefined);
-            const returnTab = searchParams?.get('returnTab');
-            if (returnTab) {
-              const returnRfiId = searchParams?.get('returnRfiId');
-              const returnSnagId = searchParams?.get('returnSnagId');
-              const params = new URLSearchParams();
-              params.set('tab', returnTab);
-              if (returnRfiId) params.set('rfiId', returnRfiId);
-              if (returnSnagId) params.set('snagId', returnSnagId);
-              router.push(`?${params.toString()}`);
-            }
-          } else {
-            setViewerState(prev => ({ ...prev, open: true }));
-          }
-        }}
-        user={user}
-        targetType="document"
-        projectId={project.id}
-        onCreateRfi={handleStartCreateRfi}
-        initialTab={initialViewerTab}
-      />
+          <FileViewer
+            files={sortedDocs}
+            initialIndex={viewerState.index}
+            open={viewerState.open}
+            onOpenChange={(open) => {
+              if (!open) {
+                setViewerState(prev => ({ ...prev, open: false }));
+                setInitialViewerTab(undefined);
+                const returnTab = searchParams?.get('returnTab');
+                if (returnTab) {
+                  const returnRfiId = searchParams?.get('returnRfiId');
+                  const returnSnagId = searchParams?.get('returnSnagId');
+                  const returnFolderId = searchParams?.get('returnFolderId');
+                  const returnFileId = searchParams?.get('returnFileId');
+                  const params = new URLSearchParams();
+                  params.set('tab', returnTab);
+                  if (returnRfiId) params.set('rfiId', returnRfiId);
+                  if (returnSnagId) params.set('snagId', returnSnagId);
+                  if (returnFolderId) params.set('folder', returnFolderId);
+                  if (returnFileId) params.set('fileId', returnFileId);
+                  router.push(window.location.pathname + `?${params.toString()}`);
+                }
+              } else {
+                setViewerState(prev => ({ ...prev, open: true }));
+              }
+            }}
+            user={user}
+            targetType="document"
+            projectId={project.id}
+            onCreateRfi={handleStartCreateRfi}
+            initialTab={initialViewerTab}
+          />
 
           {
             currentFolders.length === 0 && visibleDocs.length === 0 && (

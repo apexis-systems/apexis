@@ -260,6 +260,23 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     if (folderId !== selectedFolder) {
       setRawSelectedFolder(folderId);
     }
+    const fileId = searchParams?.get('fileId') || searchParams?.get('photoId') || null;
+    if (fileId) {
+      setInitialFileId(fileId);
+    }
+    const viewerTab = searchParams?.get('viewerTab') as 'discussion' | 'links' | undefined;
+    if (viewerTab) {
+      setInitialViewerTab(viewerTab);
+    }
+    const viewerSubtab = searchParams?.get('viewerSubTab');
+    if (viewerSubtab === 'rfi') {
+      setActiveFolderTab('rfi');
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('viewerSubTab');
+        window.history.replaceState(null, '', url.toString());
+      }
+    }
   }, [searchParams]);
 
   const importFolders = async () => {
@@ -738,7 +755,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       )}
 
       {activeFolderTab === 'rfi' && selectedFolder && (linkedRFICount > 0 || linkedSnagCount > 0) ? (
-        <LinkedItemsTab folderId={selectedFolder} projectId={project.id} />
+        <LinkedItemsTab tab='photos' folderId={selectedFolder} projectId={project.id} />
       ) : (
         <>
           <div className="grid grid-cols-4 gap-2">
@@ -1056,11 +1073,15 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     if (returnTab) {
                         const returnRfiId = searchParams?.get('returnRfiId');
                         const returnSnagId = searchParams?.get('returnSnagId');
+                        const returnFolderId = searchParams?.get('returnFolderId');
+                        const returnFileId = searchParams?.get('returnFileId');
                         const params = new URLSearchParams();
                         params.set('tab', returnTab);
                         if (returnRfiId) params.set('rfiId', returnRfiId);
                         if (returnSnagId) params.set('snagId', returnSnagId);
-                        router.push(`?${params.toString()}`);
+                        if(returnFolderId) params.set('folder', returnFolderId);
+                        if(returnFileId) params.set('fileId', returnFileId);
+                        router.push(window.location.pathname + `?${params.toString()}`);
                     }
                 } else {
                     setViewerState(prev => ({ ...prev, open: true }));

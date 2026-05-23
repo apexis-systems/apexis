@@ -27,7 +27,7 @@ const LinkedRFITab = ({ folderId = null, projectId = null }: LinkedRFITabProps) 
 
     const handleRFIClick = (rfiId: number) => {
         // Navigate to RFI tab and open the RFI
-        router.push(`?tab=rfi&rfiId=${rfiId}`);
+        router.push(window.location.pathname + `?tab=rfi&rfiId=${rfiId}`);
     };
 
     if (loading) {
