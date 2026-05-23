@@ -166,8 +166,16 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     const returnTab = searchParams?.get('returnTab');
     if (returnTab) {
         const returnFolderId = searchParams?.get('returnFolderId');
-        const returnContext = returnFolderId ? `&folderId=${returnFolderId}` : '';
-        router.push(`?tab=${returnTab}${returnContext}`);
+        const returnFileId = searchParams?.get('returnFileId');
+        const params = new URLSearchParams();
+        params.set('tab', returnTab);
+        if (returnFolderId) params.set('folder', returnFolderId);
+        if (returnFileId) {
+            params.set('fileId', returnFileId);
+            params.set('viewerTab', 'links');
+        }
+        const url = window.location.pathname + '?' + params.toString();
+        router.push(url);
     }
   };
 
@@ -467,11 +475,50 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     try {
       await deleteSnag(snag.id);
       setSnags(prev => prev.filter(s => s.id !== snag.id));
-      toast.success(t('snag_deleted_msg'));
-    } catch { toast.error(t('failed_delete_snag')); }
+      toast.success(t('snag_status_updated'));
+    } catch (err) {
+      toast.error(t('failed_update_status'));
+    }
   };
 
-  const filteredSnags = snags.filter(s => {
+  const handleLinkItemClick = (item: any) => {
+    const currentUrlParams = new URLSearchParams(window.location.search);
+    const currentTab = currentUrlParams.get('tab') || 'snags';
+    
+    if (item.type === 'file') {
+        const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
+        const extraParams = new URLSearchParams();
+        extraParams.set('tab', targetTab);
+        if (item.folder_id) extraParams.set('folder', String(item.folder_id));
+        extraParams.set('fileId', String(item.file_id || item.id));
+        extraParams.set('viewerTab', 'links');
+        if (selectedSnag?.id) {
+            extraParams.set('returnTab', currentTab);
+            extraParams.set('returnSnagId', String(selectedSnag.id));
+        }
+        router.push(`?${extraParams.toString()}`);
+    } else {
+        if (item.url) {
+            try {
+                const hasPath = item.url.includes('?');
+                const [urlPath, queryStr] = hasPath ? item.url.split('?') : [item.url, ''];
+                const targetParams = new URLSearchParams(queryStr);
+                
+                targetParams.set('returnTab', currentTab);
+                if (selectedSnag?.id) targetParams.set('returnSnagId', String(selectedSnag.id));
+                
+                const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `?${targetParams.toString()}`;
+                router.push(newUrl);
+            } catch {
+                router.push(item.url);
+            }
+        }
+    }
+  };
+
+  
+
+    const filteredSnags = snags.filter(s => {
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
     const matchesCreator = creatorFilter === 'all' || String(s.created_by) === creatorFilter;
     const matchesAssignee = assigneeFilter === 'all' || String(s.assigned_to) === assigneeFilter;
@@ -865,46 +912,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   );
                 })()}
 
-                {(() => {
-                  const docs: { id?: string | number; name: string; url: string; type?: string; size?: string }[] = [];
 
-                  if (docs.length === 0) return null;
-
-                  return (
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('documents')}</p>
-                      <div className="grid grid-cols-1 gap-2">
-                        {docs.map((doc, idx) => (
-                          <div 
-                            key={idx} 
-                            onClick={() => {
-                              if (doc.id) {
-                                router.push(`?tab=documents&documentId=${doc.id}&returnTab=snags&returnSnagId=${selectedSnag.id}`);
-                              }
-                            }}
-                            className="flex items-center justify-between p-3 rounded-xl border border-border bg-card shadow-sm hover:border-accent/30 transition-all cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                              <div className="p-2 rounded-lg bg-accent/10 text-accent">
-                                <FileText className="h-5 w-5" />
-                              </div>
-                              <div className="overflow-hidden">
-                                <p className="text-xs font-semibold truncate max-w-[250px]" title={doc.name}>
-                                  {doc.name}
-                                </p>
-                                {(doc.type || doc.size) && (
-                                  <p className="text-[10px] text-muted-foreground">
-                                    {[doc.type, doc.size].filter(Boolean).join(' • ')}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
 
                 {(selectedSnag.audioDownloadUrl || selectedSnag.audio_url) && (
                   <div className="rounded-lg border border-border bg-card p-3">
@@ -939,10 +947,13 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                         <button 
                           key={f.id} 
                           onClick={() => {
+                            const snagId = selectedSnag.id;
                             setSelectedSnag(null);
-                            const params = new URLSearchParams(window.location.search);
+                            const params = new URLSearchParams();
                             params.set('tab', f.folder_type === 'photo' ? 'photos' : 'documents');
                             params.set('folder', String(f.id));
+                            params.set('returnTab', 'snags');
+                            params.set('returnSnagId', String(snagId));
                             router.push(`?${params.toString()}`);
                           }}
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
@@ -1191,6 +1202,8 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
               projectId={project.id}
               linkedFileIds={selectedSnag.file_snag_links?.map((l: any) => l.file_id) || []}
               onLink={handleLinkFile}
+              onRemoveLink={handleRemoveFileLink}
+              handleLinkItemClick={handleLinkItemClick}
               onlyPhotos={true}
           />
       )}

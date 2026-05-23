@@ -204,19 +204,53 @@ const isAudioFile = (
 };
 
 const getLinkedDocuments = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
-    const list: { id?: string | number; name: string; url: string; size?: string; type?: string; file_size_mb?: number }[] = [];
+    const list: { id?: string | number; name: string; url: string; size?: string; type?: string; file_size_mb?: number; folder_id?: string | number; file_type?: string }[] = [];
     if (!rfi) return list;
+
+    if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
+        rfi.file_rfi_links.forEach((link: any) => {
+            const file = link.file || link;
+            const url = file.downloadUrl || file.url || '';
+            if (!url) return;
+            if (!isImageFile(file, docMetadata) && !isAudioFile(file, docMetadata)) {
+                const meta = docMetadata?.[url];
+                list.push({
+                    id: file.id || link.file_id,
+                    name: file.file_name || file.name || url.split('/').pop() || 'File',
+                    url,
+                    type: meta?.type || file.file_type || '',
+                    size: meta?.size || (file.file_size_mb ? `${file.file_size_mb.toFixed(1)} MB` : undefined),
+                    file_size_mb: file.file_size_mb,
+                    folder_id: file.folder_id,
+                    file_type: file.file_type,
+                });
+            }
+        });
+    }
+
     return list;
 };
 
 const getLinkedImages = (rfi: any, docMetadata?: Record<string, { size?: string; type?: string }>) => {
-    const list: { id?: number; url: string }[] = [];
+    const list: { id?: number | string; url: string; folder_id?: string | number; file_type?: string }[] = [];
     if (!rfi) return list;
 
     if (rfi.photoDownloadUrls && Array.isArray(rfi.photoDownloadUrls)) {
         rfi.photoDownloadUrls.forEach((url: string) => {
             if (isImageFile(url, docMetadata) && !list.find(i => i.url === url)) {
                 list.push({ url });
+            }
+        });
+    }
+
+    // Also include image files from file_rfi_links
+    if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
+        rfi.file_rfi_links.forEach((link: any) => {
+            const file = link.file || link;
+            const url = file.downloadUrl || file.url || '';
+            if (!url) return;
+            if (isImageFile(file, docMetadata) && !list.find(i => i.url === url)) {
+                list.push({ id: file.id || link.file_id, url, folder_id: file.folder_id, file_type: file.file_type });
             }
         });
     }
@@ -317,8 +351,17 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         const returnTab = searchParams?.get('returnTab');
         if (returnTab) {
             const returnFolderId = searchParams?.get('returnFolderId');
-            const returnContext = returnFolderId ? `&folderId=${returnFolderId}` : '';
-            router.push(`?tab=${returnTab}${returnContext}`);
+            const returnFileId = searchParams?.get('returnFileId');
+            const params = new URLSearchParams();
+            params.set('tab', returnTab);
+            if (returnFolderId) params.set('folder', returnFolderId);
+            if (returnFileId) {
+                params.set('fileId', returnFileId);
+                params.set('viewerTab', 'links');
+            }
+            // Clear return params from URL
+            const url = window.location.pathname + '?' + params.toString();
+            router.push(url);
         }
     };
 
@@ -748,11 +791,48 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             // Update the selected RFI view if it's the one being modified
             if (selectedRFI?.id === id) {
                 setSelectedRFI({ ...selectedRFI, status });
-            }
-        } catch {
+            }            toast.success(t('status_updated_msg'));
+        } catch (err) {
             toast.error(t('failed_update_status'));
         }
     };
+
+    const handleLinkItemClick = (item: any) => {
+        const currentUrlParams = new URLSearchParams(window.location.search);
+        const currentTab = currentUrlParams.get('tab') || 'rfi';
+        
+        if (item.type === 'file') {
+            const targetTab = (item.file_type?.toLowerCase().includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.url || '')) ? 'photos' : 'documents';
+            const extraParams = new URLSearchParams();
+            extraParams.set('tab', targetTab);
+            if (item.folder_id) extraParams.set('folder', String(item.folder_id));
+            extraParams.set('fileId', String(item.file_id || item.id));
+            extraParams.set('viewerTab', 'links');
+            if (selectedRFI?.id) {
+                extraParams.set('returnTab', currentTab);
+                extraParams.set('returnRfiId', String(selectedRFI.id));
+            }
+            router.push(`?${extraParams.toString()}`);
+        } else {
+            if (item.url) {
+                try {
+                    const hasPath = item.url.includes('?');
+                    const [urlPath, queryStr] = hasPath ? item.url.split('?') : [item.url, ''];
+                    const targetParams = new URLSearchParams(queryStr);
+                    
+                    targetParams.set('returnTab', currentTab);
+                    if (selectedRFI?.id) targetParams.set('returnRfiId', String(selectedRFI.id));
+                    
+                    const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `?${targetParams.toString()}`;
+                    router.push(newUrl);
+                } catch {
+                    router.push(item.url);
+                }
+            }
+        }
+    };
+
+    const hasExistingResponseAudio = !!selectedRFI?.response_photos?.some(p => p.match(/\.(m4a|webm|mp3|wav|aac|ogg)(\?.*)?$/i));
 
     const filteredRfis = rfis.filter(r => {
         const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
@@ -1154,10 +1234,13 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                 <button 
                                                     key={f.id} 
                                                     onClick={() => {
+                                                        const rfiId = selectedRFI.id;
                                                         setSelectedRFI(null);
-                                                        const params = new URLSearchParams(window.location.search);
+                                                        const params = new URLSearchParams();
                                                         params.set('tab', f.folder_type === 'photo' ? 'photos' : 'documents');
                                                         params.set('folder', String(f.id));
+                                                        params.set('returnTab', 'rfi');
+                                                        params.set('returnRfiId', String(rfiId));
                                                         router.push(`?${params.toString()}`);
                                                     }}
                                                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
@@ -1186,7 +1269,15 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                                 key={idx}
                                                                 onClick={() => {
                                                                     if (img.id) {
-                                                                        router.push(`?tab=photos&photoId=${img.id}&returnTab=rfi&returnRfiId=${selectedRFI.id}`);
+                                                                        // Navigate to photos tab, open that file, with return context to come back here
+                                                                        const params = new URLSearchParams();
+                                                                        params.set('tab', 'photos');
+                                                                        if (img.folder_id) params.set('folder', String(img.folder_id));
+                                                                        params.set('fileId', String(img.id));
+                                                                        params.set('returnTab', 'rfi');
+                                                                        params.set('returnRfiId', String(selectedRFI.id));
+                                                                        setSelectedRFI(null);
+                                                                        router.push(`?${params.toString()}`);
                                                                     } else {
                                                                         setViewPhoto(img.url);
                                                                     }
@@ -1228,86 +1319,6 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         </div>
                                     );
                                 })()}
-
-                            
-
-                                {/* Linked Documents Section */}
-                                 {(() => {
-                                     const docs = getLinkedDocuments(selectedRFI, docMetadata);
-                                     if (docs.length === 0) return null;
-                                     return (
-                                         <div className="space-y-2">
-                                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('documents')}</p>
-                                             <div className="grid grid-cols-1 gap-2">
-                                                 {docs.map((doc, idx) => (
-                                                     <div 
-                                                         key={idx} 
-                                                         onClick={() => {
-                                                             if (doc.id) {
-                                                                 router.push(`?tab=documents&documentId=${doc.id}&returnTab=rfi&returnRfiId=${selectedRFI.id}`);
-                                                             } else {
-                                                                 const filesForViewer = docs.map((d, index) => ({
-                                                                     id: d.id || `rfi-doc-${selectedRFI.id}-${index}`,
-                                                                     file_name: d.name,
-                                                                     file_type: d.type || getMimeTypeFromUrl(d.url) || 'application/octet-stream',
-                                                                     downloadUrl: d.url,
-                                                                     file_size_mb: d.file_size_mb,
-                                                                     creator: { name: selectedRFI.creator?.name },
-                                                                     createdAt: selectedRFI.createdAt || selectedRFI.created_at,
-                                                                     project_id: selectedRFI.project_id,
-                                                                 }));
-                                                                 setViewerFiles(filesForViewer);
-                                                                 setViewerIndex(idx);
-                                                                 setViewerOpen(true);
-                                                             }
-                                                         }}
-                                                         className="flex items-center justify-between p-3 rounded-xl border border-border bg-card shadow-sm hover:border-accent/30 transition-all cursor-pointer"
-                                                     >
-                                                         <div className="flex items-center gap-3 overflow-hidden">
-                                                             <div className="p-2 rounded-lg bg-accent/10 text-accent">
-                                                                 <FileText className="h-5 w-5" />
-                                                             </div>
-                                                             <div className="overflow-hidden">
-                                                                 <p className="text-xs font-semibold truncate max-w-[250px]" title={doc.name}>
-                                                                     {doc.name}
-                                                                 </p>
-                                                                 {(doc.type || doc.size) && (
-                                                                     <p className="text-[10px] text-muted-foreground">
-                                                                         {[doc.type, doc.size].filter(Boolean).join(' • ')}
-                                                                     </p>
-                                                                 )}
-                                                             </div>
-                                                         </div>
-                                                         {doc.url && (
-                                                             <button 
-                                                                 onClick={(e) => {
-                                                                     e.stopPropagation();
-                                                                     const filesForViewer = docs.map((d, index) => ({
-                                                                         id: d.id || `rfi-doc-${selectedRFI.id}-${index}`,
-                                                                         file_name: d.name,
-                                                                         file_type: d.type || getMimeTypeFromUrl(d.url) || 'application/octet-stream',
-                                                                         downloadUrl: d.url,
-                                                                         file_size_mb: d.file_size_mb,
-                                                                         creator: { name: selectedRFI.creator?.name },
-                                                                         createdAt: selectedRFI.createdAt || selectedRFI.created_at,
-                                                                         project_id: selectedRFI.project_id,
-                                                                     }));
-                                                                     setViewerFiles(filesForViewer);
-                                                                     setViewerIndex(idx);
-                                                                     setViewerOpen(true);
-                                                                 }}
-                                                                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-[10px] font-semibold hover:bg-secondary/80 transition-colors"
-                                                             >
-                                                                 <Eye className="h-3.5 w-3.5" />
-                                                                 {t('view_btn') || 'View'}
-                                                             </button>
-                                                         )}
-                                                     </div>
-                                                 ))}
-                                             </div>
-                                         </div>
-                                     );
-                                 })()}
 
                                 <div className="space-y-3 pt-4 border-t border-border">
                                     <style>{`
@@ -1557,6 +1568,8 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 projectId={String(project.id)}
                 linkedFileIds={selectedRFI.file_rfi_links?.map((l: any) => l.file_id) || []}
                 onLink={handleLinkFile}
+                onRemoveLink={handleRemoveFileLink}
+                handleLinkItemClick={handleLinkItemClick}
             />
         )}
     </div>
