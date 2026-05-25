@@ -359,14 +359,16 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             if (returnFileId) {
                 params.set('fileId', returnFileId);
                 params.set('viewerTab', 'links');
-
+                params.set('openLinkModal', 'true');
             }
             if (returnViewerTab) {
                 params.set('viewerSubTab', returnViewerTab);
             }
             // Clear return params from URL
             const url = window.location.pathname + '?' + params.toString();
-            router.push(url);
+            setTimeout(() => {
+                router.push(url);
+            }, 300);
         }
     };
 
@@ -522,9 +524,15 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
         if (initialRfiId) {
             const openRFI = (target: RFI) => {
                 setSelectedRFI(target);
+                const openLinkModal = searchParams?.get('openLinkModal') === 'true';
+                if (openLinkModal) {
+                    setShowFilePicker(true);
+                }
                 // Clear the ID from URL to prevent loop on back navigation
                 const params = new URLSearchParams(window.location.search);
                 params.delete('rfiId');
+                params.delete('openLinkModal');
+                params.delete('viewerTab');
                 const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
                 window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
             };
@@ -538,6 +546,8 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                     // Fallback: clear param if fetch fails
                     const params = new URLSearchParams(window.location.search);
                     params.delete('rfiId');
+                    params.delete('openLinkModal');
+                    params.delete('viewerTab');
                     const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
                     window.history.replaceState({}, '', newUrl);
                 });
@@ -803,6 +813,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
     };
 
     const handleLinkItemClick = (item: any) => {
+        setShowFilePicker(false);
         const currentUrlParams = new URLSearchParams(window.location.search);
         const currentTab = currentUrlParams.get('tab') || 'rfi';
         
@@ -824,8 +835,11 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             if (selectedRFI?.id) {
                 extraParams.set('returnTab', currentTab);
                 extraParams.set('returnRfiId', String(selectedRFI.id));
+                extraParams.set('returnViewerTab', 'links');
             }
-            router.push(window.location.pathname + `?${extraParams.toString()}`);
+            setTimeout(() => {
+                router.push(window.location.pathname + `?${extraParams.toString()}`);
+            }, 300);
         } else {
             if (item.url) {
                 try {
@@ -837,9 +851,13 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                     if (selectedRFI?.id) targetParams.set('returnRfiId', String(selectedRFI.id));
                     
                     const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `${window.location.pathname}?${targetParams.toString()}`;
-                    router.push(newUrl);
+                    setTimeout(() => {
+                        router.push(newUrl);
+                    }, 300);
                 } catch {
-                    router.push(item.url);
+                    setTimeout(() => {
+                        router.push(item.url);
+                    }, 300);
                 }
             }
         }
@@ -1254,6 +1272,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                         params.set('folder', String(f.id));
                                                         params.set('returnTab', 'rfi');
                                                         params.set('returnRfiId', String(rfiId));
+                                                        params.set("returnViewerTab", 'links');
                                                         router.push(window.location.pathname + `?${params.toString()}`);
                                                     }}
                                                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 border border-accent/10 text-[10px] font-semibold text-accent hover:bg-accent/10 transition-colors"
@@ -1574,7 +1593,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             }}
         />
 
-        {selectedRFI && showFilePicker && (
+        {selectedRFI && (
             <LinkFileModal
                 open={showFilePicker}
                 onOpenChange={setShowFilePicker}

@@ -25,10 +25,11 @@ interface FileViewerProps {
   projectId?: string | number;
   onCreateSnag?: (photo: any) => void;
   onCreateRfi?: (photo: any) => void;
-  initialTab?: 'discussion' | 'links';
+  initialTab?: null | 'links';
+  initialOpenLinkModal?: boolean;
 }
 
-const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi, initialTab }: FileViewerProps) => {
+const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi, initialTab, initialOpenLinkModal }: FileViewerProps) => {
   const router = useRouter();
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -50,7 +51,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
 
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'discussion' | 'links'>(initialTab || 'discussion');
+  const [activeTab, setActiveTab] = useState<'discussion'>('discussion');
 
   const currentFile = files[currentIndex];
   const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
@@ -72,6 +73,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   useEffect(() => {
     if (open) fetchLinks();
   }, [open, fetchLinks]);
+
+  useEffect(() => {
+    if (open && initialOpenLinkModal) {
+      setShowLinkModal(true);
+      // setActiveTab('links');
+    }
+  }, [open, initialOpenLinkModal]);
 
   const handleLinkFile = async (targetId: string | number) => {
     try {
@@ -95,10 +103,10 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   };
 
   const handleLinkItemClick = (item: any) => {
+    setShowLinkModal(false);
     const currentUrlParams = new URLSearchParams(window.location.search);
     const currentTab = currentUrlParams.get('tab') || 'documents';
     const currentFolderId = currentUrlParams.get('folder');
-    console.log('item', item);
     if (item.type === 'file') {
       const idx = files.findIndex(f => String(f.id) === String(item.id));
       if (idx !== -1) {
@@ -123,8 +131,11 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           extraParams.set('returnTab', currentTab);
           if (currentFolderId) extraParams.set('returnFolderId', currentFolderId);
           extraParams.set('returnFileId', String(currentFile.id));
+          extraParams.set('returnViewerTab', 'links');
         }
-        router.push(window.location.pathname + `?${extraParams.toString()}`);
+        setTimeout(() => {
+          router.push(window.location.pathname + `?${extraParams.toString()}`);
+        }, 300);
       }
     } else {
       // Navigate to RFI or Snag with return context so closing it brings back here
@@ -135,17 +146,21 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           const hasPath = item.url.includes('?');
           const [urlPath, queryStr] = hasPath ? item.url.split('?') : [item.url, ''];
           const targetParams = new URLSearchParams(queryStr);
-          
+
           // Add return context
           targetParams.set('returnTab', currentTab);
           if (currentFile?.id) targetParams.set('returnFileId', String(currentFile.id));
           if (currentFolderId) targetParams.set('returnFolderId', currentFolderId);
-          
+
           // Determine if this is an absolute URL or just query params
           const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `${window.location.pathname}?${targetParams.toString()}`;
-          router.push(newUrl);
+          setTimeout(() => {
+            router.push(newUrl);
+          }, 300);
         } catch {
-          router.push(item.url);
+          setTimeout(() => {
+            router.push(item.url);
+          }, 300);
         }
       }
     }
@@ -154,9 +169,9 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   useEffect(() => {
     if (open) {
       setCurrentIndex(initialIndex);
-      if (initialTab) {
-        setActiveTab(initialTab);
-      }
+      // if (initialTab) {
+      //   setActiveTab(initialTab);
+      // }
     }
   }, [open, initialIndex, initialTab]);
 
@@ -367,13 +382,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                       {activeTab === 'discussion' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
                       {t('discussion')}
                     </button>
-                    <button
+                    {/* <button
                       onClick={() => setActiveTab('links')}
                       className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'links' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
                     >
                       {activeTab === 'links' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
                       {t('links_label')} ({linkedItems.length})
-                    </button>
+                    </button> */}
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto">
                     {activeTab === 'discussion' ? (
@@ -580,15 +595,14 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
           </div>
         </div>
       </DialogContent>
-      {showLinkModal && (
-        <LinkFileModal
-          open={showLinkModal}
-          onOpenChange={setShowLinkModal}
-          projectId={projectId || currentFile?.project_id}
-          currentFileId={currentFile?.id}
-          onLink={handleLinkFile}
-        />
-      )}
+      <LinkFileModal
+        open={showLinkModal}
+        onOpenChange={setShowLinkModal}
+        projectId={projectId || currentFile?.project_id}
+        currentFileId={currentFile?.id}
+        onLink={handleLinkFile}
+        handleLinkItemClick={handleLinkItemClick}
+      />
     </Dialog>
   );
 };
