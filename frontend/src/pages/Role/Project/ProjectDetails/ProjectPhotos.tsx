@@ -52,8 +52,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
   const [shareItem, setShareItem] = useState<any | null>(null);
   const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
   const [initialFileId, setInitialFileId] = useState<string | null>(searchParams?.get('fileId') || searchParams?.get('photoId') || null);
-  const [initialViewerTab, setInitialViewerTab] = useState<'discussion' | 'links' | undefined>(
-    (searchParams?.get('viewerTab') as 'discussion' | 'links') || undefined
+  const [initialViewerTab, setInitialViewerTab] = useState<null | 'links'>(
+    searchParams?.get('viewerTab') === 'links' ? 'links' : null
+  );
+  const [initialOpenLinkModal, setInitialOpenLinkModal] = useState<boolean>(
+    searchParams?.get('openLinkModal') === 'true'
   );
 
   // Selection state
@@ -237,6 +240,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           url.searchParams.delete('fileId');
           url.searchParams.delete('photoId');
           url.searchParams.delete('viewerTab');
+          url.searchParams.delete('openLinkModal');
           window.history.replaceState(null, '', url.toString());
         }
       }
@@ -264,10 +268,14 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     if (fileId) {
       setInitialFileId(fileId);
     }
-    const viewerTab = searchParams?.get('viewerTab') as 'discussion' | 'links' | undefined;
-    if (viewerTab) {
-      setInitialViewerTab(viewerTab);
+    const viewerTab = searchParams?.get('viewerTab');
+    if (viewerTab === 'links') {
+      setInitialViewerTab('links');
+    } else {
+      setInitialViewerTab(null);
     }
+    const openLinkModal = searchParams?.get('openLinkModal') === 'true';
+    setInitialOpenLinkModal(openLinkModal);
     const viewerSubtab = searchParams?.get('viewerSubTab');
     if (viewerSubtab === 'rfi') {
       setActiveFolderTab('rfi');
@@ -350,6 +358,24 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
     if (!selectedFolder) return;
     const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
     setSelectedFolder(parentId);
+    const returnTab = searchParams?.get('returnTab');
+    if (returnTab) {
+      const returnRfiId = searchParams?.get('returnRfiId');
+      const returnSnagId = searchParams?.get('returnSnagId');
+      const returnFolderId = searchParams?.get('returnFolderId');
+      const returnFileId = searchParams?.get('returnFileId');
+      const returnViewerTab = searchParams?.get('returnViewerTab');
+      const params = new URLSearchParams();
+      params.set('tab', returnTab);
+      if (returnRfiId) params.set('rfiId', returnRfiId);
+      if (returnSnagId) params.set('snagId', returnSnagId);
+      if (returnFolderId) params.set('folder', returnFolderId);
+      if (returnFileId) params.set('fileId', returnFileId);
+      
+      setTimeout(() => {
+        router.push(window.location.pathname + `?${params.toString()}`);
+      }, 300);
+    }
   };
 
   const getBreadcrumbs = () => {
@@ -1066,26 +1092,34 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             initialIndex={viewerState.index}
             open={viewerState.open}
             onOpenChange={(open) => {
-                if (!open) {
-                    setViewerState(prev => ({ ...prev, open: false }));
-                    setInitialViewerTab(undefined);
-                    const returnTab = searchParams?.get('returnTab');
-                    if (returnTab) {
-                        const returnRfiId = searchParams?.get('returnRfiId');
-                        const returnSnagId = searchParams?.get('returnSnagId');
-                        const returnFolderId = searchParams?.get('returnFolderId');
-                        const returnFileId = searchParams?.get('returnFileId');
-                        const params = new URLSearchParams();
-                        params.set('tab', returnTab);
-                        if (returnRfiId) params.set('rfiId', returnRfiId);
-                        if (returnSnagId) params.set('snagId', returnSnagId);
-                        if(returnFolderId) params.set('folder', returnFolderId);
-                        if(returnFileId) params.set('fileId', returnFileId);
-                        router.push(window.location.pathname + `?${params.toString()}`);
-                    }
-                } else {
-                    setViewerState(prev => ({ ...prev, open: true }));
+              if (!open) {
+                setViewerState(prev => ({ ...prev, open: false }));
+                setInitialViewerTab(null);
+                setInitialOpenLinkModal(false);
+                const returnTab = searchParams?.get('returnTab');
+                if (returnTab) {
+                  const returnRfiId = searchParams?.get('returnRfiId');
+                  const returnSnagId = searchParams?.get('returnSnagId');
+                  const returnFolderId = searchParams?.get('returnFolderId');
+                  const returnFileId = searchParams?.get('returnFileId');
+                  const returnViewerTab = searchParams?.get('returnViewerTab');
+                  const params = new URLSearchParams();
+                  params.set('tab', returnTab);
+                  if (returnRfiId) params.set('rfiId', returnRfiId);
+                  if (returnSnagId) params.set('snagId', returnSnagId);
+                  if (returnFolderId) params.set('folder', returnFolderId);
+                  if (returnFileId) params.set('fileId', returnFileId);
+                  if (returnViewerTab === 'links') {
+                    params.set('viewerTab', 'links');
+                    params.set('openLinkModal', 'true');
+                  }
+                  setTimeout(() => {
+                    router.push(window.location.pathname + `?${params.toString()}`);
+                  }, 300);
                 }
+              } else {
+                setViewerState(prev => ({ ...prev, open: true }));
+              }
             }}
             user={user}
             onUpdate={(updatedFile) => setPhotos(prev => prev.map(p => p.id === updatedFile.id ? updatedFile : p))}
@@ -1093,6 +1127,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             projectId={project.id}
             onCreateSnag={handleStartCreateSnag}
             initialTab={initialViewerTab}
+            initialOpenLinkModal={initialOpenLinkModal}
             onCreateRfi={handleStartCreateRfi}
           />
 
