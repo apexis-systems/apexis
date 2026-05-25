@@ -55,8 +55,11 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [shareItem, setShareItem] = useState<any | null>(null);
   const [viewerState, setViewerState] = useState<{ open: boolean, index: number }>({ open: false, index: 0 });
   const [initialFileId, setInitialFileId] = useState<string | null>(searchParams?.get('fileId') || searchParams?.get('documentId') || null);
-  const [initialViewerTab, setInitialViewerTab] = useState<'discussion' | 'links' | undefined>(
-    (searchParams?.get('viewerTab') as 'discussion' | 'links') || undefined
+  const [initialViewerTab, setInitialViewerTab] = useState<null | 'links'>(
+    searchParams?.get('viewerTab') === 'links' ? 'links' : null
+  );
+  const [initialOpenLinkModal, setInitialOpenLinkModal] = useState<boolean>(
+    searchParams?.get('openLinkModal') === 'true'
   );
 
   const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
@@ -177,6 +180,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           url.searchParams.delete('fileId');
           url.searchParams.delete('documentId');
           url.searchParams.delete('viewerTab');
+          url.searchParams.delete('openLinkModal');
           window.history.replaceState(null, '', url.toString());
         }
       }
@@ -206,10 +210,14 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     if (fileId) {
       setInitialFileId(fileId);
     }
-    const viewerTab = searchParams?.get('viewerTab') as 'discussion' | 'links' | undefined;
-    if (viewerTab) {
-      setInitialViewerTab(viewerTab);
+    const viewerTab = searchParams?.get('viewerTab');
+    if (viewerTab === 'links') {
+      setInitialViewerTab('links');
+    } else {
+      setInitialViewerTab(null);
     }
+    const openLinkModal = searchParams?.get('openLinkModal') === 'true';
+    setInitialOpenLinkModal(openLinkModal);
     const viewerSubtab = searchParams?.get('viewerSubTab');
     if (viewerSubtab === 'rfi') {
       setActiveFolderTab('rfi');
@@ -304,6 +312,24 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     if (!selectedFolder) return;
     const parentId = currentFolder?.parent_id != null ? String(currentFolder.parent_id) : null;
     setSelectedFolder(parentId);
+    const returnTab = searchParams?.get('returnTab');
+    if (returnTab) {
+      const returnRfiId = searchParams?.get('returnRfiId');
+      const returnSnagId = searchParams?.get('returnSnagId');
+      const returnFolderId = searchParams?.get('returnFolderId');
+      const returnFileId = searchParams?.get('returnFileId');
+      const returnViewerTab = searchParams?.get('returnViewerTab');
+      const params = new URLSearchParams();
+      params.set('tab', returnTab);
+      if (returnRfiId) params.set('rfiId', returnRfiId);
+      if (returnSnagId) params.set('snagId', returnSnagId);
+      if (returnFolderId) params.set('folder', returnFolderId);
+      if (returnFileId) params.set('fileId', returnFileId);
+      
+      setTimeout(() => {
+        router.push(window.location.pathname + `?${params.toString()}`);
+      }, 300);
+    }
   };
 
   const getBreadcrumbs = () => {
@@ -990,20 +1016,28 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             onOpenChange={(open) => {
               if (!open) {
                 setViewerState(prev => ({ ...prev, open: false }));
-                setInitialViewerTab(undefined);
+                setInitialViewerTab(null);
+                setInitialOpenLinkModal(false);
                 const returnTab = searchParams?.get('returnTab');
                 if (returnTab) {
                   const returnRfiId = searchParams?.get('returnRfiId');
                   const returnSnagId = searchParams?.get('returnSnagId');
                   const returnFolderId = searchParams?.get('returnFolderId');
                   const returnFileId = searchParams?.get('returnFileId');
+                  const returnViewerTab = searchParams?.get('returnViewerTab');
                   const params = new URLSearchParams();
                   params.set('tab', returnTab);
                   if (returnRfiId) params.set('rfiId', returnRfiId);
                   if (returnSnagId) params.set('snagId', returnSnagId);
                   if (returnFolderId) params.set('folder', returnFolderId);
                   if (returnFileId) params.set('fileId', returnFileId);
-                  router.push(window.location.pathname + `?${params.toString()}`);
+                  if (returnViewerTab === 'links') {
+                    params.set('viewerTab', 'links');
+                    params.set('openLinkModal', 'true');
+                  }
+                  setTimeout(() => {
+                    router.push(window.location.pathname + `?${params.toString()}`);
+                  }, 300);
                 }
               } else {
                 setViewerState(prev => ({ ...prev, open: true }));
@@ -1014,6 +1048,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             projectId={project.id}
             onCreateRfi={handleStartCreateRfi}
             initialTab={initialViewerTab}
+            initialOpenLinkModal={initialOpenLinkModal}
           />
 
           {
