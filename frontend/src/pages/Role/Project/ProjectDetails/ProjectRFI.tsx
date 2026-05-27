@@ -43,7 +43,7 @@ const FilePaperclip = ({ className }: { className?: string }) => {
     return (
         <div className={cn("relative flex items-center justify-center shrink-0", className)}>
             <FileText className="h-[90%] w-[90%] -translate-x-[5%] -translate-y-[5%]" />
-            <Paperclip className="absolute -bottom-[3px] -right-[3px] h-[65%] w-[65%] bg-background text-foreground rounded-full p-[0.5px]" />
+            <Paperclip className="absolute -bottom-[3px] -right-[3px] h-[65%] w-[65%] bg-background text-inherit rounded-full p-[0.5px]" />
         </div>
     );
 };
@@ -1422,9 +1422,27 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                             </>
                                         )}
                                     </div>
+                                </div>
 
-                                    {isConversationParticipant && (
-                                        isConversationClosed ? (
+                                {/* Linked Attachments Pill */}
+                                {(selectedRFI.file_rfi_links && selectedRFI.file_rfi_links.length > 0) ? (
+                                    <div className="flex justify-end mt-3 mb-1">
+                                        <button
+                                            onClick={() => setShowFilePicker(true)}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                                        >
+                                            <FilePaperclip className="h-3.5 w-3.5" />
+                                            <span className="text-xs font-bold">
+                                                {selectedRFI.file_rfi_links.length} {selectedRFI.file_rfi_links.length === 1 ? 'Linked File' : 'Linked Files'}
+                                            </span>
+                                        </button>
+                                    </div>
+                                ) : null}
+
+                                {isConversationParticipant && (
+                                    <div className="pt-4 border-t border-border space-y-3 mt-4">
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase">Conversation</p>
+                                        {isConversationClosed ? (
                                             <div className="rounded-xl border border-border bg-secondary/20 px-3 py-3 text-xs text-muted-foreground">
                                                 {t('closed_status')} - messages are disabled.
                                             </div>
@@ -1513,9 +1531,9 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                     )}
                                                 </div>
                                             </div>
-                                        )
-                                    )}
-                                </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 {isConversationParticipant && (
                                     <div className="pt-4 border-t border-border space-y-3">
