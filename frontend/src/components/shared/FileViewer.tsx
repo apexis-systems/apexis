@@ -51,7 +51,31 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
 
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'discussion'>('discussion');
+  const [activeTab, setActiveTab] = useState<'discussion' | 'links'>('discussion');
+  const [linksSubTab, setLinksSubTab] = useState<'rfi' | 'snag' | 'photo' | 'doc'>('rfi');
+
+  const isFilePhoto = (item: any) => {
+    const name = (item.title || item.file_name || item.name || '').toLowerCase();
+    return item.file_type?.startsWith('image/') ||
+        name.endsWith('.jpg') || name.endsWith('.jpeg') ||
+        name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
+  };
+
+  const linkedDocs = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && !isFilePhoto(i));
+  const linkedPhotos = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && isFilePhoto(i));
+  const linkedRFIs = linkedItems.filter(i => i.type === 'rfi' || i.target_type === 'rfi');
+  const linkedSnags = linkedItems.filter(i => i.type === 'snag' || i.target_type === 'snag');
+
+  const linkedSubTabs = [
+    ...(linkedRFIs.length > 0 ? [{ key: 'rfi' as const, label: `${t('rfi_label')} (${linkedRFIs.length})`, color: 'text-rose-500', border: 'border-rose-500', bg: 'bg-rose-500/10' }] : []),
+    ...(linkedSnags.length > 0 ? [{ key: 'snag' as const, label: `${t('snags')} (${linkedSnags.length})`, color: 'text-orange-500', border: 'border-orange-500', bg: 'bg-orange-500/10' }] : []),
+    ...(linkedPhotos.length > 0 ? [{ key: 'photo' as const, label: `${t('photos')} (${linkedPhotos.length})`, color: 'text-emerald-500', border: 'border-emerald-500', bg: 'bg-emerald-500/10' }] : []),
+    ...(linkedDocs.length > 0 ? [{ key: 'doc' as const, label: `${t('documents')} (${linkedDocs.length})`, color: 'text-blue-500', border: 'border-blue-500', bg: 'bg-blue-500/10' }] : []),
+  ];
+
+  const activeLinksSubTab = linkedSubTabs.find(s => s.key === linksSubTab)
+    ? linksSubTab
+    : (linkedSubTabs[0]?.key || 'rfi');
 
   const currentFile = files[currentIndex];
   const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
@@ -77,7 +101,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   useEffect(() => {
     if (open && initialOpenLinkModal) {
       setShowLinkModal(true);
-      // setActiveTab('links');
+      setActiveTab('links');
     }
   }, [open, initialOpenLinkModal]);
 
@@ -169,9 +193,9 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   useEffect(() => {
     if (open) {
       setCurrentIndex(initialIndex);
-      // if (initialTab) {
-      //   setActiveTab(initialTab);
-      // }
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
     }
   }, [open, initialIndex, initialTab]);
 
@@ -382,42 +406,81 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                       {activeTab === 'discussion' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
                       {t('discussion')}
                     </button>
-                    {/* <button
+                    <button
                       onClick={() => setActiveTab('links')}
                       className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'links' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
                     >
                       {activeTab === 'links' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
                       {t('links_label')} ({linkedItems.length})
-                    </button> */}
+                    </button>
                   </div>
-                  <div className="flex-1 min-h-0 overflow-y-auto">
+                  <div className="flex-1 min-h-0 flex flex-col">
                     {activeTab === 'discussion' ? (
-                      <CommentThread targetId={currentFile.id} targetType={targetType} projectId={projectId || currentFile.project_id} />
+                      <div className="flex-1 overflow-y-auto">
+                        <CommentThread targetId={currentFile.id} targetType={targetType} projectId={projectId || currentFile.project_id} />
+                      </div>
                     ) : (
-                      <div className="space-y-3 pr-2">
+                      <div className="flex flex-col h-full min-h-0">
                         {linkedItems.length === 0 ? (
                           <div className="text-center py-8 text-xs text-muted-foreground">{t('no_linked_items')}</div>
                         ) : (
-                          linkedItems.map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
-                              <div
-                                className="flex-1 min-w-0 pr-2 cursor-pointer hover:opacity-85 transition-opacity"
-                                onClick={() => handleLinkItemClick(item)}
-                              >
-                                <div className="text-[10px] uppercase font-bold text-accent mb-1 tracking-wider">{item.type}</div>
-                                <div className="text-sm font-semibold truncate text-foreground">{item.title}</div>
-                                {item.status && <div className="text-[10px] text-muted-foreground mt-0.5 capitalize">{item.status}</div>}
+                          <>
+                            {linkedSubTabs.length > 0 && (
+                              <div className="flex border border-border/30 bg-secondary/20 rounded-lg p-0.5 shrink-0 overflow-x-auto gap-1 mb-4 no-scrollbar">
+                                {linkedSubTabs.map(st => {
+                                  const isActive = activeLinksSubTab === st.key;
+                                  return (
+                                    <button
+                                      key={st.key}
+                                      onClick={() => setLinksSubTab(st.key)}
+                                      className={cn(
+                                        "flex-1 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider transition-all rounded-md whitespace-nowrap",
+                                        isActive 
+                                          ? `${st.color} ${st.bg} shadow-sm border border-border/40 font-black` 
+                                          : "text-muted-foreground hover:text-foreground hover:bg-muted/10 border border-transparent"
+                                      )}
+                                    >
+                                      {st.label}
+                                    </button>
+                                  );
+                                })}
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent" onClick={() => handleLinkItemClick(item)} title={t('view_btn')}>
-                                  <ExternalLink className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveLink(item.type, item.id)} title={t('remove_link')}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
+                            )}
+                            <div className="flex-1 overflow-y-auto space-y-3 pr-2 min-h-0">
+                              {(() => {
+                                let itemsToRender = [];
+                                if (activeLinksSubTab === 'rfi') itemsToRender = linkedRFIs;
+                                if (activeLinksSubTab === 'snag') itemsToRender = linkedSnags;
+                                if (activeLinksSubTab === 'photo') itemsToRender = linkedPhotos;
+                                if (activeLinksSubTab === 'doc') itemsToRender = linkedDocs;
+
+                                if (itemsToRender.length === 0) {
+                                  return <div className="text-center py-8 text-xs text-muted-foreground">{t('no_linked_items')}</div>;
+                                }
+
+                                return itemsToRender.map((item, idx) => (
+                                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
+                                    <div
+                                      className="flex-1 min-w-0 pr-2 cursor-pointer hover:opacity-85 transition-opacity"
+                                      onClick={() => handleLinkItemClick(item)}
+                                    >
+                                      <div className="text-[10px] uppercase font-bold text-accent mb-1 tracking-wider">{item.type}</div>
+                                      <div className="text-sm font-semibold truncate text-foreground">{item.title}</div>
+                                      {item.status && <div className="text-[10px] text-muted-foreground mt-0.5 capitalize">{item.status}</div>}
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent" onClick={() => handleLinkItemClick(item)} title={t('view_btn')}>
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveLink(item.type, item.id)} title={t('remove_link')}>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ));
+                              })()}
                             </div>
-                          ))
+                          </>
                         )}
                       </div>
                     )}
