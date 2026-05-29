@@ -243,17 +243,17 @@ const getLinkedImages = (rfi: any, docMetadata?: Record<string, { size?: string;
         });
     }
 
-    // Also include image files from file_rfi_links
-    if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
-        rfi.file_rfi_links.forEach((link: any) => {
-            const file = link.file || link;
-            const url = file.downloadUrl || file.url || '';
-            if (!url) return;
-            if (isImageFile(file, docMetadata) && !list.find(i => i.url === url)) {
-                list.push({ id: file.id || link.file_id, url, folder_id: file.folder_id, file_type: file.file_type });
-            }
-        });
-    }
+    // // Also include image files from file_rfi_links
+    // if (rfi.file_rfi_links && Array.isArray(rfi.file_rfi_links)) {
+    //     rfi.file_rfi_links.forEach((link: any) => {
+    //         const file = link.file || link;
+    //         const url = file.downloadUrl || file.url || '';
+    //         if (!url) return;
+    //         if (isImageFile(file, docMetadata) && !list.find(i => i.url === url)) {
+    //             list.push({ id: file.id || link.file_id, url, folder_id: file.folder_id, file_type: file.file_type });
+    //         }
+    //     });
+    // }
 
     return list;
 };
