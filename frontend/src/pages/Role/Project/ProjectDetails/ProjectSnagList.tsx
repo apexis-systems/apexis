@@ -127,7 +127,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
         setSelectedSnag(updated);
         setSnags(prev => prev.map(s => s.id === updated.id ? updated : s));
       }
-      toast.success(t('link_success') || 'File linked successfully');
+      toast.success(t('link_snag') || 'File linked to Snag successfully');
       setShowFilePicker(false);
     } catch (error) {
       toast.error(t('link_failed') || 'Failed to link file');
