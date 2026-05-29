@@ -191,7 +191,10 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl h-[85vh] p-0 flex flex-col gap-0 overflow-hidden bg-background">
+      <DialogContent 
+        className="max-w-3xl h-[85vh] p-0 flex flex-col gap-0 overflow-hidden bg-background z-[60]"
+        overlayClassName="z-[60]"
+      >
         <DialogHeader className="p-4 border-b shrink-0 flex flex-row items-center justify-between">
           <DialogTitle className="text-lg">{t('link_a_file')}</DialogTitle>
         </DialogHeader>

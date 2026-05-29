@@ -174,12 +174,15 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       if (returnFileId) {
         params.set('fileId', returnFileId);
         params.set('viewerTab', 'links');
+        params.set('openLinkModal', 'true');
       }
       if (returnViewerTab) {
         params.set('viewerSubTab', returnViewerTab);
       }
       const url = window.location.pathname + '?' + params.toString();
-      router.push(url);
+      setTimeout(() => {
+        router.push(url);
+      }, 300);
     }
   };
 
@@ -209,10 +212,16 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       const target = snags.find(s => String(s.id) === String(initialSnagId));
       if (target) {
         setSelectedSnag(target);
+        const openLinkModal = searchParams?.get('openLinkModal') === 'true';
+        if (openLinkModal) {
+          setShowFilePicker(true);
+        }
       }
       // Clear the ID from URL to prevent loop on back navigation
       const params = new URLSearchParams(window.location.search);
       params.delete('snagId');
+      params.delete('openLinkModal');
+      params.delete('viewerTab');
       const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
       window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
     }
@@ -486,6 +495,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   };
 
   const handleLinkItemClick = (item: any) => {
+    setShowFilePicker(false);
     const currentUrlParams = new URLSearchParams(window.location.search);
     const currentTab = currentUrlParams.get('tab') || 'snags';
 
@@ -507,8 +517,11 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
       if (selectedSnag?.id) {
         extraParams.set('returnTab', currentTab);
         extraParams.set('returnSnagId', String(selectedSnag.id));
+        extraParams.set('returnViewerTab', 'links');
       }
-      router.push(window.location.pathname + `?${extraParams.toString()}`);
+      setTimeout(() => {
+        router.push(window.location.pathname + `?${extraParams.toString()}`);
+      }, 300);
     } else {
       if (item.url) {
         try {
@@ -520,9 +533,13 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           if (selectedSnag?.id) targetParams.set('returnSnagId', String(selectedSnag.id));
 
           const newUrl = urlPath ? `${urlPath}?${targetParams.toString()}` : `${window.location.pathname}?${targetParams.toString()}`;
-          router.push(newUrl);
+          setTimeout(() => {
+            router.push(newUrl);
+          }, 300);
         } catch {
-          router.push(item.url);
+          setTimeout(() => {
+            router.push(item.url);
+          }, 300);
         }
       }
     }
@@ -1222,7 +1239,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
         }}
       />
 
-      {selectedSnag && showFilePicker && (
+      {selectedSnag && (
         <LinkFileModal
           open={showFilePicker}
           onOpenChange={setShowFilePicker}
