@@ -151,8 +151,13 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
         });
 
     const getFoldersInCurrentLevel = () => {
-        const valid = getValidFolders().filter(f => f.folder_type === activeTab);
-        return valid.filter(f => String(f.parent_id ?? 'null') === String(currentParentId ?? 'null'));
+        const valid = getValidFolders();
+        return valid.filter(f => {
+            if (currentParentId === null) {
+                return f.folder_type === activeTab && String(f.parent_id ?? 'null') === 'null';
+            }
+            return String(f.parent_id) === String(currentParentId);
+        });
     };
 
     const getFilesInCurrentLevel = () =>
@@ -165,11 +170,7 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
                 return (f.file_type?.startsWith('image/') ? 'photo' : 'document') === activeTab;
             } else {
                 if (String(f.folder_id) !== String(currentParentId)) return false;
-                const isImg = f.file_type?.startsWith('image/') ||
-                    f.file_name?.toLowerCase().endsWith('.jpg') ||
-                    f.file_name?.toLowerCase().endsWith('.png') ||
-                    f.file_name?.toLowerCase().endsWith('.jpeg');
-                return (isImg ? 'photo' : 'document') === activeTab;
+                return true;
             }
         });
 
@@ -468,13 +469,24 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
                                                     <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 8 }}>Go Up</Text>
                                                 </TouchableOpacity>
                                             )}
-                                            {foldersInCurrentLevel.map(folder => (
-                                                <TouchableOpacity key={folder.id} onPress={() => setCurrentParentId(folder.id)}
-                                                    style={{ width: '30%', height: 90, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-                                                    <Feather name="folder" size={24} color={colors.primary} />
-                                                    <Text numberOfLines={2} style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 8, textAlign: 'center' }}>{folder.name}</Text>
-                                                </TouchableOpacity>
-                                            ))}
+                                            {foldersInCurrentLevel.map(folder => {
+                                                const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
+                                                const childFiles = files.filter(p => String(p.folder_id) === String(folder.id));
+                                                const count = childFiles.length;
+                                                const subcount = childFolders.length;
+                                                return (
+                                                    <TouchableOpacity key={folder.id} onPress={() => setCurrentParentId(folder.id)}
+                                                        style={{ width: '30%', height: 90, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+                                                        <Feather name="folder" size={24} color={colors.primary} />
+                                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: colors.text, marginTop: 8, textAlign: 'center' }}>{folder.name}</Text>
+                                                        <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2, textAlign: 'center' }}>
+                                                            {subcount > 0
+                                                                ? t('projectDocuments.filesFoldersCount', { fileCount: count, folderCount: subcount })
+                                                                : t('projectDocuments.filesOnlyCount', { count: count })}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
                                         </View>
                                     )}
                                     {filesInCurrentLevel.length > 0 && (
