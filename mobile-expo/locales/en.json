@@ -388,6 +388,7 @@
             "voiceResponseHeader": "Voice Response",
             "submitResponse": "Submit Response",
             "noMessagesYet": "No messages yet",
+            "viewLinkedAttachments": "View Linked Attachments",
             "sendMessage": "Send message",
             "failedToSendMessage": "Failed to send message",
             "linkedFolders": "Linked Folders"
@@ -432,6 +433,7 @@
             "provideResponse": "Provide Response",
             "typeResponsePlaceholder": "Type your response here...",
             "noMessagesYet": "No messages yet",
+            "viewLinkedAttachments": "View Linked Attachments",
             "sendMessage": "Send message",
             "failedToSendMessage": "Failed to send message",
             "closedRfiNoUpdate": "Closed RFIs cannot be updated",
@@ -824,6 +826,7 @@
             "file": "📄 File",
             "noMessageContent": "No message content",
             "noMessagesYet": "No messages yet",
+            "viewLinkedAttachments": "View Linked Attachments",
             "tourMessage1": "The site report is ready for review.",
             "moreMembers": "+{{count}} more",
             "typing": "{{userName}} typing...",

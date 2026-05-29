@@ -675,6 +675,8 @@ const translations: Record<Language, Record<string, string>> = {
     create_rfi: 'Create RFI',
     create_snag: 'Create Snag',
     confirmations_folder_name: 'Confirmations',
+    'projectSnags.viewLinkedAttachments': 'View Linked Attachments',
+    'projectRfi.viewLinkedAttachments': 'View Linked Attachments',
   },
   hi: {
     welcome_back: 'वापसी पर स्वागत है',
@@ -1346,6 +1348,8 @@ const translations: Record<Language, Record<string, string>> = {
     create_rfi: 'RFI बनाएं',
     create_snag: 'स्नैग बनाएं',
     confirmations_folder_name: 'Confirmations',
+    'projectSnags.viewLinkedAttachments': 'लिंक किए गए अनुलग्नक देखें',
+    'projectRfi.viewLinkedAttachments': 'लिंक किए गए अनुलग्नक देखें',
   },
   te: {
     welcome_back: 'తిరిగి స్వాగతం',
@@ -2009,6 +2013,8 @@ const translations: Record<Language, Record<string, string>> = {
     create_rfi: 'RFI సృష్టించండి',
     create_snag: 'స్నాగ్ సృష్టించండి',
     confirmations_folder_name: 'Confirmations',
+    'projectSnags.viewLinkedAttachments': 'లింక్ చేయబడిన జోడింపులను వీక్షించండి',
+    'projectRfi.viewLinkedAttachments': 'లింక్ చేయబడిన జోడింపులను వీక్షించండి',
   },
 };
 

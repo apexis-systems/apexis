@@ -31,7 +31,7 @@ const FilePaperclip = ({ className }: { className?: string }) => {
   return (
     <div className={cn("relative flex items-center justify-center shrink-0", className)}>
       <FileText className="h-[90%] w-[90%] -translate-x-[5%] -translate-y-[5%]" />
-      <Paperclip className="absolute -bottom-[3px] -right-[3px] h-[65%] w-[65%] bg-background text-foreground rounded-full p-[0.5px]" />
+      <Paperclip className="absolute -bottom-[3px] -right-[3px] h-[65%] w-[65%] bg-background text-inherit rounded-full p-[0.5px]" />
     </div>
   );
 };
@@ -1080,6 +1080,21 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                     )}
                   </div>
                 </div>
+
+                {/* Linked Attachments Pill */}
+                {(selectedSnag.file_snag_links && selectedSnag.file_snag_links.length > 0) ? (
+                  <div className="flex justify-end mt-3 mb-1">
+                    <button
+                      onClick={() => setShowFilePicker(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                    >
+                      <FilePaperclip className="h-3.5 w-3.5" />
+                      <span className="text-xs font-bold">
+                        {selectedSnag.file_snag_links.length} {selectedSnag.file_snag_links.length === 1 ? 'Linked File' : 'Linked Files'}
+                      </span>
+                    </button>
+                  </div>
+                ) : null}
 
                 {isConversationParticipant && (
                   <div className="pt-4 border-t border-border space-y-3">
