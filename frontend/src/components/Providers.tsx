@@ -15,7 +15,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                     <InterfaceProvider>
                         <UsageProvider>
                             {children}
-                            <Toaster position="top-right" richColors />
+                            <Toaster position="top-right" richColors closeButton style={{ marginTop: '32px' }} />
                         </UsageProvider>
                     </InterfaceProvider>
                 </LanguageProvider>

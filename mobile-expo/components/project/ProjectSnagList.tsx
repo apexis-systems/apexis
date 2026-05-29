@@ -1574,6 +1574,29 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 )}
                                             </View>
 
+                                            {/* Linked Attachments Pill */}
+                                            {(selectedSnag.file_snag_links && selectedSnag.file_snag_links.length > 0) ? (
+                                                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, marginBottom: 4 }}>
+                                                    <TouchableOpacity
+                                                        onPress={() => setShowFilePicker(true)}
+                                                        style={{
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            backgroundColor: colors.primary + '15',
+                                                            paddingHorizontal: 12,
+                                                            paddingVertical: 6,
+                                                            borderRadius: 20,
+                                                            gap: 6
+                                                        }}
+                                                    >
+                                                        <FilePaperclip size={14} color={colors.primary} bgColor={colors.background} />
+                                                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                                                            {selectedSnag.file_snag_links.length} {selectedSnag.file_snag_links.length === 1 ? 'Linked File' : 'Linked Files'}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ) : null}
+
                                             {/* Response Section */}
                                             {isConversationParticipant && (
                                                 <View style={{ gap: 10, marginTop: 6 }}>

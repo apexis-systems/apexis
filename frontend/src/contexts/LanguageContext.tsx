@@ -639,6 +639,8 @@ const translations: Record<Language, Record<string, string>> = {
     fullscreen: 'Fullscreen',
     preview_not_available: 'Preview not available for this file type',
     file_linked_success: 'File linked successfully',
+    link_rfi: 'File linked to RFI successfully',
+    link_snag: 'File linked to Snag successfully',
     file_link_failed: 'Failed to link file',
     link_removed_success: 'Link removed successfully',
     link_remove_failed: 'Failed to remove link',
@@ -675,6 +677,8 @@ const translations: Record<Language, Record<string, string>> = {
     create_rfi: 'Create RFI',
     create_snag: 'Create Snag',
     confirmations_folder_name: 'Confirmations',
+    'projectSnags.viewLinkedAttachments': 'View Linked Attachments',
+    'projectRfi.viewLinkedAttachments': 'View Linked Attachments',
   },
   hi: {
     welcome_back: 'वापसी पर स्वागत है',
@@ -1310,6 +1314,8 @@ const translations: Record<Language, Record<string, string>> = {
     fullscreen: 'फ़ुलस्क्रीन',
     preview_not_available: 'इस फ़ाइल प्रकार के लिए पूर्वावलोकन उपलब्ध नहीं है',
     file_linked_success: 'फ़ाइल सफलतापूर्वक लिंक की गई',
+    link_rfi: 'फ़ाइल सफलतापूर्वक आरएफआई से लिंक की गई',
+    link_snag: 'फ़ाइल सफलतापूर्वक स्नैग से लिंक की गई',
     file_link_failed: 'फ़ाइल को लिंक करने में विफल',
     link_removed_success: 'लिंक सफलतापूर्वक हटाया गया',
     link_remove_failed: 'लिंक हटाने में विफल',
@@ -1346,6 +1352,8 @@ const translations: Record<Language, Record<string, string>> = {
     create_rfi: 'RFI बनाएं',
     create_snag: 'स्नैग बनाएं',
     confirmations_folder_name: 'Confirmations',
+    'projectSnags.viewLinkedAttachments': 'लिंक किए गए अनुलग्नक देखें',
+    'projectRfi.viewLinkedAttachments': 'लिंक किए गए अनुलग्नक देखें',
   },
   te: {
     welcome_back: 'తిరిగి స్వాగతం',
@@ -1981,6 +1989,8 @@ const translations: Record<Language, Record<string, string>> = {
     fullscreen: 'పూర్తి స్క్రీన్',
     preview_not_available: 'ఈ ఫైల్ రకానికి ప్రివ్యూ అందుబాటులో లేదు',
     file_linked_success: 'ఫైల్ విజయవంతంగా లింక్ చేయబడింది',
+    link_rfi: 'ఫైల్ విజయవంతంగా RFI కి లింక్ చేయబడింది',
+    link_snag: 'ఫైల్ విజయవంతంగా స్నాగ్‌కి లింక్ చేయబడింది',
     file_link_failed: 'ఫైల్‌ను లింక్ చేయడంలో విఫలమైంది',
     link_removed_success: 'లింక్ విజయవంతంగా తీసివేయబడింది',
     link_remove_failed: 'లింక్‌ను తీసివేయడంలో విఫలమైంది',
@@ -2009,6 +2019,8 @@ const translations: Record<Language, Record<string, string>> = {
     create_rfi: 'RFI సృష్టించండి',
     create_snag: 'స్నాగ్ సృష్టించండి',
     confirmations_folder_name: 'Confirmations',
+    'projectSnags.viewLinkedAttachments': 'లింక్ చేయబడిన జోడింపులను వీక్షించండి',
+    'projectRfi.viewLinkedAttachments': 'లింక్ చేయబడిన జోడింపులను వీక్షించండి',
   },
 };
 

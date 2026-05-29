@@ -99,8 +99,13 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
     });
 
   const getFoldersInCurrentLevel = () => {
-    const valid = getValidFolders().filter(f => f.folder_type === activeTab);
-    return valid.filter(f => String(f.parent_id ?? 'null') === String(currentParentId ?? 'null'));
+    const valid = getValidFolders();
+    return valid.filter(f => {
+      if (currentParentId === null) {
+        return f.folder_type === activeTab && String(f.parent_id ?? 'null') === 'null';
+      }
+      return String(f.parent_id) === String(currentParentId);
+    });
   };
 
   const getFilesInCurrentLevel = () =>
@@ -113,11 +118,7 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
         return (f.file_type?.startsWith('image/') ? 'photo' : 'document') === activeTab;
       } else {
         if (String(f.folder_id) !== String(currentParentId)) return false;
-        const isImg = f.file_type?.startsWith('image/') ||
-          f.file_name?.toLowerCase().endsWith('.jpg') ||
-          f.file_name?.toLowerCase().endsWith('.png') ||
-          f.file_name?.toLowerCase().endsWith('.jpeg');
-        return (isImg ? 'photo' : 'document') === activeTab;
+        return true;
       }
     });
 
@@ -372,12 +373,24 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
                           <span className="text-xs font-semibold">{t('go_up')}</span>
                         </button>
                       )}
-                      {foldersInCurrentLevel.map(folder => (
-                        <button key={folder.id} onClick={() => setCurrentParentId(folder.id)} className="h-[100px] flex flex-col items-center justify-center border rounded-xl bg-background hover:bg-accent/5 transition-colors gap-2 p-2">
-                          <Folder className="h-8 w-8 text-primary opacity-80" />
-                          <span className="text-xs font-semibold text-center line-clamp-2 w-full px-2" title={folder.name}>{folder.name}</span>
-                        </button>
-                      ))}
+                      {foldersInCurrentLevel.map(folder => {
+                        const childFolders = folders.filter(f => String(f.parent_id) === String(folder.id));
+                        const childFiles = files.filter(p => String(p.folder_id) === String(folder.id));
+                        const count = childFiles.length;
+                        const subcount = childFolders.length;
+                        return (
+                          <button key={folder.id} onClick={() => setCurrentParentId(folder.id)} className="h-[100px] flex flex-col items-center justify-center border rounded-xl bg-background hover:bg-accent/5 transition-colors gap-1 p-2">
+                            <Folder className="h-8 w-8 text-primary opacity-80" />
+                            <span className="text-xs font-semibold text-center line-clamp-1 w-full px-2" title={folder.name}>{folder.name}</span>
+                            <span className="text-[10px] text-muted-foreground text-center line-clamp-1 w-full px-1">
+                              {count === 0 && subcount === 0 
+                                ? t('files_count_label').replace('{count}', '0')
+                                : <>{t('files_count_label').replace('{count}', String(count))}{subcount > 0 ? `, ${t(subcount === 1 ? 'folder_count_label' : 'folders_count_label').replace('{count}', String(subcount))}` : ''}</>
+                              }
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
 
