@@ -677,7 +677,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             const updated = await getRFIById(selectedRFI.id);
             setSelectedRFI(updated);
             setRfis(prev => prev.map(r => r.id === updated.id ? updated : r));
-            toast.success(t('link_success') || 'File linked successfully');
+            toast.success(t('link_rfi') || 'File linked to RFI successfully');
             setShowFilePicker(false);
         } catch (error) {
             toast.error(t('link_failed') || 'Failed to link file');
