@@ -154,7 +154,7 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
         const valid = getValidFolders();
         return valid.filter(f => {
             if (currentParentId === null) {
-                return f.folder_type === activeTab && String(f.parent_id ?? 'null') === 'null';
+                return (f.folder_type === activeTab || !f.folder_type) && String(f.parent_id ?? 'null') === 'null';
             }
             return String(f.parent_id) === String(currentParentId);
         });
