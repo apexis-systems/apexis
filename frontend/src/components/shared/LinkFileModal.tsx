@@ -102,7 +102,7 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
     const valid = getValidFolders();
     return valid.filter(f => {
       if (currentParentId === null) {
-        return f.folder_type === activeTab && String(f.parent_id ?? 'null') === 'null';
+        return (f.folder_type === activeTab || !f.folder_type) && String(f.parent_id ?? 'null') === 'null';
       }
       return String(f.parent_id) === String(currentParentId);
     });
@@ -169,8 +169,8 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
   const isFilePhoto = (item: any) => {
     const name = (item.title || item.file_name || item.name || '').toLowerCase();
     return item.file_type?.startsWith('image/') ||
-        name.endsWith('.jpg') || name.endsWith('.jpeg') ||
-        name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
+      name.endsWith('.jpg') || name.endsWith('.jpeg') ||
+      name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
   };
 
   const linkedDocs = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && !isFilePhoto(i));
@@ -191,7 +191,7 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent 
+      <DialogContent
         className="max-w-3xl h-[85vh] p-0 flex flex-col gap-0 overflow-hidden bg-background z-[60]"
         overlayClassName="z-[60]"
       >
@@ -258,13 +258,13 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
                       if (activeLinkedSubTab === 'snag') itemsToRender = linkedSnags;
                       if (activeLinkedSubTab === 'photo') itemsToRender = linkedPhotos;
                       if (activeLinkedSubTab === 'doc') itemsToRender = linkedDocs;
-                      
+
                       return itemsToRender.map(item => {
                         const key = item.id || item.target_id;
                         const name = item.title || item.file_name || item.name || item.subject || '—';
                         return (
-                          <div 
-                            key={key} 
+                          <div
+                            key={key}
                             onClick={() => handleLinkItemClick?.(item)}
                             className="relative h-[110px] rounded-xl border border-border bg-card flex flex-col p-3 cursor-pointer hover:border-primary/40 transition-colors"
                           >
@@ -272,8 +272,8 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
                               <div className="p-1.5 rounded-md bg-muted">
                                 <FileText className="h-4 w-4 text-muted-foreground" />
                               </div>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleRemoveLink(item); }} 
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRemoveLink(item); }}
                                 disabled={unlinkingId === key}
                                 className="p-1.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
                               >
@@ -348,9 +348,9 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
                 searchFiles.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {searchFiles.map(item => (
-                      <FileCard 
-                        key={item.id} 
-                        item={item} 
+                      <FileCard
+                        key={item.id}
+                        item={item}
                         linkedItems={linkedItems}
                         selectedIds={selectedIds}
                         setSelectedIds={setSelectedIds}
@@ -383,7 +383,7 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
                             <Folder className="h-8 w-8 text-primary opacity-80" />
                             <span className="text-xs font-semibold text-center line-clamp-1 w-full px-2" title={folder.name}>{folder.name}</span>
                             <span className="text-[10px] text-muted-foreground text-center line-clamp-1 w-full px-1">
-                              {count === 0 && subcount === 0 
+                              {count === 0 && subcount === 0
                                 ? t('files_count_label').replace('{count}', '0')
                                 : <>{t('files_count_label').replace('{count}', String(count))}{subcount > 0 ? `, ${t(subcount === 1 ? 'folder_count_label' : 'folders_count_label').replace('{count}', String(subcount))}` : ''}</>
                               }
@@ -397,9 +397,9 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
                   {filesInCurrentLevel.length > 0 && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {filesInCurrentLevel.map(item => (
-                        <FileCard 
-                          key={item.id} 
-                          item={item} 
+                        <FileCard
+                          key={item.id}
+                          item={item}
                           linkedItems={linkedItems}
                           selectedIds={selectedIds}
                           setSelectedIds={setSelectedIds}
@@ -437,10 +437,10 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
   );
 }
 
-function FileCard({ item, linkedItems, selectedIds, setSelectedIds }: { item: any, linkedItems: any[], selectedIds: Set<string|number>, setSelectedIds: any }) {
+function FileCard({ item, linkedItems, selectedIds, setSelectedIds }: { item: any, linkedItems: any[], selectedIds: Set<string | number>, setSelectedIds: any }) {
   const isAlreadyLinked = linkedItems.some(link => link.type === 'file' && String(link.id) === String(item.id));
   const isSelected = selectedIds.has(item.id);
-  
+
   const isImage = item.file_type?.startsWith('image/') ||
     item.file_name?.toLowerCase().endsWith('.jpg') ||
     item.file_name?.toLowerCase().endsWith('.png') ||
@@ -448,7 +448,7 @@ function FileCard({ item, linkedItems, selectedIds, setSelectedIds }: { item: an
 
   const toggleSelect = () => {
     if (isAlreadyLinked) return;
-    setSelectedIds((prev: Set<string|number>) => {
+    setSelectedIds((prev: Set<string | number>) => {
       const next = new Set(prev);
       next.has(item.id) ? next.delete(item.id) : next.add(item.id);
       return next;
@@ -458,7 +458,7 @@ function FileCard({ item, linkedItems, selectedIds, setSelectedIds }: { item: an
   const checked = isAlreadyLinked || isSelected;
 
   return (
-    <div 
+    <div
       onClick={toggleSelect}
       className={cn(
         "relative h-[130px] rounded-xl border flex flex-col items-center justify-center overflow-hidden cursor-pointer transition-all bg-background",
